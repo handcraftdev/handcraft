@@ -1,0 +1,22 @@
+{
+  "name": "handcraft",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean && rm -rf node_modules",
+    "dev:web": "turbo dev --filter=@handcraft/web",
+    "dev:mobile": "turbo dev --filter=@handcraft/mobile",
+    "build:web": "turbo build --filter=@handcraft/web",
+    "build:mobile": "turbo build --filter=@handcraft/mobile"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.14.2",
+  "engines": {
+    "node": ">=20"
+  }
+}
