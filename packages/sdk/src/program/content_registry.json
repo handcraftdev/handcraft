@@ -1,0 +1,455 @@
+{
+  "address": "25WLThAnXWyNZcTLJpXkx6Gh7b7Go9DNNiZrZdWEKabi",
+  "metadata": {
+    "name": "content_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Handcraft on-chain content registry"
+  },
+  "instructions": [
+    {
+      "name": "create_content",
+      "docs": [
+        "Publish new content"
+      ],
+      "discriminator": [
+        196,
+        78,
+        200,
+        14,
+        158,
+        190,
+        68,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "account",
+                "path": "profile.content_count",
+                "account": "CreatorProfile"
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "profile"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "content_cid",
+          "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "content_type",
+          "type": {
+            "defined": {
+              "name": "ContentType"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_profile",
+      "docs": [
+        "Create a new creator profile"
+      ],
+      "discriminator": [
+        225,
+        205,
+        234,
+        143,
+        17,
+        186,
+        50,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "tip_content",
+      "docs": [
+        "Tip a creator for their content"
+      ],
+      "discriminator": [
+        12,
+        29,
+        43,
+        141,
+        181,
+        42,
+        144,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "tipper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_content",
+      "docs": [
+        "Update content metadata (creator only)"
+      ],
+      "discriminator": [
+        201,
+        145,
+        238,
+        112,
+        36,
+        231,
+        69,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "content"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ContentEntry",
+      "discriminator": [
+        8,
+        200,
+        227,
+        175,
+        3,
+        190,
+        190,
+        31
+      ]
+    },
+    {
+      "name": "CreatorProfile",
+      "discriminator": [
+        251,
+        250,
+        184,
+        111,
+        214,
+        178,
+        32,
+        221
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "TipEvent",
+      "discriminator": [
+        213,
+        36,
+        191,
+        50,
+        28,
+        25,
+        189,
+        252
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UsernameTooLong",
+      "msg": "Username must be 32 characters or less"
+    },
+    {
+      "code": 6001,
+      "name": "CidTooLong",
+      "msg": "CID must be 64 characters or less"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTipAmount",
+      "msg": "Tip amount must be greater than 0"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Unauthorized"
+    }
+  ],
+  "types": [
+    {
+      "name": "ContentEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "content_cid",
+            "type": "string"
+          },
+          {
+            "name": "metadata_cid",
+            "type": "string"
+          },
+          {
+            "name": "content_type",
+            "type": {
+              "defined": {
+                "name": "ContentType"
+              }
+            }
+          },
+          {
+            "name": "tips_received",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "index",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ContentType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Video"
+          },
+          {
+            "name": "Audio"
+          },
+          {
+            "name": "Image"
+          },
+          {
+            "name": "Post"
+          },
+          {
+            "name": "Stream"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreatorProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "username",
+            "type": "string"
+          },
+          {
+            "name": "content_count",
+            "type": "u64"
+          },
+          {
+            "name": "total_tips",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TipEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "tipper",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
