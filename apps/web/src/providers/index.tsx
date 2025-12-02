@@ -6,7 +6,6 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TamaguiProvider } from "tamagui";
@@ -27,13 +26,8 @@ export function Providers({ children }: { children: ReactNode }) {
   // Use devnet for development
   const endpoint = useMemo(() => clusterApiUrl("devnet"), []);
 
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-    ],
-    []
-  );
+  // Empty array = auto-detect all Wallet Standard wallets (Phantom, Solflare, Jupiter, Backpack, etc.)
+  const wallets = useMemo(() => [], []);
 
   return (
     <QueryClientProvider client={queryClient}>

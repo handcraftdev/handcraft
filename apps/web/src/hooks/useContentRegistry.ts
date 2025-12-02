@@ -38,7 +38,7 @@ export function useContentRegistry() {
     mutationFn: async (username: string) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
-      const ix = client.createProfileInstruction(publicKey, username);
+      const ix = await client.createProfileInstruction(publicKey, username);
       const tx = new Transaction().add(ix);
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -66,7 +66,7 @@ export function useContentRegistry() {
       if (!publicKey) throw new Error("Wallet not connected");
       if (!profileQuery.data) throw new Error("Profile not found");
 
-      const ix = client.createContentInstruction(
+      const ix = await client.createContentInstruction(
         publicKey,
         profileQuery.data.contentCount,
         contentCid,
@@ -104,7 +104,7 @@ export function useContentRegistry() {
       const creator = new PublicKey(creatorAddress);
       const [contentPda] = getContentPda(creator, contentIndex);
 
-      const ix = client.tipContentInstruction(publicKey, contentPda, creator, amountLamports);
+      const ix = await client.tipContentInstruction(publicKey, contentPda, creator, amountLamports);
       const tx = new Transaction().add(ix);
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;

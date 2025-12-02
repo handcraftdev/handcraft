@@ -1,4 +1,6 @@
+import { Program, AnchorProvider, Idl, BN } from "@coral-xyz/anchor";
 import { Connection, PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import idlJson from "./content_registry.json";
 
 export const PROGRAM_ID = new PublicKey("25WLThAnXWyNZcTLJpXkx6Gh7b7Go9DNNiZrZdWEKabi");
 
@@ -36,136 +38,115 @@ export function getProfilePda(authority: PublicKey): [PublicKey, number] {
   );
 }
 
-export function getContentPda(authority: PublicKey, index: bigint): [PublicKey, number] {
+export function getContentPda(authority: PublicKey, index: bigint | number): [PublicKey, number] {
   const indexBuffer = Buffer.alloc(8);
-  indexBuffer.writeBigUInt64LE(index);
+  indexBuffer.writeBigUInt64LE(BigInt(index));
   return PublicKey.findProgramAddressSync(
     [Buffer.from("content"), authority.toBuffer(), indexBuffer],
     PROGRAM_ID
   );
 }
 
-// Instruction discriminators (from IDL)
-const DISCRIMINATORS = {
-  createProfile: Buffer.from([225, 205, 234, 143, 17, 186, 50, 220]),
-  createContent: Buffer.from([196, 78, 200, 14, 158, 190, 68, 223]),
-  tipContent: Buffer.from([12, 29, 43, 141, 181, 42, 144, 92]),
-  updateContent: Buffer.from([201, 145, 238, 112, 36, 231, 69, 8]),
-};
-
-// Serialization helpers
-function serializeString(str: string): Buffer {
-  const strBuffer = Buffer.from(str, "utf-8");
-  const lenBuffer = Buffer.alloc(4);
-  lenBuffer.writeUInt32LE(strBuffer.length);
-  return Buffer.concat([lenBuffer, strBuffer]);
+// Convert ContentType enum to Anchor format
+function contentTypeToAnchor(type: ContentType): object {
+  switch (type) {
+    case ContentType.Video: return { video: {} };
+    case ContentType.Audio: return { audio: {} };
+    case ContentType.Image: return { image: {} };
+    case ContentType.Post: return { post: {} };
+    case ContentType.Stream: return { stream: {} };
+    default: return { post: {} };
+  }
 }
 
-function serializeU64(value: bigint | number): Buffer {
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64LE(BigInt(value));
-  return buf;
+// Create Anchor program instance (read-only, no wallet)
+export function createProgram(connection: Connection): Program {
+  // Create a dummy provider for read-only operations
+  const provider = {
+    connection,
+    publicKey: null,
+  } as unknown as AnchorProvider;
+
+  return new Program(idlJson as Idl, provider);
 }
 
-// Create profile instruction
-export function createProfileInstruction(
+// Create profile instruction using Anchor
+export async function createProfileInstruction(
+  program: Program,
   authority: PublicKey,
   username: string
-): TransactionInstruction {
+): Promise<TransactionInstruction> {
   const [profilePda] = getProfilePda(authority);
 
-  const data = Buffer.concat([
-    DISCRIMINATORS.createProfile,
-    serializeString(username),
-  ]);
-
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: profilePda, isSigner: false, isWritable: true },
-      { pubkey: authority, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    programId: PROGRAM_ID,
-    data,
-  });
+  return await program.methods
+    .createProfile(username)
+    .accounts({
+      profile: profilePda,
+      authority: authority,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
 }
 
-// Create content instruction
-export function createContentInstruction(
+// Create content instruction using Anchor
+export async function createContentInstruction(
+  program: Program,
   authority: PublicKey,
-  contentIndex: bigint,
+  contentIndex: bigint | number,
   contentCid: string,
   metadataCid: string,
   contentType: ContentType
-): TransactionInstruction {
+): Promise<TransactionInstruction> {
   const [profilePda] = getProfilePda(authority);
   const [contentPda] = getContentPda(authority, contentIndex);
 
-  const data = Buffer.concat([
-    DISCRIMINATORS.createContent,
-    serializeString(contentCid),
-    serializeString(metadataCid),
-    Buffer.from([contentType]),
-  ]);
-
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: contentPda, isSigner: false, isWritable: true },
-      { pubkey: profilePda, isSigner: false, isWritable: true },
-      { pubkey: authority, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    programId: PROGRAM_ID,
-    data,
-  });
+  return await program.methods
+    .createContent(contentCid, metadataCid, contentTypeToAnchor(contentType))
+    .accounts({
+      content: contentPda,
+      profile: profilePda,
+      authority: authority,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
 }
 
-// Tip content instruction
-export function tipContentInstruction(
+// Tip content instruction using Anchor
+export async function tipContentInstruction(
+  program: Program,
   tipper: PublicKey,
   contentPda: PublicKey,
   creator: PublicKey,
   amount: bigint | number
-): TransactionInstruction {
+): Promise<TransactionInstruction> {
   const [creatorProfilePda] = getProfilePda(creator);
 
-  const data = Buffer.concat([
-    DISCRIMINATORS.tipContent,
-    serializeU64(amount),
-  ]);
-
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: contentPda, isSigner: false, isWritable: true },
-      { pubkey: creatorProfilePda, isSigner: false, isWritable: true },
-      { pubkey: creator, isSigner: false, isWritable: true },
-      { pubkey: tipper, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
-    programId: PROGRAM_ID,
-    data,
-  });
+  return await program.methods
+    .tipContent(new BN(amount.toString()))
+    .accounts({
+      content: contentPda,
+      profile: creatorProfilePda,
+      creator: creator,
+      tipper: tipper,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
 }
 
-// Update content instruction
-export function updateContentInstruction(
+// Update content instruction using Anchor
+export async function updateContentInstruction(
+  program: Program,
   creator: PublicKey,
   contentPda: PublicKey,
   metadataCid: string
-): TransactionInstruction {
-  const data = Buffer.concat([
-    DISCRIMINATORS.updateContent,
-    serializeString(metadataCid),
-  ]);
-
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: contentPda, isSigner: false, isWritable: true },
-      { pubkey: creator, isSigner: true, isWritable: false },
-    ],
-    programId: PROGRAM_ID,
-    data,
-  });
+): Promise<TransactionInstruction> {
+  return await program.methods
+    .updateContent(metadataCid)
+    .accounts({
+      content: contentPda,
+      creator: creator,
+    })
+    .instruction();
 }
 
 // Account fetching helpers
@@ -173,100 +154,87 @@ export async function fetchProfile(
   connection: Connection,
   authority: PublicKey
 ): Promise<CreatorProfile | null> {
+  const program = createProgram(connection);
   const [pda] = getProfilePda(authority);
-  const account = await connection.getAccountInfo(pda);
-  if (!account) return null;
 
-  const data = account.data;
-  // Skip 8-byte discriminator
-  let offset = 8;
-
-  const authorityPubkey = new PublicKey(data.subarray(offset, offset + 32));
-  offset += 32;
-
-  const usernameLen = data.readUInt32LE(offset);
-  offset += 4;
-  const username = data.subarray(offset, offset + usernameLen).toString("utf-8");
-  offset += usernameLen;
-
-  const contentCount = data.readBigUInt64LE(offset);
-  offset += 8;
-
-  const totalTips = data.readBigUInt64LE(offset);
-  offset += 8;
-
-  const createdAt = data.readBigInt64LE(offset);
-
-  return {
-    authority: authorityPubkey,
-    username,
-    contentCount,
-    totalTips,
-    createdAt,
-  };
+  try {
+    const account = await (program.account as any).creatorProfile.fetch(pda);
+    return {
+      authority: account.authority,
+      username: account.username,
+      contentCount: BigInt(account.contentCount.toString()),
+      totalTips: BigInt(account.totalTips.toString()),
+      createdAt: BigInt(account.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchContent(
   connection: Connection,
   authority: PublicKey,
-  index: bigint
+  index: bigint | number
 ): Promise<ContentEntry | null> {
+  const program = createProgram(connection);
   const [pda] = getContentPda(authority, index);
-  const account = await connection.getAccountInfo(pda);
-  if (!account) return null;
 
-  const data = account.data;
-  // Skip 8-byte discriminator
-  let offset = 8;
+  try {
+    const account = await (program.account as any).contentEntry.fetch(pda);
 
-  const creator = new PublicKey(data.subarray(offset, offset + 32));
-  offset += 32;
+    // Convert Anchor enum to our enum
+    let contentType = ContentType.Post;
+    if (account.contentType.video) contentType = ContentType.Video;
+    else if (account.contentType.audio) contentType = ContentType.Audio;
+    else if (account.contentType.image) contentType = ContentType.Image;
+    else if (account.contentType.stream) contentType = ContentType.Stream;
 
-  const contentCidLen = data.readUInt32LE(offset);
-  offset += 4;
-  const contentCid = data.subarray(offset, offset + contentCidLen).toString("utf-8");
-  offset += contentCidLen;
-
-  const metadataCidLen = data.readUInt32LE(offset);
-  offset += 4;
-  const metadataCid = data.subarray(offset, offset + metadataCidLen).toString("utf-8");
-  offset += metadataCidLen;
-
-  const contentType = data.readUInt8(offset) as ContentType;
-  offset += 1;
-
-  const tipsReceived = data.readBigUInt64LE(offset);
-  offset += 8;
-
-  const createdAt = data.readBigInt64LE(offset);
-  offset += 8;
-
-  const contentIndex = data.readBigUInt64LE(offset);
-
-  return {
-    creator,
-    contentCid,
-    metadataCid,
-    contentType,
-    tipsReceived,
-    createdAt,
-    index: contentIndex,
-  };
+    return {
+      creator: account.creator,
+      contentCid: account.contentCid,
+      metadataCid: account.metadataCid,
+      contentType,
+      tipsReceived: BigInt(account.tipsReceived.toString()),
+      createdAt: BigInt(account.createdAt.toString()),
+      index: BigInt(account.index.toString()),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // High-level client
 export function createContentRegistryClient(connection: Connection) {
+  const program = createProgram(connection);
+
   return {
+    program,
     getProfilePda,
     getContentPda,
 
-    createProfileInstruction,
-    createContentInstruction,
-    tipContentInstruction,
-    updateContentInstruction,
+    createProfileInstruction: (authority: PublicKey, username: string) =>
+      createProfileInstruction(program, authority, username),
+    createContentInstruction: (
+      authority: PublicKey,
+      contentIndex: bigint | number,
+      contentCid: string,
+      metadataCid: string,
+      contentType: ContentType
+    ) => createContentInstruction(program, authority, contentIndex, contentCid, metadataCid, contentType),
+    tipContentInstruction: (
+      tipper: PublicKey,
+      contentPda: PublicKey,
+      creator: PublicKey,
+      amount: bigint | number
+    ) => tipContentInstruction(program, tipper, contentPda, creator, amount),
+    updateContentInstruction: (
+      creator: PublicKey,
+      contentPda: PublicKey,
+      metadataCid: string
+    ) => updateContentInstruction(program, creator, contentPda, metadataCid),
 
     fetchProfile: (authority: PublicKey) => fetchProfile(connection, authority),
-    fetchContent: (authority: PublicKey, index: bigint) => fetchContent(connection, authority, index),
+    fetchContent: (authority: PublicKey, index: bigint | number) => fetchContent(connection, authority, index),
 
     // Convenience method to get all content for a creator
     async fetchAllContent(authority: PublicKey): Promise<ContentEntry[]> {
@@ -283,4 +251,4 @@ export function createContentRegistryClient(connection: Connection) {
   };
 }
 
-export { idl } from "./idl";
+export const idl = idlJson;
