@@ -1,0 +1,101 @@
+/* Theme variables for RockPaperScissors component with diverse pastel colors */
+
+:root {
+  /* Light theme variables - diverse pastel palette */
+  --rps-card-bg: #ffffff;
+  --rps-section-bg: #f9f7fa;
+  --rps-border-color: #e5e1ea;
+  --rps-text-main: #463c56;
+  --rps-text-muted: #8c7a9c;
+  
+  /* Game status colors - diverse vibrant pastels */
+  --rps-color-status-win: #9bdc88;     /* Sage green */
+  --rps-color-status-lose: #ff8896;    /* Coral pink */
+  --rps-color-status-draw: #9db5ff;    /* Periwinkle blue */
+  --rps-color-status-loading: #ffc861; /* Golden apricot */
+  --rps-color-status-default: #c7bcdc; /* Dusty lavender */
+  
+  /* Theme colors - diverse vibrant pastels */
+  --rps-color-primary: #c49bff;        /* Soft purple */
+  --rps-color-success: #9bdc88;        /* Sage green */
+  --rps-color-error: #ff8896;          /* Coral pink */
+  --rps-color-warning: #ffc861;        /* Golden apricot */
+  
+  /* Primary color variants - lavender pastel */
+  --rps-primary-bg-subtle: #f1e8ff;
+  --rps-primary-border: #d4bcff;
+  --rps-primary-text: #8257db;
+  
+  /* Secondary color variants - coral pastel */
+  --rps-secondary-bg-subtle: #fff0f2;
+  --rps-secondary-border: #ffd1d9;
+  --rps-secondary-text: #e66377;
+  
+  /* Button styles */
+  --rps-button-active-bg: #ffffff;
+  --rps-button-hover-bg: #f5f0ff;
+  --rps-color-ring: #c49bff;
+  
+  /* VS divider */
+  --rps-vs-bg: #ff9ebe;
+  --rps-vs-text: #7a344e;
+  
+  /* Choice buttons */
+  --rps-choice-bg: #ffffff;
+  --rps-choice-border: #e5e1ea;
+  --rps-choice-hover-bg: #f5f0ff;
+  --rps-choice-selected-border: #c49bff;
+  
+  /* Player/Computer avatars - rock/paper/scissors themed colors */
+  --rps-player-bg: #ffeac2;            /* Rock - warm sandy color */
+  --rps-player-border: #e6b54c;
+  --rps-computer-bg: #d9f2ff;          /* Paper - light blue */
+  --rps-computer-border: #67b6e5;
+}
+
+/* Dark theme - rich dark with diverse pastel accents */
+.dark, :root[class~="dark"] {
+  --rps-card-bg: #252336;
+  --rps-section-bg: #2e2c42;
+  --rps-border-color: #403c5a;
+  --rps-text-main: #eeeaff;
+  --rps-text-muted: #b0a7c7;
+  
+  /* Status colors - diverse glowing pastels for dark mode */
+  --rps-color-status-win: #69ce69;     /* Deep mint */
+  --rps-color-status-lose: #f95d7a;    /* Vibrant rose */
+  --rps-color-status-draw: #7a9aee;    /* Royal blue */
+  --rps-color-status-loading: #fbb144; /* Deep amber */
+  --rps-color-status-default: #6d6885; /* Deep slate */
+  
+  /* Primary color variants - purple glow */
+  --rps-primary-bg-subtle: #372a59;
+  --rps-primary-border: #6e4dbe;
+  --rps-primary-text: #bb9aff;
+  
+  /* Secondary color variants - crimson glow */
+  --rps-secondary-bg-subtle: #4a2835;
+  --rps-secondary-border: #893a4f;
+  --rps-secondary-text: #ff8fab;
+  
+  /* Button styles */
+  --rps-button-active-bg: #382e6c;
+  --rps-button-hover-bg: #463d82;
+  --rps-color-ring: #bb9aff;
+  
+  /* VS divider */
+  --rps-vs-bg: #722741;
+  --rps-vs-text: #ffb2cf;
+  
+  /* Choice buttons */
+  --rps-choice-bg: #2e2c42;
+  --rps-choice-border: #403c5a;
+  --rps-choice-hover-bg: #3d3a56;
+  --rps-choice-selected-border: #bb9aff;
+  
+  /* Player/Computer avatars - themed for dark mode */
+  --rps-player-bg: #5a4413;            /* Dark amber/rock */
+  --rps-player-border: #9e7b22;
+  --rps-computer-bg: #233f5a;          /* Dark blue/paper */
+  --rps-computer-border: #3873ab;
+}

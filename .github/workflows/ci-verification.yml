@@ -1,0 +1,52 @@
+name: CI Verification
+
+on:
+  push:
+    branches:
+      - main
+      - stag
+      - dev
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          # Add environment variables needed for build
+          NEXT_PUBLIC_APP_ID: ${{ secrets.NEXT_PUBLIC_APP_ID }}
+          HMAC_SECRET_KEY: ${{ secrets.HMAC_SECRET_KEY }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          AUTH_URL: ${{ secrets.AUTH_URL }}
+          NEXT_PUBLIC_VERIFY_ACTION_ID: ${{ secrets.NEXT_PUBLIC_VERIFY_ACTION_ID }}
+          NEXT_PUBLIC_VERIFY_ACTION_ROCK: ${{ secrets.NEXT_PUBLIC_VERIFY_ACTION_ROCK }}
+          NEXT_PUBLIC_VERIFY_ACTION_PAPER: ${{ secrets.NEXT_PUBLIC_VERIFY_ACTION_PAPER }}
+          NEXT_PUBLIC_VERIFY_ACTION_SCISSORS: ${{ secrets.NEXT_PUBLIC_VERIFY_ACTION_SCISSORS }}
+
+      - name: Deployment Status
+        run: |
+          echo "::notice::CI verification completed successfully. Deployment will be handled by Vercel branch tracking."
+          echo "::notice::For additional information on deployments, please see the Vercel dashboard."

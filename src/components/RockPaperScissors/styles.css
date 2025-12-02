@@ -1,0 +1,59 @@
+/* Global animations */
+@keyframes shimmer {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 200%; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.05); opacity: 0.7; }
+}
+
+@keyframes statsPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes appearFromBottom {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes appear {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Common style variables */
+:root {
+  /* Status colors */
+  --rps-color-status-default: #6447b1;
+  --rps-color-status-loading: #7c8a97;
+  --rps-color-status-win: #3eb489;
+  --rps-color-status-lose: #e65c5c;
+  --rps-color-status-draw: #8b8b8b;
+  
+  /* Player and computer styles */
+  --rps-player-bg: #f5f7fa;
+  --rps-player-border: #e1e4e8;
+  --rps-computer-bg: #f5f7fa;
+  --rps-computer-border: #e1e4e8;
+  
+  /* VS divider styles */
+  --rps-vs-bg: #f0e6ff;
+  --rps-vs-text: #6e36b5;
+  
+  /* Text colors */
+  --rps-text-main: #333333;
+  --rps-text-muted: #777777;
+  --rps-primary-text: #6e36b5;
+  
+  /* Choice button styles */
+  --rps-choice-bg: #f0f0f0;
+  --rps-choice-border: #e0e0e0;
+}

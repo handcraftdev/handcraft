@@ -1,0 +1,452 @@
+/* Container styles */
+.container {
+  width: 100%;
+  max-width: 28rem; /* 448px */
+  margin: 2rem auto;
+  padding: 1.5rem;
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}
+
+:global(.dark) .container {
+  background-color: var(--color-neutral-950, #0a0a0a);
+  border-color: var(--color-neutral-700, #404040);
+}
+
+.header {
+  width: 100%;
+  background-color: var(--color-primary-50, #f0f9ff);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+:global(.dark) .header {
+  background-color: var(--color-primary-900, #0c4a6e);
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-primary-800, #075985);
+}
+
+:global(.dark) .title {
+  color: var(--color-primary-200, #bae6fd);
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+/* Card styles */
+.card {
+  width: 100%;
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background-color: var(--color-neutral-50, #fafafa);
+  overflow: hidden;
+}
+
+:global(.dark) .card {
+  background-color: var(--color-neutral-900, #171717);
+  border-color: var(--color-neutral-700, #404040);
+}
+
+.cardTitle {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-neutral-600, #525252);
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+:global(.dark) .cardTitle {
+  color: var(--color-neutral-400, #a3a3a3);
+}
+
+/* Scoreboard styles */
+.scoreGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  max-width: 20rem;
+  margin: 0 auto;
+}
+
+.scoreColumn {
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.scoreColumn:not(:last-child) {
+  border-right: 1px solid var(--color-neutral-200, #e5e5e5);
+}
+
+:global(.dark) .scoreColumn:not(:last-child) {
+  border-color: var(--color-neutral-700, #404040);
+}
+
+.scoreLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-neutral-600, #525252);
+  margin-bottom: 0.25rem;
+}
+
+:global(.dark) .scoreLabel {
+  color: var(--color-neutral-400, #a3a3a3);
+}
+
+.scoreValue {
+  font-size: 1.875rem;
+  font-weight: 700;
+}
+
+.winsValue {
+  color: var(--color-success-500, #22c55e);
+}
+
+:global(.dark) .winsValue {
+  color: #4ade80; /* success-400 */
+}
+
+.drawsValue {
+  color: var(--color-primary-600, #0284c7);
+}
+
+:global(.dark) .drawsValue {
+  color: var(--color-primary-400, #38bdf8);
+}
+
+.lossesValue {
+  color: var(--color-error-500, #ef4444);
+}
+
+:global(.dark) .lossesValue {
+  color: #f87171; /* error-400 */
+}
+
+/* Difficulty selection */
+.difficultyButtons {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.difficultyButton {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  color: var(--color-neutral-700, #404040);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: capitalize;
+}
+
+:global(.dark) .difficultyButton {
+  color: var(--color-neutral-300, #d4d4d4);
+}
+
+.difficultyButton:hover {
+  background-color: var(--color-neutral-100, #f5f5f5);
+}
+
+:global(.dark) .difficultyButton:hover {
+  background-color: var(--color-neutral-800, #262626);
+}
+
+.difficultyButtonActive {
+  background-color: white;
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+:global(.dark) .difficultyButtonActive {
+  background-color: var(--color-neutral-800, #262626);
+  border-color: var(--color-neutral-700, #404040);
+}
+
+/* Game arena styles */
+.gameArena {
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  border-radius: 0.75rem;
+  background-color: white;
+  overflow: hidden;
+}
+
+:global(.dark) .gameArena {
+  background-color: var(--color-neutral-900, #171717);
+  border-color: var(--color-neutral-700, #404040);
+}
+
+.statusBar {
+  width: 100%;
+  padding: 0.25rem;
+  text-align: center;
+  font-weight: 500;
+  font-size: 0.75rem;
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+  z-index: 10;
+  color: white;
+}
+
+/* Different status colors */
+.statusWin {
+  background-color: #16a34a; /* green-600 */
+}
+
+.statusLose {
+  background-color: #dc2626; /* red-600 */
+}
+
+.statusDraw {
+  background-color: #2563eb; /* blue-600 */
+}
+
+.statusLoading {
+  background-color: #d97706; /* amber-600 */
+}
+
+.statusDefault {
+  background-color: #4b5563; /* gray-600 */
+}
+
+.gameContent {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 10rem;
+}
+
+/* Choice display styles */
+.choiceContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 33.333333%;
+}
+
+.choiceDisplay {
+  height: 6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.choiceIconContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(1.1);
+}
+
+@keyframes appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+.animate {
+  animation: appear 0.4s ease-out forwards;
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.avatarPlaceholder {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.playerAvatar {
+  background-color: var(--color-primary-50, #f0f9ff);
+}
+
+:global(.dark) .playerAvatar {
+  background-color: var(--color-primary-900, #0c4a6e);
+}
+
+.computerAvatar {
+  background-color: var(--color-secondary-50, #f5f3ff);
+}
+
+:global(.dark) .computerAvatar {
+  background-color: var(--color-secondary-900, #4c1d95);
+}
+
+.choiceLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  background-color: var(--color-primary-50, #f0f9ff);
+  padding: 0.25rem 1rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-primary-100, #e0f2fe);
+  text-align: center;
+}
+
+:global(.dark) .choiceLabel {
+  background-color: var(--color-primary-900, #0c4a6e);
+  border-color: var(--color-primary-800, #075985);
+}
+
+.computerLabel {
+  background-color: var(--color-secondary-50, #f5f3ff);
+  border-color: var(--color-secondary-100, #ede9fe);
+  width: 6rem;
+}
+
+:global(.dark) .computerLabel {
+  background-color: var(--color-secondary-900, #4c1d95);
+  border-color: var(--color-secondary-800, #5b21b6);
+}
+
+.playerLabel {
+  width: 5rem;
+}
+
+.vsDivider {
+  position: relative;
+  width: 33.333333%;
+  display: flex;
+  justify-content: center;
+}
+
+.vsCircle {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background-color: var(--color-neutral-100, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+:global(.dark) .vsCircle {
+  background-color: var(--color-neutral-800, #262626);
+}
+
+.vsText {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-neutral-600, #525252);
+}
+
+:global(.dark) .vsText {
+  color: var(--color-neutral-400, #a3a3a3);
+}
+
+/* Choice buttons */
+.choiceButtons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.choiceButton {
+  padding: 1rem 0;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid var(--color-neutral-200, #e5e5e5);
+  background-color: white;
+  cursor: pointer;
+}
+
+:global(.dark) .choiceButton {
+  background-color: var(--color-neutral-900, #171717);
+  border-color: var(--color-neutral-700, #404040);
+}
+
+.choiceButton:hover:not(:disabled) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.choiceButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.choiceButtonActive {
+  border-color: transparent;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.choiceButton:global(.ring) {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--color-primary-400, #38bdf8);
+}
+
+:global(.dark) .choiceButton:global(.ring) {
+  box-shadow: 0 0 0 2px var(--color-primary-500, #0ea5e9);
+}
+
+.choiceButtonIcon {
+  font-size: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.choiceButtonText {
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* Action buttons */
+.actionButtons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+/* Text size helpers */
+.textXl { font-size: 1.875rem; }
+.textLg { font-size: 1.25rem; }
+.textMd { font-size: 1rem; }
+.textBase { font-size: 0.875rem; }
+.textSm { font-size: 0.75rem; }
+.textXs { font-size: 0.675rem; }
+
+/* Choice icon sizes */
+.iconSizeMd { font-size: 1.875rem; }
+.iconSizeLg { font-size: 3rem; }
+.iconSizeXl { font-size: 4rem; }
