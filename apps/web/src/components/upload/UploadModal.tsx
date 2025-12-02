@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useContentUpload } from "@/hooks/useUpload";
+import { useContentRegistry, ContentType as OnChainContentType } from "@/hooks/useContentRegistry";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -14,8 +15,17 @@ interface UploadModalProps {
 
 type ContentType = "video" | "audio" | "image";
 
+function mapToOnChainType(type: ContentType): OnChainContentType {
+  switch (type) {
+    case "video": return OnChainContentType.Video;
+    case "audio": return OnChainContentType.Audio;
+    case "image": return OnChainContentType.Image;
+    default: return OnChainContentType.Post;
+  }
+}
+
 export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
-  const [step, setStep] = useState<"select" | "details" | "uploading" | "done">(
+  const [step, setStep] = useState<"select" | "details" | "uploading" | "registering" | "done">(
     "select"
   );
   const [file, setFile] = useState<File | null>(null);
@@ -24,12 +34,18 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
+  const [registerOnChain, setRegisterOnChain] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { hasProfile, createContent, isCreatingContent } = useContentRegistry();
 
   const { isUploading, progress, error, uploadContent, reset } =
     useContentUpload({
       onSuccess: (result) => {
-        setStep("done");
+        if (!registerOnChain || !hasProfile) {
+          setStep("done");
+        }
+        // If registering on-chain, the handleUpload function will handle the next step
       },
       onError: (err) => {
         console.error("Upload error:", err);
@@ -80,6 +96,22 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     });
 
     if (result) {
+      // Register on-chain if user opted in and has a profile
+      if (registerOnChain && hasProfile && result.metadata) {
+        setStep("registering");
+        try {
+          await createContent({
+            contentCid: result.content.cid,
+            metadataCid: result.metadata.cid,
+            contentType: mapToOnChainType(contentType),
+          });
+        } catch (err) {
+          console.error("Failed to register on-chain:", err);
+          // Still consider it a success - IPFS upload worked
+        }
+      }
+
+      setStep("done");
       onSuccess?.({
         content: result.content,
         metadata: result.metadata,
@@ -252,6 +284,22 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 {file.name} • {(file.size / (1024 * 1024)).toFixed(2)} MB
               </div>
 
+              {/* On-chain registration */}
+              {hasProfile && (
+                <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={registerOnChain}
+                    onChange={(e) => setRegisterOnChain(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500"
+                  />
+                  <div>
+                    <p className="font-medium">Register on Solana</p>
+                    <p className="text-xs text-gray-400">Store content reference on-chain for ownership proof</p>
+                  </div>
+                </label>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3 pt-4">
                 <button
@@ -277,7 +325,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           )}
 
           {/* Step: Uploading */}
-          {step === "uploading" && (
+          {(step === "uploading" || step === "registering") && (
             <div className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4">
                 <svg
@@ -300,14 +348,23 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">Uploading to IPFS...</p>
-              <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
-                <div
-                  className="bg-primary-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <p className="text-sm text-gray-500">{progress}% complete</p>
+              <p className="text-lg font-medium mb-2">
+                {step === "uploading" ? "Uploading to IPFS..." : "Registering on Solana..."}
+              </p>
+              {step === "uploading" && (
+                <>
+                  <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div
+                      className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500">{progress}% complete</p>
+                </>
+              )}
+              {step === "registering" && (
+                <p className="text-sm text-gray-500">Please confirm the transaction in your wallet</p>
+              )}
               {error && <p className="text-red-500 mt-4">{error}</p>}
             </div>
           )}
