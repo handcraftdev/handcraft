@@ -1,8 +1,17 @@
 import type { NextConfig } from "next";
+import { withTamagui } from "@tamagui/next-plugin";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@handcraft/ui", "@handcraft/sdk", "@handcraft/types"],
+  transpilePackages: [
+    "@handcraft/ui",
+    "@handcraft/sdk",
+    "@handcraft/types",
+    "tamagui",
+    "@tamagui/core",
+    "@tamagui/config",
+    "@tamagui/animations-css",
+  ],
   images: {
     remotePatterns: [
       {
@@ -12,8 +21,16 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ["@solana/wallet-adapter-react-ui"],
+    optimizePackageImports: ["@solana/wallet-adapter-react-ui", "tamagui"],
   },
 };
 
-export default nextConfig;
+const tamaguiPlugin = withTamagui({
+  config: "../../packages/ui/src/tamagui.config.ts",
+  components: ["tamagui"],
+  appDir: true,
+  outputCSS: "./public/tamagui.css",
+  disableExtraction: process.env.NODE_ENV === "development",
+});
+
+export default tamaguiPlugin(nextConfig);

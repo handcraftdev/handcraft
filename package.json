@@ -18,5 +18,13 @@
   "packageManager": "pnpm@9.14.2",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@tamagui/animations-css": "^1.138.6",
+    "@tamagui/config": "^1.138.6",
+    "@tamagui/core": "^1.138.6",
+    "@tamagui/font-inter": "^1.138.6",
+    "@tamagui/themes": "^1.138.6",
+    "tamagui": "^1.138.6"
   }
 }

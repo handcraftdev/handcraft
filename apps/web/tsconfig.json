@@ -21,6 +21,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@handcraft/ui": ["../../packages/ui/src"],
+      "@handcraft/ui/*": ["../../packages/ui/src/*"],
       "@handcraft/sdk": ["../../packages/sdk/src"],
       "@handcraft/types": ["../../packages/types/src"]
     }
