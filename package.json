@@ -20,6 +20,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.943.0",
     "@tamagui/animations-css": "^1.138.6",
     "@tamagui/config": "^1.138.6",
     "@tamagui/core": "^1.138.6",
