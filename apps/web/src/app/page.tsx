@@ -3,7 +3,6 @@
 import { Feed } from "@/components/feed";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
-import { ProfileSetup } from "@/components/profile";
 
 export default function Home() {
   return (
@@ -15,7 +14,6 @@ export default function Home() {
           <Feed />
         </main>
       </div>
-      <ProfileSetup />
     </div>
   );
 }
