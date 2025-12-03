@@ -36,13 +36,28 @@ export function createFilebaseClient(config: FilebaseConfig) {
         ContentType: contentType,
       }));
 
-      // Get CID from response headers
-      const head = await client.send(new HeadObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-      }));
+      // Get CID from response headers - retry with delay for eventual consistency
+      let cid = "";
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          // Small delay to allow Filebase to process
+          await new Promise(resolve => setTimeout(resolve, 500));
 
-      const cid = head.Metadata?.cid || "";
+          const head = await client.send(new HeadObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+          }));
+
+          cid = head.Metadata?.cid || "";
+          if (cid) break;
+        } catch (err) {
+          retries--;
+          if (retries === 0) throw err;
+          // Wait longer on retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
 
       return {
         cid,

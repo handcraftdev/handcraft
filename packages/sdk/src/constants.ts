@@ -27,7 +27,7 @@ export const TOKEN_MINTS = {
 
 // IPFS/Storage configuration
 export const STORAGE = {
-  IPFS_GATEWAY: "https://gateway.pinata.cloud/ipfs/",
+  IPFS_GATEWAY: "https://ipfs.filebase.io/ipfs/",
   ARWEAVE_GATEWAY: "https://arweave.net/",
 } as const;
 
