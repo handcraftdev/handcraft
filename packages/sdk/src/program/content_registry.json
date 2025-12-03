@@ -1,5 +1,5 @@
 {
-  "address": "25WLThAnXWyNZcTLJpXkx6Gh7b7Go9DNNiZrZdWEKabi",
+  "address": "A5xdpZf8AKfmmWP5wsH7T8Ea8GhSKRnbaxe5eWANVcHN",
   "metadata": {
     "name": "content_registry",
     "version": "0.1.0",
@@ -8,19 +8,455 @@
   },
   "instructions": [
     {
-      "name": "create_content",
+      "name": "configure_mint",
       "docs": [
-        "Publish new content"
+        "Configure NFT minting for content (creator only)"
       ],
       "discriminator": [
-        196,
-        78,
-        200,
-        14,
-        158,
+        194,
+        40,
+        217,
+        137,
+        179,
+        23,
+        131,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "content"
+        },
+        {
+          "name": "mint_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "content"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": {
+            "defined": {
+              "name": "PaymentCurrency"
+            }
+          }
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "delete_content",
+      "docs": [
+        "Delete content (creator only, not locked)"
+      ],
+      "discriminator": [
+        5,
+        233,
+        219,
+        88,
+        173,
+        220,
+        96,
+        213
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "cid_registry",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "content"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_content_with_mint",
+      "docs": [
+        "Delete content with associated mint config (creator only, not locked)"
+      ],
+      "discriminator": [
+        217,
+        53,
+        24,
+        118,
+        52,
+        28,
+        241,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "cid_registry",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "content",
+            "mint_config"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_ecosystem",
+      "docs": [
+        "Initialize the ecosystem config (admin only, once)"
+      ],
+      "discriminator": [
+        103,
+        159,
+        177,
+        39,
+        191,
+        146,
         190,
-        68,
-        223
+        22
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "usdc_mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "mint_nft_sol",
+      "docs": [
+        "Mint NFT with SOL payment"
+      ],
+      "discriminator": [
+        246,
+        203,
+        253,
+        176,
+        41,
+        171,
+        75,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mint_nft_usdc",
+      "docs": [
+        "Mint NFT with USDC payment"
+      ],
+      "discriminator": [
+        51,
+        228,
+        227,
+        208,
+        52,
+        52,
+        182,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator"
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buyer_token_account",
+          "writable": true
+        },
+        {
+          "name": "creator_token_account",
+          "writable": true
+        },
+        {
+          "name": "platform_token_account",
+          "writable": true
+        },
+        {
+          "name": "treasury_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_content",
+      "docs": [
+        "Register new content with CID uniqueness enforcement"
+      ],
+      "discriminator": [
+        170,
+        55,
+        41,
+        115,
+        252,
+        248,
+        38,
+        144
       ],
       "accounts": [
         {
@@ -41,37 +477,28 @@
                 ]
               },
               {
-                "kind": "account",
-                "path": "authority"
-              },
-              {
-                "kind": "account",
-                "path": "profile.content_count",
-                "account": "CreatorProfile"
+                "kind": "arg",
+                "path": "cid_hash"
               }
             ]
           }
         },
         {
-          "name": "profile",
+          "name": "cid_registry",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  114,
-                  111,
-                  102,
+                  99,
                   105,
-                  108,
-                  101
+                  100
                 ]
               },
               {
-                "kind": "account",
-                "path": "authority"
+                "kind": "arg",
+                "path": "cid_hash"
               }
             ]
           }
@@ -79,10 +506,7 @@
         {
           "name": "authority",
           "writable": true,
-          "signer": true,
-          "relations": [
-            "profile"
-          ]
+          "signer": true
         },
         {
           "name": "system_program",
@@ -90,6 +514,15 @@
         }
       ],
       "args": [
+        {
+          "name": "cid_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
         {
           "name": "content_cid",
           "type": "string"
@@ -109,41 +542,89 @@
       ]
     },
     {
-      "name": "create_profile",
+      "name": "register_content_with_mint",
       "docs": [
-        "Create a new creator profile"
+        "Register new content with optional NFT mint configuration"
       ],
       "discriminator": [
-        225,
-        205,
-        234,
-        143,
-        17,
-        186,
-        50,
-        220
+        126,
+        168,
+        92,
+        147,
+        68,
+        165,
+        193,
+        127
       ],
       "accounts": [
         {
-          "name": "profile",
+          "name": "content",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  112,
-                  114,
+                  99,
                   111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "cid_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
                   102,
                   105,
-                  108,
-                  101
+                  103
                 ]
               },
               {
                 "kind": "account",
-                "path": "authority"
+                "path": "content"
               }
             ]
           }
@@ -160,8 +641,51 @@
       ],
       "args": [
         {
-          "name": "username",
+          "name": "cid_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "content_cid",
           "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "content_type",
+          "type": {
+            "defined": {
+              "name": "ContentType"
+            }
+          }
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": {
+            "defined": {
+              "name": "PaymentCurrency"
+            }
+          }
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
         }
       ]
     },
@@ -184,30 +708,6 @@
         {
           "name": "content",
           "writable": true
-        },
-        {
-          "name": "profile",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  102,
-                  105,
-                  108,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "creator"
-              }
-            ]
-          }
         },
         {
           "name": "creator",
@@ -233,7 +733,7 @@
     {
       "name": "update_content",
       "docs": [
-        "Update content metadata (creator only)"
+        "Update content metadata (creator only, not locked)"
       ],
       "discriminator": [
         201,
@@ -264,9 +764,174 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "update_ecosystem",
+      "docs": [
+        "Update ecosystem settings (admin only)"
+      ],
+      "discriminator": [
+        116,
+        15,
+        145,
+        34,
+        144,
+        187,
+        120,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "ecosystem_config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_treasury",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "new_usdc_mint",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "is_paused",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_mint_settings",
+      "docs": [
+        "Update mint settings (creator only, with restrictions after first mint)"
+      ],
+      "discriminator": [
+        46,
+        150,
+        169,
+        122,
+        14,
+        20,
+        173,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "content"
+        },
+        {
+          "name": "mint_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "content",
+            "mint_config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": {
+              "option": "u64"
+            }
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "CidRegistry",
+      "discriminator": [
+        76,
+        59,
+        180,
+        103,
+        33,
+        99,
+        115,
+        244
+      ]
+    },
     {
       "name": "ContentEntry",
       "discriminator": [
@@ -281,20 +946,46 @@
       ]
     },
     {
-      "name": "CreatorProfile",
+      "name": "EcosystemConfig",
       "discriminator": [
-        251,
-        250,
-        184,
-        111,
-        214,
-        178,
-        32,
-        221
+        230,
+        1,
+        147,
+        206,
+        55,
+        106,
+        39,
+        15
+      ]
+    },
+    {
+      "name": "MintConfig",
+      "discriminator": [
+        168,
+        252,
+        88,
+        182,
+        219,
+        205,
+        39,
+        53
       ]
     }
   ],
   "events": [
+    {
+      "name": "NftMintEvent",
+      "discriminator": [
+        114,
+        195,
+        97,
+        207,
+        65,
+        217,
+        173,
+        157
+      ]
+    },
     {
       "name": "TipEvent",
       "discriminator": [
@@ -312,26 +1003,137 @@
   "errors": [
     {
       "code": 6000,
-      "name": "UsernameTooLong",
-      "msg": "Username must be 32 characters or less"
-    },
-    {
-      "code": 6001,
       "name": "CidTooLong",
       "msg": "CID must be 64 characters or less"
     },
     {
-      "code": 6002,
+      "code": 6001,
       "name": "InvalidTipAmount",
       "msg": "Tip amount must be greater than 0"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "Unauthorized",
       "msg": "Unauthorized"
+    },
+    {
+      "code": 6003,
+      "name": "CidAlreadyRegistered",
+      "msg": "Content CID already registered by another user"
+    },
+    {
+      "code": 6004,
+      "name": "CidHashMismatch",
+      "msg": "CID hash does not match the provided CID"
+    },
+    {
+      "code": 6005,
+      "name": "ContentLocked",
+      "msg": "Content is locked after first NFT mint"
+    },
+    {
+      "code": 6006,
+      "name": "MintConfigExists",
+      "msg": "Mint configuration already exists for this content"
+    },
+    {
+      "code": 6007,
+      "name": "MintConfigNotFound",
+      "msg": "Mint configuration not found"
+    },
+    {
+      "code": 6008,
+      "name": "MintingNotActive",
+      "msg": "Minting is not active for this content"
+    },
+    {
+      "code": 6009,
+      "name": "MaxSupplyReached",
+      "msg": "Maximum supply reached"
+    },
+    {
+      "code": 6010,
+      "name": "PriceTooLow",
+      "msg": "Price below minimum allowed"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidRoyalty",
+      "msg": "Royalty percentage out of allowed range (2-10%)"
+    },
+    {
+      "code": 6012,
+      "name": "InsufficientPayment",
+      "msg": "Insufficient payment amount"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidCurrency",
+      "msg": "Invalid payment currency"
+    },
+    {
+      "code": 6014,
+      "name": "CannotIncreaseSupply",
+      "msg": "Cannot increase supply after minting has started"
+    },
+    {
+      "code": 6015,
+      "name": "SupplyBelowMinted",
+      "msg": "Cannot set supply below already minted count"
+    },
+    {
+      "code": 6016,
+      "name": "EcosystemPaused",
+      "msg": "Ecosystem is paused"
+    },
+    {
+      "code": 6017,
+      "name": "EcosystemAlreadyInitialized",
+      "msg": "Ecosystem config already initialized"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidUsdcMint",
+      "msg": "Invalid USDC mint address"
     }
   ],
   "types": [
+    {
+      "name": "CidRegistry",
+      "docs": [
+        "Registry to ensure CID uniqueness across all content.",
+        "PDA seeds: [\"cid\", hash(content_cid)]",
+        "",
+        "This prevents multiple users from claiming the same content CID.",
+        "The first user to register a CID becomes its permanent owner."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The owner who registered this CID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content_pda",
+            "docs": [
+              "The content PDA associated with this CID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "When this CID was registered"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "ContentEntry",
       "type": {
@@ -366,7 +1168,11 @@
             "type": "i64"
           },
           {
-            "name": "index",
+            "name": "is_locked",
+            "type": "bool"
+          },
+          {
+            "name": "minted_count",
             "type": "u64"
           }
         ]
@@ -378,47 +1184,250 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Video"
+            "name": "Movie"
           },
           {
-            "name": "Audio"
+            "name": "TvSeries"
           },
           {
-            "name": "Image"
+            "name": "MusicVideo"
           },
           {
-            "name": "Post"
+            "name": "ShortVideo"
           },
           {
-            "name": "Stream"
+            "name": "GeneralVideo"
+          },
+          {
+            "name": "Comic"
+          },
+          {
+            "name": "GeneralBook"
+          },
+          {
+            "name": "Podcast"
+          },
+          {
+            "name": "Audiobook"
+          },
+          {
+            "name": "GeneralAudio"
+          },
+          {
+            "name": "Photo"
+          },
+          {
+            "name": "Art"
+          },
+          {
+            "name": "GeneralImage"
           }
         ]
       }
     },
     {
-      "name": "CreatorProfile",
+      "name": "EcosystemConfig",
+      "docs": [
+        "Global ecosystem configuration",
+        "PDA seeds: [\"ecosystem\"]",
+        "Only one instance exists, controlled by admin"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "authority",
+            "name": "admin",
+            "docs": [
+              "Admin who can update ecosystem settings"
+            ],
             "type": "pubkey"
           },
           {
-            "name": "username",
-            "type": "string"
+            "name": "treasury",
+            "docs": [
+              "Treasury wallet to receive ecosystem fees"
+            ],
+            "type": "pubkey"
           },
           {
-            "name": "content_count",
+            "name": "usdc_mint",
+            "docs": [
+              "USDC mint address (for USDC payments)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_fees_sol",
+            "docs": [
+              "Total fees collected (SOL, in lamports)"
+            ],
             "type": "u64"
           },
           {
-            "name": "total_tips",
+            "name": "total_fees_usdc",
+            "docs": [
+              "Total fees collected (USDC, in base units)"
+            ],
             "type": "u64"
+          },
+          {
+            "name": "total_nfts_minted",
+            "docs": [
+              "Total NFTs minted across all content"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_paused",
+            "docs": [
+              "Whether the ecosystem is paused (emergency stop)"
+            ],
+            "type": "bool"
           },
           {
             "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MintConfig",
+      "docs": [
+        "Mint configuration for a content entry",
+        "PDA seeds: [\"mint_config\", content_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "The content entry this config belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator who owns this config"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Price per NFT (0 = free mint)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "docs": [
+              "Payment currency (SOL or USDC)"
+            ],
+            "type": {
+              "defined": {
+                "name": "PaymentCurrency"
+              }
+            }
+          },
+          {
+            "name": "max_supply",
+            "docs": [
+              "Maximum supply (None = unlimited)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creator_royalty_bps",
+            "docs": [
+              "Creator royalty on secondary sales (basis points, e.g., 500 = 5%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether minting is currently enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NftMintEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "edition_number",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "type": {
+              "defined": {
+                "name": "PaymentCurrency"
+              }
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentCurrency",
+      "docs": [
+        "Payment currency options"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Sol"
+          },
+          {
+            "name": "Usdc"
           }
         ]
       }
