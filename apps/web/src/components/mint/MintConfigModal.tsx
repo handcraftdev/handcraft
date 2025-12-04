@@ -10,12 +10,14 @@ import {
   MIN_PRICE_LAMPORTS,
   MIN_PRICE_USDC,
 } from "@/hooks/useContentRegistry";
+import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface MintConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
   contentCid: string;
   contentTitle?: string;
+  isLocked?: boolean;
   onSuccess?: () => void;
 }
 
@@ -26,6 +28,7 @@ export function MintConfigModal({
   onClose,
   contentCid,
   contentTitle,
+  isLocked = false,
   onSuccess,
 }: MintConfigModalProps) {
   const { publicKey } = useWallet();
@@ -155,7 +158,8 @@ export function MintConfigModal({
           contentCid,
           price: priceValue,
           maxSupply: maxSupplyForUpdate,
-          creatorRoyaltyBps: royaltyBps,
+          // Don't change royalty if content is locked (NFTs have been minted)
+          creatorRoyaltyBps: isLocked ? null : royaltyBps,
           isActive: null, // Keep current value
         });
       } else {
@@ -173,7 +177,7 @@ export function MintConfigModal({
       onClose();
     } catch (err) {
       console.error("Failed to save mint settings:", err);
-      setError(err instanceof Error ? err.message : "Failed to save mint settings");
+      setError(getTransactionErrorMessage(err));
     }
   };
 
@@ -345,14 +349,17 @@ export function MintConfigModal({
               step="0.5"
               value={royaltyPercent}
               onChange={(e) => setRoyaltyPercent(e.target.value)}
-              className="w-full"
+              disabled={isLocked}
+              className={`w-full ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
             />
             <div className="flex justify-between text-xs text-gray-500">
               <span>2%</span>
               <span>10%</span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              You'll receive this percentage on every resale
+              {isLocked
+                ? "Royalty cannot be changed after NFTs have been minted"
+                : "You'll receive this percentage on every resale"}
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Transaction, PublicKey } from "@solana/web3.js";
+import { Transaction, PublicKey, TransactionInstruction, Connection } from "@solana/web3.js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createContentRegistryClient,
@@ -30,6 +30,47 @@ export {
 };
 export type { MintConfig, EcosystemConfig };
 
+/**
+ * Simulate a transaction before sending to wallet
+ * Throws an error with a descriptive message if simulation fails
+ */
+async function simulateTransaction(
+  connection: Connection,
+  tx: Transaction,
+  feePayer: PublicKey
+): Promise<void> {
+  tx.feePayer = feePayer;
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+  const simulation = await connection.simulateTransaction(tx);
+
+  if (simulation.value.err) {
+    // Extract error details
+    const logs = simulation.value.logs || [];
+    const errorLog = logs.find(log =>
+      log.includes("Error") ||
+      log.includes("error") ||
+      log.includes("failed")
+    );
+
+    // Check for specific error patterns
+    if (logs.some(log => log.includes("already in use"))) {
+      throw new Error("Account already exists - this content may already be registered");
+    }
+    if (logs.some(log => log.includes("CidAlreadyRegistered"))) {
+      throw new Error("This content CID is already registered on-chain");
+    }
+    if (logs.some(log => log.includes("insufficient funds"))) {
+      throw new Error("Insufficient funds for transaction");
+    }
+
+    throw new Error(
+      errorLog ||
+      `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`
+    );
+  }
+}
+
 export function useContentRegistry() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -42,12 +83,14 @@ export function useContentRegistry() {
     queryKey: ["content", publicKey?.toBase58()],
     queryFn: () => (publicKey ? client.fetchContentByCreator(publicKey) : []),
     enabled: !!publicKey,
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   // Fetch global content (all creators)
   const globalContentQuery = useQuery({
     queryKey: ["globalContent"],
     queryFn: () => client.fetchGlobalContent(),
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   // Register content mutation (without NFT config)
@@ -56,22 +99,32 @@ export function useContentRegistry() {
       contentCid,
       metadataCid,
       contentType,
+      isEncrypted = false,
+      previewCid = "",
+      encryptionMetaCid = "",
     }: {
       contentCid: string;
       metadataCid: string;
       contentType: ContentType;
+      isEncrypted?: boolean;
+      previewCid?: string;
+      encryptionMetaCid?: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
       console.log("Registering content...");
       console.log("Content CID:", contentCid);
       console.log("Metadata CID:", metadataCid);
+      console.log("Is Encrypted:", isEncrypted);
 
       const ix = await client.registerContentInstruction(
         publicKey,
         contentCid,
         metadataCid,
-        contentType
+        contentType,
+        isEncrypted,
+        previewCid,
+        encryptionMetaCid
       );
 
       console.log("Content instruction created, keys:", ix.keys.map(k => ({
@@ -81,12 +134,13 @@ export function useContentRegistry() {
       })));
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Content registration tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Content registration confirmed!");
@@ -109,6 +163,9 @@ export function useContentRegistry() {
       currency,
       maxSupply,
       creatorRoyaltyBps,
+      isEncrypted = false,
+      previewCid = "",
+      encryptionMetaCid = "",
     }: {
       contentCid: string;
       metadataCid: string;
@@ -117,6 +174,9 @@ export function useContentRegistry() {
       currency: PaymentCurrency;
       maxSupply: bigint | null;
       creatorRoyaltyBps: number;
+      isEncrypted?: boolean;
+      previewCid?: string;
+      encryptionMetaCid?: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
@@ -127,6 +187,9 @@ export function useContentRegistry() {
         currency,
         maxSupply,
         creatorRoyaltyBps,
+        isEncrypted,
+        previewCid,
+        encryptionMetaCid,
       });
 
       const ix = await client.registerContentWithMintInstruction(
@@ -137,16 +200,20 @@ export function useContentRegistry() {
         price,
         currency,
         maxSupply,
-        creatorRoyaltyBps
+        creatorRoyaltyBps,
+        isEncrypted,
+        previewCid,
+        encryptionMetaCid
       );
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Content + mint registration tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Content + mint registration confirmed!");
@@ -175,8 +242,9 @@ export function useContentRegistry() {
 
       const ix = await client.tipContentInstruction(publicKey, contentCid, creator, amountLamports);
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Simulate transaction before prompting wallet
+      await simulateTransaction(connection, tx, publicKey);
 
       const signature = await sendTransaction(tx, connection);
       await connection.confirmTransaction(signature, "confirmed");
@@ -216,12 +284,13 @@ export function useContentRegistry() {
       );
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Configure mint tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Configure mint confirmed!");
@@ -262,12 +331,13 @@ export function useContentRegistry() {
       );
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Update mint settings tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Update mint settings confirmed!");
@@ -290,13 +360,21 @@ export function useContentRegistry() {
       contentCid: string;
       creator: PublicKey;
       treasury: PublicKey;
-      platform: PublicKey | null;
+      platform: PublicKey;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
-      console.log("Minting NFT with SOL...", { contentCid, creator: creator.toBase58() });
+      console.log("Minting NFT with SOL...", {
+        contentCid,
+        creator: creator.toBase58(),
+        treasury: treasury.toBase58(),
+        platform: platform.toBase58(),
+        buyer: publicKey.toBase58(),
+      });
 
-      const ix = await client.mintNftSolInstruction(
+      // mintNftSolInstruction returns { instruction, nftAssetKeypair }
+      // The nftAssetKeypair MUST be added as a signer to the transaction
+      const { instruction, nftAssetKeypair } = await client.mintNftSolInstruction(
         publicKey,
         contentCid,
         creator,
@@ -304,12 +382,32 @@ export function useContentRegistry() {
         platform
       );
 
-      const tx = new Transaction().add(ix);
+      console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
+
+      const tx = new Transaction().add(instruction);
+
+      // Set up the transaction for simulation
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
+      // Sign with the NFT asset keypair (partial sign before wallet signs)
+      tx.partialSign(nftAssetKeypair);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      const simulation = await connection.simulateTransaction(tx);
+      if (simulation.value.err) {
+        const logs = simulation.value.logs || [];
+        const errorLog = logs.find(log =>
+          log.includes("Error") || log.includes("error") || log.includes("failed")
+        );
+        throw new Error(errorLog || `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+      console.log("Simulation successful, sending to wallet...");
+
+      // Send transaction with the NFT keypair as additional signer
       const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
+        signers: [nftAssetKeypair],
       });
       console.log("Mint NFT tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
@@ -343,12 +441,13 @@ export function useContentRegistry() {
       );
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Update content tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Update content confirmed!");
@@ -379,12 +478,13 @@ export function useContentRegistry() {
         : await client.deleteContentInstruction(publicKey, contentCid);
 
       const tx = new Transaction().add(ix);
-      tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-      const signature = await sendTransaction(tx, connection, {
-        skipPreflight: true,
-      });
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
       console.log("Delete content tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Delete content confirmed!");
@@ -404,6 +504,48 @@ export function useContentRegistry() {
       queryKey: ["mintConfig", contentCid],
       queryFn: () => contentCid ? client.fetchMintConfig(contentCid) : null,
       enabled: !!contentCid,
+      staleTime: 60000, // Cache for 60 seconds
+    });
+  };
+
+  // Fetch ALL NFTs owned by wallet ONCE (batch query)
+  const walletNftsQuery = useQuery({
+    queryKey: ["walletNfts", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey) return [];
+      // Fetch all NFT metadata for wallet once
+      return client.fetchWalletNftMetadata(publicKey);
+    },
+    enabled: !!publicKey,
+    staleTime: 60000, // Cache for 60 seconds
+  });
+
+  // Count NFTs owned for a specific content (uses cached wallet NFTs)
+  const useNftOwnership = (contentCid: string | null) => {
+    const walletNfts = walletNftsQuery.data || [];
+
+    // Filter from cached wallet NFTs instead of making new RPC call
+    const count = contentCid
+      ? walletNfts.filter(nft => nft.contentCid === contentCid).length
+      : 0;
+
+    return {
+      data: count,
+      isLoading: walletNftsQuery.isLoading,
+      refetch: walletNftsQuery.refetch,
+    };
+  };
+
+  // Count total NFTs minted for a content (on-chain count)
+  const useTotalMintedNfts = (contentCid: string | null) => {
+    return useQuery({
+      queryKey: ["totalMintedNfts", contentCid],
+      queryFn: async () => {
+        if (!contentCid) return 0;
+        return client.countTotalMintedNfts(contentCid);
+      },
+      enabled: !!contentCid,
+      staleTime: 30000, // Cache for 30 seconds
     });
   };
 
@@ -411,12 +553,14 @@ export function useContentRegistry() {
   const ecosystemConfigQuery = useQuery({
     queryKey: ["ecosystemConfig"],
     queryFn: () => client.fetchEcosystemConfig(),
+    staleTime: 300000, // Cache for 5 minutes (rarely changes)
   });
 
-  // Fetch all mintable content
+  // Fetch all mintable content (includes mint configs!)
   const mintableContentQuery = useQuery({
     queryKey: ["mintableContent"],
     queryFn: () => client.fetchMintableContent(),
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   return {
@@ -450,6 +594,8 @@ export function useContentRegistry() {
 
     // Hooks for specific data
     useMintConfig,
+    useNftOwnership,
+    useTotalMintedNfts,
 
     // Utilities
     client,

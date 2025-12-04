@@ -7,6 +7,14 @@ export interface UploadResult {
   size: number;
   name: string;
   url: string;
+  // Encryption fields (present when encrypt=true)
+  previewCid?: string;
+  encryptionMeta?: {
+    version: number;
+    algorithm: string;
+    nonce: string;
+    contentId: string;
+  };
 }
 
 export interface UploadState {
@@ -21,7 +29,7 @@ export interface UseUploadOptions {
   onError?: (error: string) => void;
 }
 
-export function useUpload(options: UseUploadOptions = {}) {
+export function useUpload(hookOptions: UseUploadOptions = {}) {
   const [state, setState] = useState<UploadState>({
     isUploading: false,
     progress: 0,
@@ -30,7 +38,7 @@ export function useUpload(options: UseUploadOptions = {}) {
   });
 
   const uploadFile = useCallback(
-    async (file: File, name?: string): Promise<UploadResult | null> => {
+    async (file: File, name?: string, options?: { encrypt?: boolean; generatePreview?: boolean }): Promise<UploadResult | null> => {
       setState({
         isUploading: true,
         progress: 0,
@@ -43,6 +51,13 @@ export function useUpload(options: UseUploadOptions = {}) {
         formData.append("file", file);
         if (name) {
           formData.append("name", name);
+        }
+        // Always encrypt and generate preview by default
+        if (options?.encrypt !== false) {
+          formData.append("encrypt", "true");
+        }
+        if (options?.generatePreview !== false) {
+          formData.append("generatePreview", "true");
         }
 
         // Simulate progress for now (XHR would give real progress)
@@ -69,7 +84,7 @@ export function useUpload(options: UseUploadOptions = {}) {
           result,
         });
 
-        options.onSuccess?.(result);
+        hookOptions.onSuccess?.(result);
         return result;
       } catch (error) {
         const errorMessage =
@@ -82,11 +97,11 @@ export function useUpload(options: UseUploadOptions = {}) {
           result: null,
         });
 
-        options.onError?.(errorMessage);
+        hookOptions.onError?.(errorMessage);
         return null;
       }
     },
-    [options]
+    [hookOptions]
   );
 
   const uploadMetadata = useCallback(
@@ -112,11 +127,11 @@ export function useUpload(options: UseUploadOptions = {}) {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Metadata upload failed";
-        options.onError?.(errorMessage);
+        hookOptions.onError?.(errorMessage);
         return null;
       }
     },
-    [options]
+    [hookOptions]
   );
 
   const reset = useCallback(() => {
@@ -155,7 +170,7 @@ export function useContentUpload(options: UseUploadOptions = {}) {
       },
       thumbnail?: Blob
     ) => {
-      // 1. Upload main content
+      // 1. Upload main content (encrypted by default)
       const contentResult = await upload.uploadFile(file, metadata.title);
       if (!contentResult) return null;
 
@@ -167,14 +182,26 @@ export function useContentUpload(options: UseUploadOptions = {}) {
           `${metadata.title}-thumbnail.jpg`,
           { type: "image/jpeg" }
         );
+        // Don't encrypt thumbnails
         thumbResult = await upload.uploadFile(
           thumbFile,
-          `${metadata.title}-thumbnail`
+          `${metadata.title}-thumbnail`,
+          { encrypt: false, generatePreview: false }
         );
         setThumbnailResult(thumbResult);
       }
 
-      // 3. Upload metadata
+      // 3. Upload encryption metadata to IPFS if content was encrypted
+      let encryptionMetaCid: string | null = null;
+      if (contentResult.encryptionMeta) {
+        const encryptionMetaResult = await upload.uploadMetadata(
+          contentResult.encryptionMeta,
+          `${metadata.title}-encryption-meta`
+        );
+        encryptionMetaCid = encryptionMetaResult?.cid || null;
+      }
+
+      // 4. Upload content metadata (no timestamp - metadata should be content-addressed too)
       const fullMetadata = {
         name: metadata.title,
         description: metadata.description || "",
@@ -185,7 +212,10 @@ export function useContentUpload(options: UseUploadOptions = {}) {
         thumbnailUrl: thumbResult?.url || null,
         mimeType: file.type,
         size: file.size,
-        createdAt: new Date().toISOString(),
+        // Include encryption info in metadata
+        isEncrypted: !!contentResult.encryptionMeta,
+        previewCid: contentResult.previewCid || null,
+        encryptionMetaCid,
       };
 
       const metadataResult = await upload.uploadMetadata(
@@ -197,6 +227,10 @@ export function useContentUpload(options: UseUploadOptions = {}) {
         content: contentResult,
         thumbnail: thumbResult,
         metadata: metadataResult,
+        // Include encryption fields for on-chain registration
+        isEncrypted: !!contentResult.encryptionMeta,
+        previewCid: contentResult.previewCid || null,
+        encryptionMetaCid,
       };
     },
     [upload]

@@ -52,7 +52,7 @@ export function EditContentModal({
       const metadataRes = await fetch("/api/upload/metadata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(metadata),
+        body: JSON.stringify({ metadata, name: "metadata" }),
       });
 
       if (!metadataRes.ok) {

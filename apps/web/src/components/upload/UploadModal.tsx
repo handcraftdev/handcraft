@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentUpload } from "@/hooks/useUpload";
 import { useContentRegistry, ContentType as OnChainContentType, PaymentCurrency } from "@/hooks/useContentRegistry";
+import { isUserRejection, getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -88,6 +89,16 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [nftSupplyType, setNftSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [nftMaxSupply, setNftMaxSupply] = useState("");
   const [nftRoyaltyPercent, setNftRoyaltyPercent] = useState("5");
+  // Store upload result so we can retry on-chain registration without re-uploading
+  const [uploadResult, setUploadResult] = useState<{
+    content: { cid: string; url: string };
+    metadata: { cid: string; url: string } | null;
+    isEncrypted?: boolean;
+    previewCid?: string | null;
+    encryptionMetaCid?: string | null;
+  } | null>(null);
+  // Store registration error to display in UI
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -156,18 +167,34 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       royaltyPercent: currentNftRoyaltyPercent,
     });
 
-    setStep("uploading");
+    // Clear any previous registration error
+    setRegistrationError(null);
 
-    const result = await uploadContent(file, {
-      title,
-      description,
-      tags: tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-    });
+    // Use cached upload result if available (for retry after wallet rejection)
+    let result = uploadResult;
 
-    console.log("Upload result:", result);
+    if (!result) {
+      setStep("uploading");
+
+      result = await uploadContent(file, {
+        title,
+        description,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      });
+
+      console.log("Upload result:", result);
+
+      // Cache the result for potential retry
+      if (result) {
+        setUploadResult(result);
+      }
+    } else {
+      console.log("Using cached upload result:", result);
+    }
+
     console.log("publicKey:", publicKey?.toBase58());
 
     if (result) {
@@ -206,6 +233,9 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             currency: currentNftCurrency,
             maxSupply: maxSupplyValue,
             royaltyBps,
+            isEncrypted: result.isEncrypted,
+            previewCid: result.previewCid,
+            encryptionMetaCid: result.encryptionMetaCid,
           });
 
           const txSig = await registerContentWithMint({
@@ -216,11 +246,22 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             currency: currentNftCurrency,
             maxSupply: maxSupplyValue,
             creatorRoyaltyBps: royaltyBps,
+            isEncrypted: result.isEncrypted || false,
+            previewCid: result.previewCid || "",
+            encryptionMetaCid: result.encryptionMetaCid || "",
           });
           console.log("On-chain registration with NFT successful:", txSig);
         } catch (err) {
           console.error("Failed to register on-chain:", err);
-          // Still consider it a success - IPFS upload worked
+          // Go back to details step so they can retry
+          // uploadResult is already cached, so retry won't re-upload
+          setStep("details");
+
+          if (!isUserRejection(err)) {
+            // Show error message for non-cancellation errors
+            setRegistrationError(getTransactionErrorMessage(err));
+          }
+          return;
         }
       } else {
         console.log("Skipping on-chain registration:", {
@@ -246,6 +287,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     nftMaxSupply,
     nftRoyaltyPercent,
     contentType,
+    uploadResult,
     publicKey,
     uploadContent,
     registerContentWithMint,
@@ -269,6 +311,9 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
     setNftRoyaltyPercent("5");
+    // Reset cached upload result and error
+    setUploadResult(null);
+    setRegistrationError(null);
     reset();
     onClose();
   };
@@ -571,6 +616,30 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 </div>
               )}
 
+              {/* Registration error */}
+              {registrationError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{registrationError}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Already uploaded notice */}
+              {uploadResult && !registrationError && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-center gap-2 text-green-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>File uploaded to IPFS. Click below to register on-chain.</span>
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3 pt-4">
                 <button
@@ -579,6 +648,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     setFile(null);
                     if (preview) URL.revokeObjectURL(preview);
                     setPreview(null);
+                    setUploadResult(null);
+                    setRegistrationError(null);
                   }}
                   className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                 >
@@ -589,7 +660,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   disabled={!title.trim()}
                   className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
                 >
-                  Upload to IPFS
+                  {uploadResult ? "Register on Solana" : "Upload to IPFS"}
                 </button>
               </div>
             </div>

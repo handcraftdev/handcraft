@@ -7,11 +7,13 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { UploadModal } from "./upload";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { useSession } from "@/hooks/useSession";
 
 export function Header() {
   const { publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
   const { content } = useContentRegistry();
+  const { clearSession } = useSession();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
@@ -185,6 +187,7 @@ export function Header() {
                       </button>
                       <button
                         onClick={() => {
+                          clearSession();
                           disconnect();
                           setIsProfileOpen(false);
                         }}

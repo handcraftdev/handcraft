@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface DeleteContentModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ export function DeleteContentModal({
       onClose();
     } catch (err) {
       console.error("Failed to delete content:", err);
-      setError(err instanceof Error ? err.message : "Failed to delete content");
+      setError(getTransactionErrorMessage(err));
     }
   };
 

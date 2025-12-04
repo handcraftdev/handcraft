@@ -1,11 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry, ContentType, MintConfig } from "@/hooks/useContentRegistry";
+import { useSession } from "@/hooks/useSession";
 import { getIpfsUrl, ContentEntry, getContentCategory, getContentTypeLabel as sdkGetContentTypeLabel } from "@handcraft/sdk";
 import { MintConfigModal, BuyNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
+
+// Global cache for decrypted content URLs (persists across component re-renders)
+// Key: `${walletAddress}:${contentCid}`, Value: blob URL
+const decryptedContentCache = new Map<string, string>();
+
+function getCachedDecryptedUrl(wallet: string, contentCid: string): string | null {
+  return decryptedContentCache.get(`${wallet}:${contentCid}`) || null;
+}
+
+function setCachedDecryptedUrl(wallet: string, contentCid: string, url: string): void {
+  decryptedContentCache.set(`${wallet}:${contentCid}`, url);
+}
 
 type FeedTab = "foryou" | "your-content";
 
@@ -29,8 +42,9 @@ interface EnrichedContent extends ContentEntry {
 
 export function Feed() {
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
   const { content: userContent, globalContent: rawGlobalContent, client } = useContentRegistry();
+  const { isValid: hasValidSession, isCreating: isCreatingSession, createSession, needsSession } = useSession();
 
   // Global feed state
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);
@@ -132,8 +146,41 @@ export function Feed() {
 
   return (
     <div className="pt-16 pb-20">
+      {/* Session Required Banner - Show when wallet connected but no valid session */}
+      {needsSession && (
+        <div className="sticky top-16 z-50 bg-amber-900/90 backdrop-blur-md border-b border-amber-700">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <span className="text-amber-100 text-sm">
+                Sign to verify your wallet and access your content
+              </span>
+            </div>
+            <button
+              onClick={() => createSession()}
+              disabled={isCreatingSession}
+              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-amber-600 text-black font-medium rounded-full text-sm transition-colors flex items-center gap-2"
+            >
+              {isCreatingSession ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Signing...
+                </>
+              ) : (
+                "Sign to Verify"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab Navigation */}
-      <div className="sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
+      <div className="sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-gray-800" style={{ top: needsSession ? '116px' : '64px' }}>
         <div className="flex gap-1 px-4 py-2">
           <button
             onClick={() => setActiveTab("foryou")}
@@ -190,17 +237,28 @@ export function Feed() {
 }
 
 function ContentCard({ content }: { content: EnrichedContent }) {
-  const [showTipModal, setShowTipModal] = useState(false);
   const [showMintConfigModal, setShowMintConfigModal] = useState(false);
   const [showBuyNftModal, setShowBuyNftModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
-  const { useMintConfig, ecosystemConfig } = useContentRegistry();
+  const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
+  const { useMintConfig, useNftOwnership, ecosystemConfig } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
+  const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
 
-  const contentUrl = getIpfsUrl(content.contentCid);
+  // User owns NFT if count > 0
+  const ownsNft = ownedNftCount > 0;
+
+  // Determine content URL based on encryption and access
+  // Use strict boolean check - content is encrypted only if explicitly true
+  const isEncrypted = content.isEncrypted === true;
+  const previewUrl = content.previewCid ? getIpfsUrl(content.previewCid) : null;
+  const fullContentUrl = getIpfsUrl(content.contentCid);
   const contentTypeLabel = getContentTypeLabel(content.contentType);
   const timeAgo = getTimeAgo(Number(content.createdAt) * 1000);
   const shortAddress = content.creatorAddress
@@ -210,10 +268,98 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   // Check if current user is the creator
   const isCreator = publicKey?.toBase58() === content.creatorAddress;
   const hasMintConfig = mintConfig && mintConfig.isActive;
-  // Content is locked if NFTs have been minted (mintedCount > 0)
-  const isLocked = content.isLocked || (content.mintedCount && content.mintedCount > BigInt(0));
+  // Content is locked if NFTs have been minted - use mintedCount from content entry
+  const actualMintedCount = Number(content.mintedCount ?? 0);
+  const isLocked = content.isLocked || actualMintedCount > 0;
   const canEdit = isCreator && !isLocked;
   const canDelete = isCreator && !isLocked;
+
+  // For encrypted content, only show full content if decrypted
+  // Creators and NFT owners need a valid session to decrypt
+  const contentUrl = !isEncrypted
+    ? fullContentUrl
+    : decryptedUrl || previewUrl || null;
+
+  // Show locked overlay for non-owners without access
+  const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft;
+
+  // Show "needs session" state for creators/owners with encrypted content but no session
+  const needsSession = isEncrypted && (isCreator || ownsNft) && !decryptedUrl && !sessionToken;
+
+  // Show placeholder if encrypted but no content URL available (no preview)
+  const showPlaceholder = isEncrypted && !contentUrl;
+
+  // Request decrypted content - requires valid session (session must exist before calling)
+  const requestDecryptedContent = useCallback(async () => {
+    if (!publicKey || !content.encryptionMetaCid || isDecrypting || !sessionToken) return;
+
+    const walletAddress = publicKey.toBase58();
+
+    // Check decrypted content cache first
+    const cachedContent = getCachedDecryptedUrl(walletAddress, content.contentCid);
+    if (cachedContent) {
+      setDecryptedUrl(cachedContent);
+      setHasAccess(true);
+      return;
+    }
+
+    setIsDecrypting(true);
+    try {
+      const params = new URLSearchParams({
+        contentCid: content.contentCid,
+        metaCid: content.encryptionMetaCid,
+        sessionToken,
+      });
+
+      const response = await fetch(`/api/content?${params}`);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setDecryptedUrl(url);
+        setCachedDecryptedUrl(walletAddress, content.contentCid, url);
+        setHasAccess(true);
+      } else if (response.status === 403) {
+        setHasAccess(false);
+      } else if (response.status === 401) {
+        // Session expired - user needs to sign again
+        setHasAccess(false);
+      }
+    } catch (err) {
+      console.error("Failed to request decrypted content:", err);
+      setHasAccess(false);
+    } finally {
+      setIsDecrypting(false);
+    }
+  }, [publicKey, content.contentCid, content.encryptionMetaCid, isDecrypting, sessionToken]);
+
+  // Auto-decrypt for creators and NFT owners when session is valid
+  useEffect(() => {
+    if (!isEncrypted) {
+      setHasAccess(true);
+      return;
+    }
+    if (!publicKey) {
+      setHasAccess(false);
+      return;
+    }
+    // Check cache first
+    const cached = getCachedDecryptedUrl(publicKey.toBase58(), content.contentCid);
+    if (cached) {
+      setDecryptedUrl(cached);
+      setHasAccess(true);
+      return;
+    }
+    // Only auto-decrypt if we have a valid session
+    if (!sessionToken) {
+      return;
+    }
+    // Auto-decrypt if creator or owns NFT and hasn't decrypted yet
+    if ((isCreator || ownsNft) && !decryptedUrl && !isDecrypting) {
+      requestDecryptedContent();
+    }
+  }, [isEncrypted, publicKey, isCreator, ownsNft, decryptedUrl, isDecrypting, content.contentCid, requestDecryptedContent, sessionToken]);
+
 
   return (
     <article className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-gray-700 transition-colors">
@@ -235,7 +381,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-full">
             {contentTypeLabel}
           </span>
-          {isLocked && (
+          {isCreator && isLocked && (
             <span className="text-xs text-amber-500 bg-amber-500/20 px-2 py-1 rounded-full flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -289,46 +435,72 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       {/* Content Preview */}
       {getContentCategory(content.contentType) === "video" && (
         <div className="relative aspect-video bg-gray-800">
-          <video
-            src={contentUrl}
-            className="w-full h-full object-contain"
-            controls
-            preload="metadata"
-          />
+          {showPlaceholder ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </div>
+          ) : (
+            <video
+              src={contentUrl!}
+              className={`w-full h-full object-contain ${showLockedOverlay || needsSession ? "blur-sm" : ""}`}
+              controls={!showLockedOverlay && !needsSession}
+              preload="metadata"
+            />
+          )}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} onBuyClick={() => setShowBuyNftModal(true)} />}
+          {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
       {getContentCategory(content.contentType) === "audio" && (
         <div className="relative aspect-video bg-gradient-to-br from-primary-900/50 to-secondary-900/50 flex items-center justify-center">
-          <div className="text-center">
+          <div className={`text-center ${showLockedOverlay || needsSession ? "blur-sm" : ""}`}>
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary-500/20 flex items-center justify-center">
               <svg className="w-10 h-10 text-primary-400" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
               </svg>
             </div>
-            <audio src={contentUrl} controls className="w-full max-w-xs" />
+            {!showLockedOverlay && !needsSession && !showPlaceholder && contentUrl && (
+              <audio src={contentUrl} controls className="w-full max-w-xs" />
+            )}
           </div>
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} onBuyClick={() => setShowBuyNftModal(true)} />}
+          {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
       {getContentCategory(content.contentType) === "image" && (
         <div className="relative aspect-video bg-gray-800">
-          <img
-            src={contentUrl}
-            alt={content.metadata?.title || content.metadata?.name || "Content"}
-            className="w-full h-full object-contain"
-          />
+          {showPlaceholder ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-16 h-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          ) : (
+            <img
+              src={contentUrl!}
+              alt={content.metadata?.title || content.metadata?.name || "Content"}
+              className={`w-full h-full object-contain ${showLockedOverlay || needsSession ? "blur-md" : ""}`}
+            />
+          )}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} onBuyClick={() => setShowBuyNftModal(true)} />}
+          {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
       {getContentCategory(content.contentType) === "book" && (
         <div className="relative aspect-video bg-gradient-to-br from-amber-900/30 to-orange-900/30 flex items-center justify-center">
-          <div className="text-center">
+          <div className={`text-center ${showLockedOverlay || needsSession ? "blur-sm" : ""}`}>
             <svg className="w-20 h-20 mx-auto text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
             <p className="text-amber-200 mt-2">{content.metadata?.title || content.metadata?.name || "Book"}</p>
           </div>
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} onBuyClick={() => setShowBuyNftModal(true)} />}
+          {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
@@ -358,41 +530,31 @@ function ContentCard({ content }: { content: EnrichedContent }) {
 
       {/* Stats & Actions */}
       <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-800">
-        <div className="flex items-center gap-2 text-gray-500">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-sm">
-            {(Number(content.tipsReceived) / 1e9).toFixed(3)} SOL tips
-          </span>
-        </div>
-
-        {/* NFT Minted Count */}
+        {/* NFT Minted Count - use on-chain count */}
         {hasMintConfig && (
           <div className="flex items-center gap-2 text-gray-500">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             <span className="text-sm">
-              {content.mintedCount?.toString() || "0"} minted
+              {actualMintedCount} minted
+            </span>
+          </div>
+        )}
+
+        {/* Owned NFT Count - show how many the user owns */}
+        {!isCreator && ownedNftCount > 0 && (
+          <div className="flex items-center gap-2 text-green-500">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm">
+              You own {ownedNftCount}
             </span>
           </div>
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Tip Button */}
-          {!isCreator && (
-            <button
-              onClick={() => setShowTipModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-full transition-colors text-sm font-medium"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Tip
-            </button>
-          )}
-
           {/* Buy NFT Button - for non-creators when mint config exists */}
           {!isCreator && hasMintConfig && (
             <button
@@ -435,14 +597,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
         </div>
       </div>
 
-      {/* Tip Modal */}
-      {showTipModal && (
-        <TipModal
-          content={content}
-          onClose={() => setShowTipModal(false)}
-        />
-      )}
-
       {/* Mint Config Modal - for creators */}
       {showMintConfigModal && (
         <MintConfigModal
@@ -450,6 +604,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           onClose={() => setShowMintConfigModal(false)}
           contentCid={content.contentCid}
           contentTitle={content.metadata?.title || content.metadata?.name}
+          isLocked={!!isLocked}
           onSuccess={() => {
             refetchMintConfig();
           }}
@@ -465,9 +620,11 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           contentTitle={content.metadata?.title || content.metadata?.name}
           creator={content.creator}
           mintConfig={mintConfig}
-          mintedCount={content.mintedCount || BigInt(0)}
+          mintedCount={BigInt(actualMintedCount)}
+          ownedCount={ownedNftCount}
           onSuccess={() => {
             refetchMintConfig();
+            refetchOwnership();
           }}
         />
       )}
@@ -498,122 +655,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   );
 }
 
-function TipModal({ content, onClose }: { content: EnrichedContent; onClose: () => void }) {
-  const [amount, setAmount] = useState("0.01");
-  const [isTipping, setIsTipping] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
-  const { tipContent } = useContentRegistry();
-  const shortAddress = content.creatorAddress
-    ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}`
-    : "Unknown";
-
-  const handleTip = async () => {
-    setIsTipping(true);
-    setError("");
-
-    try {
-      const lamports = Math.floor(parseFloat(amount) * 1e9);
-      await tipContent({
-        contentCid: content.contentCid,
-        creator: content.creator,
-        amountLamports: lamports,
-      });
-      setSuccess(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to tip");
-    } finally {
-      setIsTipping(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-gray-900 rounded-2xl w-full max-w-sm mx-4 overflow-hidden border border-gray-800 p-6">
-        {success ? (
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold mb-2">Tip Sent!</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              You tipped {amount} SOL to {shortAddress}
-            </p>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
-            >
-              Done
-            </button>
-          </div>
-        ) : (
-          <>
-            <h3 className="text-lg font-semibold mb-4">Tip {shortAddress}</h3>
-
-            <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-2">Amount (SOL)</label>
-              <div className="flex gap-2 mb-3">
-                {["0.01", "0.05", "0.1", "0.5"].map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => setAmount(preset)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      amount === preset
-                        ? "bg-primary-600 text-white"
-                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                step="0.01"
-                min="0.001"
-                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-              />
-            </div>
-
-            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleTip}
-                disabled={isTipping || !amount || parseFloat(amount) <= 0}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
-              >
-                {isTipping ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  `Send ${amount} SOL`
-                )}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function EmptyState({ showExplore = false }: { showExplore?: boolean }) {
   return (
     <div className="text-center py-12">
@@ -628,6 +669,86 @@ function EmptyState({ showExplore = false }: { showExplore?: boolean }) {
           ? "Be the first to upload content to the decentralized feed!"
           : "Upload your first content to see it here."}
       </p>
+    </div>
+  );
+}
+
+function LockedOverlay({
+  hasMintConfig,
+  onBuyClick,
+}: {
+  hasMintConfig: boolean;
+  onBuyClick: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+      <div className="w-16 h-16 mb-4 rounded-full bg-gray-800/80 flex items-center justify-center">
+        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <p className="text-white font-medium mb-2">Premium Content</p>
+      <p className="text-gray-400 text-sm mb-4 text-center px-4">
+        {hasMintConfig
+          ? "Purchase the NFT to unlock full access"
+          : "This content is encrypted"
+        }
+      </p>
+      {hasMintConfig && (
+        <button
+          onClick={onBuyClick}
+          className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-full font-medium transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          Buy NFT
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NeedsSessionOverlay({
+  onSignIn,
+  isSigningIn,
+}: {
+  onSignIn: () => void;
+  isSigningIn: boolean;
+}) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+      <div className="w-16 h-16 mb-4 rounded-full bg-primary-800/80 flex items-center justify-center">
+        <svg className="w-8 h-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        </svg>
+      </div>
+      <p className="text-white font-medium mb-2">Sign to View Content</p>
+      <p className="text-gray-400 text-sm mb-4 text-center px-4">
+        Sign a message to verify ownership and decrypt your content
+      </p>
+      <button
+        onClick={onSignIn}
+        disabled={isSigningIn}
+        className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:cursor-wait text-white rounded-full font-medium transition-colors flex items-center gap-2"
+      >
+        {isSigningIn ? (
+          <>
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Signing...
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+            Sign In
+          </>
+        )}
+      </button>
     </div>
   );
 }

@@ -12,6 +12,7 @@
     "build:mobile": "turbo build --filter=@handcraft/mobile"
   },
   "devDependencies": {
+    "tsx": "^4.21.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.2"
   },
