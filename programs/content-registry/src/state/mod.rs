@@ -18,6 +18,9 @@ pub use ecosystem_config::{
     PLATFORM_FEE_SECONDARY_BPS, ECOSYSTEM_FEE_SECONDARY_BPS,
 };
 pub use reward_pool::{
+    ContentRewardPool, WalletContentState,
+    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED, PRECISION,
+    // Legacy exports for migration
     GlobalRewardPool, NftRewardState,
-    GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED, PRECISION,
+    GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED,
 };

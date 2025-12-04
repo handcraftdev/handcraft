@@ -248,21 +248,21 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useNftOwnership, getPendingRewardsForContent, pendingRewardsQuery, ecosystemConfig } = useContentRegistry();
+  const { useMintConfig, useNftOwnership, getPendingRewardForContent, pendingRewardsQuery, ecosystemConfig } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
 
-  // Get pending rewards filtered by this content
-  const pendingRewards = getPendingRewardsForContent(content.contentCid);
+  // Get pending reward for this content (per-content pool model)
+  const pendingReward = getPendingRewardForContent(content.contentCid);
   const refetchPending = pendingRewardsQuery.refetch;
 
   // User owns NFT if count > 0
   const ownsNft = ownedNftCount > 0;
 
-  // Calculate total pending rewards (SOL only now)
-  const totalPendingRewards = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
-  const hasPendingRewards = pendingRewards && pendingRewards.length > 0 && totalPendingRewards > BigInt(0);
+  // Get total pending rewards for this content
+  const totalPendingRewards = pendingReward?.pending || BigInt(0);
+  const hasPendingRewards = pendingReward && totalPendingRewards > BigInt(0);
 
   // Determine content URL based on encryption and access
   // Use strict boolean check - content is encrypted only if explicitly true

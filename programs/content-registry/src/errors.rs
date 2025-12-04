@@ -52,4 +52,8 @@ pub enum ContentRegistryError {
     NotNftOwner,
     #[msg("No rewards available to claim")]
     NothingToClaim,
+    #[msg("Invalid account pairs for batch claim")]
+    InvalidAccountPairs,
+    #[msg("Invalid account data")]
+    InvalidAccountData,
 }

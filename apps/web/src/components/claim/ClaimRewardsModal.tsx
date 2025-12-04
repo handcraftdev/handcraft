@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
@@ -21,14 +20,13 @@ export function ClaimRewardsModal({
 }: ClaimRewardsModalProps) {
   const { publicKey } = useWallet();
   const {
-    claimRewards,
+    claimContentRewards,
+    claimAllRewards,
     isClaimingReward,
-    useGlobalRewardPool,
     usePendingRewards,
     globalContent,
   } = useContentRegistry();
 
-  const { data: globalRewardPool, isLoading: isLoadingPool } = useGlobalRewardPool();
   const { data: pendingRewards, isLoading: isLoadingPending, refetch } = usePendingRewards();
 
   // Create a map of contentCid -> content metadata for display
@@ -47,8 +45,11 @@ export function ClaimRewardsModal({
   const [claimingIndex, setClaimingIndex] = useState<number | null>(null);
   const [claimingAll, setClaimingAll] = useState(false);
 
-  // Calculate total pending rewards (SOL only now)
+  // Calculate total pending rewards (SOL only)
   const totalPending = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
+
+  // Calculate total NFT count across all content positions
+  const totalNftCount = pendingRewards?.reduce((acc, r) => acc + r.nftCount, BigInt(0)) || BigInt(0);
 
   const formatSol = (lamports: bigint) => {
     return `${(Number(lamports) / LAMPORTS_PER_SOL).toFixed(6)} SOL`;
@@ -64,8 +65,8 @@ export function ClaimRewardsModal({
     setClaimingIndex(index);
 
     try {
-      await claimRewards({
-        nftAsset: reward.nftAsset,
+      await claimContentRewards({
+        contentCid: reward.contentCid,
       });
       await refetch();
       if (pendingRewards.length === 1) {
@@ -87,14 +88,9 @@ export function ClaimRewardsModal({
     setClaimingAll(true);
 
     try {
-      // Claim each NFT's rewards sequentially
-      for (let i = 0; i < pendingRewards.length; i++) {
-        const reward = pendingRewards[i];
-        setClaimingIndex(i);
-        await claimRewards({
-          nftAsset: reward.nftAsset,
-        });
-      }
+      // Use batch claim for all content positions in one transaction
+      const contentCids = pendingRewards.map(r => r.contentCid);
+      await claimAllRewards({ contentCids });
       await refetch();
       onSuccess?.();
       onClose();
@@ -109,8 +105,8 @@ export function ClaimRewardsModal({
 
   if (!isOpen) return null;
 
-  const isLoading = isLoadingPool || isLoadingPending;
-  const hasRewards = pendingRewards && pendingRewards.length > 0;
+  const isLoading = isLoadingPending;
+  const hasRewards = pendingRewards && pendingRewards.length > 0 && totalPending > BigInt(0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -151,39 +147,19 @@ export function ClaimRewardsModal({
                   {formatSol(totalPending)}
                 </span>
                 <span className="text-sm text-gray-500">
-                  {pendingRewards.length} NFT{pendingRewards.length > 1 ? "s" : ""}
+                  {pendingRewards.length} content position{pendingRewards.length > 1 ? "s" : ""} ({totalNftCount.toString()} NFT{totalNftCount > BigInt(1) ? "s" : ""})
                 </span>
               </div>
             </div>
 
-            {/* Global Reward Pool Info */}
-            {globalRewardPool && (
-              <div className="bg-gray-800/50 rounded-lg p-3 text-sm">
-                <div className="flex justify-between text-gray-400">
-                  <span>Global Pool Deposited</span>
-                  <span>{formatSol(globalRewardPool.totalDeposited)}</span>
-                </div>
-                <div className="flex justify-between text-gray-400">
-                  <span>Total Claimed</span>
-                  <span>{formatSol(globalRewardPool.totalClaimed)}</span>
-                </div>
-                <div className="flex justify-between text-gray-400">
-                  <span>Total NFTs in Pool</span>
-                  <span>{globalRewardPool.totalNfts.toString()}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Individual Claims */}
+            {/* Individual Claims by Content */}
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-400">Your NFTs with Pending Rewards</h3>
-              {pendingRewards.map((reward, index) => {
-                const contentInfo = reward.contentCid
-                  ? contentMetadataMap.get(reward.contentCid)
-                  : null;
+              <h3 className="text-sm font-medium text-gray-400">Your Content Positions with Pending Rewards</h3>
+              {pendingRewards.filter(r => r.pending > BigInt(0)).map((reward, index) => {
+                const contentInfo = contentMetadataMap.get(reward.contentCid);
                 return (
                   <div
-                    key={reward.nftAsset.toBase58()}
+                    key={reward.contentCid}
                     className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"
                   >
                     <div className="flex-1 min-w-0 mr-3">
@@ -191,7 +167,7 @@ export function ClaimRewardsModal({
                         {contentInfo?.title || "Unknown Content"}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {reward.nftAsset.toBase58().slice(0, 8)}...
+                        {reward.nftCount.toString()} NFT{reward.nftCount > BigInt(1) ? "s" : ""} owned
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -225,8 +201,8 @@ export function ClaimRewardsModal({
                 className="w-full py-3 rounded-lg font-medium bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
               >
                 {claimingAll
-                  ? `Claiming ${claimingIndex !== null ? claimingIndex + 1 : 0}/${pendingRewards.length}...`
-                  : `Claim All (${pendingRewards.length} transactions)`}
+                  ? "Claiming all..."
+                  : `Claim All (1 transaction)`}
               </button>
             )}
 
@@ -244,7 +220,7 @@ export function ClaimRewardsModal({
 
         {/* Info */}
         <p className="text-xs text-gray-500 mt-4 text-center">
-          Rewards accumulate from the 12% holder share when ANY NFT is minted across the platform.
+          Rewards accumulate from the 12% holder share when NFTs are minted for content you own.
         </p>
       </div>
     </div>

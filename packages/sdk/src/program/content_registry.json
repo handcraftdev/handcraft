@@ -83,7 +83,7 @@
     },
     {
       "name": "initialize_ecosystem",
-      "docs": ["Initialize the ecosystem config and global reward pool (admin only, once)"],
+      "docs": ["Initialize the ecosystem config (admin only, once)"],
       "discriminator": [103, 159, 177, 39, 191, 146, 190, 22],
       "accounts": [
         {
@@ -92,15 +92,6 @@
           "pda": {
             "seeds": [
               { "kind": "const", "value": [101, 99, 111, 115, 121, 115, 116, 101, 109] }
-            ]
-          }
-        },
-        {
-          "name": "global_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [103, 108, 111, 98, 97, 108, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] }
             ]
           }
         },
@@ -114,7 +105,7 @@
     },
     {
       "name": "mint_nft_sol",
-      "docs": ["Mint NFT with SOL payment using global reward pool"],
+      "docs": ["Mint NFT with SOL payment using per-content reward pool"],
       "discriminator": [246, 203, 253, 176, 41, 171, 75, 92],
       "accounts": [
         {
@@ -137,21 +128,23 @@
           }
         },
         {
-          "name": "global_reward_pool",
+          "name": "content_reward_pool",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [103, 108, 111, 98, 97, 108, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] }
+              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
+              { "kind": "account", "path": "content" }
             ]
           }
         },
         {
-          "name": "nft_reward_state",
+          "name": "buyer_wallet_state",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [110, 102, 116, 95, 114, 101, 119, 97, 114, 100] },
-              { "kind": "account", "path": "nft_asset" }
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "buyer" },
+              { "kind": "account", "path": "content" }
             ]
           }
         },
@@ -166,30 +159,28 @@
       "args": []
     },
     {
-      "name": "claim_rewards",
-      "docs": ["Claim accumulated rewards for an NFT from global pool"],
-      "discriminator": [4, 144, 132, 71, 116, 23, 151, 80],
+      "name": "claim_content_rewards",
+      "docs": ["Claim accumulated rewards for a single content position"],
+      "discriminator": [199, 71, 194, 156, 230, 105, 182, 161],
       "accounts": [
         {
-          "name": "global_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [103, 108, 111, 98, 97, 108, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] }
-            ]
-          }
+          "name": "content_reward_pool",
+          "writable": true
         },
         {
-          "name": "nft_reward_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [110, 102, 116, 95, 114, 101, 119, 97, 114, 100] },
-              { "kind": "account", "path": "nft_asset" }
-            ]
-          }
+          "name": "wallet_content_state",
+          "writable": true
         },
-        { "name": "nft_asset" },
+        { "name": "holder", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_all_rewards",
+      "docs": ["Batch claim rewards from multiple content pools"],
+      "discriminator": [132, 203, 246, 173, 206, 240, 85, 120],
+      "accounts": [
         { "name": "holder", "writable": true, "signer": true },
         { "name": "system_program", "address": "11111111111111111111111111111111" }
       ],
@@ -364,12 +355,12 @@
       "discriminator": [76, 59, 180, 103, 33, 99, 115, 244]
     },
     {
-      "name": "GlobalRewardPool",
-      "discriminator": [253, 163, 35, 227, 96, 158, 106, 63]
+      "name": "ContentRewardPool",
+      "discriminator": [118, 173, 137, 83, 204, 183, 229, 79]
     },
     {
-      "name": "NftRewardState",
-      "discriminator": [117, 51, 192, 35, 172, 30, 218, 77]
+      "name": "WalletContentState",
+      "discriminator": [107, 170, 127, 220, 5, 80, 117, 30]
     },
     {
       "name": "ContentEntry",
@@ -419,8 +410,11 @@
     { "code": 6017, "name": "EcosystemAlreadyInitialized", "msg": "Ecosystem config already initialized" },
     { "code": 6018, "name": "InvalidUsdcMint", "msg": "Invalid USDC mint address" },
     { "code": 6019, "name": "NftMismatch", "msg": "NFT asset does not match the reward state" },
-    { "code": 6020, "name": "NotNftOwner", "msg": "Holder does not own this NFT" },
-    { "code": 6021, "name": "NothingToClaim", "msg": "No rewards available to claim" }
+    { "code": 6020, "name": "ContentMismatch", "msg": "Content does not match the reward pool" },
+    { "code": 6021, "name": "NotNftOwner", "msg": "Holder does not own this NFT" },
+    { "code": 6022, "name": "NothingToClaim", "msg": "No rewards available to claim" },
+    { "code": 6023, "name": "InvalidAccountPairs", "msg": "Invalid account pairs for batch claim" },
+    { "code": 6024, "name": "InvalidAccountData", "msg": "Invalid account data" }
   ],
   "types": [
     {
@@ -436,28 +430,32 @@
       }
     },
     {
-      "name": "GlobalRewardPool",
-      "docs": ["Global accumulated reward pool for all holder rewards"],
+      "name": "ContentRewardPool",
+      "docs": ["Per-content reward pool for holder rewards"],
       "type": {
         "kind": "struct",
         "fields": [
+          { "name": "content", "docs": ["The content this pool belongs to"], "type": "pubkey" },
           { "name": "reward_per_share", "docs": ["Accumulated reward per share (scaled by PRECISION)"], "type": "u128" },
-          { "name": "total_nfts", "docs": ["Total NFTs minted across all content"], "type": "u64" },
-          { "name": "total_deposited", "docs": ["Total rewards ever deposited to the pool (lamports)"], "type": "u64" },
-          { "name": "total_claimed", "docs": ["Total rewards claimed from the pool (lamports)"], "type": "u64" },
+          { "name": "total_nfts", "docs": ["Total NFTs minted for this content"], "type": "u64" },
+          { "name": "total_deposited", "docs": ["Total rewards ever deposited to this pool (lamports)"], "type": "u64" },
+          { "name": "total_claimed", "docs": ["Total rewards claimed from this pool (lamports)"], "type": "u64" },
           { "name": "created_at", "docs": ["Timestamp when pool was created"], "type": "i64" }
         ]
       }
     },
     {
-      "name": "NftRewardState",
-      "docs": ["Per-NFT reward tracking state"],
+      "name": "WalletContentState",
+      "docs": ["Per-wallet content state tracking NFT ownership and reward debt"],
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "nft_asset", "type": "pubkey" },
-          { "name": "reward_debt", "docs": ["Reward debt - global reward_per_share at mint/last claim"], "type": "u128" },
-          { "name": "created_at", "type": "i64" }
+          { "name": "wallet", "docs": ["The wallet this state belongs to"], "type": "pubkey" },
+          { "name": "content", "docs": ["The content this state tracks"], "type": "pubkey" },
+          { "name": "nft_count", "docs": ["Number of NFTs this wallet owns for this content"], "type": "u64" },
+          { "name": "reward_debt", "docs": ["Cumulative reward debt"], "type": "u128" },
+          { "name": "created_at", "docs": ["Timestamp when first NFT was acquired"], "type": "i64" },
+          { "name": "updated_at", "docs": ["Timestamp of last update"], "type": "i64" }
         ]
       }
     },
@@ -581,7 +579,7 @@
         "kind": "struct",
         "fields": [
           { "name": "holder", "type": "pubkey" },
-          { "name": "nft_asset", "type": "pubkey" },
+          { "name": "content", "type": "pubkey" },
           { "name": "amount", "type": "u64" },
           { "name": "timestamp", "type": "i64" }
         ]

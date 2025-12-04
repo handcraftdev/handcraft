@@ -11,10 +11,10 @@ import {
   getCidRegistryPda,
   getEcosystemConfigPda,
   getMintConfigPda,
-  getGlobalRewardPoolPda,
-  getNftRewardStatePda,
-  GlobalRewardPool,
-  NftRewardState,
+  getContentRewardPoolPda,
+  getWalletContentStatePda,
+  ContentRewardPool,
+  WalletContentState,
   MintConfig,
   EcosystemConfig,
   calculatePrimarySplit,
@@ -32,7 +32,7 @@ export {
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
 };
-export type { MintConfig, EcosystemConfig, GlobalRewardPool, NftRewardState };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState };
 
 /**
  * Simulate a transaction before sending to wallet
@@ -416,7 +416,8 @@ export function useContentRegistry() {
       queryClient.invalidateQueries({ queryKey: ["globalContent"] });
       queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
       queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
-      queryClient.invalidateQueries({ queryKey: ["globalRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["walletContentState"] });
       queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
     },
   });
@@ -498,22 +499,22 @@ export function useContentRegistry() {
     },
   });
 
-  // Claim rewards mutation (global pool - claims pending rewards for an NFT)
-  const claimRewards = useMutation({
+  // Claim rewards mutation (per-content pool - claims pending rewards for a content position)
+  const claimContentRewards = useMutation({
     mutationFn: async ({
-      nftAsset,
+      contentCid,
     }: {
-      nftAsset: PublicKey;
+      contentCid: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
-      console.log("Claiming rewards from global pool...", {
-        nftAsset: nftAsset.toBase58(),
+      console.log("Claiming rewards for content...", {
+        contentCid,
       });
 
-      const ix = await client.claimRewardsInstruction(
+      const ix = await client.claimContentRewardsInstruction(
         publicKey,
-        nftAsset
+        contentCid
       );
 
       const tx = new Transaction().add(ix);
@@ -529,8 +530,50 @@ export function useContentRegistry() {
       console.log("Claim confirmed!");
       return signature;
     },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["walletContentState", publicKey?.toBase58(), contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+    },
+  });
+
+  // Batch claim rewards mutation (claims from multiple content positions in one transaction)
+  const claimAllRewards = useMutation({
+    mutationFn: async ({
+      contentCids,
+    }: {
+      contentCids: string[];
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (contentCids.length === 0) throw new Error("No content to claim from");
+
+      console.log("Claiming all rewards...", {
+        contentCids,
+        count: contentCids.length,
+      });
+
+      const ix = await client.claimAllRewardsInstruction(
+        publicKey,
+        contentCids
+      );
+
+      const tx = new Transaction().add(ix);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating batch claim transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Batch claim tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Batch claim confirmed!");
+      return signature;
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["globalRewardPool"] });
+      // Invalidate all content reward pools and wallet states
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["walletContentState"] });
       queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
     },
   });
@@ -545,11 +588,22 @@ export function useContentRegistry() {
     });
   };
 
-  // Fetch global reward pool
-  const useGlobalRewardPool = () => {
+  // Fetch content reward pool
+  const useContentRewardPool = (contentCid: string | null) => {
     return useQuery({
-      queryKey: ["globalRewardPool"],
-      queryFn: () => client.fetchGlobalRewardPool(),
+      queryKey: ["contentRewardPool", contentCid],
+      queryFn: () => contentCid ? client.fetchContentRewardPool(contentCid) : null,
+      enabled: !!contentCid,
+      staleTime: 30000, // Cache for 30 seconds
+    });
+  };
+
+  // Fetch wallet content state (user's position in a specific content)
+  const useWalletContentState = (contentCid: string | null) => {
+    return useQuery({
+      queryKey: ["walletContentState", publicKey?.toBase58(), contentCid],
+      queryFn: () => publicKey && contentCid ? client.fetchWalletContentState(publicKey, contentCid) : null,
+      enabled: !!publicKey && !!contentCid,
       staleTime: 30000, // Cache for 30 seconds
     });
   };
@@ -566,37 +620,35 @@ export function useContentRegistry() {
     staleTime: 60000, // Cache for 60 seconds
   });
 
-  // Enriched pending reward with content info
-  interface EnrichedPendingReward {
-    nftAsset: PublicKey;
+  // Per-content pending reward info
+  interface ContentPendingReward {
+    contentCid: string;
     pending: bigint;
-    contentCid: string | null;
+    nftCount: bigint;
   }
 
   // Get wallet NFTs data (may be undefined while loading)
   const walletNfts = walletNftsQuery.data || [];
 
-  // Fetch pending rewards for ALL user's NFTs (global pool) with content info
-  // This query depends on walletNftsQuery being loaded first
+  // Fetch pending rewards for ALL user's content positions (per-content pools)
+  // This query depends on walletNftsQuery being loaded first to know which content the user owns NFTs for
   const pendingRewardsQuery = useQuery({
     queryKey: ["pendingRewards", publicKey?.toBase58(), walletNftsQuery.dataUpdatedAt],
-    queryFn: async (): Promise<EnrichedPendingReward[]> => {
-      // Use fresh data from walletNftsQuery inside the query function
+    queryFn: async (): Promise<ContentPendingReward[]> => {
+      if (!publicKey) return [];
+
+      // Get unique content CIDs the user has NFTs for
       const nfts = walletNftsQuery.data || [];
-      if (nfts.length === 0) return [];
+      const contentCids = [...new Set(
+        nfts
+          .map(nft => nft.contentCid)
+          .filter((cid): cid is string => cid !== null)
+      )];
 
-      const nftPubkeys = nfts.map(nft => new PublicKey(nft.assetPubkey));
-      const nftToContentMap = new Map(
-        nfts.map(nft => [nft.assetPubkey, nft.contentCid])
-      );
+      if (contentCids.length === 0) return [];
 
-      const rewards = await client.getPendingRewardsForWallet(nftPubkeys);
-
-      // Enrich with content info
-      return rewards.map(r => ({
-        ...r,
-        contentCid: nftToContentMap.get(r.nftAsset.toBase58()) || null,
-      }));
+      // Use the SDK function to get pending rewards for each content
+      return client.getPendingRewardsForWallet(publicKey, contentCids);
     },
     enabled: walletNftsQuery.isSuccess && walletNfts.length > 0 && !!publicKey,
     staleTime: 30000,
@@ -605,20 +657,10 @@ export function useContentRegistry() {
   // Helper to get all pending rewards
   const usePendingRewards = () => pendingRewardsQuery;
 
-  // Helper to filter pending rewards by content (no hooks, just filtering)
-  const getPendingRewardsForContent = (contentCid: string | null) => {
-    if (!contentCid || !pendingRewardsQuery.data) return [];
-
-    // Get NFT pubkeys for this content from fresh walletNfts
-    const contentNftPubkeys = new Set(
-      walletNfts
-        .filter(nft => nft.contentCid === contentCid)
-        .map(nft => nft.assetPubkey)
-    );
-
-    return pendingRewardsQuery.data.filter(
-      reward => contentNftPubkeys.has(reward.nftAsset.toBase58())
-    );
+  // Helper to get pending reward for a specific content
+  const getPendingRewardForContent = (contentCid: string | null): ContentPendingReward | null => {
+    if (!contentCid || !pendingRewardsQuery.data) return null;
+    return pendingRewardsQuery.data.find(r => r.contentCid === contentCid) || null;
   };
 
   // Count NFTs owned for a specific content (uses cached wallet NFTs)
@@ -681,7 +723,8 @@ export function useContentRegistry() {
     mintNftSol: mintNftSol.mutateAsync,
     updateContent: updateContent.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
-    claimRewards: claimRewards.mutateAsync,
+    claimContentRewards: claimContentRewards.mutateAsync,
+    claimAllRewards: claimAllRewards.mutateAsync,
 
     // Mutation states
     isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending,
@@ -691,15 +734,16 @@ export function useContentRegistry() {
     isMintingNft: mintNftSol.isPending,
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
-    isClaimingReward: claimRewards.isPending,
+    isClaimingReward: claimContentRewards.isPending || claimAllRewards.isPending,
 
     // Hooks for specific data
     useMintConfig,
     useNftOwnership,
     useTotalMintedNfts,
-    useGlobalRewardPool,
+    useContentRewardPool,
+    useWalletContentState,
     usePendingRewards,
-    getPendingRewardsForContent,
+    getPendingRewardForContent,
     pendingRewardsQuery,
 
     // Utilities
@@ -708,8 +752,8 @@ export function useContentRegistry() {
     getCidRegistryPda,
     getEcosystemConfigPda,
     getMintConfigPda,
-    getGlobalRewardPoolPda,
-    getNftRewardStatePda,
+    getContentRewardPoolPda,
+    getWalletContentStatePda,
     calculatePrimarySplit,
     calculatePendingReward,
   };

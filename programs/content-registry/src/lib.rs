@@ -97,8 +97,8 @@ use state::{
     CidRegistry, CID_REGISTRY_SEED, hash_cid,
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     EcosystemConfig, ECOSYSTEM_CONFIG_SEED,
-    GlobalRewardPool, NftRewardState,
-    GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED,
+    ContentRewardPool, WalletContentState,
+    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED,
 };
 use errors::ContentRegistryError;
 
@@ -112,13 +112,12 @@ pub mod content_registry {
     // ECOSYSTEM MANAGEMENT
     // ============================================
 
-    /// Initialize the ecosystem config and global reward pool (admin only, once)
+    /// Initialize the ecosystem config (admin only, once)
     pub fn initialize_ecosystem(
         ctx: Context<InitializeEcosystem>,
         usdc_mint: Pubkey,
     ) -> Result<()> {
         let ecosystem = &mut ctx.accounts.ecosystem_config;
-        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
         let timestamp = Clock::get()?.unix_timestamp;
 
         // Initialize ecosystem config
@@ -130,13 +129,6 @@ pub mod content_registry {
         ecosystem.total_nfts_minted = 0;
         ecosystem.is_paused = false;
         ecosystem.created_at = timestamp;
-
-        // Initialize global reward pool
-        global_reward_pool.reward_per_share = 0;
-        global_reward_pool.total_nfts = 0;
-        global_reward_pool.total_deposited = 0;
-        global_reward_pool.total_claimed = 0;
-        global_reward_pool.created_at = timestamp;
 
         Ok(())
     }
@@ -457,15 +449,16 @@ pub mod content_registry {
     // ============================================
 
     /// Mint NFT with SOL payment
-    /// Uses global accumulated reward pool model:
-    /// - All 12% holder rewards go to a single global pool
-    /// - reward_per_share increases for all existing NFT holders across ALL content
+    /// Uses per-content reward pools with wallet-level tracking:
+    /// - Each content has its own reward pool
+    /// - 12% holder rewards go to that content's pool only
+    /// - Wallet-level tracking allows batch claiming
     pub fn mint_nft_sol(ctx: Context<MintNftSol>) -> Result<()> {
         let ecosystem = &ctx.accounts.ecosystem_config;
         let mint_config = &ctx.accounts.mint_config;
         let content = &mut ctx.accounts.content;
-        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
-        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let buyer_wallet_state = &mut ctx.accounts.buyer_wallet_state;
         let timestamp = Clock::get()?.unix_timestamp;
 
         // Check ecosystem not paused
@@ -486,15 +479,21 @@ pub mod content_registry {
 
         let price = mint_config.price;
         let is_first_content_mint = content.minted_count == 0;
-        let has_existing_nfts = global_reward_pool.total_nfts > 0;
+        let has_existing_nfts = content_reward_pool.total_nfts > 0;
+
+        // Initialize content reward pool if this is the first mint for this content
+        if content_reward_pool.content == Pubkey::default() {
+            content_reward_pool.content = content.key();
+            content_reward_pool.created_at = timestamp;
+        }
 
         // Process payment if not free
         if price > 0 {
             let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
                 EcosystemConfig::calculate_primary_split(price);
 
-            // For first global NFT, holder reward goes to creator (no holders yet)
-            // Otherwise, holder reward goes to global pool
+            // For first NFT of this content, holder reward goes to creator (no holders yet)
+            // Otherwise, holder reward goes to this content's reward pool
             let final_creator_amount = if !has_existing_nfts {
                 creator_amount + holder_reward_amount
             } else {
@@ -518,26 +517,26 @@ pub mod content_registry {
                 )?;
             }
 
-            // Transfer holder reward to global reward pool (if existing NFTs)
-            // This increases reward_per_share for ALL existing NFT holders
+            // Transfer holder reward to content reward pool (if existing NFTs)
+            // This increases reward_per_share for holders of THIS CONTENT only
             if has_existing_nfts && holder_reward_amount > 0 {
                 let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
                     &ctx.accounts.buyer.key(),
-                    &global_reward_pool.to_account_info().key,
+                    &content_reward_pool.to_account_info().key,
                     holder_reward_amount,
                 );
                 anchor_lang::solana_program::program::invoke(
                     &transfer_ix,
                     &[
                         ctx.accounts.buyer.to_account_info(),
-                        global_reward_pool.to_account_info(),
+                        content_reward_pool.to_account_info(),
                         ctx.accounts.system_program.to_account_info(),
                     ],
                 )?;
 
                 // Update reward_per_share BEFORE incrementing total_nfts
                 // This ensures only existing holders benefit from this sale
-                global_reward_pool.add_rewards(holder_reward_amount);
+                content_reward_pool.add_rewards(holder_reward_amount);
             }
 
             // Transfer to platform (if provided)
@@ -581,22 +580,38 @@ pub mod content_registry {
             }
         }
 
-        // Lock content on first mint for this content
+        // Initialize content reward pool if first mint
         if is_first_content_mint {
+            content_reward_pool.content = content.key();
+            content_reward_pool.reward_per_share = 0;
+            content_reward_pool.total_nfts = 0;
+            content_reward_pool.total_deposited = 0;
+            content_reward_pool.total_claimed = 0;
+            content_reward_pool.created_at = timestamp;
+
+            // Lock content on first mint
             content.is_locked = true;
         }
 
+        // Initialize or update buyer's wallet state for this content
+        if buyer_wallet_state.nft_count == 0 {
+            // First NFT for this wallet-content pair
+            buyer_wallet_state.wallet = ctx.accounts.buyer.key();
+            buyer_wallet_state.content = content.key();
+            buyer_wallet_state.nft_count = 0;
+            buyer_wallet_state.reward_debt = 0;
+            buyer_wallet_state.created_at = timestamp;
+            buyer_wallet_state.updated_at = timestamp;
+        }
+
+        // Add NFT to buyer's wallet state (records current reward_per_share as debt)
+        buyer_wallet_state.add_nft(content_reward_pool.reward_per_share, timestamp);
+
+        // Increment content's NFT count in the pool AFTER updating buyer state
+        content_reward_pool.increment_nfts();
+
         // Increment content mint count
         content.minted_count += 1;
-
-        // Initialize NFT reward state with current global reward_per_share as debt
-        // This ensures this NFT can only claim rewards from FUTURE sales
-        nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
-        nft_reward_state.reward_debt = global_reward_pool.reward_per_share;
-        nft_reward_state.created_at = timestamp;
-
-        // Increment global NFT count AFTER setting reward debt
-        global_reward_pool.increment_nfts();
 
         // Update ecosystem stats
         let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
@@ -639,31 +654,125 @@ pub mod content_registry {
     // HOLDER REWARD CLAIMS
     // ============================================
 
-    /// Claim accumulated holder rewards for a single NFT from the global pool
-    /// Rewards = (current_reward_per_share - nft_reward_debt) / PRECISION
-    pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
-        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+    /// Claim accumulated holder rewards for a single content
+    /// Rewards = (nft_count * reward_per_share - reward_debt) / PRECISION
+    pub fn claim_content_rewards(ctx: Context<ClaimContentRewards>) -> Result<()> {
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let wallet_state = &mut ctx.accounts.wallet_content_state;
         let timestamp = Clock::get()?.unix_timestamp;
 
-        // Calculate pending rewards
-        let pending = nft_reward_state.pending_reward(global_reward_pool.reward_per_share);
+        // Calculate pending rewards for this wallet's position in this content
+        let pending = wallet_state.claim(content_reward_pool.reward_per_share, timestamp);
 
         require!(pending > 0, ContentRegistryError::NothingToClaim);
 
-        // Transfer from global reward pool to holder
-        **global_reward_pool.to_account_info().try_borrow_mut_lamports()? -= pending;
+        // Transfer from content reward pool to holder
+        **content_reward_pool.to_account_info().try_borrow_mut_lamports()? -= pending;
         **ctx.accounts.holder.to_account_info().try_borrow_mut_lamports()? += pending;
 
-        // Update state
-        global_reward_pool.total_claimed += pending;
-        nft_reward_state.reward_debt = global_reward_pool.reward_per_share;
+        // Update pool stats
+        content_reward_pool.total_claimed += pending;
 
         // Emit claim event
         emit!(ClaimRewardEvent {
             holder: ctx.accounts.holder.key(),
-            nft_asset: nft_reward_state.nft_asset,
+            content: content_reward_pool.content,
             amount: pending,
+            timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Batch claim rewards from multiple content pools
+    /// Pass WalletContentState and ContentRewardPool pairs as remaining_accounts
+    /// Order: [wallet_state_1, pool_1, wallet_state_2, pool_2, ...]
+    pub fn claim_all_rewards(ctx: Context<ClaimAllRewards>) -> Result<()> {
+        let holder = &ctx.accounts.holder;
+        let remaining = &ctx.remaining_accounts;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        // Must have pairs of accounts (wallet_state, pool)
+        require!(remaining.len() % 2 == 0, ContentRegistryError::InvalidAccountPairs);
+        require!(remaining.len() > 0, ContentRegistryError::NothingToClaim);
+
+        let mut total_claimed: u64 = 0;
+        let num_pairs = remaining.len() / 2;
+
+        for i in 0..num_pairs {
+            let wallet_state_info = &remaining[i * 2];
+            let pool_info = &remaining[i * 2 + 1];
+
+            // Manually deserialize WalletContentState
+            let wallet_state_data = wallet_state_info.try_borrow_data()?;
+            let wallet_state: WalletContentState = WalletContentState::try_deserialize(
+                &mut &wallet_state_data[..]
+            )?;
+
+            // Manually deserialize ContentRewardPool
+            let pool_data = pool_info.try_borrow_data()?;
+            let pool: ContentRewardPool = ContentRewardPool::try_deserialize(
+                &mut &pool_data[..]
+            )?;
+
+            // Verify wallet state belongs to holder
+            require!(wallet_state.wallet == holder.key(), ContentRegistryError::Unauthorized);
+
+            // Verify wallet state and pool match
+            require!(wallet_state.content == pool.content, ContentRegistryError::ContentMismatch);
+
+            // Calculate pending rewards
+            let pending = wallet_state.pending_reward(pool.reward_per_share);
+
+            if pending > 0 {
+                // Drop the borrows before mutating
+                drop(wallet_state_data);
+                drop(pool_data);
+
+                // Update wallet state by re-borrowing and re-serializing
+                {
+                    let new_reward_debt = wallet_state.nft_count as u128 * pool.reward_per_share;
+                    let mut wallet_state_data = wallet_state_info.try_borrow_mut_data()?;
+                    let mut updated_wallet = WalletContentState::try_deserialize(
+                        &mut &wallet_state_data[..]
+                    )?;
+                    updated_wallet.reward_debt = new_reward_debt;
+                    updated_wallet.updated_at = timestamp;
+                    updated_wallet.try_serialize(&mut &mut wallet_state_data[..])?;
+                }
+
+                // Update pool stats
+                {
+                    let new_total_claimed = pool.total_claimed + pending;
+                    let mut pool_data = pool_info.try_borrow_mut_data()?;
+                    let mut updated_pool = ContentRewardPool::try_deserialize(
+                        &mut &pool_data[..]
+                    )?;
+                    updated_pool.total_claimed = new_total_claimed;
+                    updated_pool.try_serialize(&mut &mut pool_data[..])?;
+                }
+
+                // Transfer from pool to holder
+                **pool_info.try_borrow_mut_lamports()? -= pending;
+                **holder.to_account_info().try_borrow_mut_lamports()? += pending;
+
+                total_claimed += pending;
+
+                emit!(ClaimRewardEvent {
+                    holder: holder.key(),
+                    content: pool.content,
+                    amount: pending,
+                    timestamp,
+                });
+            }
+        }
+
+        require!(total_claimed > 0, ContentRegistryError::NothingToClaim);
+
+        emit!(BatchClaimEvent {
+            holder: holder.key(),
+            total_amount: total_claimed,
+            num_contents: num_pairs as u32,
             timestamp,
         });
 
@@ -685,16 +794,6 @@ pub struct InitializeEcosystem<'info> {
         bump
     )]
     pub ecosystem_config: Account<'info, EcosystemConfig>,
-
-    /// Global reward pool for all holder rewards
-    #[account(
-        init,
-        payer = admin,
-        space = 8 + GlobalRewardPool::INIT_SPACE,
-        seeds = [GLOBAL_REWARD_POOL_SEED],
-        bump
-    )]
-    pub global_reward_pool: Account<'info, GlobalRewardPool>,
 
     /// CHECK: Treasury wallet to receive ecosystem fees
     pub treasury: AccountInfo<'info>,
@@ -912,25 +1011,27 @@ pub struct MintNftSol<'info> {
     )]
     pub mint_config: Account<'info, MintConfig>,
 
-    /// Global reward pool for all holder rewards
-    /// All 12% holder rewards from all content sales accumulate here
+    /// Content-specific reward pool
+    /// Holder rewards from this content's sales accumulate here
     #[account(
-        mut,
-        seeds = [GLOBAL_REWARD_POOL_SEED],
-        bump
-    )]
-    pub global_reward_pool: Account<'info, GlobalRewardPool>,
-
-    /// NFT reward state tracking for the newly minted NFT
-    /// Records current global reward_per_share as debt so this NFT only claims future rewards
-    #[account(
-        init,
+        init_if_needed,
         payer = buyer,
-        space = 8 + NftRewardState::INIT_SPACE,
-        seeds = [NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+        space = 8 + ContentRewardPool::INIT_SPACE,
+        seeds = [CONTENT_REWARD_POOL_SEED, content.key().as_ref()],
         bump
     )]
-    pub nft_reward_state: Account<'info, NftRewardState>,
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
+
+    /// Buyer's wallet state for this content
+    /// Tracks how many NFTs they own and their reward debt
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        space = 8 + WalletContentState::INIT_SPACE,
+        seeds = [WALLET_CONTENT_STATE_SEED, buyer.key().as_ref(), content.key().as_ref()],
+        bump
+    )]
+    pub buyer_wallet_state: Account<'info, WalletContentState>,
 
     /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(mut, constraint = content.creator == creator.key())]
@@ -960,31 +1061,35 @@ pub struct MintNftSol<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ClaimRewards<'info> {
-    /// The global reward pool to claim from
+pub struct ClaimContentRewards<'info> {
+    /// The content's reward pool to claim from
     #[account(
         mut,
-        seeds = [GLOBAL_REWARD_POOL_SEED],
+        seeds = [CONTENT_REWARD_POOL_SEED, content_reward_pool.content.as_ref()],
         bump
     )]
-    pub global_reward_pool: Account<'info, GlobalRewardPool>,
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
 
-    /// NFT reward state tracking for this NFT
+    /// The holder's wallet state for this content
     #[account(
         mut,
-        seeds = [NFT_REWARD_STATE_SEED, nft_reward_state.nft_asset.as_ref()],
-        bump
+        seeds = [WALLET_CONTENT_STATE_SEED, holder.key().as_ref(), wallet_content_state.content.as_ref()],
+        bump,
+        constraint = wallet_content_state.wallet == holder.key() @ ContentRegistryError::Unauthorized,
+        constraint = wallet_content_state.content == content_reward_pool.content @ ContentRegistryError::ContentMismatch
     )]
-    pub nft_reward_state: Account<'info, NftRewardState>,
+    pub wallet_content_state: Account<'info, WalletContentState>,
 
-    /// CHECK: The NFT asset - we verify the holder owns it via Metaplex Core
-    /// The owner field is at offset 33 in the Core asset account data
-    #[account(
-        constraint = nft_reward_state.nft_asset == nft_asset.key() @ ContentRegistryError::NftMismatch
-    )]
-    pub nft_asset: AccountInfo<'info>,
+    /// The holder claiming the reward
+    #[account(mut)]
+    pub holder: Signer<'info>,
 
-    /// The holder claiming the reward (must own the NFT)
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimAllRewards<'info> {
+    /// The holder claiming rewards from multiple content pools
     #[account(mut)]
     pub holder: Signer<'info>,
 
@@ -1018,7 +1123,15 @@ pub struct NftMintEvent {
 #[event]
 pub struct ClaimRewardEvent {
     pub holder: Pubkey,
-    pub nft_asset: Pubkey,
+    pub content: Pubkey,
     pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct BatchClaimEvent {
+    pub holder: Pubkey,
+    pub total_amount: u64,
+    pub num_contents: u32,
     pub timestamp: i64,
 }

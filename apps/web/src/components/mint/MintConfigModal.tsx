@@ -340,17 +340,24 @@ export function MintConfigModal({
             <div className="space-y-1 text-sm text-gray-400">
               <div className="flex justify-between">
                 <span>Creator (you)</span>
-                <span className="text-green-400">92%</span>
+                <span className="text-green-400">76%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Existing Holders</span>
+                <span className="text-blue-400">12%</span>
               </div>
               <div className="flex justify-between">
                 <span>Platform</span>
-                <span>5%</span>
+                <span>10%</span>
               </div>
               <div className="flex justify-between">
                 <span>Ecosystem</span>
-                <span>3%</span>
+                <span>2%</span>
               </div>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              First mint: 12% holder reward goes to creator
+            </p>
           </div>
 
           {error && (

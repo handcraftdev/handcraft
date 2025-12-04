@@ -589,11 +589,19 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                         <p className="text-gray-400 mb-1.5">Primary Sale Split:</p>
                         <div className="flex justify-between text-gray-300">
                           <span>You (Creator)</span>
-                          <span className="text-green-400">92%</span>
+                          <span className="text-green-400">76%</span>
+                        </div>
+                        <div className="flex justify-between text-gray-300">
+                          <span>Existing Holders</span>
+                          <span className="text-blue-400">12%</span>
                         </div>
                         <div className="flex justify-between text-gray-500">
-                          <span>Platform + Ecosystem</span>
-                          <span>8%</span>
+                          <span>Platform</span>
+                          <span>10%</span>
+                        </div>
+                        <div className="flex justify-between text-gray-500">
+                          <span>Ecosystem</span>
+                          <span>2%</span>
                         </div>
                       </div>
                   </div>

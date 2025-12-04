@@ -11,6 +11,10 @@ export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm
 // Seeds for PDA derivation
 export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
 export const MINT_CONFIG_SEED = "mint_config";
+export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
+export const WALLET_CONTENT_STATE_SEED = "wallet_content";
+
+// Legacy seeds (for migration)
 export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
 export const NFT_REWARD_STATE_SEED = "nft_reward";
 
@@ -142,20 +146,24 @@ export interface EcosystemConfig {
   createdAt: bigint;
 }
 
-// Global accumulated reward pool interface
-export interface GlobalRewardPool {
+// Per-content reward pool interface
+export interface ContentRewardPool {
+  content: PublicKey;
   rewardPerShare: bigint;   // Scaled by PRECISION (1e12)
-  totalNfts: bigint;        // Total NFTs minted across all content
+  totalNfts: bigint;        // Total NFTs minted for this content
   totalDeposited: bigint;
   totalClaimed: bigint;
   createdAt: bigint;
 }
 
-// Per-NFT reward state interface
-export interface NftRewardState {
-  nftAsset: PublicKey;
-  rewardDebt: bigint;       // global reward_per_share at mint/last claim
+// Per wallet-content state interface
+export interface WalletContentState {
+  wallet: PublicKey;
+  content: PublicKey;
+  nftCount: bigint;         // Number of NFTs owned for this content
+  rewardDebt: bigint;       // Cumulative reward debt
   createdAt: bigint;
+  updatedAt: bigint;
 }
 
 // Hash a CID string using SHA-256 (matches Solana's hash function)
@@ -194,16 +202,16 @@ export function getMintConfigPda(contentPda: PublicKey): [PublicKey, number] {
   );
 }
 
-export function getGlobalRewardPoolPda(): [PublicKey, number] {
+export function getContentRewardPoolPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(GLOBAL_REWARD_POOL_SEED)],
+    [Buffer.from(CONTENT_REWARD_POOL_SEED), contentPda.toBuffer()],
     PROGRAM_ID
   );
 }
 
-export function getNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
+export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(NFT_REWARD_STATE_SEED), nftAsset.toBuffer()],
+    [Buffer.from(WALLET_CONTENT_STATE_SEED), wallet.toBuffer(), contentPda.toBuffer()],
     PROGRAM_ID
   );
 }
@@ -222,12 +230,13 @@ export function calculatePrimarySplit(price: bigint): { creator: bigint; platfor
   return { creator, platform, ecosystem, holderReward };
 }
 
-// Calculate pending rewards for an NFT
-export function calculatePendingReward(rewardPerShare: bigint, rewardDebt: bigint): bigint {
-  if (rewardPerShare <= rewardDebt) {
+// Calculate pending rewards for a wallet's content position
+export function calculatePendingReward(nftCount: bigint, rewardPerShare: bigint, rewardDebt: bigint): bigint {
+  const entitled = nftCount * rewardPerShare;
+  if (entitled <= rewardDebt) {
     return BigInt(0);
   }
-  return (rewardPerShare - rewardDebt) / PRECISION;
+  return (entitled - rewardDebt) / PRECISION;
 }
 
 // Convert ContentType enum to Anchor format
@@ -433,7 +442,7 @@ export async function deleteContentWithMintInstruction(
     .instruction();
 }
 
-// Initialize ecosystem config and global reward pool
+// Initialize ecosystem config
 export async function initializeEcosystemInstruction(
   program: Program,
   admin: PublicKey,
@@ -441,13 +450,11 @@ export async function initializeEcosystemInstruction(
   usdcMint: PublicKey
 ): Promise<TransactionInstruction> {
   const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
 
   return await program.methods
     .initializeEcosystem(usdcMint)
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
-      globalRewardPool: globalRewardPoolPda,
       treasury: treasury,
       admin: admin,
       systemProgram: SystemProgram.programId,
@@ -542,7 +549,7 @@ export interface MintNftResult {
   nftAssetKeypair: Keypair;
 }
 
-// Mint NFT with SOL payment (global reward pool model)
+// Mint NFT with SOL payment (per-content reward pool model)
 export async function mintNftSolInstruction(
   program: Program,
   buyer: PublicKey,
@@ -554,13 +561,11 @@ export async function mintNftSolInstruction(
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
 
   // Generate a new keypair for the NFT asset
   const nftAssetKeypair = Keypair.generate();
-
-  // Get NFT reward state PDA for the new NFT
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
 
   const instruction = await program.methods
     .mintNftSol()
@@ -568,8 +573,8 @@ export async function mintNftSolInstruction(
       ecosystemConfig: ecosystemConfigPda,
       content: contentPda,
       mintConfig: mintConfigPda,
-      globalRewardPool: globalRewardPoolPda,
-      nftRewardState: nftRewardStatePda,
+      contentRewardPool: contentRewardPoolPda,
+      buyerWalletState: buyerWalletStatePda,
       creator: creator,
       platform: platform,
       treasury: treasury,
@@ -583,24 +588,54 @@ export async function mintNftSolInstruction(
   return { instruction, nftAssetKeypair };
 }
 
-// Claim rewards instruction (global pool model)
-export async function claimRewardsInstruction(
+// Claim content rewards instruction (single content)
+export async function claimContentRewardsInstruction(
   program: Program,
   holder: PublicKey,
-  nftAsset: PublicKey
+  contentCid: string
 ): Promise<TransactionInstruction> {
-  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+  const [contentPda] = getContentPda(contentCid);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [walletContentStatePda] = getWalletContentStatePda(holder, contentPda);
 
   return await program.methods
-    .claimRewards()
+    .claimContentRewards()
     .accounts({
-      globalRewardPool: globalRewardPoolPda,
-      nftRewardState: nftRewardStatePda,
-      nftAsset: nftAsset,
+      contentRewardPool: contentRewardPoolPda,
+      walletContentState: walletContentStatePda,
       holder: holder,
       systemProgram: SystemProgram.programId,
     })
+    .instruction();
+}
+
+// Batch claim rewards instruction
+export async function claimAllRewardsInstruction(
+  program: Program,
+  holder: PublicKey,
+  contentCids: string[]
+): Promise<TransactionInstruction> {
+  // Build remaining accounts: pairs of [walletContentState, contentRewardPool]
+  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
+
+  for (const contentCid of contentCids) {
+    const [contentPda] = getContentPda(contentCid);
+    const [walletContentStatePda] = getWalletContentStatePda(holder, contentPda);
+    const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+
+    remainingAccounts.push(
+      { pubkey: walletContentStatePda, isSigner: false, isWritable: true },
+      { pubkey: contentRewardPoolPda, isSigner: false, isWritable: true }
+    );
+  }
+
+  return await program.methods
+    .claimAllRewards()
+    .accounts({
+      holder: holder,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
     .instruction();
 }
 
@@ -713,16 +748,19 @@ export async function fetchEcosystemConfig(
   }
 }
 
-// Fetch global reward pool
-export async function fetchGlobalRewardPool(
-  connection: Connection
-): Promise<GlobalRewardPool | null> {
+// Fetch content reward pool
+export async function fetchContentRewardPool(
+  connection: Connection,
+  contentCid: string
+): Promise<ContentRewardPool | null> {
   const program = createProgram(connection);
-  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
+  const [contentPda] = getContentPda(contentCid);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
 
   try {
-    const account = await (program.account as any).globalRewardPool.fetch(globalRewardPoolPda);
+    const account = await (program.account as any).contentRewardPool.fetch(contentRewardPoolPda);
     return {
+      content: account.content,
       rewardPerShare: BigInt(account.rewardPerShare.toString()),
       totalNfts: BigInt(account.totalNfts.toString()),
       totalDeposited: BigInt(account.totalDeposited.toString()),
@@ -734,58 +772,76 @@ export async function fetchGlobalRewardPool(
   }
 }
 
-// Fetch NFT reward state
-export async function fetchNftRewardState(
+// Fetch wallet content state
+export async function fetchWalletContentState(
   connection: Connection,
-  nftAsset: PublicKey
-): Promise<NftRewardState | null> {
+  wallet: PublicKey,
+  contentCid: string
+): Promise<WalletContentState | null> {
   const program = createProgram(connection);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+  const [contentPda] = getContentPda(contentCid);
+  const [walletContentStatePda] = getWalletContentStatePda(wallet, contentPda);
 
   try {
-    const account = await (program.account as any).nftRewardState.fetch(nftRewardStatePda);
+    const account = await (program.account as any).walletContentState.fetch(walletContentStatePda);
     return {
-      nftAsset: account.nftAsset,
+      wallet: account.wallet,
+      content: account.content,
+      nftCount: BigInt(account.nftCount.toString()),
       rewardDebt: BigInt(account.rewardDebt.toString()),
       createdAt: BigInt(account.createdAt.toString()),
+      updatedAt: BigInt(account.updatedAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Get pending rewards for a specific NFT (from global pool)
-export async function getPendingReward(
+// Get pending rewards for a wallet's position in a content
+export async function getPendingRewardForContent(
   connection: Connection,
-  nftAsset: PublicKey
+  wallet: PublicKey,
+  contentCid: string
 ): Promise<bigint> {
-  const globalRewardPool = await fetchGlobalRewardPool(connection);
-  if (!globalRewardPool) return BigInt(0);
+  const contentRewardPool = await fetchContentRewardPool(connection, contentCid);
+  if (!contentRewardPool) return BigInt(0);
 
-  const nftRewardState = await fetchNftRewardState(connection, nftAsset);
-  if (!nftRewardState) return BigInt(0);
+  const walletState = await fetchWalletContentState(connection, wallet, contentCid);
+  if (!walletState) return BigInt(0);
 
-  return calculatePendingReward(globalRewardPool.rewardPerShare, nftRewardState.rewardDebt);
+  return calculatePendingReward(
+    walletState.nftCount,
+    contentRewardPool.rewardPerShare,
+    walletState.rewardDebt
+  );
 }
 
-// Get all pending rewards for a wallet's NFTs (from global pool)
+// Get all pending rewards for a wallet across all their content positions
 export async function getPendingRewardsForWallet(
   connection: Connection,
-  nftAssets: PublicKey[]
-): Promise<Array<{ nftAsset: PublicKey; pending: bigint }>> {
-  const globalRewardPool = await fetchGlobalRewardPool(connection);
-  if (!globalRewardPool) return [];
+  wallet: PublicKey,
+  contentCids: string[]
+): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint }>> {
+  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint }> = [];
 
-  const results: Array<{ nftAsset: PublicKey; pending: bigint }> = [];
+  for (const contentCid of contentCids) {
+    const contentRewardPool = await fetchContentRewardPool(connection, contentCid);
+    if (!contentRewardPool) continue;
 
-  for (const nftAsset of nftAssets) {
-    const nftRewardState = await fetchNftRewardState(connection, nftAsset);
-    if (!nftRewardState) continue;
+    const walletState = await fetchWalletContentState(connection, wallet, contentCid);
+    if (!walletState || walletState.nftCount === BigInt(0)) continue;
 
-    const pending = calculatePendingReward(globalRewardPool.rewardPerShare, nftRewardState.rewardDebt);
-    if (pending > BigInt(0)) {
-      results.push({ nftAsset, pending });
-    }
+    const pending = calculatePendingReward(
+      walletState.nftCount,
+      contentRewardPool.rewardPerShare,
+      walletState.rewardDebt
+    );
+
+    results.push({
+      contentCid,
+      pending,
+      nftCount: walletState.nftCount,
+    });
   }
 
   return results;
@@ -877,6 +933,11 @@ export async function countNftsOwned(
   wallet: PublicKey,
   contentCid: string
 ): Promise<number> {
+  const walletState = await fetchWalletContentState(connection, wallet, contentCid);
+  if (walletState) {
+    return Number(walletState.nftCount);
+  }
+  // Fallback to checking NFT metadata
   const nftMetadata = await fetchWalletNftMetadata(connection, wallet);
   return nftMetadata.filter(nft => nft.contentCid === contentCid).length;
 }
@@ -973,8 +1034,8 @@ export function createContentRegistryClient(connection: Connection) {
     getCidRegistryPda,
     getEcosystemConfigPda,
     getMintConfigPda,
-    getGlobalRewardPoolPda,
-    getNftRewardStatePda,
+    getContentRewardPoolPda,
+    getWalletContentStatePda,
     hashCid,
 
     // Content management
@@ -1054,7 +1115,7 @@ export function createContentRegistryClient(connection: Connection) {
       isActive: boolean | null
     ) => updateMintSettingsInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps, isActive),
 
-    // NFT minting (SOL only, accumulated reward pool)
+    // NFT minting (SOL only, per-content reward pool)
     mintNftSolInstruction: (
       buyer: PublicKey,
       contentCid: string,
@@ -1063,11 +1124,17 @@ export function createContentRegistryClient(connection: Connection) {
       platform: PublicKey
     ): Promise<MintNftResult> => mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform),
 
-    // Claim rewards (global pool - single transaction per NFT)
-    claimRewardsInstruction: (
+    // Claim rewards (per-content)
+    claimContentRewardsInstruction: (
       holder: PublicKey,
-      nftAsset: PublicKey
-    ) => claimRewardsInstruction(program, holder, nftAsset),
+      contentCid: string
+    ) => claimContentRewardsInstruction(program, holder, contentCid),
+
+    // Batch claim rewards (multiple content)
+    claimAllRewardsInstruction: (
+      holder: PublicKey,
+      contentCids: string[]
+    ) => claimAllRewardsInstruction(program, holder, contentCids),
 
     // Ecosystem management
     initializeEcosystemInstruction: (
@@ -1088,14 +1155,15 @@ export function createContentRegistryClient(connection: Connection) {
     fetchContentByPda: (pda: PublicKey) => fetchContentByPda(connection, pda),
     fetchMintConfig: (contentCid: string) => fetchMintConfig(connection, contentCid),
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
-    fetchGlobalRewardPool: () => fetchGlobalRewardPool(connection),
-    fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
+    fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
+    fetchWalletContentState: (wallet: PublicKey, contentCid: string) =>
+      fetchWalletContentState(connection, wallet, contentCid),
 
-    // Reward calculations (global pool)
-    getPendingReward: (nftAsset: PublicKey) =>
-      getPendingReward(connection, nftAsset),
-    getPendingRewardsForWallet: (nftAssets: PublicKey[]) =>
-      getPendingRewardsForWallet(connection, nftAssets),
+    // Reward calculations (per-content)
+    getPendingRewardForContent: (wallet: PublicKey, contentCid: string) =>
+      getPendingRewardForContent(connection, wallet, contentCid),
+    getPendingRewardsForWallet: (wallet: PublicKey, contentCids: string[]) =>
+      getPendingRewardsForWallet(connection, wallet, contentCids),
 
     // NFT ownership
     checkNftOwnership: (wallet: PublicKey, contentCid: string) =>
