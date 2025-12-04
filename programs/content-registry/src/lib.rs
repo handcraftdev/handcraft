@@ -16,9 +16,137 @@ pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
 // DataState enum values
 const DATA_STATE_ACCOUNT_STATE: u8 = 0;
 
+// External Plugin Adapter types for lifecycle hook
+mod plugin_types {
+    // ExternalPluginAdapterInitInfo variant indices
+    pub const LIFECYCLE_HOOK_VARIANT: u8 = 0;
+
+    // HookableLifecycleEvent enum
+    pub const LIFECYCLE_EVENT_TRANSFER: u8 = 1;
+
+    // ExternalCheckResult enum
+    pub const CHECK_RESULT_CAN_LISTEN: u8 = 0;
+
+    // PluginAuthority enum
+    pub const PLUGIN_AUTHORITY_UPDATE_AUTHORITY: u8 = 2;
+
+    // ExternalPluginAdapterSchema enum
+    pub const SCHEMA_BINARY: u8 = 0;
+
+    // ExternalPluginAdapterExtraAccount enum variants
+    pub const EXTRA_ACCOUNT_CUSTOM_PDA: u8 = 4;
+
+    // Seed enum variants
+    pub const SEED_ADDRESS: u8 = 0;
+    pub const SEED_BYTES: u8 = 1;
+    pub const SEED_OWNER: u8 = 3;
+    pub const SEED_RECIPIENT: u8 = 4;
+}
+
+/// Build the lifecycle hook external plugin adapter data
+/// This configures the hook to be called on transfers with our program
+fn build_lifecycle_hook_plugin(
+    hooked_program: &Pubkey,
+    content_pda: &Pubkey,
+) -> Vec<u8> {
+    use plugin_types::*;
+
+    let mut data = Vec::new();
+
+    // ExternalPluginAdapterInitInfo::LifecycleHook variant (0)
+    data.push(LIFECYCLE_HOOK_VARIANT);
+
+    // hooked_program: Pubkey
+    data.extend_from_slice(hooked_program.as_ref());
+
+    // init_plugin_authority: Option<PluginAuthority> = Some(UpdateAuthority)
+    data.push(1); // Some
+    data.push(PLUGIN_AUTHORITY_UPDATE_AUTHORITY);
+
+    // lifecycle_checks: Vec<(HookableLifecycleEvent, ExternalCheckResult)>
+    // We only want to listen to Transfer events
+    data.extend_from_slice(&1u32.to_le_bytes()); // Vec length = 1
+    data.push(LIFECYCLE_EVENT_TRANSFER); // HookableLifecycleEvent::Transfer
+    data.push(CHECK_RESULT_CAN_LISTEN); // ExternalCheckResult::CanListen
+
+    // extra_accounts: Option<Vec<ExternalPluginAdapterExtraAccount>>
+    // We need: ContentRewardPool, SenderWalletState, ReceiverWalletState
+    data.push(1); // Some
+    data.extend_from_slice(&3u32.to_le_bytes()); // Vec length = 3
+
+    // 1. ContentRewardPool (fixed PDA)
+    // ExternalPluginAdapterExtraAccount::CustomPda
+    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
+    // seeds: Vec<Seed>
+    data.extend_from_slice(&2u32.to_le_bytes()); // 2 seeds
+    // Seed::Bytes("content_reward_pool")
+    data.push(SEED_BYTES);
+    let seed_bytes = b"content_reward_pool";
+    data.extend_from_slice(&(seed_bytes.len() as u32).to_le_bytes());
+    data.extend_from_slice(seed_bytes);
+    // Seed::Address(content_pda)
+    data.push(SEED_ADDRESS);
+    data.extend_from_slice(content_pda.as_ref());
+    // custom_program_id: Option<Pubkey> = Some(our program)
+    data.push(1); // Some
+    data.extend_from_slice(hooked_program.as_ref());
+    // is_signer: bool = false
+    data.push(0);
+    // is_writable: bool = true
+    data.push(1);
+
+    // 2. Sender's WalletContentState (uses Owner seed)
+    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
+    data.extend_from_slice(&3u32.to_le_bytes()); // 3 seeds
+    // Seed::Bytes("wallet_content")
+    data.push(SEED_BYTES);
+    let wallet_seed = b"wallet_content";
+    data.extend_from_slice(&(wallet_seed.len() as u32).to_le_bytes());
+    data.extend_from_slice(wallet_seed);
+    // Seed::Owner (current owner = sender in transfer)
+    data.push(SEED_OWNER);
+    // Seed::Address(content_pda)
+    data.push(SEED_ADDRESS);
+    data.extend_from_slice(content_pda.as_ref());
+    // custom_program_id
+    data.push(1);
+    data.extend_from_slice(hooked_program.as_ref());
+    // is_signer, is_writable
+    data.push(0);
+    data.push(1);
+
+    // 3. Receiver's WalletContentState (uses Recipient seed)
+    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
+    data.extend_from_slice(&3u32.to_le_bytes()); // 3 seeds
+    // Seed::Bytes("wallet_content")
+    data.push(SEED_BYTES);
+    data.extend_from_slice(&(wallet_seed.len() as u32).to_le_bytes());
+    data.extend_from_slice(wallet_seed);
+    // Seed::Recipient (new owner = receiver in transfer)
+    data.push(SEED_RECIPIENT);
+    // Seed::Address(content_pda)
+    data.push(SEED_ADDRESS);
+    data.extend_from_slice(content_pda.as_ref());
+    // custom_program_id
+    data.push(1);
+    data.extend_from_slice(hooked_program.as_ref());
+    // is_signer, is_writable
+    data.push(0);
+    data.push(1);
+
+    // data_authority: Option<PluginAuthority> = None
+    data.push(0);
+
+    // schema: ExternalPluginAdapterSchema = Binary
+    data.push(SCHEMA_BINARY);
+
+    data
+}
+
 /// Build and invoke the Metaplex Core CreateV2 instruction via raw CPI
 /// CreateV2 discriminator is 20
 /// Account order (all 8): asset, collection?, authority?, payer, owner?, updateAuthority?, systemProgram, logWrapper?
+/// Now includes lifecycle hook plugin for automatic transfer tracking
 fn create_core_nft<'info>(
     mpl_core_program: &AccountInfo<'info>,
     asset: &AccountInfo<'info>,
@@ -28,6 +156,8 @@ fn create_core_nft<'info>(
     system_program: &AccountInfo<'info>,
     name: String,
     uri: String,
+    content_pda: &Pubkey,
+    our_program_id: &Pubkey,
 ) -> Result<()> {
     // CreateV2 discriminator
     const CREATE_V2_DISCRIMINATOR: u8 = 20;
@@ -49,9 +179,12 @@ fn create_core_nft<'info>(
     data.write_all(&(uri_bytes.len() as u32).to_le_bytes()).unwrap();
     data.write_all(uri_bytes).unwrap();
 
-    // None for optional plugins and externalPluginAdapters
-    data.push(0); // plugins = None
-    data.push(0); // externalPluginAdapters = None
+    // plugins: Option<Vec<PluginAuthorityPair>> = None (no standard plugins)
+    data.push(0);
+
+    // externalPluginAdapters: Option<Vec<ExternalPluginAdapterInitInfo>> = None for now
+    // TODO: Re-enable lifecycle hook once encoding is fixed
+    data.push(0); // None - disabled until we fix the encoding
 
     // Build account metas - ALL 8 accounts in correct order
     // Optional accounts that are not used should still be included (use program ID as placeholder)
@@ -621,9 +754,10 @@ pub mod content_registry {
             ecosystem_mut.total_fees_sol += ecosystem_amount;
         }
 
-        // Create Metaplex Core NFT
+        // Create Metaplex Core NFT with lifecycle hook for transfer tracking
         let nft_name = format!("Handcraft #{}", content.minted_count);
         let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+        let content_key = content.key();
 
         create_core_nft(
             &ctx.accounts.mpl_core_program.to_account_info(),
@@ -634,6 +768,8 @@ pub mod content_registry {
             &ctx.accounts.system_program.to_account_info(),
             nft_name,
             nft_uri,
+            &content_key,
+            &crate::ID,
         )?;
 
         // Emit mint event
@@ -773,6 +909,179 @@ pub mod content_registry {
             holder: holder.key(),
             total_amount: total_claimed,
             num_contents: num_pairs as u32,
+            timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============================================
+    // NFT TRANSFER HOOK (Lifecycle Hook Handler)
+    // ============================================
+
+    /// Handle NFT transfer - called by Metaplex Core lifecycle hook
+    /// This is NOT called via CPI from Metaplex - it's a separate instruction
+    /// that must be called after the transfer to sync reward state.
+    ///
+    /// For now, we implement a manual sync approach where users call this
+    /// after transferring NFTs to update their reward positions.
+    pub fn sync_nft_transfer(ctx: Context<SyncNftTransfer>) -> Result<()> {
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let sender_state = &mut ctx.accounts.sender_wallet_state;
+        let receiver_state = &mut ctx.accounts.receiver_wallet_state;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        // Verify sender actually had NFTs
+        require!(sender_state.nft_count > 0, ContentRegistryError::SenderNotOwner);
+
+        // Auto-claim sender's pending rewards before transfer
+        let sender_pending = sender_state.pending_reward(content_reward_pool.reward_per_share);
+        if sender_pending > 0 {
+            // Transfer rewards from pool to sender
+            **content_reward_pool.to_account_info().try_borrow_mut_lamports()? -= sender_pending;
+            **ctx.accounts.sender.to_account_info().try_borrow_mut_lamports()? += sender_pending;
+            content_reward_pool.total_claimed += sender_pending;
+
+            emit!(ClaimRewardEvent {
+                holder: ctx.accounts.sender.key(),
+                content: content_reward_pool.content,
+                amount: sender_pending,
+                timestamp,
+            });
+        }
+
+        // Remove NFT from sender's position
+        sender_state.remove_nft(content_reward_pool.reward_per_share, timestamp);
+
+        // Initialize receiver state if needed
+        if receiver_state.nft_count == 0 && receiver_state.wallet == Pubkey::default() {
+            receiver_state.wallet = ctx.accounts.receiver.key();
+            receiver_state.content = content_reward_pool.content;
+            receiver_state.created_at = timestamp;
+        }
+
+        // Add NFT to receiver's position
+        receiver_state.add_nft(content_reward_pool.reward_per_share, timestamp);
+
+        emit!(NftTransferSyncEvent {
+            content: content_reward_pool.content,
+            sender: ctx.accounts.sender.key(),
+            receiver: ctx.accounts.receiver.key(),
+            sender_claimed: sender_pending,
+            timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Handle lifecycle hook callback from Metaplex Core
+    /// Called automatically when NFTs with our hook are transferred
+    /// This updates the wallet states for sender and receiver
+    pub fn execute_lifecycle_hook(ctx: Context<ExecuteLifecycleHook>) -> Result<()> {
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let sender_state = &mut ctx.accounts.sender_wallet_state;
+        let receiver_state = &mut ctx.accounts.receiver_wallet_state;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        let mut sender_claimed: u64 = 0;
+
+        // If sender has NFTs, process the transfer
+        if sender_state.nft_count > 0 {
+            // Auto-claim sender's pending rewards
+            let sender_pending = sender_state.pending_reward(content_reward_pool.reward_per_share);
+            if sender_pending > 0 {
+                **content_reward_pool.to_account_info().try_borrow_mut_lamports()? -= sender_pending;
+                **ctx.accounts.sender.to_account_info().try_borrow_mut_lamports()? += sender_pending;
+                content_reward_pool.total_claimed += sender_pending;
+                sender_claimed = sender_pending;
+
+                emit!(ClaimRewardEvent {
+                    holder: ctx.accounts.sender.key(),
+                    content: content_reward_pool.content,
+                    amount: sender_pending,
+                    timestamp,
+                });
+            }
+
+            // Remove NFT from sender
+            sender_state.remove_nft(content_reward_pool.reward_per_share, timestamp);
+        }
+
+        // Initialize receiver state if needed (for already-existing accounts)
+        if receiver_state.wallet == Pubkey::default() {
+            receiver_state.wallet = ctx.accounts.receiver.key();
+            receiver_state.content = content_reward_pool.content;
+            receiver_state.created_at = timestamp;
+        }
+
+        // Add NFT to receiver
+        receiver_state.add_nft(content_reward_pool.reward_per_share, timestamp);
+
+        emit!(NftTransferSyncEvent {
+            content: content_reward_pool.content,
+            sender: ctx.accounts.sender.key(),
+            receiver: ctx.accounts.receiver.key(),
+            sender_claimed,
+            timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Batch sync multiple NFT transfers at once
+    /// Useful when transferring multiple NFTs from same content
+    pub fn sync_nft_transfers_batch(
+        ctx: Context<SyncNftTransfersBatch>,
+        count: u8,
+    ) -> Result<()> {
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let sender_state = &mut ctx.accounts.sender_wallet_state;
+        let receiver_state = &mut ctx.accounts.receiver_wallet_state;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        // Verify sender has enough NFTs
+        require!(
+            sender_state.nft_count >= count as u64,
+            ContentRegistryError::SenderNotOwner
+        );
+
+        // Auto-claim sender's pending rewards before transfer
+        let sender_pending = sender_state.pending_reward(content_reward_pool.reward_per_share);
+        if sender_pending > 0 {
+            **content_reward_pool.to_account_info().try_borrow_mut_lamports()? -= sender_pending;
+            **ctx.accounts.sender.to_account_info().try_borrow_mut_lamports()? += sender_pending;
+            content_reward_pool.total_claimed += sender_pending;
+
+            emit!(ClaimRewardEvent {
+                holder: ctx.accounts.sender.key(),
+                content: content_reward_pool.content,
+                amount: sender_pending,
+                timestamp,
+            });
+        }
+
+        // Remove NFTs from sender's position
+        for _ in 0..count {
+            sender_state.remove_nft(content_reward_pool.reward_per_share, timestamp);
+        }
+
+        // Initialize receiver state if needed
+        if receiver_state.nft_count == 0 && receiver_state.wallet == Pubkey::default() {
+            receiver_state.wallet = ctx.accounts.receiver.key();
+            receiver_state.content = content_reward_pool.content;
+            receiver_state.created_at = timestamp;
+        }
+
+        // Add NFTs to receiver's position
+        for _ in 0..count {
+            receiver_state.add_nft(content_reward_pool.reward_per_share, timestamp);
+        }
+
+        emit!(NftTransferSyncEvent {
+            content: content_reward_pool.content,
+            sender: ctx.accounts.sender.key(),
+            receiver: ctx.accounts.receiver.key(),
+            sender_claimed: sender_pending,
             timestamp,
         });
 
@@ -1096,6 +1405,139 @@ pub struct ClaimAllRewards<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct SyncNftTransfer<'info> {
+    /// The content's reward pool
+    #[account(
+        mut,
+        seeds = [CONTENT_REWARD_POOL_SEED, content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
+
+    /// The sender's wallet state for this content
+    #[account(
+        mut,
+        seeds = [WALLET_CONTENT_STATE_SEED, sender.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump,
+        constraint = sender_wallet_state.wallet == sender.key() @ ContentRegistryError::Unauthorized,
+        constraint = sender_wallet_state.content == content_reward_pool.content @ ContentRegistryError::ContentMismatch
+    )]
+    pub sender_wallet_state: Account<'info, WalletContentState>,
+
+    /// The receiver's wallet state for this content (created if needed)
+    #[account(
+        init_if_needed,
+        payer = sender,
+        space = 8 + WalletContentState::INIT_SPACE,
+        seeds = [WALLET_CONTENT_STATE_SEED, receiver.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub receiver_wallet_state: Account<'info, WalletContentState>,
+
+    /// The sender (must sign to authorize the sync)
+    #[account(mut)]
+    pub sender: Signer<'info>,
+
+    /// CHECK: The receiver of the NFT
+    #[account(mut)]
+    pub receiver: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SyncNftTransfersBatch<'info> {
+    /// The content's reward pool
+    #[account(
+        mut,
+        seeds = [CONTENT_REWARD_POOL_SEED, content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
+
+    /// The sender's wallet state for this content
+    #[account(
+        mut,
+        seeds = [WALLET_CONTENT_STATE_SEED, sender.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump,
+        constraint = sender_wallet_state.wallet == sender.key() @ ContentRegistryError::Unauthorized,
+        constraint = sender_wallet_state.content == content_reward_pool.content @ ContentRegistryError::ContentMismatch
+    )]
+    pub sender_wallet_state: Account<'info, WalletContentState>,
+
+    /// The receiver's wallet state for this content (created if needed)
+    #[account(
+        init_if_needed,
+        payer = sender,
+        space = 8 + WalletContentState::INIT_SPACE,
+        seeds = [WALLET_CONTENT_STATE_SEED, receiver.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub receiver_wallet_state: Account<'info, WalletContentState>,
+
+    /// The sender (must sign to authorize the sync)
+    #[account(mut)]
+    pub sender: Signer<'info>,
+
+    /// CHECK: The receiver of the NFT
+    #[account(mut)]
+    pub receiver: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for Metaplex Core lifecycle hook callback
+/// Called automatically by Metaplex Core when NFTs with our hook are transferred
+/// Receiver's wallet state is created automatically if it doesn't exist
+#[derive(Accounts)]
+pub struct ExecuteLifecycleHook<'info> {
+    /// CHECK: The Metaplex Core program must be the caller
+    /// We verify the asset has our lifecycle hook configured
+    #[account(address = MPL_CORE_ID)]
+    pub mpl_core_program: AccountInfo<'info>,
+
+    /// CHECK: The NFT asset being transferred
+    pub asset: AccountInfo<'info>,
+
+    /// The content's reward pool (passed as extra account by Metaplex Core)
+    #[account(
+        mut,
+        seeds = [CONTENT_REWARD_POOL_SEED, content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
+
+    /// The sender's wallet state for this content
+    #[account(
+        mut,
+        seeds = [WALLET_CONTENT_STATE_SEED, sender.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub sender_wallet_state: Account<'info, WalletContentState>,
+
+    /// The receiver's wallet state for this content (created if needed)
+    /// Sender pays for account creation as part of transfer cost
+    #[account(
+        init_if_needed,
+        payer = sender,
+        space = 8 + WalletContentState::INIT_SPACE,
+        seeds = [WALLET_CONTENT_STATE_SEED, receiver.key().as_ref(), content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub receiver_wallet_state: Account<'info, WalletContentState>,
+
+    /// CHECK: The sender (current owner) of the NFT - pays for receiver account if needed
+    #[account(mut)]
+    pub sender: Signer<'info>,
+
+    /// CHECK: The receiver (new owner) of the NFT
+    #[account(mut)]
+    pub receiver: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 // ============================================
 // EVENTS
 // ============================================
@@ -1133,5 +1575,14 @@ pub struct BatchClaimEvent {
     pub holder: Pubkey,
     pub total_amount: u64,
     pub num_contents: u32,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct NftTransferSyncEvent {
+    pub content: Pubkey,
+    pub sender: Pubkey,
+    pub receiver: Pubkey,
+    pub sender_claimed: u64,
     pub timestamp: i64,
 }

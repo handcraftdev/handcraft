@@ -187,6 +187,139 @@
       "args": []
     },
     {
+      "name": "sync_nft_transfer",
+      "docs": ["Sync NFT transfer - call after transferring to update reward state"],
+      "discriminator": [153, 72, 61, 154, 198, 149, 126, 145],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "sender" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "receiver" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        { "name": "sender", "writable": true, "signer": true },
+        { "name": "receiver", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
+      "name": "sync_nft_transfers_batch",
+      "docs": ["Sync multiple NFT transfers at once"],
+      "discriminator": [117, 138, 233, 11, 152, 81, 245, 83],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "sender" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "receiver" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        { "name": "sender", "writable": true, "signer": true },
+        { "name": "receiver", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [
+        { "name": "count", "type": "u8" }
+      ]
+    },
+    {
+      "name": "execute_lifecycle_hook",
+      "docs": ["Handle lifecycle hook callback from Metaplex Core - called automatically on NFT transfers"],
+      "discriminator": [152, 6, 57, 45, 26, 166, 207, 223],
+      "accounts": [
+        { "name": "mpl_core_program", "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" },
+        { "name": "asset" },
+        {
+          "name": "content_reward_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "sender" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
+              { "kind": "account", "path": "receiver" },
+              { "kind": "account", "path": "content_reward_pool.content" }
+            ]
+          }
+        },
+        { "name": "sender", "writable": true },
+        { "name": "receiver", "writable": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": []
+    },
+    {
       "name": "register_content",
       "docs": ["Register new content with CID uniqueness enforcement"],
       "discriminator": [170, 55, 41, 115, 252, 248, 38, 144],
@@ -387,6 +520,14 @@
     {
       "name": "ClaimRewardEvent",
       "discriminator": [156, 47, 92, 165, 31, 204, 187, 72]
+    },
+    {
+      "name": "BatchClaimEvent",
+      "discriminator": [197, 90, 252, 93, 78, 87, 115, 63]
+    },
+    {
+      "name": "NftTransferSyncEvent",
+      "discriminator": [142, 50, 252, 230, 228, 220, 59, 23]
     }
   ],
   "errors": [
@@ -414,7 +555,10 @@
     { "code": 6021, "name": "NotNftOwner", "msg": "Holder does not own this NFT" },
     { "code": 6022, "name": "NothingToClaim", "msg": "No rewards available to claim" },
     { "code": 6023, "name": "InvalidAccountPairs", "msg": "Invalid account pairs for batch claim" },
-    { "code": 6024, "name": "InvalidAccountData", "msg": "Invalid account data" }
+    { "code": 6024, "name": "InvalidAccountData", "msg": "Invalid account data" },
+    { "code": 6025, "name": "InvalidHookCaller", "msg": "Invalid lifecycle hook caller - must be Metaplex Core" },
+    { "code": 6026, "name": "InvalidAsset", "msg": "Invalid asset for transfer hook" },
+    { "code": 6027, "name": "SenderNotOwner", "msg": "Sender does not own this NFT" }
   ],
   "types": [
     {
@@ -581,6 +725,31 @@
           { "name": "holder", "type": "pubkey" },
           { "name": "content", "type": "pubkey" },
           { "name": "amount", "type": "u64" },
+          { "name": "timestamp", "type": "i64" }
+        ]
+      }
+    },
+    {
+      "name": "BatchClaimEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "holder", "type": "pubkey" },
+          { "name": "total_amount", "type": "u64" },
+          { "name": "num_contents", "type": "u32" },
+          { "name": "timestamp", "type": "i64" }
+        ]
+      }
+    },
+    {
+      "name": "NftTransferSyncEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "content", "type": "pubkey" },
+          { "name": "sender", "type": "pubkey" },
+          { "name": "receiver", "type": "pubkey" },
+          { "name": "sender_claimed", "type": "u64" },
           { "name": "timestamp", "type": "i64" }
         ]
       }

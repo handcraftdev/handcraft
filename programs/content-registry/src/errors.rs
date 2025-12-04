@@ -56,4 +56,12 @@ pub enum ContentRegistryError {
     InvalidAccountPairs,
     #[msg("Invalid account data")]
     InvalidAccountData,
+
+    // Lifecycle hook errors
+    #[msg("Invalid lifecycle hook caller - must be Metaplex Core")]
+    InvalidHookCaller,
+    #[msg("Invalid asset for transfer hook")]
+    InvalidAsset,
+    #[msg("Sender does not own this NFT")]
+    SenderNotOwner,
 }

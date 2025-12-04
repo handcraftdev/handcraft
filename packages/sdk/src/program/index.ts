@@ -639,6 +639,57 @@ export async function claimAllRewardsInstruction(
     .instruction();
 }
 
+// Sync NFT transfer - call after transferring an NFT to update reward state
+export async function syncNftTransferInstruction(
+  program: Program,
+  sender: PublicKey,
+  receiver: PublicKey,
+  contentCid: string
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [senderWalletStatePda] = getWalletContentStatePda(sender, contentPda);
+  const [receiverWalletStatePda] = getWalletContentStatePda(receiver, contentPda);
+
+  return await program.methods
+    .syncNftTransfer()
+    .accounts({
+      contentRewardPool: contentRewardPoolPda,
+      senderWalletState: senderWalletStatePda,
+      receiverWalletState: receiverWalletStatePda,
+      sender: sender,
+      receiver: receiver,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+// Sync multiple NFT transfers at once (same sender/receiver, same content)
+export async function syncNftTransfersBatchInstruction(
+  program: Program,
+  sender: PublicKey,
+  receiver: PublicKey,
+  contentCid: string,
+  count: number
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [senderWalletStatePda] = getWalletContentStatePda(sender, contentPda);
+  const [receiverWalletStatePda] = getWalletContentStatePda(receiver, contentPda);
+
+  return await program.methods
+    .syncNftTransfersBatch(count)
+    .accounts({
+      contentRewardPool: contentRewardPoolPda,
+      senderWalletState: senderWalletStatePda,
+      receiverWalletState: receiverWalletStatePda,
+      sender: sender,
+      receiver: receiver,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
 // Fetch content
 export async function fetchContent(
   connection: Connection,
@@ -1135,6 +1186,21 @@ export function createContentRegistryClient(connection: Connection) {
       holder: PublicKey,
       contentCids: string[]
     ) => claimAllRewardsInstruction(program, holder, contentCids),
+
+    // Sync NFT transfer (call after transferring to update reward state)
+    syncNftTransferInstruction: (
+      sender: PublicKey,
+      receiver: PublicKey,
+      contentCid: string
+    ) => syncNftTransferInstruction(program, sender, receiver, contentCid),
+
+    // Sync multiple NFT transfers at once
+    syncNftTransfersBatchInstruction: (
+      sender: PublicKey,
+      receiver: PublicKey,
+      contentCid: string,
+      count: number
+    ) => syncNftTransfersBatchInstruction(program, sender, receiver, contentCid, count),
 
     // Ecosystem management
     initializeEcosystemInstruction: (
