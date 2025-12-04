@@ -337,6 +337,15 @@
           "signer": true
         },
         {
+          "name": "nft_asset",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -437,8 +446,21 @@
           "writable": true
         },
         {
+          "name": "nft_asset",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -538,6 +560,18 @@
               "name": "ContentType"
             }
           }
+        },
+        {
+          "name": "is_encrypted",
+          "type": "bool"
+        },
+        {
+          "name": "preview_cid",
+          "type": "string"
+        },
+        {
+          "name": "encryption_meta_cid",
+          "type": "string"
         }
       ]
     },
@@ -686,6 +720,18 @@
         {
           "name": "creator_royalty_bps",
           "type": "u16"
+        },
+        {
+          "name": "is_encrypted",
+          "type": "bool"
+        },
+        {
+          "name": "preview_cid",
+          "type": "string"
+        },
+        {
+          "name": "encryption_meta_cid",
+          "type": "string"
         }
       ]
     },
@@ -1174,6 +1220,18 @@
           {
             "name": "minted_count",
             "type": "u64"
+          },
+          {
+            "name": "is_encrypted",
+            "type": "bool"
+          },
+          {
+            "name": "preview_cid",
+            "type": "string"
+          },
+          {
+            "name": "encryption_meta_cid",
+            "type": "string"
           }
         ]
       }

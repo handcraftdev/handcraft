@@ -1,7 +1,15 @@
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { createHash } from "crypto";
 
 const FILEBASE_ENDPOINT = "https://s3.filebase.com";
 const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs/";
+
+/**
+ * Generate a content-based hash for consistent naming
+ */
+function contentHash(data: Buffer | Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex").slice(0, 16);
+}
 
 export interface UploadResult {
   cid: string;
@@ -27,8 +35,33 @@ export function createFilebaseClient(config: FilebaseConfig) {
 
   return {
     async upload(file: Buffer | Uint8Array, name: string, contentType?: string): Promise<UploadResult> {
-      const key = `${Date.now()}-${name}`;
+      // Use content-based key for deduplication - same content = same key = same CID
+      const hash = contentHash(file instanceof Buffer ? file : Buffer.from(file));
+      const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+      const key = `${hash}${ext}`;
 
+      // Check if this content already exists
+      try {
+        const head = await client.send(new HeadObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+        }));
+
+        const existingCid = head.Metadata?.cid;
+        if (existingCid) {
+          // Content already uploaded, return existing CID
+          console.log(`Content already exists with CID: ${existingCid}`);
+          return {
+            cid: existingCid,
+            url: `${IPFS_GATEWAY}${existingCid}`,
+            size: file.length,
+          };
+        }
+      } catch {
+        // Object doesn't exist, proceed with upload
+      }
+
+      // Upload new content
       await client.send(new PutObjectCommand({
         Bucket: config.bucket,
         Key: key,
