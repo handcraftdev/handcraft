@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentUpload } from "@/hooks/useUpload";
-import { useContentRegistry, ContentType as OnChainContentType, PaymentCurrency } from "@/hooks/useContentRegistry";
+import { useContentRegistry, ContentType as OnChainContentType } from "@/hooks/useContentRegistry";
 import { isUserRejection, getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface UploadModalProps {
@@ -83,9 +83,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
-  // NFT configuration state (always enabled by default)
+  // NFT configuration state (always enabled by default, SOL only)
   const [nftPrice, setNftPrice] = useState("");
-  const [nftCurrency, setNftCurrency] = useState<PaymentCurrency>(PaymentCurrency.Sol);
   const [nftSupplyType, setNftSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [nftMaxSupply, setNftMaxSupply] = useState("");
   const [nftRoyaltyPercent, setNftRoyaltyPercent] = useState("5");
@@ -153,7 +152,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
     // Capture current values before async operations
     const currentNftPrice = nftPrice;
-    const currentNftCurrency = nftCurrency;
     const currentNftSupplyType = nftSupplyType;
     const currentNftMaxSupply = nftMaxSupply;
     const currentNftRoyaltyPercent = nftRoyaltyPercent;
@@ -161,7 +159,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
     console.log("handleUpload called with NFT config:", {
       price: currentNftPrice,
-      currency: currentNftCurrency,
       supplyType: currentNftSupplyType,
       maxSupply: currentNftMaxSupply,
       royaltyPercent: currentNftRoyaltyPercent,
@@ -206,17 +203,13 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         setStep("registering");
         try {
           // Always register with NFT mint config in one transaction
-          // Parse price
+          // Parse price (SOL only)
           let priceValue: bigint;
           if (currentNftPrice === "" || currentNftPrice === "0") {
             priceValue = BigInt(0); // Free mint
           } else {
             const priceFloat = parseFloat(currentNftPrice);
-            if (currentNftCurrency === PaymentCurrency.Sol) {
-              priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
-            } else {
-              priceValue = BigInt(Math.floor(priceFloat * 1_000_000)); // 6 decimals for USDC
-            }
+            priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
           }
 
           // Parse supply
@@ -230,7 +223,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
           console.log("Registering with NFT config:", {
             price: priceValue,
-            currency: currentNftCurrency,
             maxSupply: maxSupplyValue,
             royaltyBps,
             isEncrypted: result.isEncrypted,
@@ -243,7 +235,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             metadataCid: result.metadata.cid,
             contentType: currentContentType,
             price: priceValue,
-            currency: currentNftCurrency,
             maxSupply: maxSupplyValue,
             creatorRoyaltyBps: royaltyBps,
             isEncrypted: result.isEncrypted || false,
@@ -282,7 +273,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     description,
     tags,
     nftPrice,
-    nftCurrency,
     nftSupplyType,
     nftMaxSupply,
     nftRoyaltyPercent,
@@ -307,7 +297,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     setStep("select");
     // Reset NFT state
     setNftPrice("");
-    setNftCurrency(PaymentCurrency.Sol);
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
     setNftRoyaltyPercent("5");
@@ -523,7 +512,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   <div className="p-3 space-y-3 border-t border-gray-700">
                       {/* Price */}
                       <div>
-                        <label className="block text-xs font-medium mb-1.5 text-gray-400">Price</label>
+                        <label className="block text-xs font-medium mb-1.5 text-gray-400">Price (SOL)</label>
                         <div className="flex gap-2">
                           <input
                             type="number"
@@ -534,14 +523,9 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                             placeholder="0 for free"
                             className="flex-1 px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
                           />
-                          <select
-                            value={nftCurrency}
-                            onChange={(e) => setNftCurrency(Number(e.target.value) as PaymentCurrency)}
-                            className="px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                          >
-                            <option value={PaymentCurrency.Sol}>SOL</option>
-                            <option value={PaymentCurrency.Usdc}>USDC</option>
-                          </select>
+                          <span className="px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-400">
+                            SOL
+                          </span>
                         </div>
                       </div>
 

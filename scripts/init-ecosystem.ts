@@ -8,8 +8,9 @@ import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import * as fs from "fs";
 import * as path from "path";
 
-const PROGRAM_ID = new PublicKey("A5xdpZf8AKfmmWP5wsH7T8Ea8GhSKRnbaxe5eWANVcHN");
+const PROGRAM_ID = new PublicKey("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
 const ECOSYSTEM_CONFIG_SEED = "ecosystem";
+const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
 
 // USDC devnet mint (from Circle)
 const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
@@ -36,7 +37,7 @@ async function main() {
   }
 
   // Load IDL
-  const idlPath = path.join(__dirname, "../target/idl/content_registry.json");
+  const idlPath = path.join(__dirname, "../packages/sdk/src/program/content_registry.json");
   const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
 
   // Create provider and program
@@ -50,7 +51,14 @@ async function main() {
     PROGRAM_ID
   );
 
+  // Get global reward pool PDA
+  const [globalRewardPoolPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(GLOBAL_REWARD_POOL_SEED)],
+    PROGRAM_ID
+  );
+
   console.log("Ecosystem Config PDA:", ecosystemConfigPda.toBase58());
+  console.log("Global Reward Pool PDA:", globalRewardPoolPda.toBase58());
 
   // Check if already initialized
   const existingAccount = await connection.getAccountInfo(ecosystemConfigPda);
@@ -59,7 +67,7 @@ async function main() {
     return;
   }
 
-  console.log("Initializing ecosystem config...");
+  console.log("Initializing ecosystem config and global reward pool...");
   console.log("  Admin:", keypair.publicKey.toBase58());
   console.log("  Treasury:", keypair.publicKey.toBase58());
   console.log("  USDC Mint:", USDC_DEVNET_MINT.toBase58());
@@ -69,6 +77,7 @@ async function main() {
       .initializeEcosystem(USDC_DEVNET_MINT)
       .accounts({
         ecosystemConfig: ecosystemConfigPda,
+        globalRewardPool: globalRewardPoolPda,
         admin: keypair.publicKey,
         treasury: keypair.publicKey, // Using admin as treasury for now
         systemProgram: PublicKey.default,
@@ -77,11 +86,14 @@ async function main() {
       .rpc();
 
     console.log("Transaction signature:", tx);
-    console.log("Ecosystem initialized successfully!");
+    console.log("Ecosystem and global reward pool initialized successfully!");
 
     // Verify
     const account = await connection.getAccountInfo(ecosystemConfigPda);
-    console.log("Account data length:", account?.data.length);
+    console.log("Ecosystem config data length:", account?.data.length);
+
+    const poolAccount = await connection.getAccountInfo(globalRewardPoolPda);
+    console.log("Global reward pool data length:", poolAccount?.data.length);
   } catch (error) {
     console.error("Error:", error);
   }

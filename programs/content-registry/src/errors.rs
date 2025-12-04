@@ -42,4 +42,14 @@ pub enum ContentRegistryError {
     EcosystemAlreadyInitialized,
     #[msg("Invalid USDC mint address")]
     InvalidUsdcMint,
+
+    // Holder reward claim errors
+    #[msg("NFT asset does not match the reward state")]
+    NftMismatch,
+    #[msg("Content does not match the reward pool")]
+    ContentMismatch,
+    #[msg("Holder does not own this NFT")]
+    NotNftOwner,
+    #[msg("No rewards available to claim")]
+    NothingToClaim,
 }

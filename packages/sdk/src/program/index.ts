@@ -1,10 +1,9 @@
 import { Program, AnchorProvider, Idl, BN } from "@coral-xyz/anchor";
 import { Connection, PublicKey, SystemProgram, TransactionInstruction, Keypair } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
 import { sha256 } from "js-sha256";
 import idlJson from "./content_registry.json";
 
-export const PROGRAM_ID = new PublicKey("A5xdpZf8AKfmmWP5wsH7T8Ea8GhSKRnbaxe5eWANVcHN");
+export const PROGRAM_ID = new PublicKey("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
 
 // Metaplex Core Program ID
 export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
@@ -12,21 +11,25 @@ export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm
 // Seeds for PDA derivation
 export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
 export const MINT_CONFIG_SEED = "mint_config";
+export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
+export const NFT_REWARD_STATE_SEED = "nft_reward";
 
 // Fee constants (basis points)
 // Primary sale: Creator 80%, Platform 5%, Ecosystem 3%, Existing Holders 12%
 export const PLATFORM_FEE_PRIMARY_BPS = 500;   // 5%
 export const ECOSYSTEM_FEE_PRIMARY_BPS = 300;  // 3%
 export const CREATOR_FEE_PRIMARY_BPS = 8000;   // 80%
-export const HOLDER_REWARD_PRIMARY_BPS = 1200; // 12% - distributed equally to existing NFT holders
+export const HOLDER_REWARD_PRIMARY_BPS = 1200; // 12% - distributed to existing NFT holders
 export const PLATFORM_FEE_SECONDARY_BPS = 100; // 1%
 export const ECOSYSTEM_FEE_SECONDARY_BPS = 50; // 0.5%
 export const MIN_CREATOR_ROYALTY_BPS = 200;    // 2%
 export const MAX_CREATOR_ROYALTY_BPS = 1000;   // 10%
 
-// Minimum prices
+// Minimum prices (SOL only)
 export const MIN_PRICE_LAMPORTS = 1_000_000;   // 0.001 SOL
-export const MIN_PRICE_USDC = 10_000;          // 0.01 USDC (6 decimals)
+
+// Precision for reward_per_share calculations (matches program)
+export const PRECISION = BigInt("1000000000000"); // 1e12
 
 export enum ContentType {
   // Video types
@@ -91,10 +94,9 @@ export function getContentTypeLabel(type: ContentType): string {
   }
 }
 
-// Payment currency enum
+// Payment currency enum (SOL only now)
 export enum PaymentCurrency {
   Sol = 0,
-  Usdc = 1,
 }
 
 export interface ContentEntry {
@@ -106,7 +108,6 @@ export interface ContentEntry {
   createdAt: bigint;
   isLocked: boolean;
   mintedCount: bigint;
-  // Access control fields
   isEncrypted: boolean;
   previewCid: string;
   encryptionMetaCid: string;
@@ -141,12 +142,28 @@ export interface EcosystemConfig {
   createdAt: bigint;
 }
 
+// Global accumulated reward pool interface
+export interface GlobalRewardPool {
+  rewardPerShare: bigint;   // Scaled by PRECISION (1e12)
+  totalNfts: bigint;        // Total NFTs minted across all content
+  totalDeposited: bigint;
+  totalClaimed: bigint;
+  createdAt: bigint;
+}
+
+// Per-NFT reward state interface
+export interface NftRewardState {
+  nftAsset: PublicKey;
+  rewardDebt: bigint;       // global reward_per_share at mint/last claim
+  createdAt: bigint;
+}
+
 // Hash a CID string using SHA-256 (matches Solana's hash function)
 export function hashCid(cid: string): Uint8Array {
   return new Uint8Array(sha256.array(cid));
 }
 
-// PDA derivation helpers - uses CID hash as seeds (32 bytes)
+// PDA derivation helpers
 export function getContentPda(contentCid: string): [PublicKey, number] {
   const cidHash = hashCid(contentCid);
   return PublicKey.findProgramAddressSync(
@@ -163,7 +180,6 @@ export function getCidRegistryPda(contentCid: string): [PublicKey, number] {
   );
 }
 
-// Get ecosystem config PDA
 export function getEcosystemConfigPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_CONFIG_SEED)],
@@ -171,7 +187,6 @@ export function getEcosystemConfigPda(): [PublicKey, number] {
   );
 }
 
-// Get mint config PDA for a content entry
 export function getMintConfigPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MINT_CONFIG_SEED), contentPda.toBuffer()],
@@ -179,24 +194,21 @@ export function getMintConfigPda(contentPda: PublicKey): [PublicKey, number] {
   );
 }
 
-// Convert PaymentCurrency enum to Anchor format
-function paymentCurrencyToAnchor(currency: PaymentCurrency): object {
-  switch (currency) {
-    case PaymentCurrency.Sol: return { sol: {} };
-    case PaymentCurrency.Usdc: return { usdc: {} };
-    default: return { sol: {} };
-  }
+export function getGlobalRewardPoolPda(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(GLOBAL_REWARD_POOL_SEED)],
+    PROGRAM_ID
+  );
 }
 
-// Convert Anchor enum format to PaymentCurrency
-function anchorToPaymentCurrency(anchorCurrency: Record<string, unknown>): PaymentCurrency {
-  if (anchorCurrency.usdc) return PaymentCurrency.Usdc;
-  return PaymentCurrency.Sol;
+export function getNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(NFT_REWARD_STATE_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
 }
 
 // Calculate primary sale split
-// Returns { creator, platform, ecosystem, holderReward }
-// If no existing holders, holderReward should be added to creator
 export function calculatePrimarySplit(price: bigint): { creator: bigint; platform: bigint; ecosystem: bigint; holderReward: bigint } {
   const zero = BigInt(0);
   if (price === zero) {
@@ -210,23 +222,27 @@ export function calculatePrimarySplit(price: bigint): { creator: bigint; platfor
   return { creator, platform, ecosystem, holderReward };
 }
 
+// Calculate pending rewards for an NFT
+export function calculatePendingReward(rewardPerShare: bigint, rewardDebt: bigint): bigint {
+  if (rewardPerShare <= rewardDebt) {
+    return BigInt(0);
+  }
+  return (rewardPerShare - rewardDebt) / PRECISION;
+}
+
 // Convert ContentType enum to Anchor format
 function contentTypeToAnchor(type: ContentType): object {
   switch (type) {
-    // Video types
     case ContentType.Movie: return { movie: {} };
     case ContentType.TvSeries: return { tvSeries: {} };
     case ContentType.MusicVideo: return { musicVideo: {} };
     case ContentType.ShortVideo: return { shortVideo: {} };
     case ContentType.GeneralVideo: return { generalVideo: {} };
-    // Book types
     case ContentType.Comic: return { comic: {} };
     case ContentType.GeneralBook: return { generalBook: {} };
-    // Audio types
     case ContentType.Podcast: return { podcast: {} };
     case ContentType.Audiobook: return { audiobook: {} };
     case ContentType.GeneralAudio: return { generalAudio: {} };
-    // Image types
     case ContentType.Photo: return { photo: {} };
     case ContentType.Art: return { art: {} };
     case ContentType.GeneralImage: return { generalImage: {} };
@@ -254,7 +270,6 @@ function anchorToContentType(anchorType: Record<string, unknown>): ContentType {
 
 // Create Anchor program instance (read-only, no wallet)
 export function createProgram(connection: Connection): Program {
-  // Create a dummy provider for read-only operations
   const provider = {
     connection,
     publicKey: null,
@@ -263,7 +278,7 @@ export function createProgram(connection: Connection): Program {
   return new Program(idlJson as Idl, provider);
 }
 
-// Register content instruction using Anchor
+// Register content instruction
 export async function registerContentInstruction(
   program: Program,
   authority: PublicKey,
@@ -297,7 +312,7 @@ export async function registerContentInstruction(
     .instruction();
 }
 
-// Register content with NFT mint config in one transaction
+// Register content with mint config (SOL only)
 export async function registerContentWithMintInstruction(
   program: Program,
   authority: PublicKey,
@@ -305,7 +320,6 @@ export async function registerContentWithMintInstruction(
   metadataCid: string,
   contentType: ContentType,
   price: bigint,
-  currency: PaymentCurrency,
   maxSupply: bigint | null,
   creatorRoyaltyBps: number,
   isEncrypted: boolean = false,
@@ -317,8 +331,6 @@ export async function registerContentWithMintInstruction(
   const [cidRegistryPda] = getCidRegistryPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
 
-  const currencyArg = currency === PaymentCurrency.Sol ? { sol: {} } : { usdc: {} };
-
   return await program.methods
     .registerContentWithMint(
       Array.from(cidHash),
@@ -326,7 +338,6 @@ export async function registerContentWithMintInstruction(
       metadataCid,
       contentTypeToAnchor(contentType),
       new BN(price.toString()),
-      currencyArg,
       maxSupply !== null ? new BN(maxSupply.toString()) : null,
       creatorRoyaltyBps,
       isEncrypted,
@@ -343,7 +354,7 @@ export async function registerContentWithMintInstruction(
     .instruction();
 }
 
-// Tip content instruction using Anchor
+// Tip content instruction
 export async function tipContentInstruction(
   program: Program,
   tipper: PublicKey,
@@ -364,7 +375,7 @@ export async function tipContentInstruction(
     .instruction();
 }
 
-// Update content instruction using Anchor
+// Update content instruction
 export async function updateContentInstruction(
   program: Program,
   creator: PublicKey,
@@ -382,7 +393,7 @@ export async function updateContentInstruction(
     .instruction();
 }
 
-// Delete content instruction (only before first mint)
+// Delete content instruction
 export async function deleteContentInstruction(
   program: Program,
   creator: PublicKey,
@@ -401,7 +412,7 @@ export async function deleteContentInstruction(
     .instruction();
 }
 
-// Delete content with mint config instruction (only before first mint)
+// Delete content with mint config instruction
 export async function deleteContentWithMintInstruction(
   program: Program,
   creator: PublicKey,
@@ -422,7 +433,7 @@ export async function deleteContentWithMintInstruction(
     .instruction();
 }
 
-// Initialize ecosystem config (admin only, one-time)
+// Initialize ecosystem config and global reward pool
 export async function initializeEcosystemInstruction(
   program: Program,
   admin: PublicKey,
@@ -430,11 +441,13 @@ export async function initializeEcosystemInstruction(
   usdcMint: PublicKey
 ): Promise<TransactionInstruction> {
   const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
 
   return await program.methods
     .initializeEcosystem(usdcMint)
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
+      globalRewardPool: globalRewardPoolPda,
       treasury: treasury,
       admin: admin,
       systemProgram: SystemProgram.programId,
@@ -442,7 +455,7 @@ export async function initializeEcosystemInstruction(
     .instruction();
 }
 
-// Update ecosystem config (admin only)
+// Update ecosystem config
 export async function updateEcosystemInstruction(
   program: Program,
   admin: PublicKey,
@@ -461,13 +474,12 @@ export async function updateEcosystemInstruction(
     .instruction();
 }
 
-// Configure mint settings for content
+// Configure mint settings (SOL only)
 export async function configureMintInstruction(
   program: Program,
   creator: PublicKey,
   contentCid: string,
   price: bigint,
-  currency: PaymentCurrency,
   maxSupply: bigint | null,
   creatorRoyaltyBps: number
 ): Promise<TransactionInstruction> {
@@ -477,7 +489,6 @@ export async function configureMintInstruction(
   return await program.methods
     .configureMint(
       new BN(price.toString()),
-      paymentCurrencyToAnchor(currency),
       maxSupply !== null ? new BN(maxSupply.toString()) : null,
       creatorRoyaltyBps
     )
@@ -496,32 +507,19 @@ export async function updateMintSettingsInstruction(
   creator: PublicKey,
   contentCid: string,
   price: bigint | null,
-  maxSupply: bigint | null | undefined, // undefined = don't change, null = unlimited
+  maxSupply: bigint | null | undefined,
   creatorRoyaltyBps: number | null,
   isActive: boolean | null
 ): Promise<TransactionInstruction> {
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
 
-  // For Option<Option<u64>> in Anchor:
-  // - undefined in JS = don't change (pass null to Anchor = outer None)
-  // - bigint in JS = set to value (Some(Some(value)))
-  // - null in JS = set to unlimited (Some(None)) - NOT SUPPORTED by Anchor TS client
-  //
-  // Due to Anchor TypeScript client limitations, we cannot easily represent Some(None).
-  // So we only support: undefined = don't change, bigint = set specific value
-
   let maxSupplyArg: BN | null;
   if (maxSupply === undefined || maxSupply === null) {
-    // Don't change - passing null means outer None in Anchor
-    // Note: null from JS would mean "set unlimited" but we can't represent that,
-    // so we treat it as "don't change" for safety
     maxSupplyArg = null;
   } else {
-    maxSupplyArg = new BN(maxSupply.toString()); // Some(Some(value))
+    maxSupplyArg = new BN(maxSupply.toString());
   }
-
-  console.log("updateMintSettings - maxSupply input:", maxSupply, "-> arg:", maxSupplyArg);
 
   return await program.methods
     .updateMintSettings(
@@ -538,37 +536,31 @@ export async function updateMintSettingsInstruction(
     .instruction();
 }
 
-// Result type for mint NFT instructions (includes the NFT asset keypair that must sign)
+// Result type for mint NFT instruction
 export interface MintNftResult {
   instruction: TransactionInstruction;
   nftAssetKeypair: Keypair;
 }
 
-// Mint NFT with SOL payment
-// existingHolders: Array of wallet addresses that own NFTs for this content
-// They will receive 12% of the sale price distributed equally
+// Mint NFT with SOL payment (global reward pool model)
 export async function mintNftSolInstruction(
   program: Program,
   buyer: PublicKey,
   contentCid: string,
   creator: PublicKey,
   treasury: PublicKey,
-  platform: PublicKey,
-  existingHolders: PublicKey[] = []
+  platform: PublicKey
 ): Promise<MintNftResult> {
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
 
   // Generate a new keypair for the NFT asset
   const nftAssetKeypair = Keypair.generate();
 
-  // Build remaining accounts for existing holders (they receive 12% holder reward)
-  const remainingAccounts = existingHolders.map((holder) => ({
-    pubkey: holder,
-    isWritable: true,
-    isSigner: false,
-  }));
+  // Get NFT reward state PDA for the new NFT
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
 
   const instruction = await program.methods
     .mintNftSol()
@@ -576,6 +568,8 @@ export async function mintNftSolInstruction(
       ecosystemConfig: ecosystemConfigPda,
       content: contentPda,
       mintConfig: mintConfigPda,
+      globalRewardPool: globalRewardPoolPda,
+      nftRewardState: nftRewardStatePda,
       creator: creator,
       platform: platform,
       treasury: treasury,
@@ -584,65 +578,33 @@ export async function mintNftSolInstruction(
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .remainingAccounts(remainingAccounts)
     .instruction();
 
   return { instruction, nftAssetKeypair };
 }
 
-// Mint NFT with USDC payment
-// existingHolderTokenAccounts: Array of USDC token accounts of existing NFT holders
-// They will receive 12% of the sale price distributed equally
-export async function mintNftUsdcInstruction(
+// Claim rewards instruction (global pool model)
+export async function claimRewardsInstruction(
   program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  creator: PublicKey,
-  usdcMint: PublicKey,
-  buyerTokenAccount: PublicKey,
-  creatorTokenAccount: PublicKey,
-  platformTokenAccount: PublicKey,
-  treasuryTokenAccount: PublicKey,
-  existingHolderTokenAccounts: PublicKey[] = []
-): Promise<MintNftResult> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  holder: PublicKey,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
 
-  // Generate a new keypair for the NFT asset
-  const nftAssetKeypair = Keypair.generate();
-
-  // Build remaining accounts for existing holder token accounts (they receive 12% holder reward)
-  const remainingAccounts = existingHolderTokenAccounts.map((tokenAccount) => ({
-    pubkey: tokenAccount,
-    isWritable: true,
-    isSigner: false,
-  }));
-
-  const instruction = await program.methods
-    .mintNftUsdc()
+  return await program.methods
+    .claimRewards()
     .accounts({
-      ecosystemConfig: ecosystemConfigPda,
-      content: contentPda,
-      mintConfig: mintConfigPda,
-      creator: creator,
-      buyer: buyer,
-      buyerTokenAccount: buyerTokenAccount,
-      creatorTokenAccount: creatorTokenAccount,
-      platformTokenAccount: platformTokenAccount,
-      treasuryTokenAccount: treasuryTokenAccount,
-      nftAsset: nftAssetKeypair.publicKey,
-      mplCoreProgram: MPL_CORE_PROGRAM_ID,
-      tokenProgram: TOKEN_PROGRAM_ID,
+      globalRewardPool: globalRewardPoolPda,
+      nftRewardState: nftRewardStatePda,
+      nftAsset: nftAsset,
+      holder: holder,
       systemProgram: SystemProgram.programId,
     })
-    .remainingAccounts(remainingAccounts)
     .instruction();
-
-  return { instruction, nftAssetKeypair };
 }
 
-// Account fetching helpers
+// Fetch content
 export async function fetchContent(
   connection: Connection,
   contentCid: string
@@ -698,7 +660,7 @@ export async function fetchContentByPda(
   }
 }
 
-// Fetch mint config for content
+// Fetch mint config
 export async function fetchMintConfig(
   connection: Connection,
   contentCid: string
@@ -707,43 +669,21 @@ export async function fetchMintConfig(
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
 
-  console.log("fetchMintConfig for CID:", contentCid);
-  console.log("Content PDA:", contentPda.toBase58());
-  console.log("MintConfig PDA:", mintConfigPda.toBase58());
-
   try {
     const account = await (program.account as any).mintConfig.fetch(mintConfigPda);
 
-    console.log("Raw mint config account:", {
-      price: account.price?.toString(),
-      currency: account.currency,
-      maxSupply: account.maxSupply?.toString(),
-      creatorRoyaltyBps: account.creatorRoyaltyBps,
-      isActive: account.isActive,
-    });
-
-    const result = {
+    return {
       content: account.content,
       creator: account.creator,
       price: BigInt(account.price.toString()),
-      currency: anchorToPaymentCurrency(account.currency),
+      currency: PaymentCurrency.Sol,
       maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
       creatorRoyaltyBps: account.creatorRoyaltyBps,
       isActive: account.isActive,
       createdAt: BigInt(account.createdAt.toString()),
       updatedAt: BigInt(account.updatedAt.toString()),
     };
-
-    console.log("Parsed mint config:", {
-      price: result.price.toString(),
-      currency: result.currency,
-      maxSupply: result.maxSupply?.toString(),
-      creatorRoyaltyBps: result.creatorRoyaltyBps,
-    });
-
-    return result;
-  } catch (err) {
-    console.error("Error fetching mint config:", err);
+  } catch {
     return null;
   }
 }
@@ -755,12 +695,10 @@ export async function fetchEcosystemConfig(
   const program = createProgram(connection);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
 
-  console.log("Fetching ecosystem config from PDA:", ecosystemConfigPda.toBase58());
-
   try {
     const account = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
 
-    const config = {
+    return {
       admin: account.admin,
       treasury: account.treasury,
       usdcMint: account.usdcMint,
@@ -770,17 +708,259 @@ export async function fetchEcosystemConfig(
       isPaused: account.isPaused,
       createdAt: BigInt(account.createdAt.toString()),
     };
-
-    console.log("Ecosystem config loaded:", {
-      admin: config.admin.toBase58(),
-      treasury: config.treasury.toBase58(),
-    });
-
-    return config;
-  } catch (err) {
-    console.error("Error fetching ecosystem config:", err);
+  } catch {
     return null;
   }
+}
+
+// Fetch global reward pool
+export async function fetchGlobalRewardPool(
+  connection: Connection
+): Promise<GlobalRewardPool | null> {
+  const program = createProgram(connection);
+  const [globalRewardPoolPda] = getGlobalRewardPoolPda();
+
+  try {
+    const account = await (program.account as any).globalRewardPool.fetch(globalRewardPoolPda);
+    return {
+      rewardPerShare: BigInt(account.rewardPerShare.toString()),
+      totalNfts: BigInt(account.totalNfts.toString()),
+      totalDeposited: BigInt(account.totalDeposited.toString()),
+      totalClaimed: BigInt(account.totalClaimed.toString()),
+      createdAt: BigInt(account.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Fetch NFT reward state
+export async function fetchNftRewardState(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<NftRewardState | null> {
+  const program = createProgram(connection);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+
+  try {
+    const account = await (program.account as any).nftRewardState.fetch(nftRewardStatePda);
+    return {
+      nftAsset: account.nftAsset,
+      rewardDebt: BigInt(account.rewardDebt.toString()),
+      createdAt: BigInt(account.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Get pending rewards for a specific NFT (from global pool)
+export async function getPendingReward(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<bigint> {
+  const globalRewardPool = await fetchGlobalRewardPool(connection);
+  if (!globalRewardPool) return BigInt(0);
+
+  const nftRewardState = await fetchNftRewardState(connection, nftAsset);
+  if (!nftRewardState) return BigInt(0);
+
+  return calculatePendingReward(globalRewardPool.rewardPerShare, nftRewardState.rewardDebt);
+}
+
+// Get all pending rewards for a wallet's NFTs (from global pool)
+export async function getPendingRewardsForWallet(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Array<{ nftAsset: PublicKey; pending: bigint }>> {
+  const globalRewardPool = await fetchGlobalRewardPool(connection);
+  if (!globalRewardPool) return [];
+
+  const results: Array<{ nftAsset: PublicKey; pending: bigint }> = [];
+
+  for (const nftAsset of nftAssets) {
+    const nftRewardState = await fetchNftRewardState(connection, nftAsset);
+    if (!nftRewardState) continue;
+
+    const pending = calculatePendingReward(globalRewardPool.rewardPerShare, nftRewardState.rewardDebt);
+    if (pending > BigInt(0)) {
+      results.push({ nftAsset, pending });
+    }
+  }
+
+  return results;
+}
+
+// NFT metadata with content CID for ownership tracking
+export interface WalletNftMetadata {
+  assetPubkey: string;
+  uri: string;
+  contentCid: string | null;
+}
+
+// Fetch all NFT metadata for a wallet in one batch
+export async function fetchWalletNftMetadata(
+  connection: Connection,
+  wallet: PublicKey
+): Promise<WalletNftMetadata[]> {
+  try {
+    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "2" } }, // AssetV1
+        { memcmp: { offset: 1, bytes: wallet.toBase58() } }, // Owner
+      ],
+    });
+
+    const assetsWithUris: { pubkey: string; uri: string }[] = [];
+    for (const { pubkey, account } of accounts) {
+      try {
+        const data = account.data;
+        const nameOffset = 1 + 32 + 33;
+        const nameLen = data.readUInt32LE(nameOffset);
+        const uriOffset = nameOffset + 4 + nameLen;
+        const uriLen = data.readUInt32LE(uriOffset);
+        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
+        assetsWithUris.push({ pubkey: pubkey.toBase58(), uri });
+      } catch {
+        // Skip malformed assets
+      }
+    }
+
+    const results: WalletNftMetadata[] = [];
+    const BATCH_SIZE = 5;
+
+    for (let i = 0; i < assetsWithUris.length; i += BATCH_SIZE) {
+      const batch = assetsWithUris.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async ({ pubkey, uri }) => {
+          let contentCid: string | null = null;
+
+          if (uri.startsWith("https://")) {
+            try {
+              const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
+              if (response.ok) {
+                const metadata = await response.json();
+                contentCid = metadata.contentCid ||
+                  metadata.properties?.content_cid ||
+                  extractCidFromUrl(metadata.image) ||
+                  extractCidFromUrl(metadata.animation_url) ||
+                  extractCidFromUrl(metadata.contentUrl) ||
+                  null;
+              }
+            } catch {
+              // Ignore fetch errors
+            }
+          }
+
+          return { assetPubkey: pubkey, uri, contentCid };
+        })
+      );
+      results.push(...batchResults);
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+// Helper to extract CID from IPFS URL
+function extractCidFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/Qm[a-zA-Z0-9]{44,}/);
+  return match ? match[0] : null;
+}
+
+// Count NFTs owned for a specific content
+export async function countNftsOwned(
+  connection: Connection,
+  wallet: PublicKey,
+  contentCid: string
+): Promise<number> {
+  const nftMetadata = await fetchWalletNftMetadata(connection, wallet);
+  return nftMetadata.filter(nft => nft.contentCid === contentCid).length;
+}
+
+// Check if wallet owns at least one NFT for a content
+export async function checkNftOwnership(
+  connection: Connection,
+  wallet: PublicKey,
+  contentCid: string
+): Promise<boolean> {
+  const count = await countNftsOwned(connection, wallet, contentCid);
+  return count > 0;
+}
+
+// Get content NFT holders
+export async function getContentNftHolders(
+  connection: Connection,
+  contentCid: string
+): Promise<PublicKey[]> {
+  try {
+    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "2" } },
+      ],
+    });
+
+    const holders = new Set<string>();
+
+    for (const { account } of accounts) {
+      try {
+        const data = account.data;
+        const ownerBytes = data.slice(1, 33);
+        const owner = new PublicKey(ownerBytes);
+
+        const nameOffset = 1 + 32 + 33;
+        const nameLen = data.readUInt32LE(nameOffset);
+        const uriOffset = nameOffset + 4 + nameLen;
+        const uriLen = data.readUInt32LE(uriOffset);
+        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
+
+        if (uri.includes(contentCid)) {
+          holders.add(owner.toBase58());
+          continue;
+        }
+
+        if (uri.startsWith("https://")) {
+          try {
+            const response = await fetch(uri, { signal: AbortSignal.timeout(3000) });
+            if (response.ok) {
+              const metadata = await response.json();
+              if (
+                metadata.contentCid === contentCid ||
+                metadata.properties?.content_cid === contentCid ||
+                metadata.image?.includes(contentCid) ||
+                metadata.animation_url?.includes(contentCid) ||
+                metadata.contentUrl?.includes(contentCid)
+              ) {
+                holders.add(owner.toBase58());
+              }
+            }
+          } catch {
+            // Ignore fetch errors
+          }
+        }
+      } catch {
+        // Skip malformed assets
+      }
+    }
+
+    return Array.from(holders).map(addr => new PublicKey(addr));
+  } catch {
+    return [];
+  }
+}
+
+// Count total NFTs minted for a content
+export async function countTotalMintedNfts(
+  connection: Connection,
+  contentCid: string
+): Promise<number> {
+  // Just fetch from content entry - it tracks minted_count
+  const content = await fetchContent(connection, contentCid);
+  if (!content) return 0;
+  return Number(content.mintedCount);
 }
 
 // High-level client
@@ -793,6 +973,8 @@ export function createContentRegistryClient(connection: Connection) {
     getCidRegistryPda,
     getEcosystemConfigPda,
     getMintConfigPda,
+    getGlobalRewardPoolPda,
+    getNftRewardStatePda,
     hashCid,
 
     // Content management
@@ -812,7 +994,6 @@ export function createContentRegistryClient(connection: Connection) {
       metadataCid: string,
       contentType: ContentType,
       price: bigint,
-      currency: PaymentCurrency,
       maxSupply: bigint | null,
       creatorRoyaltyBps: number,
       isEncrypted: boolean = false,
@@ -825,7 +1006,6 @@ export function createContentRegistryClient(connection: Connection) {
       metadataCid,
       contentType,
       price,
-      currency,
       maxSupply,
       creatorRoyaltyBps,
       isEncrypted,
@@ -856,15 +1036,14 @@ export function createContentRegistryClient(connection: Connection) {
       amount: bigint | number
     ) => tipContentInstruction(program, tipper, contentCid, creator, amount),
 
-    // Mint configuration
+    // Mint configuration (SOL only)
     configureMintInstruction: (
       creator: PublicKey,
       contentCid: string,
       price: bigint,
-      currency: PaymentCurrency,
       maxSupply: bigint | null,
       creatorRoyaltyBps: number
-    ) => configureMintInstruction(program, creator, contentCid, price, currency, maxSupply, creatorRoyaltyBps),
+    ) => configureMintInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps),
 
     updateMintSettingsInstruction: (
       creator: PublicKey,
@@ -875,33 +1054,22 @@ export function createContentRegistryClient(connection: Connection) {
       isActive: boolean | null
     ) => updateMintSettingsInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps, isActive),
 
-    // NFT minting - returns { instruction, nftAssetKeypair }
-    // The nftAssetKeypair MUST be added as a signer to the transaction
-    // existingHolders: Array of wallet addresses that own NFTs for this content
-    // They will receive 12% of the sale price distributed equally
+    // NFT minting (SOL only, accumulated reward pool)
     mintNftSolInstruction: (
       buyer: PublicKey,
       contentCid: string,
       creator: PublicKey,
       treasury: PublicKey,
-      platform: PublicKey,
-      existingHolders: PublicKey[] = []
-    ): Promise<MintNftResult> => mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, existingHolders),
+      platform: PublicKey
+    ): Promise<MintNftResult> => mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform),
 
-    // existingHolderTokenAccounts: Array of USDC token accounts of existing NFT holders
-    mintNftUsdcInstruction: (
-      buyer: PublicKey,
-      contentCid: string,
-      creator: PublicKey,
-      usdcMint: PublicKey,
-      buyerTokenAccount: PublicKey,
-      creatorTokenAccount: PublicKey,
-      platformTokenAccount: PublicKey,
-      treasuryTokenAccount: PublicKey,
-      existingHolderTokenAccounts: PublicKey[] = []
-    ): Promise<MintNftResult> => mintNftUsdcInstruction(program, buyer, contentCid, creator, usdcMint, buyerTokenAccount, creatorTokenAccount, platformTokenAccount, treasuryTokenAccount, existingHolderTokenAccounts),
+    // Claim rewards (global pool - single transaction per NFT)
+    claimRewardsInstruction: (
+      holder: PublicKey,
+      nftAsset: PublicKey
+    ) => claimRewardsInstruction(program, holder, nftAsset),
 
-    // Ecosystem management (admin)
+    // Ecosystem management
     initializeEcosystemInstruction: (
       admin: PublicKey,
       treasury: PublicKey,
@@ -920,30 +1088,34 @@ export function createContentRegistryClient(connection: Connection) {
     fetchContentByPda: (pda: PublicKey) => fetchContentByPda(connection, pda),
     fetchMintConfig: (contentCid: string) => fetchMintConfig(connection, contentCid),
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
+    fetchGlobalRewardPool: () => fetchGlobalRewardPool(connection),
+    fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
-    // NFT ownership check and counting
+    // Reward calculations (global pool)
+    getPendingReward: (nftAsset: PublicKey) =>
+      getPendingReward(connection, nftAsset),
+    getPendingRewardsForWallet: (nftAssets: PublicKey[]) =>
+      getPendingRewardsForWallet(connection, nftAssets),
+
+    // NFT ownership
     checkNftOwnership: (wallet: PublicKey, contentCid: string) =>
       checkNftOwnership(connection, wallet, contentCid),
     countNftsOwned: (wallet: PublicKey, contentCid: string) =>
       countNftsOwned(connection, wallet, contentCid),
     countTotalMintedNfts: (contentCid: string) =>
       countTotalMintedNfts(connection, contentCid),
-    // Batch fetch all wallet NFT metadata (more efficient)
     fetchWalletNftMetadata: (wallet: PublicKey) =>
       fetchWalletNftMetadata(connection, wallet),
-    // Get unique NFT holders for a content (for holder reward distribution)
     getContentNftHolders: (contentCid: string) =>
       getContentNftHolders(connection, contentCid),
 
-    // Fetch all content from all creators (global feed)
+    // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {
-      console.log("Fetching global content...");
       try {
         const accounts = await connection.getProgramAccounts(PROGRAM_ID);
-        console.log("Found", accounts.length, "total program accounts");
 
         const entries: ContentEntry[] = [];
-        for (const { pubkey, account } of accounts) {
+        for (const { account } of accounts) {
           try {
             const decoded = program.coder.accounts.decode("contentEntry", account.data);
 
@@ -961,22 +1133,18 @@ export function createContentRegistryClient(connection: Connection) {
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
             });
           } catch {
-            // Not a content entry, skip
+            // Not a content entry
           }
         }
 
         entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-        console.log("Total content entries:", entries.length);
         return entries;
-      } catch (err) {
-        console.error("Error fetching global content:", err);
+      } catch {
         return [];
       }
     },
 
-    // Fetch all content by a specific creator
     async fetchContentByCreator(creator: PublicKey): Promise<ContentEntry[]> {
-      console.log("Fetching content for creator:", creator.toBase58());
       try {
         const accounts = await connection.getProgramAccounts(PROGRAM_ID);
         const entries: ContentEntry[] = [];
@@ -1001,27 +1169,22 @@ export function createContentRegistryClient(connection: Connection) {
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
             });
           } catch {
-            // Not a content entry, skip
+            // Not a content entry
           }
         }
 
         entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-        console.log("Total entries for creator:", entries.length);
         return entries;
-      } catch (err) {
-        console.error("Error fetching creator content:", err);
+      } catch {
         return [];
       }
     },
 
-    // Fetch all mintable content (content with mint config)
     async fetchMintableContent(): Promise<Array<{ content: ContentEntry; mintConfig: MintConfig }>> {
-      console.log("Fetching mintable content...");
       try {
         const accounts = await connection.getProgramAccounts(PROGRAM_ID);
         const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
 
-        // First, collect all content entries
         const contentEntries: Map<string, ContentEntry> = new Map();
         for (const { account } of accounts) {
           try {
@@ -1044,12 +1207,10 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        // Then, find mint configs and match with content
         for (const { account } of accounts) {
           try {
             const decoded = program.coder.accounts.decode("mintConfig", account.data);
 
-            // Find matching content
             for (const [cid, content] of contentEntries) {
               const [contentPda] = getContentPda(cid);
               if (contentPda.equals(decoded.content)) {
@@ -1059,7 +1220,7 @@ export function createContentRegistryClient(connection: Connection) {
                     content: decoded.content,
                     creator: decoded.creator,
                     price: BigInt(decoded.price.toString()),
-                    currency: anchorToPaymentCurrency(decoded.currency),
+                    currency: PaymentCurrency.Sol,
                     maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
                     creatorRoyaltyBps: decoded.creatorRoyaltyBps,
                     isActive: decoded.isActive,
@@ -1075,371 +1236,13 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        // Sort by creation date (newest first)
         results.sort((a, b) => Number(b.content.createdAt - a.content.createdAt));
-        console.log("Total mintable content:", results.length);
         return results;
-      } catch (err) {
-        console.error("Error fetching mintable content:", err);
+      } catch {
         return [];
       }
     },
   };
-}
-
-/**
- * NFT metadata with content CID for ownership tracking
- */
-export interface WalletNftMetadata {
-  assetPubkey: string;
-  uri: string;
-  contentCid: string | null;
-}
-
-/**
- * Fetch all NFT metadata for a wallet in one batch
- * This is more efficient than calling countNftsOwned for each content
- */
-export async function fetchWalletNftMetadata(
-  connection: Connection,
-  wallet: PublicKey
-): Promise<WalletNftMetadata[]> {
-  try {
-    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
-      filters: [
-        { memcmp: { offset: 0, bytes: "2" } }, // AssetV1
-        { memcmp: { offset: 1, bytes: wallet.toBase58() } }, // Owner
-      ],
-    });
-
-    console.log(`fetchWalletNftMetadata: Found ${accounts.length} assets for wallet ${wallet.toBase58()}`);
-
-    // Parse URIs from all assets
-    const assetsWithUris: { pubkey: string; uri: string }[] = [];
-    for (const { pubkey, account } of accounts) {
-      try {
-        const data = account.data;
-        const nameOffset = 1 + 32 + 33;
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-        assetsWithUris.push({ pubkey: pubkey.toBase58(), uri });
-      } catch {
-        // Skip malformed assets
-      }
-    }
-
-    // Fetch all metadata in parallel (with concurrency limit)
-    const results: WalletNftMetadata[] = [];
-    const BATCH_SIZE = 5;
-
-    for (let i = 0; i < assetsWithUris.length; i += BATCH_SIZE) {
-      const batch = assetsWithUris.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async ({ pubkey, uri }) => {
-          let contentCid: string | null = null;
-
-          // Try to extract contentCid from URI or metadata
-          if (uri.startsWith("https://")) {
-            try {
-              const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
-              if (response.ok) {
-                const metadata = await response.json();
-                contentCid = metadata.contentCid ||
-                  metadata.properties?.content_cid ||
-                  extractCidFromUrl(metadata.image) ||
-                  extractCidFromUrl(metadata.animation_url) ||
-                  extractCidFromUrl(metadata.contentUrl) ||
-                  null;
-              }
-            } catch {
-              // Ignore fetch errors
-            }
-          }
-
-          return { assetPubkey: pubkey, uri, contentCid };
-        })
-      );
-      results.push(...batchResults);
-    }
-
-    return results;
-  } catch (err) {
-    console.error("Error fetching wallet NFT metadata:", err);
-    return [];
-  }
-}
-
-// Helper to extract CID from IPFS URL
-function extractCidFromUrl(url: string | undefined): string | null {
-  if (!url) return null;
-  const match = url.match(/Qm[a-zA-Z0-9]{44,}/);
-  return match ? match[0] : null;
-}
-
-// Check if a wallet owns an NFT for a specific content
-// This queries Metaplex Core assets owned by the wallet and checks if any reference this content
-/**
- * Count how many NFTs the wallet owns for a specific content
- * Returns the count (0 if none)
- * @deprecated Use fetchWalletNftMetadata for batch queries instead
- */
-export async function countNftsOwned(
-  connection: Connection,
-  wallet: PublicKey,
-  contentCid: string
-): Promise<number> {
-  try {
-    // Get all Metaplex Core assets owned by the wallet
-    // AssetV1 account structure:
-    // - Byte 0: Key discriminator (1 = AssetV1)
-    // - Bytes 1-32: Owner (32 bytes)
-    // - Bytes 33-65: UpdateAuthority (33 bytes - includes type prefix)
-    // - Then: name, uri, etc.
-    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
-      filters: [
-        {
-          // Filter for AssetV1 accounts (key = 1)
-          memcmp: {
-            offset: 0,
-            bytes: "2", // base58 encoding of byte value 1
-          },
-        },
-        {
-          // Owner pubkey at offset 1 (right after the 1-byte key discriminator)
-          memcmp: {
-            offset: 1,
-            bytes: wallet.toBase58(),
-          },
-        },
-      ],
-    });
-
-    console.log(`countNftsOwned: Found ${accounts.length} assets for wallet ${wallet.toBase58()}`);
-
-    let count = 0;
-
-    // Check each asset's URI to see if it references our content
-    for (const { pubkey, account } of accounts) {
-      const data = account.data;
-
-      try {
-        // Parse URI from asset data
-        // AssetV1 structure:
-        // - key(1) + owner(32) + updateAuthority(33) + name(4+len) + uri(4+len)
-        // UpdateAuthority has a 1-byte type prefix + 32-byte address = 33 bytes
-        const nameOffset = 1 + 32 + 33; // 66
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-
-        console.log(`  Asset ${pubkey.toBase58()}: URI = ${uri}`);
-
-        // Check if URI contains the content CID
-        if (uri.includes(contentCid)) {
-          count++;
-          continue;
-        }
-
-        // Also fetch metadata to check contentCid property
-        if (uri.startsWith("https://")) {
-          try {
-            const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
-            if (response.ok) {
-              const metadata = await response.json();
-              console.log(`    Metadata contentCid: ${metadata.contentCid}, looking for: ${contentCid}`);
-              if (
-                metadata.contentCid === contentCid ||
-                metadata.properties?.content_cid === contentCid ||
-                metadata.image?.includes(contentCid) ||
-                metadata.animation_url?.includes(contentCid) ||
-                metadata.contentUrl?.includes(contentCid)
-              ) {
-                console.log(`    MATCH FOUND!`);
-                count++;
-              }
-            }
-          } catch (err) {
-            console.log(`    Fetch error:`, err);
-            // Ignore fetch errors, continue checking
-          }
-        }
-      } catch {
-        // Skip malformed assets
-      }
-    }
-
-    return count;
-  } catch (err) {
-    console.error("Error counting NFT ownership:", err);
-    return 0;
-  }
-}
-
-/**
- * Check if wallet owns at least one NFT for a content (convenience wrapper)
- */
-export async function checkNftOwnership(
-  connection: Connection,
-  wallet: PublicKey,
-  contentCid: string
-): Promise<boolean> {
-  const count = await countNftsOwned(connection, wallet, contentCid);
-  return count > 0;
-}
-
-/**
- * Get all unique NFT holder addresses for a specific content
- * Used to distribute holder rewards during minting
- */
-export async function getContentNftHolders(
-  connection: Connection,
-  contentCid: string
-): Promise<PublicKey[]> {
-  try {
-    // Get ALL Metaplex Core AssetV1 accounts
-    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
-      filters: [
-        { memcmp: { offset: 0, bytes: "2" } }, // AssetV1
-      ],
-    });
-
-    console.log(`getContentNftHolders: Checking ${accounts.length} total assets for contentCid ${contentCid}`);
-
-    const holders = new Set<string>();
-
-    // Check each asset to see if it references our content
-    for (const { account } of accounts) {
-      const data = account.data;
-
-      try {
-        // Parse owner from asset data (bytes 1-32)
-        const ownerBytes = data.slice(1, 33);
-        const owner = new PublicKey(ownerBytes);
-
-        // Parse URI from asset data
-        const nameOffset = 1 + 32 + 33;
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-
-        // Check if URI contains the content CID
-        if (uri.includes(contentCid)) {
-          holders.add(owner.toBase58());
-          continue;
-        }
-
-        // Also fetch metadata to check contentCid property
-        if (uri.startsWith("https://")) {
-          try {
-            const response = await fetch(uri, { signal: AbortSignal.timeout(3000) });
-            if (response.ok) {
-              const metadata = await response.json();
-              if (
-                metadata.contentCid === contentCid ||
-                metadata.properties?.content_cid === contentCid ||
-                metadata.image?.includes(contentCid) ||
-                metadata.animation_url?.includes(contentCid) ||
-                metadata.contentUrl?.includes(contentCid)
-              ) {
-                holders.add(owner.toBase58());
-              }
-            }
-          } catch {
-            // Ignore fetch errors
-          }
-        }
-      } catch {
-        // Skip malformed assets
-      }
-    }
-
-    console.log(`getContentNftHolders: Found ${holders.size} unique holders for contentCid ${contentCid}`);
-    return Array.from(holders).map(addr => new PublicKey(addr));
-  } catch (err) {
-    console.error("Error getting content NFT holders:", err);
-    return [];
-  }
-}
-
-/**
- * Count total NFTs minted for a content by checking all Metaplex Core assets
- * This provides accurate on-chain count regardless of program state
- */
-export async function countTotalMintedNfts(
-  connection: Connection,
-  contentCid: string
-): Promise<number> {
-  try {
-    // Get ALL Metaplex Core AssetV1 accounts
-    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
-      filters: [
-        {
-          // Filter for AssetV1 accounts (key = 1)
-          memcmp: {
-            offset: 0,
-            bytes: "2", // base58 encoding of byte value 1
-          },
-        },
-      ],
-    });
-
-    console.log(`countTotalMintedNfts: Checking ${accounts.length} total assets for contentCid ${contentCid}`);
-
-    let count = 0;
-
-    // Check each asset's URI to see if it references our content
-    for (const { pubkey, account } of accounts) {
-      const data = account.data;
-
-      try {
-        // Parse URI from asset data
-        const nameOffset = 1 + 32 + 33; // 66
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-
-        // Check if URI contains the content CID
-        if (uri.includes(contentCid)) {
-          count++;
-          continue;
-        }
-
-        // Also fetch metadata to check contentCid property
-        if (uri.startsWith("https://")) {
-          try {
-            const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
-            if (response.ok) {
-              const metadata = await response.json();
-              if (
-                metadata.contentCid === contentCid ||
-                metadata.properties?.content_cid === contentCid ||
-                metadata.image?.includes(contentCid) ||
-                metadata.animation_url?.includes(contentCid) ||
-                metadata.contentUrl?.includes(contentCid)
-              ) {
-                count++;
-              }
-            }
-          } catch {
-            // Ignore fetch errors, continue checking
-          }
-        }
-      } catch {
-        // Skip malformed assets
-      }
-    }
-
-    console.log(`countTotalMintedNfts: Found ${count} NFTs for content ${contentCid}`);
-    return count;
-  } catch (err) {
-    console.error("Error counting total minted NFTs:", err);
-    return 0;
-  }
 }
 
 export const idl = idlJson;

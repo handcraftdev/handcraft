@@ -7,6 +7,7 @@ import { useSession } from "@/hooks/useSession";
 import { getIpfsUrl, ContentEntry, getContentCategory, getContentTypeLabel as sdkGetContentTypeLabel } from "@handcraft/sdk";
 import { MintConfigModal, BuyNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
+import { ClaimRewardsModal } from "@/components/claim";
 
 // Global cache for decrypted content URLs (persists across component re-renders)
 // Key: `${walletAddress}:${contentCid}`, Value: blob URL
@@ -241,18 +242,27 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [showBuyNftModal, setShowBuyNftModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useNftOwnership, ecosystemConfig } = useContentRegistry();
+  const { useMintConfig, useNftOwnership, getPendingRewardsForContent, pendingRewardsQuery, ecosystemConfig } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
 
+  // Get pending rewards filtered by this content
+  const pendingRewards = getPendingRewardsForContent(content.contentCid);
+  const refetchPending = pendingRewardsQuery.refetch;
+
   // User owns NFT if count > 0
   const ownsNft = ownedNftCount > 0;
+
+  // Calculate total pending rewards (SOL only now)
+  const totalPendingRewards = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
+  const hasPendingRewards = pendingRewards && pendingRewards.length > 0 && totalPendingRewards > BigInt(0);
 
   // Determine content URL based on encryption and access
   // Use strict boolean check - content is encrypted only if explicitly true
@@ -554,6 +564,19 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           </div>
         )}
 
+        {/* Claim Rewards Button - show if user has pending rewards */}
+        {hasPendingRewards && (
+          <button
+            onClick={() => setShowClaimModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-full transition-colors text-sm font-medium animate-pulse hover:animate-none"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Claim {(Number(totalPendingRewards) / 1_000_000_000).toFixed(4)} SOL
+          </button>
+        )}
+
         <div className="ml-auto flex items-center gap-2">
           {/* Buy NFT Button - for non-creators when mint config exists */}
           {!isCreator && hasMintConfig && (
@@ -649,6 +672,17 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           contentCid={content.contentCid}
           contentTitle={content.metadata?.title || content.metadata?.name}
           hasMintConfig={!!mintConfig}
+        />
+      )}
+
+      {/* Claim Rewards Modal - for NFT holders (global pool) */}
+      {showClaimModal && (
+        <ClaimRewardsModal
+          isOpen={showClaimModal}
+          onClose={() => setShowClaimModal(false)}
+          onSuccess={() => {
+            refetchPending();
+          }}
         />
       )}
     </article>

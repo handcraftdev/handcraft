@@ -11,13 +11,18 @@ import {
   getCidRegistryPda,
   getEcosystemConfigPda,
   getMintConfigPda,
+  getGlobalRewardPoolPda,
+  getNftRewardStatePda,
+  GlobalRewardPool,
+  NftRewardState,
   MintConfig,
   EcosystemConfig,
   calculatePrimarySplit,
+  calculatePendingReward,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
-  MIN_PRICE_USDC,
+  PRECISION,
 } from "@handcraft/sdk";
 
 export {
@@ -26,9 +31,8 @@ export {
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
-  MIN_PRICE_USDC,
 };
-export type { MintConfig, EcosystemConfig };
+export type { MintConfig, EcosystemConfig, GlobalRewardPool, NftRewardState };
 
 /**
  * Simulate a transaction before sending to wallet
@@ -153,14 +157,13 @@ export function useContentRegistry() {
     },
   });
 
-  // Register content with NFT mint config in one transaction
+  // Register content with mint config (SOL only)
   const registerContentWithMint = useMutation({
     mutationFn: async ({
       contentCid,
       metadataCid,
       contentType,
       price,
-      currency,
       maxSupply,
       creatorRoyaltyBps,
       isEncrypted = false,
@@ -171,7 +174,6 @@ export function useContentRegistry() {
       metadataCid: string;
       contentType: ContentType;
       price: bigint;
-      currency: PaymentCurrency;
       maxSupply: bigint | null;
       creatorRoyaltyBps: number;
       isEncrypted?: boolean;
@@ -184,7 +186,6 @@ export function useContentRegistry() {
         contentCid,
         metadataCid,
         price,
-        currency,
         maxSupply,
         creatorRoyaltyBps,
         isEncrypted,
@@ -198,7 +199,6 @@ export function useContentRegistry() {
         metadataCid,
         contentType,
         price,
-        currency,
         maxSupply,
         creatorRoyaltyBps,
         isEncrypted,
@@ -255,30 +255,27 @@ export function useContentRegistry() {
     },
   });
 
-  // Configure mint mutation
+  // Configure mint mutation (SOL only)
   const configureMint = useMutation({
     mutationFn: async ({
       contentCid,
       price,
-      currency,
       maxSupply,
       creatorRoyaltyBps,
     }: {
       contentCid: string;
       price: bigint;
-      currency: PaymentCurrency;
       maxSupply: bigint | null;
       creatorRoyaltyBps: number;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
 
-      console.log("Configuring mint...", { contentCid, price, currency, maxSupply, creatorRoyaltyBps });
+      console.log("Configuring mint...", { contentCid, price, maxSupply, creatorRoyaltyBps });
 
       const ix = await client.configureMintInstruction(
         publicKey,
         contentCid,
         price,
-        currency,
         maxSupply,
         creatorRoyaltyBps
       );
@@ -350,6 +347,7 @@ export function useContentRegistry() {
   });
 
   // Mint NFT with SOL mutation
+  // 12% holder reward is automatically deposited to accumulated reward pool
   const mintNftSol = useMutation({
     mutationFn: async ({
       contentCid,
@@ -418,6 +416,8 @@ export function useContentRegistry() {
       queryClient.invalidateQueries({ queryKey: ["globalContent"] });
       queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
       queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
+      queryClient.invalidateQueries({ queryKey: ["globalRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
     },
   });
 
@@ -498,6 +498,43 @@ export function useContentRegistry() {
     },
   });
 
+  // Claim rewards mutation (global pool - claims pending rewards for an NFT)
+  const claimRewards = useMutation({
+    mutationFn: async ({
+      nftAsset,
+    }: {
+      nftAsset: PublicKey;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+
+      console.log("Claiming rewards from global pool...", {
+        nftAsset: nftAsset.toBase58(),
+      });
+
+      const ix = await client.claimRewardsInstruction(
+        publicKey,
+        nftAsset
+      );
+
+      const tx = new Transaction().add(ix);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating claim transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Claim tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Claim confirmed!");
+      return signature;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["globalRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+    },
+  });
+
   // Fetch mint config for a specific content
   const useMintConfig = (contentCid: string | null) => {
     return useQuery({
@@ -505,6 +542,15 @@ export function useContentRegistry() {
       queryFn: () => contentCid ? client.fetchMintConfig(contentCid) : null,
       enabled: !!contentCid,
       staleTime: 60000, // Cache for 60 seconds
+    });
+  };
+
+  // Fetch global reward pool
+  const useGlobalRewardPool = () => {
+    return useQuery({
+      queryKey: ["globalRewardPool"],
+      queryFn: () => client.fetchGlobalRewardPool(),
+      staleTime: 30000, // Cache for 30 seconds
     });
   };
 
@@ -520,10 +566,63 @@ export function useContentRegistry() {
     staleTime: 60000, // Cache for 60 seconds
   });
 
+  // Enriched pending reward with content info
+  interface EnrichedPendingReward {
+    nftAsset: PublicKey;
+    pending: bigint;
+    contentCid: string | null;
+  }
+
+  // Get wallet NFTs data (may be undefined while loading)
+  const walletNfts = walletNftsQuery.data || [];
+
+  // Fetch pending rewards for ALL user's NFTs (global pool) with content info
+  // This query depends on walletNftsQuery being loaded first
+  const pendingRewardsQuery = useQuery({
+    queryKey: ["pendingRewards", publicKey?.toBase58(), walletNftsQuery.dataUpdatedAt],
+    queryFn: async (): Promise<EnrichedPendingReward[]> => {
+      // Use fresh data from walletNftsQuery inside the query function
+      const nfts = walletNftsQuery.data || [];
+      if (nfts.length === 0) return [];
+
+      const nftPubkeys = nfts.map(nft => new PublicKey(nft.assetPubkey));
+      const nftToContentMap = new Map(
+        nfts.map(nft => [nft.assetPubkey, nft.contentCid])
+      );
+
+      const rewards = await client.getPendingRewardsForWallet(nftPubkeys);
+
+      // Enrich with content info
+      return rewards.map(r => ({
+        ...r,
+        contentCid: nftToContentMap.get(r.nftAsset.toBase58()) || null,
+      }));
+    },
+    enabled: walletNftsQuery.isSuccess && walletNfts.length > 0 && !!publicKey,
+    staleTime: 30000,
+  });
+
+  // Helper to get all pending rewards
+  const usePendingRewards = () => pendingRewardsQuery;
+
+  // Helper to filter pending rewards by content (no hooks, just filtering)
+  const getPendingRewardsForContent = (contentCid: string | null) => {
+    if (!contentCid || !pendingRewardsQuery.data) return [];
+
+    // Get NFT pubkeys for this content from fresh walletNfts
+    const contentNftPubkeys = new Set(
+      walletNfts
+        .filter(nft => nft.contentCid === contentCid)
+        .map(nft => nft.assetPubkey)
+    );
+
+    return pendingRewardsQuery.data.filter(
+      reward => contentNftPubkeys.has(reward.nftAsset.toBase58())
+    );
+  };
+
   // Count NFTs owned for a specific content (uses cached wallet NFTs)
   const useNftOwnership = (contentCid: string | null) => {
-    const walletNfts = walletNftsQuery.data || [];
-
     // Filter from cached wallet NFTs instead of making new RPC call
     const count = contentCid
       ? walletNfts.filter(nft => nft.contentCid === contentCid).length
@@ -582,6 +681,7 @@ export function useContentRegistry() {
     mintNftSol: mintNftSol.mutateAsync,
     updateContent: updateContent.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
+    claimRewards: claimRewards.mutateAsync,
 
     // Mutation states
     isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending,
@@ -591,11 +691,16 @@ export function useContentRegistry() {
     isMintingNft: mintNftSol.isPending,
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
+    isClaimingReward: claimRewards.isPending,
 
     // Hooks for specific data
     useMintConfig,
     useNftOwnership,
     useTotalMintedNfts,
+    useGlobalRewardPool,
+    usePendingRewards,
+    getPendingRewardsForContent,
+    pendingRewardsQuery,
 
     // Utilities
     client,
@@ -603,6 +708,9 @@ export function useContentRegistry() {
     getCidRegistryPda,
     getEcosystemConfigPda,
     getMintConfigPda,
+    getGlobalRewardPoolPda,
+    getNftRewardStatePda,
     calculatePrimarySplit,
+    calculatePendingReward,
   };
 }

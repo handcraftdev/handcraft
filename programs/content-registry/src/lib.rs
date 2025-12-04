@@ -3,7 +3,6 @@ use anchor_lang::solana_program::{
     instruction::{AccountMeta, Instruction},
     program::invoke,
 };
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use std::io::Write;
 
 // Metaplex Core Program ID: CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
@@ -98,10 +97,12 @@ use state::{
     CidRegistry, CID_REGISTRY_SEED, hash_cid,
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     EcosystemConfig, ECOSYSTEM_CONFIG_SEED,
+    GlobalRewardPool, NftRewardState,
+    GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED,
 };
 use errors::ContentRegistryError;
 
-declare_id!("A5xdpZf8AKfmmWP5wsH7T8Ea8GhSKRnbaxe5eWANVcHN");
+declare_id!("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
 
 #[program]
 pub mod content_registry {
@@ -111,14 +112,16 @@ pub mod content_registry {
     // ECOSYSTEM MANAGEMENT
     // ============================================
 
-    /// Initialize the ecosystem config (admin only, once)
+    /// Initialize the ecosystem config and global reward pool (admin only, once)
     pub fn initialize_ecosystem(
         ctx: Context<InitializeEcosystem>,
         usdc_mint: Pubkey,
     ) -> Result<()> {
         let ecosystem = &mut ctx.accounts.ecosystem_config;
+        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
         let timestamp = Clock::get()?.unix_timestamp;
 
+        // Initialize ecosystem config
         ecosystem.admin = ctx.accounts.admin.key();
         ecosystem.treasury = ctx.accounts.treasury.key();
         ecosystem.usdc_mint = usdc_mint;
@@ -127,6 +130,13 @@ pub mod content_registry {
         ecosystem.total_nfts_minted = 0;
         ecosystem.is_paused = false;
         ecosystem.created_at = timestamp;
+
+        // Initialize global reward pool
+        global_reward_pool.reward_per_share = 0;
+        global_reward_pool.total_nfts = 0;
+        global_reward_pool.total_deposited = 0;
+        global_reward_pool.total_claimed = 0;
+        global_reward_pool.created_at = timestamp;
 
         Ok(())
     }
@@ -210,7 +220,6 @@ pub mod content_registry {
         metadata_cid: String,
         content_type: ContentType,
         price: u64,
-        currency: PaymentCurrency,
         max_supply: Option<u64>,
         creator_royalty_bps: u16,
         is_encrypted: bool,
@@ -226,9 +235,9 @@ pub mod content_registry {
         let computed_hash = hash_cid(&content_cid);
         require!(computed_hash == cid_hash, ContentRegistryError::CidHashMismatch);
 
-        // Validate mint config
+        // Validate mint config (SOL only)
         require!(
-            MintConfig::validate_price(price, currency),
+            MintConfig::validate_price(price, PaymentCurrency::Sol),
             ContentRegistryError::PriceTooLow
         );
         require!(
@@ -259,11 +268,11 @@ pub mod content_registry {
         cid_registry.content_pda = content.key();
         cid_registry.registered_at = timestamp;
 
-        // Initialize mint config
+        // Initialize mint config (SOL only)
         mint_config.content = content.key();
         mint_config.creator = ctx.accounts.authority.key();
         mint_config.price = price;
-        mint_config.currency = currency;
+        mint_config.currency = PaymentCurrency::Sol;
         mint_config.max_supply = max_supply;
         mint_config.creator_royalty_bps = creator_royalty_bps;
         mint_config.is_active = true;
@@ -342,17 +351,16 @@ pub mod content_registry {
     // MINT CONFIGURATION
     // ============================================
 
-    /// Configure NFT minting for content (creator only)
+    /// Configure NFT minting for content (creator only, SOL only)
     pub fn configure_mint(
         ctx: Context<ConfigureMint>,
         price: u64,
-        currency: PaymentCurrency,
         max_supply: Option<u64>,
         creator_royalty_bps: u16,
     ) -> Result<()> {
-        // Validate price
+        // Validate price (SOL only)
         require!(
-            MintConfig::validate_price(price, currency),
+            MintConfig::validate_price(price, PaymentCurrency::Sol),
             ContentRegistryError::PriceTooLow
         );
 
@@ -368,7 +376,7 @@ pub mod content_registry {
         mint_config.content = ctx.accounts.content.key();
         mint_config.creator = ctx.accounts.creator.key();
         mint_config.price = price;
-        mint_config.currency = currency;
+        mint_config.currency = PaymentCurrency::Sol;
         mint_config.max_supply = max_supply;
         mint_config.creator_royalty_bps = creator_royalty_bps;
         mint_config.is_active = true;
@@ -445,16 +453,20 @@ pub mod content_registry {
     }
 
     // ============================================
-    // NFT MINTING (SOL PAYMENT)
+    // NFT MINTING (SOL PAYMENT ONLY)
     // ============================================
 
     /// Mint NFT with SOL payment
-    /// Existing NFT holders can be passed as remaining_accounts to receive 12% holder reward
-    /// If no existing holders, the 12% goes to the creator
-    pub fn mint_nft_sol<'info>(ctx: Context<'_, '_, 'info, 'info, MintNftSol<'info>>) -> Result<()> {
+    /// Uses global accumulated reward pool model:
+    /// - All 12% holder rewards go to a single global pool
+    /// - reward_per_share increases for all existing NFT holders across ALL content
+    pub fn mint_nft_sol(ctx: Context<MintNftSol>) -> Result<()> {
         let ecosystem = &ctx.accounts.ecosystem_config;
         let mint_config = &ctx.accounts.mint_config;
         let content = &mut ctx.accounts.content;
+        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
+        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+        let timestamp = Clock::get()?.unix_timestamp;
 
         // Check ecosystem not paused
         require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
@@ -466,39 +478,30 @@ pub mod content_registry {
             ContentRegistryError::MaxSupplyReached
         );
 
-        // Verify correct currency
+        // Verify SOL currency (only SOL supported now)
         require!(
             mint_config.currency == PaymentCurrency::Sol,
             ContentRegistryError::InvalidCurrency
         );
 
         let price = mint_config.price;
+        let is_first_content_mint = content.minted_count == 0;
+        let has_existing_nfts = global_reward_pool.total_nfts > 0;
 
         // Process payment if not free
         if price > 0 {
             let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
                 EcosystemConfig::calculate_primary_split(price);
 
-            // Get existing holders from remaining_accounts
-            let existing_holders: Vec<&AccountInfo<'info>> = ctx.remaining_accounts
-                .iter()
-                .filter(|acc| acc.is_writable)
-                .collect();
-
-            // Calculate holder reward distribution
-            // If no existing holders, holder reward goes to creator
-            let (final_creator_amount, per_holder_amount) = if existing_holders.is_empty() {
-                // First mint or no holders passed - creator gets holder reward too
-                (creator_amount + holder_reward_amount, 0u64)
+            // For first global NFT, holder reward goes to creator (no holders yet)
+            // Otherwise, holder reward goes to global pool
+            let final_creator_amount = if !has_existing_nfts {
+                creator_amount + holder_reward_amount
             } else {
-                // Distribute equally among existing holders
-                let per_holder = holder_reward_amount / existing_holders.len() as u64;
-                // Any remainder from integer division goes to creator
-                let remainder = holder_reward_amount - (per_holder * existing_holders.len() as u64);
-                (creator_amount + remainder, per_holder)
+                creator_amount
             };
 
-            // Transfer to creator (base amount + any remainder)
+            // Transfer to creator
             if final_creator_amount > 0 {
                 let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
                     &ctx.accounts.buyer.key(),
@@ -515,23 +518,26 @@ pub mod content_registry {
                 )?;
             }
 
-            // Transfer to each existing holder
-            if per_holder_amount > 0 {
-                for holder in existing_holders.iter() {
-                    let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                        &ctx.accounts.buyer.key(),
-                        holder.key,
-                        per_holder_amount,
-                    );
-                    anchor_lang::solana_program::program::invoke(
-                        &transfer_ix,
-                        &[
-                            ctx.accounts.buyer.to_account_info(),
-                            (*holder).clone(),
-                            ctx.accounts.system_program.to_account_info(),
-                        ],
-                    )?;
-                }
+            // Transfer holder reward to global reward pool (if existing NFTs)
+            // This increases reward_per_share for ALL existing NFT holders
+            if has_existing_nfts && holder_reward_amount > 0 {
+                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.buyer.key(),
+                    &global_reward_pool.to_account_info().key,
+                    holder_reward_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &transfer_ix,
+                    &[
+                        ctx.accounts.buyer.to_account_info(),
+                        global_reward_pool.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
+
+                // Update reward_per_share BEFORE incrementing total_nfts
+                // This ensures only existing holders benefit from this sale
+                global_reward_pool.add_rewards(holder_reward_amount);
             }
 
             // Transfer to platform (if provided)
@@ -575,13 +581,22 @@ pub mod content_registry {
             }
         }
 
-        // Lock content after first mint
-        if content.minted_count == 0 {
+        // Lock content on first mint for this content
+        if is_first_content_mint {
             content.is_locked = true;
         }
 
-        // Increment mint count
+        // Increment content mint count
         content.minted_count += 1;
+
+        // Initialize NFT reward state with current global reward_per_share as debt
+        // This ensures this NFT can only claim rewards from FUTURE sales
+        nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
+        nft_reward_state.reward_debt = global_reward_pool.reward_per_share;
+        nft_reward_state.created_at = timestamp;
+
+        // Increment global NFT count AFTER setting reward debt
+        global_reward_pool.increment_nfts();
 
         // Update ecosystem stats
         let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
@@ -592,10 +607,7 @@ pub mod content_registry {
         }
 
         // Create Metaplex Core NFT
-        // The NFT name includes edition number for uniqueness
         let nft_name = format!("Handcraft #{}", content.minted_count);
-
-        // Use the content's metadata CID as the NFT URI
         let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
 
         create_core_nft(
@@ -616,8 +628,7 @@ pub mod content_registry {
             creator: ctx.accounts.creator.key(),
             edition_number: content.minted_count,
             price,
-            currency: PaymentCurrency::Sol,
-            timestamp: Clock::get()?.unix_timestamp,
+            timestamp,
             nft_asset: ctx.accounts.nft_asset.key(),
         });
 
@@ -625,163 +636,35 @@ pub mod content_registry {
     }
 
     // ============================================
-    // NFT MINTING (USDC PAYMENT)
+    // HOLDER REWARD CLAIMS
     // ============================================
 
-    /// Mint NFT with USDC payment
-    /// Existing NFT holder token accounts can be passed as remaining_accounts to receive 12% holder reward
-    /// If no existing holders, the 12% goes to the creator
-    pub fn mint_nft_usdc<'info>(ctx: Context<'_, '_, 'info, 'info, MintNftUsdc<'info>>) -> Result<()> {
-        let ecosystem = &ctx.accounts.ecosystem_config;
-        let mint_config = &ctx.accounts.mint_config;
-        let content = &mut ctx.accounts.content;
+    /// Claim accumulated holder rewards for a single NFT from the global pool
+    /// Rewards = (current_reward_per_share - nft_reward_debt) / PRECISION
+    pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
+        let global_reward_pool = &mut ctx.accounts.global_reward_pool;
+        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+        let timestamp = Clock::get()?.unix_timestamp;
 
-        // Check ecosystem not paused
-        require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
+        // Calculate pending rewards
+        let pending = nft_reward_state.pending_reward(global_reward_pool.reward_per_share);
 
-        // Check minting is active and supply available
-        require!(mint_config.is_active, ContentRegistryError::MintingNotActive);
-        require!(
-            mint_config.can_mint(content.minted_count),
-            ContentRegistryError::MaxSupplyReached
-        );
+        require!(pending > 0, ContentRegistryError::NothingToClaim);
 
-        // Verify correct currency
-        require!(
-            mint_config.currency == PaymentCurrency::Usdc,
-            ContentRegistryError::InvalidCurrency
-        );
+        // Transfer from global reward pool to holder
+        **global_reward_pool.to_account_info().try_borrow_mut_lamports()? -= pending;
+        **ctx.accounts.holder.to_account_info().try_borrow_mut_lamports()? += pending;
 
-        let price = mint_config.price;
+        // Update state
+        global_reward_pool.total_claimed += pending;
+        nft_reward_state.reward_debt = global_reward_pool.reward_per_share;
 
-        // Process payment if not free
-        if price > 0 {
-            let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
-                EcosystemConfig::calculate_primary_split(price);
-
-            // Get existing holder token accounts from remaining_accounts
-            let existing_holder_token_accounts: Vec<&AccountInfo<'info>> = ctx.remaining_accounts
-                .iter()
-                .filter(|acc| acc.is_writable)
-                .collect();
-
-            // Calculate holder reward distribution
-            // If no existing holders, holder reward goes to creator
-            let (final_creator_amount, per_holder_amount) = if existing_holder_token_accounts.is_empty() {
-                // First mint or no holders passed - creator gets holder reward too
-                (creator_amount + holder_reward_amount, 0u64)
-            } else {
-                // Distribute equally among existing holders
-                let per_holder = holder_reward_amount / existing_holder_token_accounts.len() as u64;
-                // Any remainder from integer division goes to creator
-                let remainder = holder_reward_amount - (per_holder * existing_holder_token_accounts.len() as u64);
-                (creator_amount + remainder, per_holder)
-            };
-
-            // Transfer USDC to creator (base amount + any remainder)
-            if final_creator_amount > 0 {
-                token::transfer(
-                    CpiContext::new(
-                        ctx.accounts.token_program.to_account_info(),
-                        Transfer {
-                            from: ctx.accounts.buyer_token_account.to_account_info(),
-                            to: ctx.accounts.creator_token_account.to_account_info(),
-                            authority: ctx.accounts.buyer.to_account_info(),
-                        },
-                    ),
-                    final_creator_amount,
-                )?;
-            }
-
-            // Transfer USDC to each existing holder's token account
-            if per_holder_amount > 0 {
-                for holder_token_account in existing_holder_token_accounts.iter() {
-                    token::transfer(
-                        CpiContext::new(
-                            ctx.accounts.token_program.to_account_info(),
-                            Transfer {
-                                from: ctx.accounts.buyer_token_account.to_account_info(),
-                                to: (*holder_token_account).clone(),
-                                authority: ctx.accounts.buyer.to_account_info(),
-                            },
-                        ),
-                        per_holder_amount,
-                    )?;
-                }
-            }
-
-            // Transfer USDC to platform
-            if platform_amount > 0 {
-                token::transfer(
-                    CpiContext::new(
-                        ctx.accounts.token_program.to_account_info(),
-                        Transfer {
-                            from: ctx.accounts.buyer_token_account.to_account_info(),
-                            to: ctx.accounts.platform_token_account.to_account_info(),
-                            authority: ctx.accounts.buyer.to_account_info(),
-                        },
-                    ),
-                    platform_amount,
-                )?;
-            }
-
-            // Transfer USDC to ecosystem treasury
-            if ecosystem_amount > 0 {
-                token::transfer(
-                    CpiContext::new(
-                        ctx.accounts.token_program.to_account_info(),
-                        Transfer {
-                            from: ctx.accounts.buyer_token_account.to_account_info(),
-                            to: ctx.accounts.treasury_token_account.to_account_info(),
-                            authority: ctx.accounts.buyer.to_account_info(),
-                        },
-                    ),
-                    ecosystem_amount,
-                )?;
-            }
-        }
-
-        // Lock content after first mint
-        if content.minted_count == 0 {
-            content.is_locked = true;
-        }
-
-        // Increment mint count
-        content.minted_count += 1;
-
-        // Update ecosystem stats
-        let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
-        ecosystem_mut.total_nfts_minted += 1;
-        if price > 0 {
-            let (_, _, ecosystem_amount, _) = EcosystemConfig::calculate_primary_split(price);
-            ecosystem_mut.total_fees_usdc += ecosystem_amount;
-        }
-
-        // Create Metaplex Core NFT
-        let nft_name = format!("Handcraft #{}", content.minted_count);
-        let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
-
-        create_core_nft(
-            &ctx.accounts.mpl_core_program.to_account_info(),
-            &ctx.accounts.nft_asset.to_account_info(),
-            &ctx.accounts.buyer.to_account_info(),
-            &ctx.accounts.buyer.to_account_info(),
-            &ctx.accounts.creator.to_account_info(),
-            &ctx.accounts.system_program.to_account_info(),
-            nft_name,
-            nft_uri,
-        )?;
-
-        // Emit mint event
-        emit!(NftMintEvent {
-            content: content.key(),
-            buyer: ctx.accounts.buyer.key(),
-            creator: ctx.accounts.creator.key(),
-            edition_number: content.minted_count,
-            price,
-            currency: PaymentCurrency::Usdc,
-            timestamp: Clock::get()?.unix_timestamp,
-            nft_asset: ctx.accounts.nft_asset.key(),
+        // Emit claim event
+        emit!(ClaimRewardEvent {
+            holder: ctx.accounts.holder.key(),
+            nft_asset: nft_reward_state.nft_asset,
+            amount: pending,
+            timestamp,
         });
 
         Ok(())
@@ -802,6 +685,16 @@ pub struct InitializeEcosystem<'info> {
         bump
     )]
     pub ecosystem_config: Account<'info, EcosystemConfig>,
+
+    /// Global reward pool for all holder rewards
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + GlobalRewardPool::INIT_SPACE,
+        seeds = [GLOBAL_REWARD_POOL_SEED],
+        bump
+    )]
+    pub global_reward_pool: Account<'info, GlobalRewardPool>,
 
     /// CHECK: Treasury wallet to receive ecosystem fees
     pub treasury: AccountInfo<'info>,
@@ -1019,6 +912,26 @@ pub struct MintNftSol<'info> {
     )]
     pub mint_config: Account<'info, MintConfig>,
 
+    /// Global reward pool for all holder rewards
+    /// All 12% holder rewards from all content sales accumulate here
+    #[account(
+        mut,
+        seeds = [GLOBAL_REWARD_POOL_SEED],
+        bump
+    )]
+    pub global_reward_pool: Account<'info, GlobalRewardPool>,
+
+    /// NFT reward state tracking for the newly minted NFT
+    /// Records current global reward_per_share as debt so this NFT only claims future rewards
+    #[account(
+        init,
+        payer = buyer,
+        space = 8 + NftRewardState::INIT_SPACE,
+        seeds = [NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+        bump
+    )]
+    pub nft_reward_state: Account<'info, NftRewardState>,
+
     /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(mut, constraint = content.creator == creator.key())]
     pub creator: AccountInfo<'info>,
@@ -1047,53 +960,33 @@ pub struct MintNftSol<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MintNftUsdc<'info> {
+pub struct ClaimRewards<'info> {
+    /// The global reward pool to claim from
     #[account(
         mut,
-        seeds = [ECOSYSTEM_CONFIG_SEED],
+        seeds = [GLOBAL_REWARD_POOL_SEED],
         bump
     )]
-    pub ecosystem_config: Account<'info, EcosystemConfig>,
+    pub global_reward_pool: Account<'info, GlobalRewardPool>,
 
-    #[account(mut)]
-    pub content: Account<'info, ContentEntry>,
-
+    /// NFT reward state tracking for this NFT
     #[account(
-        seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
+        mut,
+        seeds = [NFT_REWARD_STATE_SEED, nft_reward_state.nft_asset.as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, MintConfig>,
+    pub nft_reward_state: Account<'info, NftRewardState>,
 
-    /// CHECK: Creator to receive payment and be update authority of NFT
-    #[account(constraint = content.creator == creator.key())]
-    pub creator: AccountInfo<'info>,
+    /// CHECK: The NFT asset - we verify the holder owns it via Metaplex Core
+    /// The owner field is at offset 33 in the Core asset account data
+    #[account(
+        constraint = nft_reward_state.nft_asset == nft_asset.key() @ ContentRegistryError::NftMismatch
+    )]
+    pub nft_asset: AccountInfo<'info>,
 
+    /// The holder claiming the reward (must own the NFT)
     #[account(mut)]
-    pub buyer: Signer<'info>,
-
-    // Token accounts for USDC transfers
-    #[account(mut)]
-    pub buyer_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub creator_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub platform_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub treasury_token_account: Account<'info, TokenAccount>,
-
-    /// The NFT asset account (Metaplex Core asset)
-    /// This must be a new keypair generated client-side
-    #[account(mut)]
-    pub nft_asset: Signer<'info>,
-
-    /// CHECK: Metaplex Core program
-    #[account(address = MPL_CORE_ID)]
-    pub mpl_core_program: AccountInfo<'info>,
-
-    pub token_program: Program<'info, Token>,
+    pub holder: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -1118,7 +1011,14 @@ pub struct NftMintEvent {
     pub creator: Pubkey,
     pub edition_number: u64,
     pub price: u64,
-    pub currency: PaymentCurrency,
     pub timestamp: i64,
     pub nft_asset: Pubkey,
+}
+
+#[event]
+pub struct ClaimRewardEvent {
+    pub holder: Pubkey,
+    pub nft_asset: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
 }

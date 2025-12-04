@@ -5,7 +5,6 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   useContentRegistry,
-  PaymentCurrency,
   MintConfig,
 } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
@@ -49,7 +48,6 @@ export function BuyNftModal({
 
   const price = mintConfig.price;
   const isFree = price === BigInt(0);
-  const currency = mintConfig.currency;
   const maxSupply = mintConfig.maxSupply;
   const remaining = maxSupply ? maxSupply - mintedCount : null;
   const isSoldOut = remaining !== null && remaining <= BigInt(0);
@@ -60,11 +58,7 @@ export function BuyNftModal({
   const formatPrice = (qty: number = 1) => {
     if (isFree) return "Free";
     const totalPrice = Number(price) * qty;
-    if (currency === PaymentCurrency.Sol) {
-      return `${totalPrice / LAMPORTS_PER_SOL} SOL`;
-    } else {
-      return `${totalPrice / 1_000_000} USDC`;
-    }
+    return `${totalPrice / LAMPORTS_PER_SOL} SOL`;
   };
 
   const handleBuy = async () => {
@@ -87,24 +81,18 @@ export function BuyNftModal({
     }
 
     try {
-      if (currency === PaymentCurrency.Sol) {
-        // Use configured platform wallet, or fall back to treasury (ecosystem gets the platform cut)
-        const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+      // Use configured platform wallet, or fall back to treasury (ecosystem gets the platform cut)
+      const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
 
-        // Mint multiple NFTs sequentially
-        for (let i = 0; i < quantity; i++) {
-          setMintingProgress(i + 1);
-          await mintNftSol({
-            contentCid,
-            creator,
-            treasury: ecosystemConfig.treasury,
-            platform: platformWallet,
-          });
-        }
-      } else {
-        // USDC not implemented in UI yet
-        setError("USDC payments coming soon!");
-        return;
+      // Mint multiple NFTs sequentially
+      for (let i = 0; i < quantity; i++) {
+        setMintingProgress(i + 1);
+        await mintNftSol({
+          contentCid,
+          creator,
+          treasury: ecosystemConfig.treasury,
+          platform: platformWallet,
+        });
       }
 
       onSuccess?.();
@@ -222,7 +210,11 @@ export function BuyNftModal({
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span>Creator</span>
-                <span className="text-green-400">92%</span>
+                <span className="text-green-400">80%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Existing Holders</span>
+                <span className="text-blue-400">12%</span>
               </div>
               <div className="flex justify-between text-gray-500">
                 <span>Platform</span>
@@ -233,6 +225,11 @@ export function BuyNftModal({
                 <span>3%</span>
               </div>
             </div>
+            {mintedCount === BigInt(0) && (
+              <p className="text-xs text-gray-500 mt-2">
+                First mint: 12% holder reward goes to creator
+              </p>
+            )}
           </div>
 
           {/* Royalty Info */}

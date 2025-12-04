@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-content_registry = "A5xdpZf8AKfmmWP5wsH7T8Ea8GhSKRnbaxe5eWANVcHN"
+content_registry = "EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU"
 
 [registry]
 url = "https://api.apr.dev"

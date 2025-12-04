@@ -4,11 +4,9 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   useContentRegistry,
-  PaymentCurrency,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
-  MIN_PRICE_USDC,
 } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
@@ -39,7 +37,6 @@ export function MintConfigModal({
 
   // Form state
   const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState<PaymentCurrency>(PaymentCurrency.Sol);
   const [supplyType, setSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [maxSupply, setMaxSupply] = useState("");
   const [royaltyPercent, setRoyaltyPercent] = useState("5");
@@ -49,19 +46,12 @@ export function MintConfigModal({
   // Load existing config values when available
   useEffect(() => {
     if (existingConfig && !hasInitialized) {
-      // Set price
+      // Set price (SOL only)
       if (existingConfig.price > BigInt(0)) {
-        if (existingConfig.currency === PaymentCurrency.Sol) {
-          setPrice((Number(existingConfig.price) / LAMPORTS_PER_SOL).toString());
-        } else {
-          setPrice((Number(existingConfig.price) / 1_000_000).toString());
-        }
+        setPrice((Number(existingConfig.price) / LAMPORTS_PER_SOL).toString());
       } else {
         setPrice("");
       }
-
-      // Set currency
-      setCurrency(existingConfig.currency);
 
       // Set supply
       if (existingConfig.maxSupply !== null) {
@@ -96,7 +86,7 @@ export function MintConfigModal({
     }
 
     try {
-      // Parse price
+      // Parse price (SOL only)
       let priceValue: bigint;
       if (price === "" || price === "0") {
         priceValue = BigInt(0); // Free mint
@@ -106,18 +96,10 @@ export function MintConfigModal({
           setError("Invalid price");
           return;
         }
-        if (currency === PaymentCurrency.Sol) {
-          priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
-          if (priceValue > 0 && priceValue < MIN_PRICE_LAMPORTS) {
-            setError(`Minimum price is ${MIN_PRICE_LAMPORTS / LAMPORTS_PER_SOL} SOL`);
-            return;
-          }
-        } else {
-          priceValue = BigInt(Math.floor(priceFloat * 1_000_000)); // 6 decimals
-          if (priceValue > 0 && priceValue < MIN_PRICE_USDC) {
-            setError(`Minimum price is ${MIN_PRICE_USDC / 1_000_000} USDC`);
-            return;
-          }
+        priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
+        if (priceValue > 0 && priceValue < MIN_PRICE_LAMPORTS) {
+          setError(`Minimum price is ${MIN_PRICE_LAMPORTS / LAMPORTS_PER_SOL} SOL`);
+          return;
         }
       }
 
@@ -167,7 +149,6 @@ export function MintConfigModal({
         await configureMint({
           contentCid,
           price: priceValue,
-          currency,
           maxSupply: maxSupplyValue,
           creatorRoyaltyBps: royaltyBps,
         });
@@ -217,7 +198,7 @@ export function MintConfigModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Price */}
           <div>
-            <label className="block text-sm font-medium mb-2">Price</label>
+            <label className="block text-sm font-medium mb-2">Price (SOL)</label>
             <div className="flex gap-2">
               <input
                 type="number"
@@ -228,22 +209,12 @@ export function MintConfigModal({
                 placeholder="0 for free"
                 className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
               />
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(Number(e.target.value) as PaymentCurrency)}
-                disabled={!!existingConfig}
-                className={`px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 ${
-                  existingConfig ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-              >
-                <option value={PaymentCurrency.Sol}>SOL</option>
-                <option value={PaymentCurrency.Usdc}>USDC</option>
-              </select>
+              <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">
+                SOL
+              </span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {existingConfig
-                ? "Currency cannot be changed after creation"
-                : "Leave empty or 0 for free minting"}
+              Leave empty or 0 for free minting
             </p>
           </div>
 
