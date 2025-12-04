@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Transaction, PublicKey, TransactionInstruction, Connection } from "@solana/web3.js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -80,7 +81,8 @@ export function useContentRegistry() {
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
 
-  const client = createContentRegistryClient(connection);
+  // Memoize client to prevent recreating on every render
+  const client = useMemo(() => createContentRegistryClient(connection), [connection]);
 
   // Fetch current user's content
   const contentQuery = useQuery({
