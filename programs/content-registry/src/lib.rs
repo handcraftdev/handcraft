@@ -1,5 +1,94 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    program::invoke,
+};
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use std::io::Write;
+
+// Metaplex Core Program ID: CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
+pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
+    0xaf, 0x54, 0xab, 0x10, 0xbd, 0x97, 0xa5, 0x42,
+    0xa0, 0x9e, 0xf7, 0xb3, 0x98, 0x89, 0xdd, 0x0c,
+    0xd3, 0x94, 0xa4, 0xcc, 0xe9, 0xdf, 0xa6, 0xcd,
+    0xc9, 0x7e, 0xbe, 0x2d, 0x23, 0x5b, 0xa7, 0x48,
+]);
+
+// DataState enum values
+const DATA_STATE_ACCOUNT_STATE: u8 = 0;
+
+/// Build and invoke the Metaplex Core CreateV2 instruction via raw CPI
+/// CreateV2 discriminator is 20
+/// Account order (all 8): asset, collection?, authority?, payer, owner?, updateAuthority?, systemProgram, logWrapper?
+fn create_core_nft<'info>(
+    mpl_core_program: &AccountInfo<'info>,
+    asset: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    owner: &AccountInfo<'info>,
+    update_authority: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    name: String,
+    uri: String,
+) -> Result<()> {
+    // CreateV2 discriminator
+    const CREATE_V2_DISCRIMINATOR: u8 = 20;
+
+    // Build instruction data with Borsh serialization
+    // CreateV2Args: { dataState: DataState, name: String, uri: String, plugins: Option<Vec>, externalPluginAdapters: Option<Vec> }
+    let mut data = Vec::new();
+    data.push(CREATE_V2_DISCRIMINATOR);
+
+    // DataState enum: AccountState = 0
+    data.push(DATA_STATE_ACCOUNT_STATE);
+
+    // Borsh string encoding: 4-byte little-endian length + bytes
+    let name_bytes = name.as_bytes();
+    data.write_all(&(name_bytes.len() as u32).to_le_bytes()).unwrap();
+    data.write_all(name_bytes).unwrap();
+
+    let uri_bytes = uri.as_bytes();
+    data.write_all(&(uri_bytes.len() as u32).to_le_bytes()).unwrap();
+    data.write_all(uri_bytes).unwrap();
+
+    // None for optional plugins and externalPluginAdapters
+    data.push(0); // plugins = None
+    data.push(0); // externalPluginAdapters = None
+
+    // Build account metas - ALL 8 accounts in correct order
+    // Optional accounts that are not used should still be included (use program ID as placeholder)
+    let accounts = vec![
+        AccountMeta::new(asset.key(), true),                       // 1. asset (mutable, signer)
+        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 2. collection (optional) - use program ID as None
+        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 3. authority (optional) - use program ID as None
+        AccountMeta::new(payer.key(), true),                       // 4. payer (mutable, signer)
+        AccountMeta::new_readonly(owner.key(), false),             // 5. owner
+        AccountMeta::new_readonly(update_authority.key(), false),  // 6. updateAuthority
+        AccountMeta::new_readonly(system_program.key(), false),    // 7. systemProgram
+        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 8. logWrapper (optional) - use program ID as None
+    ];
+
+    let ix = Instruction {
+        program_id: MPL_CORE_ID,
+        accounts,
+        data,
+    };
+
+    invoke(
+        &ix,
+        &[
+            asset.clone(),
+            mpl_core_program.clone(),  // for collection placeholder
+            mpl_core_program.clone(),  // for authority placeholder
+            payer.clone(),
+            owner.clone(),
+            update_authority.clone(),
+            system_program.clone(),
+            mpl_core_program.clone(),  // for logWrapper placeholder
+        ],
+    )?;
+
+    Ok(())
+}
 
 pub mod state;
 pub mod errors;
@@ -75,9 +164,14 @@ pub mod content_registry {
         content_cid: String,
         metadata_cid: String,
         content_type: ContentType,
+        is_encrypted: bool,
+        preview_cid: String,
+        encryption_meta_cid: String,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(preview_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(encryption_meta_cid.len() <= 64, ContentRegistryError::CidTooLong);
 
         // Verify the hash matches the CID
         let computed_hash = hash_cid(&content_cid);
@@ -96,6 +190,9 @@ pub mod content_registry {
         content.created_at = timestamp;
         content.is_locked = false;
         content.minted_count = 0;
+        content.is_encrypted = is_encrypted;
+        content.preview_cid = preview_cid;
+        content.encryption_meta_cid = encryption_meta_cid;
 
         // Initialize CID registry (ensures uniqueness)
         cid_registry.owner = ctx.accounts.authority.key();
@@ -116,9 +213,14 @@ pub mod content_registry {
         currency: PaymentCurrency,
         max_supply: Option<u64>,
         creator_royalty_bps: u16,
+        is_encrypted: bool,
+        preview_cid: String,
+        encryption_meta_cid: String,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(preview_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(encryption_meta_cid.len() <= 64, ContentRegistryError::CidTooLong);
 
         // Verify the hash matches the CID
         let computed_hash = hash_cid(&content_cid);
@@ -148,6 +250,9 @@ pub mod content_registry {
         content.created_at = timestamp;
         content.is_locked = false;
         content.minted_count = 0;
+        content.is_encrypted = is_encrypted;
+        content.preview_cid = preview_cid;
+        content.encryption_meta_cid = encryption_meta_cid;
 
         // Initialize CID registry (ensures uniqueness)
         cid_registry.owner = ctx.accounts.authority.key();
@@ -344,7 +449,9 @@ pub mod content_registry {
     // ============================================
 
     /// Mint NFT with SOL payment
-    pub fn mint_nft_sol(ctx: Context<MintNftSol>) -> Result<()> {
+    /// Existing NFT holders can be passed as remaining_accounts to receive 12% holder reward
+    /// If no existing holders, the 12% goes to the creator
+    pub fn mint_nft_sol<'info>(ctx: Context<'_, '_, 'info, 'info, MintNftSol<'info>>) -> Result<()> {
         let ecosystem = &ctx.accounts.ecosystem_config;
         let mint_config = &ctx.accounts.mint_config;
         let content = &mut ctx.accounts.content;
@@ -369,15 +476,34 @@ pub mod content_registry {
 
         // Process payment if not free
         if price > 0 {
-            let (creator_amount, platform_amount, ecosystem_amount) =
+            let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
                 EcosystemConfig::calculate_primary_split(price);
 
-            // Transfer to creator
-            if creator_amount > 0 {
+            // Get existing holders from remaining_accounts
+            let existing_holders: Vec<&AccountInfo<'info>> = ctx.remaining_accounts
+                .iter()
+                .filter(|acc| acc.is_writable)
+                .collect();
+
+            // Calculate holder reward distribution
+            // If no existing holders, holder reward goes to creator
+            let (final_creator_amount, per_holder_amount) = if existing_holders.is_empty() {
+                // First mint or no holders passed - creator gets holder reward too
+                (creator_amount + holder_reward_amount, 0u64)
+            } else {
+                // Distribute equally among existing holders
+                let per_holder = holder_reward_amount / existing_holders.len() as u64;
+                // Any remainder from integer division goes to creator
+                let remainder = holder_reward_amount - (per_holder * existing_holders.len() as u64);
+                (creator_amount + remainder, per_holder)
+            };
+
+            // Transfer to creator (base amount + any remainder)
+            if final_creator_amount > 0 {
                 let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
                     &ctx.accounts.buyer.key(),
                     &ctx.accounts.creator.key(),
-                    creator_amount,
+                    final_creator_amount,
                 );
                 anchor_lang::solana_program::program::invoke(
                     &transfer_ix,
@@ -387,6 +513,25 @@ pub mod content_registry {
                         ctx.accounts.system_program.to_account_info(),
                     ],
                 )?;
+            }
+
+            // Transfer to each existing holder
+            if per_holder_amount > 0 {
+                for holder in existing_holders.iter() {
+                    let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                        &ctx.accounts.buyer.key(),
+                        holder.key,
+                        per_holder_amount,
+                    );
+                    anchor_lang::solana_program::program::invoke(
+                        &transfer_ix,
+                        &[
+                            ctx.accounts.buyer.to_account_info(),
+                            (*holder).clone(),
+                            ctx.accounts.system_program.to_account_info(),
+                        ],
+                    )?;
+                }
             }
 
             // Transfer to platform (if provided)
@@ -442,9 +587,27 @@ pub mod content_registry {
         let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
         ecosystem_mut.total_nfts_minted += 1;
         if price > 0 {
-            let (_, _, ecosystem_amount) = EcosystemConfig::calculate_primary_split(price);
+            let (_, _, ecosystem_amount, _) = EcosystemConfig::calculate_primary_split(price);
             ecosystem_mut.total_fees_sol += ecosystem_amount;
         }
+
+        // Create Metaplex Core NFT
+        // The NFT name includes edition number for uniqueness
+        let nft_name = format!("Handcraft #{}", content.minted_count);
+
+        // Use the content's metadata CID as the NFT URI
+        let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+
+        create_core_nft(
+            &ctx.accounts.mpl_core_program.to_account_info(),
+            &ctx.accounts.nft_asset.to_account_info(),
+            &ctx.accounts.buyer.to_account_info(),
+            &ctx.accounts.buyer.to_account_info(),
+            &ctx.accounts.creator.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            nft_name,
+            nft_uri,
+        )?;
 
         // Emit mint event
         emit!(NftMintEvent {
@@ -455,10 +618,8 @@ pub mod content_registry {
             price,
             currency: PaymentCurrency::Sol,
             timestamp: Clock::get()?.unix_timestamp,
+            nft_asset: ctx.accounts.nft_asset.key(),
         });
-
-        // Note: Actual Metaplex Core NFT creation would be done here via CPI
-        // For now, we track the mint in our state
 
         Ok(())
     }
@@ -468,7 +629,9 @@ pub mod content_registry {
     // ============================================
 
     /// Mint NFT with USDC payment
-    pub fn mint_nft_usdc(ctx: Context<MintNftUsdc>) -> Result<()> {
+    /// Existing NFT holder token accounts can be passed as remaining_accounts to receive 12% holder reward
+    /// If no existing holders, the 12% goes to the creator
+    pub fn mint_nft_usdc<'info>(ctx: Context<'_, '_, 'info, 'info, MintNftUsdc<'info>>) -> Result<()> {
         let ecosystem = &ctx.accounts.ecosystem_config;
         let mint_config = &ctx.accounts.mint_config;
         let content = &mut ctx.accounts.content;
@@ -493,11 +656,30 @@ pub mod content_registry {
 
         // Process payment if not free
         if price > 0 {
-            let (creator_amount, platform_amount, ecosystem_amount) =
+            let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
                 EcosystemConfig::calculate_primary_split(price);
 
-            // Transfer USDC to creator
-            if creator_amount > 0 {
+            // Get existing holder token accounts from remaining_accounts
+            let existing_holder_token_accounts: Vec<&AccountInfo<'info>> = ctx.remaining_accounts
+                .iter()
+                .filter(|acc| acc.is_writable)
+                .collect();
+
+            // Calculate holder reward distribution
+            // If no existing holders, holder reward goes to creator
+            let (final_creator_amount, per_holder_amount) = if existing_holder_token_accounts.is_empty() {
+                // First mint or no holders passed - creator gets holder reward too
+                (creator_amount + holder_reward_amount, 0u64)
+            } else {
+                // Distribute equally among existing holders
+                let per_holder = holder_reward_amount / existing_holder_token_accounts.len() as u64;
+                // Any remainder from integer division goes to creator
+                let remainder = holder_reward_amount - (per_holder * existing_holder_token_accounts.len() as u64);
+                (creator_amount + remainder, per_holder)
+            };
+
+            // Transfer USDC to creator (base amount + any remainder)
+            if final_creator_amount > 0 {
                 token::transfer(
                     CpiContext::new(
                         ctx.accounts.token_program.to_account_info(),
@@ -507,8 +689,25 @@ pub mod content_registry {
                             authority: ctx.accounts.buyer.to_account_info(),
                         },
                     ),
-                    creator_amount,
+                    final_creator_amount,
                 )?;
+            }
+
+            // Transfer USDC to each existing holder's token account
+            if per_holder_amount > 0 {
+                for holder_token_account in existing_holder_token_accounts.iter() {
+                    token::transfer(
+                        CpiContext::new(
+                            ctx.accounts.token_program.to_account_info(),
+                            Transfer {
+                                from: ctx.accounts.buyer_token_account.to_account_info(),
+                                to: (*holder_token_account).clone(),
+                                authority: ctx.accounts.buyer.to_account_info(),
+                            },
+                        ),
+                        per_holder_amount,
+                    )?;
+                }
             }
 
             // Transfer USDC to platform
@@ -554,9 +753,24 @@ pub mod content_registry {
         let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
         ecosystem_mut.total_nfts_minted += 1;
         if price > 0 {
-            let (_, _, ecosystem_amount) = EcosystemConfig::calculate_primary_split(price);
+            let (_, _, ecosystem_amount, _) = EcosystemConfig::calculate_primary_split(price);
             ecosystem_mut.total_fees_usdc += ecosystem_amount;
         }
+
+        // Create Metaplex Core NFT
+        let nft_name = format!("Handcraft #{}", content.minted_count);
+        let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+
+        create_core_nft(
+            &ctx.accounts.mpl_core_program.to_account_info(),
+            &ctx.accounts.nft_asset.to_account_info(),
+            &ctx.accounts.buyer.to_account_info(),
+            &ctx.accounts.buyer.to_account_info(),
+            &ctx.accounts.creator.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            nft_name,
+            nft_uri,
+        )?;
 
         // Emit mint event
         emit!(NftMintEvent {
@@ -567,6 +781,7 @@ pub mod content_registry {
             price,
             currency: PaymentCurrency::Usdc,
             timestamp: Clock::get()?.unix_timestamp,
+            nft_asset: ctx.accounts.nft_asset.key(),
         });
 
         Ok(())
@@ -804,7 +1019,7 @@ pub struct MintNftSol<'info> {
     )]
     pub mint_config: Account<'info, MintConfig>,
 
-    /// CHECK: Creator to receive payment
+    /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(mut, constraint = content.creator == creator.key())]
     pub creator: AccountInfo<'info>,
 
@@ -818,6 +1033,15 @@ pub struct MintNftSol<'info> {
 
     #[account(mut)]
     pub buyer: Signer<'info>,
+
+    /// The NFT asset account (Metaplex Core asset)
+    /// This must be a new keypair generated client-side
+    #[account(mut)]
+    pub nft_asset: Signer<'info>,
+
+    /// CHECK: Metaplex Core program
+    #[account(address = MPL_CORE_ID)]
+    pub mpl_core_program: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -840,7 +1064,7 @@ pub struct MintNftUsdc<'info> {
     )]
     pub mint_config: Account<'info, MintConfig>,
 
-    /// CHECK: Creator to receive payment
+    /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(constraint = content.creator == creator.key())]
     pub creator: AccountInfo<'info>,
 
@@ -860,7 +1084,18 @@ pub struct MintNftUsdc<'info> {
     #[account(mut)]
     pub treasury_token_account: Account<'info, TokenAccount>,
 
+    /// The NFT asset account (Metaplex Core asset)
+    /// This must be a new keypair generated client-side
+    #[account(mut)]
+    pub nft_asset: Signer<'info>,
+
+    /// CHECK: Metaplex Core program
+    #[account(address = MPL_CORE_ID)]
+    pub mpl_core_program: AccountInfo<'info>,
+
     pub token_program: Program<'info, Token>,
+
+    pub system_program: Program<'info, System>,
 }
 
 // ============================================
@@ -885,4 +1120,5 @@ pub struct NftMintEvent {
     pub price: u64,
     pub currency: PaymentCurrency,
     pub timestamp: i64,
+    pub nft_asset: Pubkey,
 }

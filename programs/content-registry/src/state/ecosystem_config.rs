@@ -3,10 +3,11 @@ use anchor_lang::prelude::*;
 pub const ECOSYSTEM_CONFIG_SEED: &[u8] = b"ecosystem";
 
 /// Fee percentages in basis points (100 = 1%)
-/// Primary sale: Creator 92%, Platform 5%, Ecosystem 3%
+/// Primary sale: Creator 80%, Platform 5%, Ecosystem 3%, Existing Holders 12%
 pub const PLATFORM_FEE_PRIMARY_BPS: u16 = 500;   // 5%
 pub const ECOSYSTEM_FEE_PRIMARY_BPS: u16 = 300;  // 3%
-pub const CREATOR_FEE_PRIMARY_BPS: u16 = 9200;   // 92%
+pub const CREATOR_FEE_PRIMARY_BPS: u16 = 8000;   // 80%
+pub const HOLDER_REWARD_PRIMARY_BPS: u16 = 1200; // 12% - distributed to existing NFT holders
 
 /// Secondary sale fixed fees (on top of creator royalty)
 pub const PLATFORM_FEE_SECONDARY_BPS: u16 = 100; // 1%
@@ -38,17 +39,20 @@ pub struct EcosystemConfig {
 
 impl EcosystemConfig {
     /// Calculate fee split for primary sale
-    /// Returns (creator_amount, platform_amount, ecosystem_amount)
-    pub fn calculate_primary_split(price: u64) -> (u64, u64, u64) {
+    /// Returns (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount)
+    /// holder_reward_amount is distributed equally among existing NFT holders
+    /// If no existing holders, holder_reward goes to creator
+    pub fn calculate_primary_split(price: u64) -> (u64, u64, u64, u64) {
         if price == 0 {
-            return (0, 0, 0);
+            return (0, 0, 0, 0);
         }
 
         let platform_amount = (price as u128 * PLATFORM_FEE_PRIMARY_BPS as u128 / 10000) as u64;
         let ecosystem_amount = (price as u128 * ECOSYSTEM_FEE_PRIMARY_BPS as u128 / 10000) as u64;
-        let creator_amount = price - platform_amount - ecosystem_amount;
+        let holder_reward_amount = (price as u128 * HOLDER_REWARD_PRIMARY_BPS as u128 / 10000) as u64;
+        let creator_amount = price - platform_amount - ecosystem_amount - holder_reward_amount;
 
-        (creator_amount, platform_amount, ecosystem_amount)
+        (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount)
     }
 
     /// Calculate fee split for secondary sale
