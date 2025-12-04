@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import Link from "next/link";
 import { UploadModal } from "./upload";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
@@ -173,6 +174,27 @@ export function Header() {
 
                     {/* Actions */}
                     <div className="p-2">
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        Creator Dashboard
+                      </Link>
+                      <Link
+                        href={`/profile/${publicKey.toBase58()}`}
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        View Profile
+                      </Link>
+                      <div className="border-t border-gray-800 my-1" />
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(publicKey.toBase58());
