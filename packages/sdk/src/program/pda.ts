@@ -31,7 +31,7 @@ export function getContentPda(contentCid: string): [PublicKey, number] {
 export function getCidRegistryPda(contentCid: string): [PublicKey, number] {
   const cidHash = hashCid(contentCid);
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("cid_registry"), cidHash],
+    [Buffer.from("cid"), cidHash],
     PROGRAM_ID
   );
 }
