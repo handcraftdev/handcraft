@@ -99,30 +99,31 @@ fn verify_core_nft_ownership(
 }
 
 /// Create a Metaplex Core NFT within a collection
-/// When an asset is in a collection, the collection's update_authority applies
+/// The content_collection PDA is the update_authority and must sign
 fn create_core_nft<'info>(
     mpl_core_program: &AccountInfo<'info>,
     asset: &AccountInfo<'info>,
     collection: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,  // content_collection PDA
     payer: &AccountInfo<'info>,
     owner: &AccountInfo<'info>,
     system_program: &AccountInfo<'info>,
     name: String,
     uri: String,
+    signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    // Create NFT within the collection
-    // Note: Cannot specify update_authority when adding to collection
-    // The collection's update_authority becomes the asset's authority
+    // Create NFT within the collection with PDA signing
     CreateV2CpiBuilder::new(mpl_core_program)
         .asset(asset)
         .collection(Some(collection))
+        .authority(Some(authority))
         .payer(payer)
         .owner(Some(owner))
         .system_program(system_program)
         .name(name)
         .uri(uri)
         .data_state(DataState::AccountState)
-        .invoke()?;
+        .invoke_signed(signer_seeds)?;
 
     Ok(())
 }
@@ -137,7 +138,7 @@ use state::{
     MintConfig, PaymentCurrency,
     EcosystemConfig,
     ContentRewardPool, WalletContentState, NftRewardState, PRECISION,
-    NFT_REWARD_STATE_SEED, ContentCollection,
+    NFT_REWARD_STATE_SEED, ContentCollection, CONTENT_COLLECTION_SEED,
 };
 use errors::ContentRegistryError;
 use contexts::*;
@@ -324,11 +325,12 @@ pub mod content_registry {
         let collection_name = format!("Handcraft Collection");
         let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
 
+        // Use content_collection PDA as update_authority so program can sign mints
         create_collection(
             &ctx.accounts.mpl_core_program.to_account_info(),
             &ctx.accounts.collection_asset.to_account_info(),
             &ctx.accounts.authority.to_account_info(),
-            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.content_collection.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
             collection_name,
             collection_uri,
@@ -750,15 +752,29 @@ pub mod content_registry {
         let nft_name = format!("Handcraft #{}", content.minted_count);
         let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
 
+        // Derive content_collection PDA bump for signing
+        let content_key = content.key();
+        let (_, content_collection_bump) = Pubkey::find_program_address(
+            &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
+            ctx.program_id,
+        );
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            CONTENT_COLLECTION_SEED,
+            content_key.as_ref(),
+            &[content_collection_bump],
+        ]];
+
         create_core_nft(
             &ctx.accounts.mpl_core_program.to_account_info(),
             &ctx.accounts.nft_asset.to_account_info(),
             &ctx.accounts.collection_asset.to_account_info(),
+            &ctx.accounts.content_collection.to_account_info(),
             &ctx.accounts.buyer.to_account_info(),
             &ctx.accounts.buyer.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
             nft_name,
             nft_uri,
+            signer_seeds,
         )?;
 
         // Emit mint event
