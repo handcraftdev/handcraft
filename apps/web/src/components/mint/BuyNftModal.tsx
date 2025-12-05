@@ -46,7 +46,7 @@ export function BuyNftModal({
   const [quantity, setQuantity] = useState(1);
   const [mintingProgress, setMintingProgress] = useState(0);
 
-  const price = mintConfig.price;
+  const price = mintConfig.priceSol;
   const isFree = price === BigInt(0);
   const maxSupply = mintConfig.maxSupply;
   const remaining = maxSupply ? maxSupply - mintedCount : null;

@@ -47,8 +47,8 @@ export function MintConfigModal({
   useEffect(() => {
     if (existingConfig && !hasInitialized) {
       // Set price (SOL only)
-      if (existingConfig.price > BigInt(0)) {
-        setPrice((Number(existingConfig.price) / LAMPORTS_PER_SOL).toString());
+      if (existingConfig.priceSol > BigInt(0)) {
+        setPrice((Number(existingConfig.priceSol) / LAMPORTS_PER_SOL).toString());
       } else {
         setPrice("");
       }

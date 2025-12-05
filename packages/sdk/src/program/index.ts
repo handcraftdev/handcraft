@@ -1,274 +1,44 @@
+// Re-export from modules
+export * from "./constants";
+export * from "./types";
+export * from "./pda";
+
+// Main program code
 import { Program, AnchorProvider, Idl, BN } from "@coral-xyz/anchor";
 import { Connection, PublicKey, SystemProgram, TransactionInstruction, Keypair } from "@solana/web3.js";
-import { sha256 } from "js-sha256";
 import idlJson from "./content_registry.json";
 
-export const PROGRAM_ID = new PublicKey("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
+import {
+  PROGRAM_ID,
+  MPL_CORE_PROGRAM_ID,
+  ContentType,
+  PaymentCurrency,
+  getContentCategory,
+} from "./constants";
 
-// Metaplex Core Program ID
-export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
+import {
+  ContentEntry,
+  MintConfig,
+  EcosystemConfig,
+  ContentRewardPool,
+  WalletContentState,
+  ContentCollection,
+  NftRewardState,
+  WalletNftMetadata,
+} from "./types";
 
-// Seeds for PDA derivation
-export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
-export const MINT_CONFIG_SEED = "mint_config";
-export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
-export const WALLET_CONTENT_STATE_SEED = "wallet_content";
-export const CONTENT_COLLECTION_SEED = "content_collection";
-
-// Legacy seeds (for migration)
-export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
-export const NFT_REWARD_STATE_SEED = "nft_reward";
-
-// Fee constants (basis points)
-// Primary sale: Creator 80%, Platform 5%, Ecosystem 3%, Existing Holders 12%
-export const PLATFORM_FEE_PRIMARY_BPS = 500;   // 5%
-export const ECOSYSTEM_FEE_PRIMARY_BPS = 300;  // 3%
-export const CREATOR_FEE_PRIMARY_BPS = 8000;   // 80%
-export const HOLDER_REWARD_PRIMARY_BPS = 1200; // 12% - distributed to existing NFT holders
-export const PLATFORM_FEE_SECONDARY_BPS = 100; // 1%
-export const ECOSYSTEM_FEE_SECONDARY_BPS = 50; // 0.5%
-export const MIN_CREATOR_ROYALTY_BPS = 200;    // 2%
-export const MAX_CREATOR_ROYALTY_BPS = 1000;   // 10%
-
-// Minimum prices (SOL only)
-export const MIN_PRICE_LAMPORTS = 1_000_000;   // 0.001 SOL
-
-// Precision for reward_per_share calculations (matches program)
-export const PRECISION = BigInt("1000000000000"); // 1e12
-
-export enum ContentType {
-  // Video types
-  Movie = 0,
-  TvSeries = 1,
-  MusicVideo = 2,
-  ShortVideo = 3,
-  GeneralVideo = 4,
-  // Book types
-  Comic = 5,
-  GeneralBook = 6,
-  // Audio types
-  Podcast = 7,
-  Audiobook = 8,
-  GeneralAudio = 9,
-  // Image types
-  Photo = 10,
-  Art = 11,
-  GeneralImage = 12,
-}
-
-// Category helpers
-export type ContentCategory = "video" | "book" | "audio" | "image";
-
-export function getContentCategory(type: ContentType): ContentCategory {
-  switch (type) {
-    case ContentType.Movie:
-    case ContentType.TvSeries:
-    case ContentType.MusicVideo:
-    case ContentType.ShortVideo:
-    case ContentType.GeneralVideo:
-      return "video";
-    case ContentType.Comic:
-    case ContentType.GeneralBook:
-      return "book";
-    case ContentType.Podcast:
-    case ContentType.Audiobook:
-    case ContentType.GeneralAudio:
-      return "audio";
-    case ContentType.Photo:
-    case ContentType.Art:
-    case ContentType.GeneralImage:
-      return "image";
-  }
-}
-
-export function getContentTypeLabel(type: ContentType): string {
-  switch (type) {
-    case ContentType.Movie: return "Movie";
-    case ContentType.TvSeries: return "TV Series";
-    case ContentType.MusicVideo: return "Music Video";
-    case ContentType.ShortVideo: return "Short Video";
-    case ContentType.GeneralVideo: return "Video";
-    case ContentType.Comic: return "Comic";
-    case ContentType.GeneralBook: return "Book";
-    case ContentType.Podcast: return "Podcast";
-    case ContentType.Audiobook: return "Audiobook";
-    case ContentType.GeneralAudio: return "Audio";
-    case ContentType.Photo: return "Photo";
-    case ContentType.Art: return "Art";
-    case ContentType.GeneralImage: return "Image";
-  }
-}
-
-// Payment currency enum (SOL only now)
-export enum PaymentCurrency {
-  Sol = 0,
-}
-
-export interface ContentEntry {
-  creator: PublicKey;
-  contentCid: string;
-  metadataCid: string;
-  contentType: ContentType;
-  tipsReceived: bigint;
-  createdAt: bigint;
-  isLocked: boolean;
-  mintedCount: bigint;
-  isEncrypted: boolean;
-  previewCid: string;
-  encryptionMetaCid: string;
-}
-
-export interface CidRegistry {
-  owner: PublicKey;
-  contentPda: PublicKey;
-  registeredAt: bigint;
-}
-
-export interface MintConfig {
-  content: PublicKey;
-  creator: PublicKey;
-  price: bigint;
-  currency: PaymentCurrency;
-  maxSupply: bigint | null;
-  creatorRoyaltyBps: number;
-  isActive: boolean;
-  createdAt: bigint;
-  updatedAt: bigint;
-}
-
-export interface EcosystemConfig {
-  admin: PublicKey;
-  treasury: PublicKey;
-  usdcMint: PublicKey;
-  totalFeesSol: bigint;
-  totalFeesUsdc: bigint;
-  totalNftsMinted: bigint;
-  isPaused: boolean;
-  createdAt: bigint;
-}
-
-// Per-content reward pool interface
-export interface ContentRewardPool {
-  content: PublicKey;
-  rewardPerShare: bigint;   // Scaled by PRECISION (1e12)
-  totalNfts: bigint;        // Total NFTs minted for this content
-  totalDeposited: bigint;
-  totalClaimed: bigint;
-  createdAt: bigint;
-}
-
-// Per wallet-content state interface
-export interface WalletContentState {
-  wallet: PublicKey;
-  content: PublicKey;
-  nftCount: bigint;         // Number of NFTs owned for this content
-  rewardDebt: bigint;       // Cumulative reward debt
-  createdAt: bigint;
-  updatedAt: bigint;
-}
-
-// Content collection interface
-export interface ContentCollection {
-  content: PublicKey;           // The content PDA this collection belongs to
-  collectionAsset: PublicKey;   // The Metaplex Core collection asset address
-  creator: PublicKey;           // The creator of the content/collection
-  createdAt: bigint;
-}
-
-// Per-NFT reward state interface
-export interface NftRewardState {
-  nftAsset: PublicKey;          // The NFT asset this state belongs to
-  content: PublicKey;           // The content this NFT belongs to
-  rewardDebt: bigint;           // Reward debt for this specific NFT
-  createdAt: bigint;
-}
-
-// Hash a CID string using SHA-256 (matches Solana's hash function)
-export function hashCid(cid: string): Uint8Array {
-  return new Uint8Array(sha256.array(cid));
-}
-
-// PDA derivation helpers
-export function getContentPda(contentCid: string): [PublicKey, number] {
-  const cidHash = hashCid(contentCid);
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("content"), cidHash],
-    PROGRAM_ID
-  );
-}
-
-export function getCidRegistryPda(contentCid: string): [PublicKey, number] {
-  const cidHash = hashCid(contentCid);
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("cid"), cidHash],
-    PROGRAM_ID
-  );
-}
-
-export function getEcosystemConfigPda(): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(ECOSYSTEM_CONFIG_SEED)],
-    PROGRAM_ID
-  );
-}
-
-export function getMintConfigPda(contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(MINT_CONFIG_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-export function getContentRewardPoolPda(contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(CONTENT_REWARD_POOL_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(WALLET_CONTENT_STATE_SEED), wallet.toBuffer(), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-export function getContentCollectionPda(contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(CONTENT_COLLECTION_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-export function getNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(NFT_REWARD_STATE_SEED), nftAsset.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-// Calculate primary sale split
-export function calculatePrimarySplit(price: bigint): { creator: bigint; platform: bigint; ecosystem: bigint; holderReward: bigint } {
-  const zero = BigInt(0);
-  if (price === zero) {
-    return { creator: zero, platform: zero, ecosystem: zero, holderReward: zero };
-  }
-  const divisor = BigInt(10000);
-  const platform = (price * BigInt(PLATFORM_FEE_PRIMARY_BPS)) / divisor;
-  const ecosystem = (price * BigInt(ECOSYSTEM_FEE_PRIMARY_BPS)) / divisor;
-  const holderReward = (price * BigInt(HOLDER_REWARD_PRIMARY_BPS)) / divisor;
-  const creator = price - platform - ecosystem - holderReward;
-  return { creator, platform, ecosystem, holderReward };
-}
-
-// Calculate pending rewards for a wallet's content position
-export function calculatePendingReward(nftCount: bigint, rewardPerShare: bigint, rewardDebt: bigint): bigint {
-  const entitled = nftCount * rewardPerShare;
-  if (entitled <= rewardDebt) {
-    return BigInt(0);
-  }
-  return (entitled - rewardDebt) / PRECISION;
-}
+import {
+  hashCid,
+  getContentPda,
+  getCidRegistryPda,
+  getEcosystemConfigPda,
+  getMintConfigPda,
+  getContentRewardPoolPda,
+  getWalletContentStatePda,
+  getContentCollectionPda,
+  getNftRewardStatePda,
+  calculatePendingRewardForNft,
+} from "./pda";
 
 // Convert ContentType enum to Anchor format
 function contentTypeToAnchor(type: ContentType): object {
@@ -286,12 +56,12 @@ function contentTypeToAnchor(type: ContentType): object {
     case ContentType.Photo: return { photo: {} };
     case ContentType.Art: return { art: {} };
     case ContentType.GeneralImage: return { generalImage: {} };
-    default: return { generalVideo: {} };
   }
 }
 
-// Convert Anchor enum format to ContentType
-function anchorToContentType(anchorType: Record<string, unknown>): ContentType {
+// Convert Anchor format to ContentType enum
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anchorToContentType(anchorType: any): ContentType {
   if (anchorType.movie) return ContentType.Movie;
   if (anchorType.tvSeries) return ContentType.TvSeries;
   if (anchorType.musicVideo) return ContentType.MusicVideo;
@@ -318,7 +88,10 @@ export function createProgram(connection: Connection): Program {
   return new Program(idlJson as Idl, provider);
 }
 
-// Register content instruction
+// ============================================
+// INSTRUCTION BUILDERS
+// ============================================
+
 export async function registerContentInstruction(
   program: Program,
   authority: PublicKey,
@@ -352,7 +125,6 @@ export async function registerContentInstruction(
     .instruction();
 }
 
-// Register content with mint config (SOL only)
 export interface RegisterContentWithMintResult {
   instruction: TransactionInstruction;
   collectionAssetKeypair: Keypair;
@@ -377,7 +149,6 @@ export async function registerContentWithMintInstruction(
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
-  // Generate a new keypair for the collection asset
   const collectionAssetKeypair = Keypair.generate();
 
   const instruction = await program.methods
@@ -408,7 +179,6 @@ export async function registerContentWithMintInstruction(
   return { instruction, collectionAssetKeypair };
 }
 
-// Tip content instruction
 export async function tipContentInstruction(
   program: Program,
   tipper: PublicKey,
@@ -429,7 +199,6 @@ export async function tipContentInstruction(
     .instruction();
 }
 
-// Update content instruction
 export async function updateContentInstruction(
   program: Program,
   creator: PublicKey,
@@ -447,7 +216,6 @@ export async function updateContentInstruction(
     .instruction();
 }
 
-// Delete content instruction
 export async function deleteContentInstruction(
   program: Program,
   creator: PublicKey,
@@ -466,7 +234,6 @@ export async function deleteContentInstruction(
     .instruction();
 }
 
-// Delete content with mint config instruction
 export async function deleteContentWithMintInstruction(
   program: Program,
   creator: PublicKey,
@@ -487,7 +254,6 @@ export async function deleteContentWithMintInstruction(
     .instruction();
 }
 
-// Initialize ecosystem config
 export async function initializeEcosystemInstruction(
   program: Program,
   admin: PublicKey,
@@ -507,7 +273,6 @@ export async function initializeEcosystemInstruction(
     .instruction();
 }
 
-// Update ecosystem config
 export async function updateEcosystemInstruction(
   program: Program,
   admin: PublicKey,
@@ -526,7 +291,6 @@ export async function updateEcosystemInstruction(
     .instruction();
 }
 
-// Configure mint settings (SOL only)
 export async function configureMintInstruction(
   program: Program,
   creator: PublicKey,
@@ -553,7 +317,6 @@ export async function configureMintInstruction(
     .instruction();
 }
 
-// Update mint settings
 export async function updateMintSettingsInstruction(
   program: Program,
   creator: PublicKey,
@@ -588,14 +351,11 @@ export async function updateMintSettingsInstruction(
     .instruction();
 }
 
-// Result type for mint NFT instruction
 export interface MintNftResult {
   instruction: TransactionInstruction;
   nftAssetKeypair: Keypair;
 }
 
-// Mint NFT with SOL payment (per-content reward pool model)
-// The collectionAsset is the Metaplex Core collection that was created when content was registered
 export async function mintNftSolInstruction(
   program: Program,
   buyer: PublicKey,
@@ -603,7 +363,7 @@ export async function mintNftSolInstruction(
   creator: PublicKey,
   treasury: PublicKey,
   platform: PublicKey,
-  collectionAsset: PublicKey  // The Metaplex Core collection asset address
+  collectionAsset: PublicKey
 ): Promise<MintNftResult> {
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
@@ -612,10 +372,7 @@ export async function mintNftSolInstruction(
   const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
-  // Generate a new keypair for the NFT asset
   const nftAssetKeypair = Keypair.generate();
-
-  // Derive the NftRewardState PDA for this NFT
   const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
 
   const instruction = await program.methods
@@ -642,7 +399,6 @@ export async function mintNftSolInstruction(
   return { instruction, nftAssetKeypair };
 }
 
-// Claim content rewards instruction (single content)
 export async function claimContentRewardsInstruction(
   program: Program,
   holder: PublicKey,
@@ -663,25 +419,20 @@ export async function claimContentRewardsInstruction(
     .instruction();
 }
 
-// Batch claim rewards instruction
 export async function claimAllRewardsInstruction(
   program: Program,
   holder: PublicKey,
   contentCids: string[]
 ): Promise<TransactionInstruction> {
-  // Build remaining accounts: pairs of [walletContentState, contentRewardPool]
-  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
-
-  for (const contentCid of contentCids) {
-    const [contentPda] = getContentPda(contentCid);
-    const [walletContentStatePda] = getWalletContentStatePda(holder, contentPda);
-    const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-
-    remainingAccounts.push(
-      { pubkey: walletContentStatePda, isSigner: false, isWritable: true },
-      { pubkey: contentRewardPoolPda, isSigner: false, isWritable: true }
-    );
-  }
+  const remainingAccounts = contentCids.flatMap(cid => {
+    const [contentPda] = getContentPda(cid);
+    const [rewardPoolPda] = getContentRewardPoolPda(contentPda);
+    const [walletStatePda] = getWalletContentStatePda(holder, contentPda);
+    return [
+      { pubkey: rewardPoolPda, isSigner: false, isWritable: true },
+      { pubkey: walletStatePda, isSigner: false, isWritable: true },
+    ];
+  });
 
   return await program.methods
     .claimAllRewards()
@@ -693,29 +444,24 @@ export async function claimAllRewardsInstruction(
     .instruction();
 }
 
-// Claim rewards with on-chain NFT verification using per-NFT reward tracking (recommended)
-// Pass NFT asset public keys - the function will derive NftRewardState PDAs automatically
-// Remaining accounts format: [nft_asset_1, nft_reward_state_1, nft_asset_2, nft_reward_state_2, ...]
 export async function claimRewardsVerifiedInstruction(
   program: Program,
   holder: PublicKey,
   contentCid: string,
-  nftAssets: PublicKey[]  // User's NFT asset addresses to verify
+  nftAssets: PublicKey[]
 ): Promise<TransactionInstruction> {
   const [contentPda] = getContentPda(contentCid);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
   const [walletContentStatePda] = getWalletContentStatePda(holder, contentPda);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
-  // Build remaining accounts: pairs of (nft_asset, nft_reward_state)
-  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
-  for (const nftAsset of nftAssets) {
+  const remainingAccounts = nftAssets.flatMap(nftAsset => {
     const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
-    remainingAccounts.push(
-      { pubkey: nftAsset, isSigner: false, isWritable: false },  // NFT asset (read-only)
-      { pubkey: nftRewardStatePda, isSigner: false, isWritable: true }  // NftRewardState (writable for update)
-    );
-  }
+    return [
+      { pubkey: nftAsset, isSigner: false, isWritable: false },
+      { pubkey: nftRewardStatePda, isSigner: false, isWritable: true },
+    ];
+  });
 
   return await program.methods
     .claimRewardsVerified()
@@ -730,7 +476,6 @@ export async function claimRewardsVerifiedInstruction(
     .instruction();
 }
 
-// Sync NFT transfer - call after transferring an NFT to update reward state
 export async function syncNftTransferInstruction(
   program: Program,
   sender: PublicKey,
@@ -755,7 +500,6 @@ export async function syncNftTransferInstruction(
     .instruction();
 }
 
-// Sync multiple NFT transfers at once (same sender/receiver, same content)
 export async function syncNftTransfersBatchInstruction(
   program: Program,
   sender: PublicKey,
@@ -781,29 +525,35 @@ export async function syncNftTransfersBatchInstruction(
     .instruction();
 }
 
-// Fetch content
+// ============================================
+// FETCH FUNCTIONS
+// ============================================
+
 export async function fetchContent(
   connection: Connection,
   contentCid: string
 ): Promise<ContentEntry | null> {
-  const program = createProgram(connection);
-  const [pda] = getContentPda(contentCid);
-
   try {
-    const account = await (program.account as any).contentEntry.fetch(pda);
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+
+    const account = await connection.getAccountInfo(contentPda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("contentEntry", account.data);
 
     return {
-      creator: account.creator,
-      contentCid: account.contentCid,
-      metadataCid: account.metadataCid,
-      contentType: anchorToContentType(account.contentType),
-      tipsReceived: BigInt(account.tipsReceived.toString()),
-      createdAt: BigInt(account.createdAt.toString()),
-      isLocked: account.isLocked,
-      mintedCount: BigInt(account.mintedCount?.toString() || "0"),
-      isEncrypted: account.isEncrypted ?? false,
-      previewCid: account.previewCid ?? "",
-      encryptionMetaCid: account.encryptionMetaCid ?? "",
+      creator: decoded.creator,
+      contentCid: decoded.contentCid,
+      metadataCid: decoded.metadataCid,
+      contentType: anchorToContentType(decoded.contentType),
+      tipsReceived: BigInt(decoded.tipsReceived.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      isLocked: decoded.isLocked ?? false,
+      mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      isEncrypted: decoded.isEncrypted ?? false,
+      previewCid: decoded.previewCid ?? "",
+      encryptionMetaCid: decoded.encryptionMetaCid ?? "",
     };
   } catch {
     return null;
@@ -814,202 +564,203 @@ export async function fetchContentByPda(
   connection: Connection,
   pda: PublicKey
 ): Promise<ContentEntry | null> {
-  const program = createProgram(connection);
-
   try {
-    const account = await (program.account as any).contentEntry.fetch(pda);
+    const program = createProgram(connection);
+    const account = await connection.getAccountInfo(pda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("contentEntry", account.data);
 
     return {
-      creator: account.creator,
-      contentCid: account.contentCid,
-      metadataCid: account.metadataCid,
-      contentType: anchorToContentType(account.contentType),
-      tipsReceived: BigInt(account.tipsReceived.toString()),
-      createdAt: BigInt(account.createdAt.toString()),
-      isLocked: account.isLocked,
-      mintedCount: BigInt(account.mintedCount?.toString() || "0"),
-      isEncrypted: account.isEncrypted ?? false,
-      previewCid: account.previewCid ?? "",
-      encryptionMetaCid: account.encryptionMetaCid ?? "",
+      creator: decoded.creator,
+      contentCid: decoded.contentCid,
+      metadataCid: decoded.metadataCid,
+      contentType: anchorToContentType(decoded.contentType),
+      tipsReceived: BigInt(decoded.tipsReceived.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      isLocked: decoded.isLocked ?? false,
+      mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      isEncrypted: decoded.isEncrypted ?? false,
+      previewCid: decoded.previewCid ?? "",
+      encryptionMetaCid: decoded.encryptionMetaCid ?? "",
     };
   } catch {
     return null;
   }
 }
 
-// Fetch mint config
 export async function fetchMintConfig(
   connection: Connection,
   contentCid: string
 ): Promise<MintConfig | null> {
-  const program = createProgram(connection);
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-
   try {
-    const account = await (program.account as any).mintConfig.fetch(mintConfigPda);
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [mintConfigPda] = getMintConfigPda(contentPda);
+
+    const account = await connection.getAccountInfo(mintConfigPda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("mintConfig", account.data);
 
     return {
-      content: account.content,
-      creator: account.creator,
-      price: BigInt(account.price.toString()),
-      currency: PaymentCurrency.Sol,
-      maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
-      creatorRoyaltyBps: account.creatorRoyaltyBps,
-      isActive: account.isActive,
-      createdAt: BigInt(account.createdAt.toString()),
-      updatedAt: BigInt(account.updatedAt.toString()),
+      content: decoded.content,
+      creator: decoded.creator,
+      priceSol: BigInt(decoded.price.toString()),
+      maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
+      creatorRoyaltyBps: decoded.creatorRoyaltyBps,
+      isActive: decoded.isActive,
+      createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Fetch ecosystem config
 export async function fetchEcosystemConfig(
   connection: Connection
 ): Promise<EcosystemConfig | null> {
-  const program = createProgram(connection);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
-
   try {
-    const account = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
+    const program = createProgram(connection);
+    const [ecosystemConfigPda] = getEcosystemConfigPda();
+
+    const account = await connection.getAccountInfo(ecosystemConfigPda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("ecosystemConfig", account.data);
 
     return {
-      admin: account.admin,
-      treasury: account.treasury,
-      usdcMint: account.usdcMint,
-      totalFeesSol: BigInt(account.totalFeesSol.toString()),
-      totalFeesUsdc: BigInt(account.totalFeesUsdc.toString()),
-      totalNftsMinted: BigInt(account.totalNftsMinted.toString()),
-      isPaused: account.isPaused,
-      createdAt: BigInt(account.createdAt.toString()),
+      admin: decoded.admin,
+      treasury: decoded.treasury,
+      usdcMint: decoded.usdcMint,
+      isPaused: decoded.isPaused,
+      totalTips: BigInt(decoded.totalTips.toString()),
+      totalMints: BigInt(decoded.totalMints.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Fetch content reward pool
 export async function fetchContentRewardPool(
   connection: Connection,
   contentCid: string
 ): Promise<ContentRewardPool | null> {
-  const program = createProgram(connection);
-  const [contentPda] = getContentPda(contentCid);
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-
   try {
-    const account = await (program.account as any).contentRewardPool.fetch(contentRewardPoolPda);
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [rewardPoolPda] = getContentRewardPoolPda(contentPda);
+
+    const account = await connection.getAccountInfo(rewardPoolPda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("contentRewardPool", account.data);
+
     return {
-      content: account.content,
-      rewardPerShare: BigInt(account.rewardPerShare.toString()),
-      totalNfts: BigInt(account.totalNfts.toString()),
-      totalDeposited: BigInt(account.totalDeposited.toString()),
-      totalClaimed: BigInt(account.totalClaimed.toString()),
-      createdAt: BigInt(account.createdAt.toString()),
+      content: decoded.content,
+      rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
+      totalNfts: BigInt(decoded.totalNfts.toString()),
+      totalDeposited: BigInt(decoded.totalDeposited.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Fetch content collection (to get the collection asset address)
 export async function fetchContentCollection(
   connection: Connection,
   contentCid: string
 ): Promise<ContentCollection | null> {
-  const program = createProgram(connection);
-  const [contentPda] = getContentPda(contentCid);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
-
   try {
-    const account = await (program.account as any).contentCollection.fetch(contentCollectionPda);
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [contentCollectionPda] = getContentCollectionPda(contentPda);
+
+    const account = await connection.getAccountInfo(contentCollectionPda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("contentCollection", account.data);
+
     return {
-      content: account.content,
-      collectionAsset: account.collectionAsset,
-      creator: account.creator,
-      createdAt: BigInt(account.createdAt.toString()),
+      content: decoded.content,
+      collectionAsset: decoded.collectionAsset,
+      createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Fetch wallet content state
 export async function fetchWalletContentState(
   connection: Connection,
   wallet: PublicKey,
   contentCid: string
 ): Promise<WalletContentState | null> {
-  const program = createProgram(connection);
-  const [contentPda] = getContentPda(contentCid);
-  const [walletContentStatePda] = getWalletContentStatePda(wallet, contentPda);
-
   try {
-    const account = await (program.account as any).walletContentState.fetch(walletContentStatePda);
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [walletStatePda] = getWalletContentStatePda(wallet, contentPda);
+
+    const account = await connection.getAccountInfo(walletStatePda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("walletContentState", account.data);
+
     return {
-      wallet: account.wallet,
-      content: account.content,
-      nftCount: BigInt(account.nftCount.toString()),
-      rewardDebt: BigInt(account.rewardDebt.toString()),
-      createdAt: BigInt(account.createdAt.toString()),
-      updatedAt: BigInt(account.updatedAt.toString()),
+      wallet: decoded.wallet,
+      content: decoded.content,
+      nftCount: BigInt(decoded.nftCount.toString()),
+      rewardDebt: BigInt(decoded.rewardDebt.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      lastUpdated: BigInt(decoded.lastUpdated.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Fetch NFT reward state for a specific NFT
 export async function fetchNftRewardState(
   connection: Connection,
   nftAsset: PublicKey
 ): Promise<NftRewardState | null> {
-  const program = createProgram(connection);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
-
   try {
-    const account = await (program.account as any).nftRewardState.fetch(nftRewardStatePda);
+    const program = createProgram(connection);
+    const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+
+    const account = await connection.getAccountInfo(nftRewardStatePda);
+    if (!account) return null;
+
+    const decoded = program.coder.accounts.decode("nftRewardState", account.data);
+
     return {
-      nftAsset: account.nftAsset,
-      content: account.content,
-      rewardDebt: BigInt(account.rewardDebt.toString()),
-      createdAt: BigInt(account.createdAt.toString()),
+      nftAsset: decoded.nftAsset,
+      content: decoded.content,
+      rewardDebt: BigInt(decoded.rewardDebt.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
     return null;
   }
 }
 
-// Calculate pending rewards for a specific NFT
-export function calculatePendingRewardForNft(rewardPerShare: bigint, nftRewardDebt: bigint): bigint {
-  if (rewardPerShare <= nftRewardDebt) {
-    return BigInt(0);
-  }
-  return (rewardPerShare - nftRewardDebt) / PRECISION;
-}
-
-// Get pending rewards for a wallet's position in a content
 export async function getPendingRewardForContent(
   connection: Connection,
   wallet: PublicKey,
   contentCid: string
 ): Promise<bigint> {
-  const contentRewardPool = await fetchContentRewardPool(connection, contentCid);
-  if (!contentRewardPool) return BigInt(0);
-
+  const rewardPool = await fetchContentRewardPool(connection, contentCid);
   const walletState = await fetchWalletContentState(connection, wallet, contentCid);
-  if (!walletState) return BigInt(0);
 
-  return calculatePendingReward(
-    walletState.nftCount,
-    contentRewardPool.rewardPerShare,
-    walletState.rewardDebt
-  );
+  if (!rewardPool || !walletState) return BigInt(0);
+  if (walletState.nftCount === BigInt(0)) return BigInt(0);
+
+  const accumulated = (walletState.nftCount * rewardPool.rewardPerShare) / BigInt("1000000000000");
+  return accumulated > walletState.rewardDebt ? accumulated - walletState.rewardDebt : BigInt(0);
 }
 
-// Get all pending rewards for a wallet across all their content positions
 export async function getPendingRewardsForWallet(
   connection: Connection,
   wallet: PublicKey,
@@ -1018,36 +769,28 @@ export async function getPendingRewardsForWallet(
   const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint }> = [];
 
   for (const contentCid of contentCids) {
-    const contentRewardPool = await fetchContentRewardPool(connection, contentCid);
-    if (!contentRewardPool) continue;
-
+    const rewardPool = await fetchContentRewardPool(connection, contentCid);
     const walletState = await fetchWalletContentState(connection, wallet, contentCid);
-    if (!walletState || walletState.nftCount === BigInt(0)) continue;
 
-    const pending = calculatePendingReward(
-      walletState.nftCount,
-      contentRewardPool.rewardPerShare,
-      walletState.rewardDebt
-    );
+    if (!rewardPool || !walletState) {
+      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(0) });
+      continue;
+    }
 
-    results.push({
-      contentCid,
-      pending,
-      nftCount: walletState.nftCount,
-    });
+    const nftCount = walletState.nftCount;
+    if (nftCount === BigInt(0)) {
+      results.push({ contentCid, pending: BigInt(0), nftCount });
+      continue;
+    }
+
+    const accumulated = (nftCount * rewardPool.rewardPerShare) / BigInt("1000000000000");
+    const pending = accumulated > walletState.rewardDebt ? accumulated - walletState.rewardDebt : BigInt(0);
+    results.push({ contentCid, pending, nftCount });
   }
 
   return results;
 }
 
-// NFT metadata with content CID for ownership tracking
-export interface WalletNftMetadata {
-  assetPubkey: string;
-  uri: string;
-  contentCid: string | null;
-}
-
-// Fetch all NFT metadata for a wallet in one batch
 export async function fetchWalletNftMetadata(
   connection: Connection,
   wallet: PublicKey
@@ -1055,56 +798,69 @@ export async function fetchWalletNftMetadata(
   try {
     const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
       filters: [
-        { memcmp: { offset: 0, bytes: "2" } }, // AssetV1
-        { memcmp: { offset: 1, bytes: wallet.toBase58() } }, // Owner
+        { memcmp: { offset: 1, bytes: wallet.toBase58() } },
       ],
     });
 
-    const assetsWithUris: { pubkey: string; uri: string }[] = [];
+    const results: WalletNftMetadata[] = [];
+
     for (const { pubkey, account } of accounts) {
       try {
         const data = account.data;
-        const nameOffset = 1 + 32 + 33;
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-        assetsWithUris.push({ pubkey: pubkey.toBase58(), uri });
-      } catch {
-        // Skip malformed assets
-      }
-    }
+        if (data.length < 66 || data[0] !== 1) continue;
 
-    const results: WalletNftMetadata[] = [];
-    const BATCH_SIZE = 5;
+        let name = "NFT";
+        let collectionAsset: PublicKey | null = null;
 
-    for (let i = 0; i < assetsWithUris.length; i += BATCH_SIZE) {
-      const batch = assetsWithUris.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async ({ pubkey, uri }) => {
-          let contentCid: string | null = null;
+        const updateAuthorityType = data[33];
+        if (updateAuthorityType === 2) {
+          const collectionBytes = data.slice(34, 66);
+          collectionAsset = new PublicKey(collectionBytes);
+        }
 
-          if (uri.startsWith("https://")) {
-            try {
-              const response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
-              if (response.ok) {
-                const metadata = await response.json();
-                contentCid = metadata.contentCid ||
-                  metadata.properties?.content_cid ||
-                  extractCidFromUrl(metadata.image) ||
-                  extractCidFromUrl(metadata.animation_url) ||
-                  extractCidFromUrl(metadata.contentUrl) ||
-                  null;
-              }
-            } catch {
-              // Ignore fetch errors
+        try {
+          let offset = 66;
+          if (data.length > offset + 4) {
+            const nameLen = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+            offset += 4;
+            if (data.length >= offset + nameLen) {
+              name = Buffer.from(data.slice(offset, offset + nameLen)).toString("utf8");
             }
           }
+        } catch {
+          // Use default name
+        }
 
-          return { assetPubkey: pubkey, uri, contentCid };
-        })
-      );
-      results.push(...batchResults);
+        let contentCid: string | null = null;
+        if (collectionAsset) {
+          const program = createProgram(connection);
+          const allAccounts = await connection.getProgramAccounts(PROGRAM_ID);
+          for (const { account: acc } of allAccounts) {
+            try {
+              const decoded = program.coder.accounts.decode("contentCollection", acc.data);
+              if (decoded.collectionAsset.equals(collectionAsset)) {
+                const contentAccount = await connection.getAccountInfo(decoded.content);
+                if (contentAccount) {
+                  const contentDecoded = program.coder.accounts.decode("contentEntry", contentAccount.data);
+                  contentCid = contentDecoded.contentCid;
+                }
+                break;
+              }
+            } catch {
+              // Not a content collection
+            }
+          }
+        }
+
+        results.push({
+          nftAsset: pubkey,
+          contentCid,
+          collectionAsset,
+          name,
+        });
+      } catch {
+        // Skip invalid account
+      }
     }
 
     return results;
@@ -1113,112 +869,63 @@ export async function fetchWalletNftMetadata(
   }
 }
 
-// Helper to extract CID from IPFS URL
-function extractCidFromUrl(url: string | undefined): string | null {
-  if (!url) return null;
-  const match = url.match(/Qm[a-zA-Z0-9]{44,}/);
-  return match ? match[0] : null;
-}
-
-// Count NFTs owned for a specific content
 export async function countNftsOwned(
   connection: Connection,
   wallet: PublicKey,
   contentCid: string
 ): Promise<number> {
   const walletState = await fetchWalletContentState(connection, wallet, contentCid);
-  if (walletState) {
-    return Number(walletState.nftCount);
-  }
-  // Fallback to checking NFT metadata
-  const nftMetadata = await fetchWalletNftMetadata(connection, wallet);
-  return nftMetadata.filter(nft => nft.contentCid === contentCid).length;
+  return walletState ? Number(walletState.nftCount) : 0;
 }
 
-// Check if wallet owns at least one NFT for a content
 export async function checkNftOwnership(
   connection: Connection,
   wallet: PublicKey,
   contentCid: string
 ): Promise<boolean> {
-  const count = await countNftsOwned(connection, wallet, contentCid);
-  return count > 0;
+  return (await countNftsOwned(connection, wallet, contentCid)) > 0;
 }
 
-// Get content NFT holders
 export async function getContentNftHolders(
   connection: Connection,
   contentCid: string
-): Promise<PublicKey[]> {
+): Promise<Array<{ wallet: PublicKey; nftCount: bigint }>> {
   try {
-    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
-      filters: [
-        { memcmp: { offset: 0, bytes: "2" } },
-      ],
-    });
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
 
-    const holders = new Set<string>();
+    const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+    const holders: Array<{ wallet: PublicKey; nftCount: bigint }> = [];
 
     for (const { account } of accounts) {
       try {
-        const data = account.data;
-        const ownerBytes = data.slice(1, 33);
-        const owner = new PublicKey(ownerBytes);
-
-        const nameOffset = 1 + 32 + 33;
-        const nameLen = data.readUInt32LE(nameOffset);
-        const uriOffset = nameOffset + 4 + nameLen;
-        const uriLen = data.readUInt32LE(uriOffset);
-        const uri = data.slice(uriOffset + 4, uriOffset + 4 + uriLen).toString("utf8");
-
-        if (uri.includes(contentCid)) {
-          holders.add(owner.toBase58());
-          continue;
-        }
-
-        if (uri.startsWith("https://")) {
-          try {
-            const response = await fetch(uri, { signal: AbortSignal.timeout(3000) });
-            if (response.ok) {
-              const metadata = await response.json();
-              if (
-                metadata.contentCid === contentCid ||
-                metadata.properties?.content_cid === contentCid ||
-                metadata.image?.includes(contentCid) ||
-                metadata.animation_url?.includes(contentCid) ||
-                metadata.contentUrl?.includes(contentCid)
-              ) {
-                holders.add(owner.toBase58());
-              }
-            }
-          } catch {
-            // Ignore fetch errors
-          }
+        const decoded = program.coder.accounts.decode("walletContentState", account.data);
+        if (decoded.content.equals(contentPda) && decoded.nftCount > 0) {
+          holders.push({
+            wallet: decoded.wallet,
+            nftCount: BigInt(decoded.nftCount.toString()),
+          });
         }
       } catch {
-        // Skip malformed assets
+        // Not a wallet content state
       }
     }
 
-    return Array.from(holders).map(addr => new PublicKey(addr));
+    return holders.sort((a, b) => Number(b.nftCount - a.nftCount));
   } catch {
     return [];
   }
 }
 
-// Fetch NFT assets owned by wallet that belong to a specific collection
-// This is used to get the NFT addresses for claimRewardsVerified
 export async function fetchWalletNftsForCollection(
   connection: Connection,
   wallet: PublicKey,
   collectionAsset: PublicKey
 ): Promise<PublicKey[]> {
   try {
-    // Fetch all assets owned by the wallet
     const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
       filters: [
-        { memcmp: { offset: 0, bytes: "2" } }, // Key = 1 (Asset) encoded as base58 "2"
-        { memcmp: { offset: 1, bytes: wallet.toBase58() } }, // Owner at offset 1
+        { memcmp: { offset: 1, bytes: wallet.toBase58() } },
       ],
     });
 
@@ -1227,24 +934,19 @@ export async function fetchWalletNftsForCollection(
     for (const { pubkey, account } of accounts) {
       try {
         const data = account.data;
+        if (data.length < 66 || data[0] !== 1) continue;
 
-        // Check minimum size for collection reference
-        if (data.length < 66) continue;
+        const updateAuthorityType = data[33];
+        if (updateAuthorityType !== 2) continue;
 
-        // Check UpdateAuthority type at offset 33
-        // Type 2 = Collection
-        if (data[33] !== 2) continue;
-
-        // Extract collection address at bytes 34-65
         const collectionBytes = data.slice(34, 66);
         const assetCollection = new PublicKey(collectionBytes);
 
-        // Check if this asset belongs to our collection
         if (assetCollection.equals(collectionAsset)) {
           nftAssets.push(pubkey);
         }
       } catch {
-        // Skip malformed assets
+        // Skip invalid account
       }
     }
 
@@ -1254,18 +956,19 @@ export async function fetchWalletNftsForCollection(
   }
 }
 
-// Count total NFTs minted for a content
 export async function countTotalMintedNfts(
   connection: Connection,
   contentCid: string
 ): Promise<number> {
-  // Just fetch from content entry - it tracks minted_count
   const content = await fetchContent(connection, contentCid);
   if (!content) return 0;
   return Number(content.mintedCount);
 }
 
-// High-level client
+// ============================================
+// HIGH-LEVEL CLIENT
+// ============================================
+
 export function createContentRegistryClient(connection: Connection) {
   const program = createProgram(connection);
 
@@ -1304,119 +1007,55 @@ export function createContentRegistryClient(connection: Connection) {
       previewCid: string = "",
       encryptionMetaCid: string = ""
     ) => registerContentWithMintInstruction(
-      program,
-      authority,
-      contentCid,
-      metadataCid,
-      contentType,
-      price,
-      maxSupply,
-      creatorRoyaltyBps,
-      isEncrypted,
-      previewCid,
-      encryptionMetaCid
+      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, isEncrypted, previewCid, encryptionMetaCid
     ),
 
-    updateContentInstruction: (
-      creator: PublicKey,
-      contentCid: string,
-      metadataCid: string
-    ) => updateContentInstruction(program, creator, contentCid, metadataCid),
+    updateContentInstruction: (creator: PublicKey, contentCid: string, metadataCid: string) =>
+      updateContentInstruction(program, creator, contentCid, metadataCid),
 
-    deleteContentInstruction: (
-      creator: PublicKey,
-      contentCid: string
-    ) => deleteContentInstruction(program, creator, contentCid),
+    deleteContentInstruction: (creator: PublicKey, contentCid: string) =>
+      deleteContentInstruction(program, creator, contentCid),
 
-    deleteContentWithMintInstruction: (
-      creator: PublicKey,
-      contentCid: string
-    ) => deleteContentWithMintInstruction(program, creator, contentCid),
+    deleteContentWithMintInstruction: (creator: PublicKey, contentCid: string) =>
+      deleteContentWithMintInstruction(program, creator, contentCid),
 
-    tipContentInstruction: (
-      tipper: PublicKey,
-      contentCid: string,
-      creator: PublicKey,
-      amount: bigint | number
-    ) => tipContentInstruction(program, tipper, contentCid, creator, amount),
+    tipContentInstruction: (tipper: PublicKey, contentCid: string, creator: PublicKey, amount: bigint | number) =>
+      tipContentInstruction(program, tipper, contentCid, creator, amount),
 
-    // Mint configuration (SOL only)
-    configureMintInstruction: (
-      creator: PublicKey,
-      contentCid: string,
-      price: bigint,
-      maxSupply: bigint | null,
-      creatorRoyaltyBps: number
-    ) => configureMintInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps),
+    // Mint configuration
+    configureMintInstruction: (creator: PublicKey, contentCid: string, price: bigint, maxSupply: bigint | null, creatorRoyaltyBps: number) =>
+      configureMintInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps),
 
-    updateMintSettingsInstruction: (
-      creator: PublicKey,
-      contentCid: string,
-      price: bigint | null,
-      maxSupply: bigint | null | undefined,
-      creatorRoyaltyBps: number | null,
-      isActive: boolean | null
-    ) => updateMintSettingsInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps, isActive),
+    updateMintSettingsInstruction: (creator: PublicKey, contentCid: string, price: bigint | null, maxSupply: bigint | null | undefined, creatorRoyaltyBps: number | null, isActive: boolean | null) =>
+      updateMintSettingsInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps, isActive),
 
-    // NFT minting (SOL only, per-content reward pool)
-    // collectionAsset is obtained from fetchContentCollection(contentCid).collectionAsset
-    mintNftSolInstruction: (
-      buyer: PublicKey,
-      contentCid: string,
-      creator: PublicKey,
-      treasury: PublicKey,
-      platform: PublicKey,
-      collectionAsset: PublicKey
-    ): Promise<MintNftResult> => mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
+    // NFT minting
+    mintNftSolInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, collectionAsset: PublicKey): Promise<MintNftResult> =>
+      mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
 
-    // Claim rewards (per-content)
-    claimContentRewardsInstruction: (
-      holder: PublicKey,
-      contentCid: string
-    ) => claimContentRewardsInstruction(program, holder, contentCid),
+    // Claim rewards
+    claimContentRewardsInstruction: (holder: PublicKey, contentCid: string) =>
+      claimContentRewardsInstruction(program, holder, contentCid),
 
-    // Batch claim rewards (multiple content)
-    claimAllRewardsInstruction: (
-      holder: PublicKey,
-      contentCids: string[]
-    ) => claimAllRewardsInstruction(program, holder, contentCids),
+    claimAllRewardsInstruction: (holder: PublicKey, contentCids: string[]) =>
+      claimAllRewardsInstruction(program, holder, contentCids),
 
-    // Claim rewards with on-chain verification (recommended)
-    // Verifies actual NFT ownership at claim time
-    claimRewardsVerifiedInstruction: (
-      holder: PublicKey,
-      contentCid: string,
-      nftAssets: PublicKey[]
-    ) => claimRewardsVerifiedInstruction(program, holder, contentCid, nftAssets),
+    claimRewardsVerifiedInstruction: (holder: PublicKey, contentCid: string, nftAssets: PublicKey[]) =>
+      claimRewardsVerifiedInstruction(program, holder, contentCid, nftAssets),
 
-    // Sync NFT transfer (call after transferring to update reward state)
-    syncNftTransferInstruction: (
-      sender: PublicKey,
-      receiver: PublicKey,
-      contentCid: string
-    ) => syncNftTransferInstruction(program, sender, receiver, contentCid),
+    // Sync NFT transfers
+    syncNftTransferInstruction: (sender: PublicKey, receiver: PublicKey, contentCid: string) =>
+      syncNftTransferInstruction(program, sender, receiver, contentCid),
 
-    // Sync multiple NFT transfers at once
-    syncNftTransfersBatchInstruction: (
-      sender: PublicKey,
-      receiver: PublicKey,
-      contentCid: string,
-      count: number
-    ) => syncNftTransfersBatchInstruction(program, sender, receiver, contentCid, count),
+    syncNftTransfersBatchInstruction: (sender: PublicKey, receiver: PublicKey, contentCid: string, count: number) =>
+      syncNftTransfersBatchInstruction(program, sender, receiver, contentCid, count),
 
     // Ecosystem management
-    initializeEcosystemInstruction: (
-      admin: PublicKey,
-      treasury: PublicKey,
-      usdcMint: PublicKey
-    ) => initializeEcosystemInstruction(program, admin, treasury, usdcMint),
+    initializeEcosystemInstruction: (admin: PublicKey, treasury: PublicKey, usdcMint: PublicKey) =>
+      initializeEcosystemInstruction(program, admin, treasury, usdcMint),
 
-    updateEcosystemInstruction: (
-      admin: PublicKey,
-      newTreasury: PublicKey | null,
-      newUsdcMint: PublicKey | null,
-      isPaused: boolean | null
-    ) => updateEcosystemInstruction(program, admin, newTreasury, newUsdcMint, isPaused),
+    updateEcosystemInstruction: (admin: PublicKey, newTreasury: PublicKey | null, newUsdcMint: PublicKey | null, isPaused: boolean | null) =>
+      updateEcosystemInstruction(program, admin, newTreasury, newUsdcMint, isPaused),
 
     // Fetching
     fetchContent: (contentCid: string) => fetchContent(connection, contentCid),
@@ -1425,43 +1064,30 @@ export function createContentRegistryClient(connection: Connection) {
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
     fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
     fetchContentCollection: (contentCid: string) => fetchContentCollection(connection, contentCid),
-    fetchWalletContentState: (wallet: PublicKey, contentCid: string) =>
-      fetchWalletContentState(connection, wallet, contentCid),
-    fetchNftRewardState: (nftAsset: PublicKey) =>
-      fetchNftRewardState(connection, nftAsset),
+    fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),
+    fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
-    // Reward calculations (per-content and per-NFT)
-    getPendingRewardForContent: (wallet: PublicKey, contentCid: string) =>
-      getPendingRewardForContent(connection, wallet, contentCid),
-    getPendingRewardsForWallet: (wallet: PublicKey, contentCids: string[]) =>
-      getPendingRewardsForWallet(connection, wallet, contentCids),
+    // Reward calculations
+    getPendingRewardForContent: (wallet: PublicKey, contentCid: string) => getPendingRewardForContent(connection, wallet, contentCid),
+    getPendingRewardsForWallet: (wallet: PublicKey, contentCids: string[]) => getPendingRewardsForWallet(connection, wallet, contentCids),
 
     // NFT ownership
-    checkNftOwnership: (wallet: PublicKey, contentCid: string) =>
-      checkNftOwnership(connection, wallet, contentCid),
-    countNftsOwned: (wallet: PublicKey, contentCid: string) =>
-      countNftsOwned(connection, wallet, contentCid),
-    countTotalMintedNfts: (contentCid: string) =>
-      countTotalMintedNfts(connection, contentCid),
-    fetchWalletNftMetadata: (wallet: PublicKey) =>
-      fetchWalletNftMetadata(connection, wallet),
-    getContentNftHolders: (contentCid: string) =>
-      getContentNftHolders(connection, contentCid),
-
-    // Fetch NFT assets for a specific collection (used with claimRewardsVerified)
-    fetchWalletNftsForCollection: (wallet: PublicKey, collectionAsset: PublicKey) =>
-      fetchWalletNftsForCollection(connection, wallet, collectionAsset),
+    checkNftOwnership: (wallet: PublicKey, contentCid: string) => checkNftOwnership(connection, wallet, contentCid),
+    countNftsOwned: (wallet: PublicKey, contentCid: string) => countNftsOwned(connection, wallet, contentCid),
+    countTotalMintedNfts: (contentCid: string) => countTotalMintedNfts(connection, contentCid),
+    fetchWalletNftMetadata: (wallet: PublicKey) => fetchWalletNftMetadata(connection, wallet),
+    getContentNftHolders: (contentCid: string) => getContentNftHolders(connection, contentCid),
+    fetchWalletNftsForCollection: (wallet: PublicKey, collectionAsset: PublicKey) => fetchWalletNftsForCollection(connection, wallet, collectionAsset),
 
     // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {
       try {
         const accounts = await connection.getProgramAccounts(PROGRAM_ID);
-
         const entries: ContentEntry[] = [];
+
         for (const { account } of accounts) {
           try {
             const decoded = program.coder.accounts.decode("contentEntry", account.data);
-
             entries.push({
               creator: decoded.creator,
               contentCid: decoded.contentCid,
@@ -1480,8 +1106,7 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-        return entries;
+        return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
       } catch {
         return [];
       }
@@ -1495,7 +1120,6 @@ export function createContentRegistryClient(connection: Connection) {
         for (const { account } of accounts) {
           try {
             const decoded = program.coder.accounts.decode("contentEntry", account.data);
-
             if (!decoded.creator.equals(creator)) continue;
 
             entries.push({
@@ -1516,8 +1140,7 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-        return entries;
+        return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
       } catch {
         return [];
       }
@@ -1562,13 +1185,11 @@ export function createContentRegistryClient(connection: Connection) {
                   mintConfig: {
                     content: decoded.content,
                     creator: decoded.creator,
-                    price: BigInt(decoded.price.toString()),
-                    currency: PaymentCurrency.Sol,
+                    priceSol: BigInt(decoded.price.toString()),
                     maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
                     creatorRoyaltyBps: decoded.creatorRoyaltyBps,
                     isActive: decoded.isActive,
                     createdAt: BigInt(decoded.createdAt.toString()),
-                    updatedAt: BigInt(decoded.updatedAt.toString()),
                   },
                 });
                 break;
@@ -1579,8 +1200,7 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        results.sort((a, b) => Number(b.content.createdAt - a.content.createdAt));
-        return results;
+        return results.sort((a, b) => Number(b.content.createdAt - a.content.createdAt));
       } catch {
         return [];
       }

@@ -292,7 +292,7 @@ export default function ProfilePage() {
 
                       return (
                         <div
-                          key={nft.assetPubkey}
+                          key={nft.nftAsset.toBase58()}
                           className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden hover:border-gray-700 transition-colors"
                         >
                           {/* Image */}
@@ -316,7 +316,7 @@ export default function ProfilePage() {
                           <div className="p-3">
                             <h3 className="font-medium text-sm truncate">{title}</h3>
                             <p className="text-xs text-gray-500 truncate">
-                              {nft.assetPubkey.slice(0, 8)}...
+                              {nft.nftAsset.toBase58().slice(0, 8)}...
                             </p>
                           </div>
                         </div>
