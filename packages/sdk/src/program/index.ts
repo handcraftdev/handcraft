@@ -633,9 +633,10 @@ export async function fetchEcosystemConfig(
       admin: decoded.admin,
       treasury: decoded.treasury,
       usdcMint: decoded.usdcMint,
+      totalFeesSol: BigInt(decoded.totalFeesSol.toString()),
+      totalFeesUsdc: BigInt(decoded.totalFeesUsdc.toString()),
+      totalNftsMinted: BigInt(decoded.totalNftsMinted.toString()),
       isPaused: decoded.isPaused,
-      totalTips: BigInt(decoded.totalTips.toString()),
-      totalMints: BigInt(decoded.totalMints.toString()),
       createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {

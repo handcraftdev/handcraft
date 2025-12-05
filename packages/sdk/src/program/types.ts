@@ -35,9 +35,10 @@ export interface EcosystemConfig {
   admin: PublicKey;
   treasury: PublicKey;
   usdcMint: PublicKey;
+  totalFeesSol: bigint;
+  totalFeesUsdc: bigint;
+  totalNftsMinted: bigint;
   isPaused: boolean;
-  totalTips: bigint;
-  totalMints: bigint;
   createdAt: bigint;
 }
 
