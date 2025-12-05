@@ -12,6 +12,11 @@
     "build:mobile": "turbo build --filter=@handcraft/mobile"
   },
   "devDependencies": {
+    "@metaplex-foundation/mpl-core": "^1.7.0",
+    "@metaplex-foundation/umi": "^1.4.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.4.1",
+    "@metaplex-foundation/umi-web3js-adapters": "^1.4.1",
+    "@noble/hashes": "1.3.3",
     "tsx": "^4.21.0",
     "turbo": "^2.3.0",
     "typescript": "^5.7.2"
