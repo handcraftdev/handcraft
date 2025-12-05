@@ -220,7 +220,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useNftOwnership, getPendingRewardForContent, pendingRewardsQuery, ecosystemConfig } = useContentRegistry();
+  const { useMintConfig, useNftOwnership, getPendingRewardForContent, pendingRewardsQuery } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
@@ -608,7 +608,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       )}
 
       {/* Buy NFT Modal - for buyers */}
-      {showBuyNftModal && mintConfig && ecosystemConfig && (
+      {showBuyNftModal && mintConfig && (
         <BuyNftModal
           isOpen={showBuyNftModal}
           onClose={() => setShowBuyNftModal(false)}
