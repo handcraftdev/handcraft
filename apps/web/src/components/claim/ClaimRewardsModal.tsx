@@ -20,8 +20,7 @@ export function ClaimRewardsModal({
 }: ClaimRewardsModalProps) {
   const { publicKey } = useWallet();
   const {
-    claimContentRewards,
-    claimAllRewards,
+    claimRewardsVerified,
     isClaimingReward,
     usePendingRewards,
     globalContent,
@@ -65,7 +64,8 @@ export function ClaimRewardsModal({
     setClaimingIndex(index);
 
     try {
-      await claimContentRewards({
+      // Use verified claim which checks NFT ownership per-NFT
+      await claimRewardsVerified({
         contentCid: reward.contentCid,
       });
       await refetch();
@@ -88,9 +88,12 @@ export function ClaimRewardsModal({
     setClaimingAll(true);
 
     try {
-      // Use batch claim for all content positions in one transaction
-      const contentCids = pendingRewards.map(r => r.contentCid);
-      await claimAllRewards({ contentCids });
+      // Claim each content position with verified claim (per-NFT tracking)
+      for (const reward of pendingRewards) {
+        if (reward.pending > BigInt(0)) {
+          await claimRewardsVerified({ contentCid: reward.contentCid });
+        }
+      }
       await refetch();
       onSuccess?.();
       onClose();
@@ -202,7 +205,7 @@ export function ClaimRewardsModal({
               >
                 {claimingAll
                   ? "Claiming all..."
-                  : `Claim All (1 transaction)`}
+                  : `Claim All (${pendingRewards.filter(r => r.pending > BigInt(0)).length} transactions)`}
               </button>
             )}
 
@@ -219,9 +222,14 @@ export function ClaimRewardsModal({
         )}
 
         {/* Info */}
-        <p className="text-xs text-gray-500 mt-4 text-center">
-          Rewards accumulate from the 12% holder share when NFTs are minted for content you own.
-        </p>
+        <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
+          <p className="text-xs text-gray-400 text-center">
+            Rewards accumulate from the 12% holder share when NFTs are minted.
+          </p>
+          <p className="text-xs text-amber-400/80 mt-2 text-center">
+            Tip: Claim before selling your NFTs - unclaimed rewards transfer to the new owner.
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,25 +1,35 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Link from "next/link";
 import { UploadModal } from "./upload";
+import { ClaimRewardsModal } from "./claim";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
 
 export function Header() {
   const { publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
-  const { content } = useContentRegistry();
+  const { content, usePendingRewards } = useContentRegistry();
   const { clearSession } = useSession();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isClaimOpen, setIsClaimOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // Get pending rewards
+  const { data: pendingRewards } = usePendingRewards();
+  const totalPending = useMemo(() => {
+    if (!pendingRewards) return BigInt(0);
+    return pendingRewards.reduce((acc, r) => acc + r.pending, BigInt(0));
+  }, [pendingRewards]);
+  const hasPendingRewards = totalPending > BigInt(0);
 
   // Prevent hydration mismatch by waiting for client mount
   useEffect(() => {
@@ -96,6 +106,18 @@ export function Header() {
 
           {/* Wallet & Actions */}
           <div className="flex items-center gap-2">
+            {publicKey && hasPendingRewards && (
+              <button
+                onClick={() => setIsClaimOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-full transition-colors text-sm font-medium animate-pulse hover:animate-none"
+                title="Claim pending rewards"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="hidden sm:inline">{(Number(totalPending) / LAMPORTS_PER_SOL).toFixed(4)}</span>
+              </button>
+            )}
             {publicKey && (
               <button
                 onClick={() => setIsUploadOpen(true)}
@@ -151,16 +173,22 @@ export function Header() {
                     </div>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-2 divide-x divide-gray-800 border-b border-gray-800">
+                    <div className="grid grid-cols-3 divide-x divide-gray-800 border-b border-gray-800">
                       <div className="p-3 text-center">
                         <p className="text-lg font-semibold text-white">{content.length}</p>
-                        <p className="text-xs text-gray-500">My Content</p>
+                        <p className="text-xs text-gray-500">Content</p>
                       </div>
                       <div className="p-3 text-center">
                         <p className="text-lg font-semibold text-white">
                           {balance !== null ? balance.toFixed(2) : '-'}
                         </p>
-                        <p className="text-xs text-gray-500">SOL Balance</p>
+                        <p className="text-xs text-gray-500">SOL</p>
+                      </div>
+                      <div className="p-3 text-center">
+                        <p className={`text-lg font-semibold ${hasPendingRewards ? 'text-green-400' : 'text-white'}`}>
+                          {(Number(totalPending) / LAMPORTS_PER_SOL).toFixed(3)}
+                        </p>
+                        <p className="text-xs text-gray-500">Rewards</p>
                       </div>
                     </div>
 
@@ -174,6 +202,23 @@ export function Header() {
 
                     {/* Actions */}
                     <div className="p-2">
+                      {hasPendingRewards && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setIsClaimOpen(true);
+                              setIsProfileOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-green-400 hover:bg-gray-800 rounded-lg transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Claim Rewards
+                          </button>
+                          <div className="border-t border-gray-800 my-1" />
+                        </>
+                      )}
                       <Link
                         href="/dashboard"
                         onClick={() => setIsProfileOpen(false)}
@@ -238,6 +283,12 @@ export function Header() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onSuccess={handleUploadSuccess}
+      />
+
+      {/* Claim Rewards Modal */}
+      <ClaimRewardsModal
+        isOpen={isClaimOpen}
+        onClose={() => setIsClaimOpen(false)}
       />
     </>
   );
