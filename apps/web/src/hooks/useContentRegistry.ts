@@ -14,10 +14,12 @@ import {
   getMintConfigPda,
   getContentRewardPoolPda,
   getWalletContentStatePda,
+  getContentCollectionPda,
   ContentRewardPool,
   WalletContentState,
   MintConfig,
   EcosystemConfig,
+  ContentCollection,
   calculatePrimarySplit,
   calculatePendingReward,
   MIN_CREATOR_ROYALTY_BPS,
@@ -33,7 +35,7 @@ export {
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
 };
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection };
 
 /**
  * Simulate a transaction before sending to wallet
@@ -195,7 +197,9 @@ export function useContentRegistry() {
         encryptionMetaCid,
       });
 
-      const ix = await client.registerContentWithMintInstruction(
+      // registerContentWithMintInstruction now returns { instruction, collectionAssetKeypair }
+      // because it also creates a Metaplex Core Collection with LinkedLifecycleHook
+      const { instruction, collectionAssetKeypair } = await client.registerContentWithMintInstruction(
         publicKey,
         contentCid,
         metadataCid,
@@ -208,14 +212,33 @@ export function useContentRegistry() {
         encryptionMetaCid
       );
 
-      const tx = new Transaction().add(ix);
+      console.log("Collection Asset pubkey:", collectionAssetKeypair.publicKey.toBase58());
+
+      const tx = new Transaction().add(instruction);
+
+      // Set up the transaction for simulation
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Sign with the collection asset keypair (partial sign before wallet signs)
+      tx.partialSign(collectionAssetKeypair);
 
       // Simulate transaction before prompting wallet
       console.log("Simulating transaction...");
-      await simulateTransaction(connection, tx, publicKey);
+      const simulation = await connection.simulateTransaction(tx);
+      if (simulation.value.err) {
+        const logs = simulation.value.logs || [];
+        const errorLog = logs.find(log =>
+          log.includes("Error") || log.includes("error") || log.includes("failed")
+        );
+        throw new Error(errorLog || `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
       console.log("Simulation successful, sending to wallet...");
 
-      const signature = await sendTransaction(tx, connection);
+      // Send transaction with the collection keypair as additional signer
+      const signature = await sendTransaction(tx, connection, {
+        signers: [collectionAssetKeypair],
+      });
       console.log("Content + mint registration tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Content + mint registration confirmed!");
@@ -350,6 +373,7 @@ export function useContentRegistry() {
 
   // Mint NFT with SOL mutation
   // 12% holder reward is automatically deposited to accumulated reward pool
+  // NFT is created within the content's collection, inheriting its LinkedLifecycleHook
   const mintNftSol = useMutation({
     mutationFn: async ({
       contentCid,
@@ -372,6 +396,14 @@ export function useContentRegistry() {
         buyer: publicKey.toBase58(),
       });
 
+      // First, fetch the content collection to get the collection asset address
+      const contentCollection = await client.fetchContentCollection(contentCid);
+      if (!contentCollection) {
+        throw new Error("Content collection not found. Make sure the content was registered with mint config.");
+      }
+
+      console.log("Collection Asset:", contentCollection.collectionAsset.toBase58());
+
       // mintNftSolInstruction returns { instruction, nftAssetKeypair }
       // The nftAssetKeypair MUST be added as a signer to the transaction
       const { instruction, nftAssetKeypair } = await client.mintNftSolInstruction(
@@ -379,7 +411,8 @@ export function useContentRegistry() {
         contentCid,
         creator,
         treasury,
-        platform
+        platform,
+        contentCollection.collectionAsset
       );
 
       console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
@@ -530,6 +563,60 @@ export function useContentRegistry() {
       console.log("Claim tx sent:", signature);
       await connection.confirmTransaction(signature, "confirmed");
       console.log("Claim confirmed!");
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["walletContentState", publicKey?.toBase58(), contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+    },
+  });
+
+  // Claim rewards with on-chain NFT verification (recommended)
+  // This verifies actual NFT ownership at claim time, preventing gaming the system
+  const claimRewardsVerified = useMutation({
+    mutationFn: async ({
+      contentCid,
+    }: {
+      contentCid: string;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+
+      console.log("Claiming verified rewards for content...", {
+        contentCid,
+      });
+
+      // First, fetch the content collection to get the collection asset address
+      const contentCollection = await client.fetchContentCollection(contentCid);
+      if (!contentCollection) {
+        throw new Error("Content collection not found.");
+      }
+
+      // Fetch NFT assets owned by the user for this collection
+      const nftAssets = await client.fetchWalletNftsForCollection(
+        publicKey,
+        contentCollection.collectionAsset
+      );
+
+      console.log("Found NFT assets:", nftAssets.length);
+
+      const ix = await client.claimRewardsVerifiedInstruction(
+        publicKey,
+        contentCid,
+        nftAssets
+      );
+
+      const tx = new Transaction().add(ix);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating verified claim transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Verified claim tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Verified claim confirmed!");
       return signature;
     },
     onSuccess: (_, { contentCid }) => {
@@ -726,6 +813,7 @@ export function useContentRegistry() {
     updateContent: updateContent.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
     claimContentRewards: claimContentRewards.mutateAsync,
+    claimRewardsVerified: claimRewardsVerified.mutateAsync,  // Recommended: verifies NFT ownership
     claimAllRewards: claimAllRewards.mutateAsync,
 
     // Mutation states
@@ -736,7 +824,7 @@ export function useContentRegistry() {
     isMintingNft: mintNftSol.isPending,
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
-    isClaimingReward: claimContentRewards.isPending || claimAllRewards.isPending,
+    isClaimingReward: claimContentRewards.isPending || claimRewardsVerified.isPending || claimAllRewards.isPending,
 
     // Hooks for specific data
     useMintConfig,
@@ -756,6 +844,7 @@ export function useContentRegistry() {
     getMintConfigPda,
     getContentRewardPoolPda,
     getWalletContentStatePda,
+    getContentCollectionPda,
     calculatePrimarySplit,
     calculatePendingReward,
   };
