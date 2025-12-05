@@ -752,14 +752,30 @@ export async function getPendingRewardForContent(
   wallet: PublicKey,
   contentCid: string
 ): Promise<bigint> {
+  // Get reward pool and collection info
   const rewardPool = await fetchContentRewardPool(connection, contentCid);
-  const walletState = await fetchWalletContentState(connection, wallet, contentCid);
+  const contentCollection = await fetchContentCollection(connection, contentCid);
 
-  if (!rewardPool || !walletState) return BigInt(0);
-  if (walletState.nftCount === BigInt(0)) return BigInt(0);
+  if (!rewardPool || !contentCollection) return BigInt(0);
 
-  const accumulated = (walletState.nftCount * rewardPool.rewardPerShare) / BigInt("1000000000000");
-  return accumulated > walletState.rewardDebt ? accumulated - walletState.rewardDebt : BigInt(0);
+  // Get all NFTs owned by wallet in this collection
+  const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+  if (nftAssets.length === 0) return BigInt(0);
+
+  // Calculate pending rewards for each NFT using per-NFT tracking
+  let totalPending = BigInt(0);
+  for (const nftAsset of nftAssets) {
+    const nftRewardState = await fetchNftRewardState(connection, nftAsset);
+    if (nftRewardState) {
+      // pending = (rewardPerShare - nftRewardDebt) / PRECISION
+      const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
+        ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
+        : BigInt(0);
+      totalPending += pending;
+    }
+  }
+
+  return totalPending;
 }
 
 export async function getPendingRewardsForWallet(
@@ -770,23 +786,38 @@ export async function getPendingRewardsForWallet(
   const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint }> = [];
 
   for (const contentCid of contentCids) {
+    // Get reward pool and collection info
     const rewardPool = await fetchContentRewardPool(connection, contentCid);
-    const walletState = await fetchWalletContentState(connection, wallet, contentCid);
+    const contentCollection = await fetchContentCollection(connection, contentCid);
 
-    if (!rewardPool || !walletState) {
+    if (!rewardPool || !contentCollection) {
       results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(0) });
       continue;
     }
 
-    const nftCount = walletState.nftCount;
-    if (nftCount === BigInt(0)) {
+    // Get all NFTs owned by wallet in this collection
+    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+    const nftCount = BigInt(nftAssets.length);
+
+    if (nftAssets.length === 0) {
       results.push({ contentCid, pending: BigInt(0), nftCount });
       continue;
     }
 
-    const accumulated = (nftCount * rewardPool.rewardPerShare) / BigInt("1000000000000");
-    const pending = accumulated > walletState.rewardDebt ? accumulated - walletState.rewardDebt : BigInt(0);
-    results.push({ contentCid, pending, nftCount });
+    // Calculate pending rewards for each NFT using per-NFT tracking
+    let totalPending = BigInt(0);
+    for (const nftAsset of nftAssets) {
+      const nftRewardState = await fetchNftRewardState(connection, nftAsset);
+      if (nftRewardState) {
+        // pending = (rewardPerShare - nftRewardDebt) / PRECISION
+        const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
+          ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
+          : BigInt(0);
+        totalPending += pending;
+      }
+    }
+
+    results.push({ contentCid, pending: totalPending, nftCount });
   }
 
   return results;
