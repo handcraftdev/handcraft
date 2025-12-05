@@ -3,6 +3,7 @@ pub mod cid_registry;
 pub mod mint_config;
 pub mod ecosystem_config;
 pub mod reward_pool;
+pub mod collection;
 
 pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
@@ -24,3 +25,4 @@ pub use reward_pool::{
     GlobalRewardPool, NftRewardState,
     GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED,
 };
+pub use collection::{ContentCollection, CONTENT_COLLECTION_SEED};

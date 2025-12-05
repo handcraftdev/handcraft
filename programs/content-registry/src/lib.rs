@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{
-    instruction::{AccountMeta, Instruction},
-    program::invoke,
-};
-use std::io::Write;
+use anchor_lang::Discriminator;
+
+// Import mpl-core types and CPI builders
+use mpl_core::instructions::{CreateCollectionV2CpiBuilder, CreateV2CpiBuilder};
+use mpl_core::types::DataState;
 
 // Metaplex Core Program ID: CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
 pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
@@ -13,211 +13,116 @@ pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
     0xc9, 0x7e, 0xbe, 0x2d, 0x23, 0x5b, 0xa7, 0x48,
 ]);
 
-// DataState enum values
-const DATA_STATE_ACCOUNT_STATE: u8 = 0;
-
-// External Plugin Adapter types for lifecycle hook
-mod plugin_types {
-    // ExternalPluginAdapterInitInfo variant indices
-    pub const LIFECYCLE_HOOK_VARIANT: u8 = 0;
-
-    // HookableLifecycleEvent enum
-    pub const LIFECYCLE_EVENT_TRANSFER: u8 = 1;
-
-    // ExternalCheckResult enum
-    pub const CHECK_RESULT_CAN_LISTEN: u8 = 0;
-
-    // PluginAuthority enum
-    pub const PLUGIN_AUTHORITY_UPDATE_AUTHORITY: u8 = 2;
-
-    // ExternalPluginAdapterSchema enum
-    pub const SCHEMA_BINARY: u8 = 0;
-
-    // ExternalPluginAdapterExtraAccount enum variants
-    pub const EXTRA_ACCOUNT_CUSTOM_PDA: u8 = 4;
-
-    // Seed enum variants
-    pub const SEED_ADDRESS: u8 = 0;
-    pub const SEED_BYTES: u8 = 1;
-    pub const SEED_OWNER: u8 = 3;
-    pub const SEED_RECIPIENT: u8 = 4;
-}
-
-/// Build the lifecycle hook external plugin adapter data
-/// This configures the hook to be called on transfers with our program
-fn build_lifecycle_hook_plugin(
-    hooked_program: &Pubkey,
-    content_pda: &Pubkey,
-) -> Vec<u8> {
-    use plugin_types::*;
-
-    let mut data = Vec::new();
-
-    // ExternalPluginAdapterInitInfo::LifecycleHook variant (0)
-    data.push(LIFECYCLE_HOOK_VARIANT);
-
-    // hooked_program: Pubkey
-    data.extend_from_slice(hooked_program.as_ref());
-
-    // init_plugin_authority: Option<PluginAuthority> = Some(UpdateAuthority)
-    data.push(1); // Some
-    data.push(PLUGIN_AUTHORITY_UPDATE_AUTHORITY);
-
-    // lifecycle_checks: Vec<(HookableLifecycleEvent, ExternalCheckResult)>
-    // We only want to listen to Transfer events
-    data.extend_from_slice(&1u32.to_le_bytes()); // Vec length = 1
-    data.push(LIFECYCLE_EVENT_TRANSFER); // HookableLifecycleEvent::Transfer
-    data.push(CHECK_RESULT_CAN_LISTEN); // ExternalCheckResult::CanListen
-
-    // extra_accounts: Option<Vec<ExternalPluginAdapterExtraAccount>>
-    // We need: ContentRewardPool, SenderWalletState, ReceiverWalletState
-    data.push(1); // Some
-    data.extend_from_slice(&3u32.to_le_bytes()); // Vec length = 3
-
-    // 1. ContentRewardPool (fixed PDA)
-    // ExternalPluginAdapterExtraAccount::CustomPda
-    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
-    // seeds: Vec<Seed>
-    data.extend_from_slice(&2u32.to_le_bytes()); // 2 seeds
-    // Seed::Bytes("content_reward_pool")
-    data.push(SEED_BYTES);
-    let seed_bytes = b"content_reward_pool";
-    data.extend_from_slice(&(seed_bytes.len() as u32).to_le_bytes());
-    data.extend_from_slice(seed_bytes);
-    // Seed::Address(content_pda)
-    data.push(SEED_ADDRESS);
-    data.extend_from_slice(content_pda.as_ref());
-    // custom_program_id: Option<Pubkey> = Some(our program)
-    data.push(1); // Some
-    data.extend_from_slice(hooked_program.as_ref());
-    // is_signer: bool = false
-    data.push(0);
-    // is_writable: bool = true
-    data.push(1);
-
-    // 2. Sender's WalletContentState (uses Owner seed)
-    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
-    data.extend_from_slice(&3u32.to_le_bytes()); // 3 seeds
-    // Seed::Bytes("wallet_content")
-    data.push(SEED_BYTES);
-    let wallet_seed = b"wallet_content";
-    data.extend_from_slice(&(wallet_seed.len() as u32).to_le_bytes());
-    data.extend_from_slice(wallet_seed);
-    // Seed::Owner (current owner = sender in transfer)
-    data.push(SEED_OWNER);
-    // Seed::Address(content_pda)
-    data.push(SEED_ADDRESS);
-    data.extend_from_slice(content_pda.as_ref());
-    // custom_program_id
-    data.push(1);
-    data.extend_from_slice(hooked_program.as_ref());
-    // is_signer, is_writable
-    data.push(0);
-    data.push(1);
-
-    // 3. Receiver's WalletContentState (uses Recipient seed)
-    data.push(EXTRA_ACCOUNT_CUSTOM_PDA);
-    data.extend_from_slice(&3u32.to_le_bytes()); // 3 seeds
-    // Seed::Bytes("wallet_content")
-    data.push(SEED_BYTES);
-    data.extend_from_slice(&(wallet_seed.len() as u32).to_le_bytes());
-    data.extend_from_slice(wallet_seed);
-    // Seed::Recipient (new owner = receiver in transfer)
-    data.push(SEED_RECIPIENT);
-    // Seed::Address(content_pda)
-    data.push(SEED_ADDRESS);
-    data.extend_from_slice(content_pda.as_ref());
-    // custom_program_id
-    data.push(1);
-    data.extend_from_slice(hooked_program.as_ref());
-    // is_signer, is_writable
-    data.push(0);
-    data.push(1);
-
-    // data_authority: Option<PluginAuthority> = None
-    data.push(0);
-
-    // schema: ExternalPluginAdapterSchema = Binary
-    data.push(SCHEMA_BINARY);
-
-    data
-}
-
-/// Build and invoke the Metaplex Core CreateV2 instruction via raw CPI
-/// CreateV2 discriminator is 20
-/// Account order (all 8): asset, collection?, authority?, payer, owner?, updateAuthority?, systemProgram, logWrapper?
-/// Now includes lifecycle hook plugin for automatic transfer tracking
-fn create_core_nft<'info>(
+/// Create a Metaplex Core Collection
+/// NFTs minted into this collection can be verified at claim time
+/// (LinkedLifecycleHook is not used since it's not available on devnet)
+fn create_collection<'info>(
     mpl_core_program: &AccountInfo<'info>,
-    asset: &AccountInfo<'info>,
+    collection: &AccountInfo<'info>,
     payer: &AccountInfo<'info>,
-    owner: &AccountInfo<'info>,
     update_authority: &AccountInfo<'info>,
     system_program: &AccountInfo<'info>,
     name: String,
     uri: String,
-    content_pda: &Pubkey,
-    our_program_id: &Pubkey,
 ) -> Result<()> {
-    // CreateV2 discriminator
-    const CREATE_V2_DISCRIMINATOR: u8 = 20;
+    // Create the collection without external plugins
+    // Reward tracking is done via claim-time verification instead of lifecycle hooks
+    CreateCollectionV2CpiBuilder::new(mpl_core_program)
+        .collection(collection)
+        .payer(payer)
+        .update_authority(Some(update_authority))
+        .system_program(system_program)
+        .name(name)
+        .uri(uri)
+        .invoke()?;
 
-    // Build instruction data with Borsh serialization
-    // CreateV2Args: { dataState: DataState, name: String, uri: String, plugins: Option<Vec>, externalPluginAdapters: Option<Vec> }
-    let mut data = Vec::new();
-    data.push(CREATE_V2_DISCRIMINATOR);
+    Ok(())
+}
 
-    // DataState enum: AccountState = 0
-    data.push(DATA_STATE_ACCOUNT_STATE);
+/// Verify a Metaplex Core NFT asset
+/// Returns Ok(true) if the asset belongs to the expected collection and is owned by the expected owner
+///
+/// Metaplex Core Asset layout:
+/// - Offset 0: Key (1 byte) - must be 1 for Asset
+/// - Offset 1-32: Owner (32 bytes Pubkey)
+/// - Offset 33: UpdateAuthority type (1 byte) - 0=None, 1=Address, 2=Collection
+/// - Offset 34-65: UpdateAuthority value (32 bytes Pubkey) - for Collection type, this is the collection address
+fn verify_core_nft_ownership(
+    asset_info: &AccountInfo,
+    expected_owner: &Pubkey,
+    expected_collection: &Pubkey,
+) -> Result<bool> {
+    // Check account is owned by Metaplex Core program
+    if asset_info.owner != &MPL_CORE_ID {
+        return Ok(false);
+    }
 
-    // Borsh string encoding: 4-byte little-endian length + bytes
-    let name_bytes = name.as_bytes();
-    data.write_all(&(name_bytes.len() as u32).to_le_bytes()).unwrap();
-    data.write_all(name_bytes).unwrap();
+    let data = asset_info.try_borrow_data()?;
 
-    let uri_bytes = uri.as_bytes();
-    data.write_all(&(uri_bytes.len() as u32).to_le_bytes()).unwrap();
-    data.write_all(uri_bytes).unwrap();
+    // Minimum size check: key(1) + owner(32) + update_authority_type(1) + update_authority_value(32) = 66
+    if data.len() < 66 {
+        return Ok(false);
+    }
 
-    // plugins: Option<Vec<PluginAuthorityPair>> = None (no standard plugins)
-    data.push(0);
+    // Check Key byte is 1 (Asset type)
+    if data[0] != 1 {
+        return Ok(false);
+    }
 
-    // externalPluginAdapters: Option<Vec<ExternalPluginAdapterInitInfo>> = None for now
-    // TODO: Re-enable lifecycle hook once encoding is fixed
-    data.push(0); // None - disabled until we fix the encoding
+    // Extract owner (bytes 1-32)
+    let owner_bytes: [u8; 32] = data[1..33].try_into().map_err(|_| ContentRegistryError::InvalidNftAsset)?;
+    let owner = Pubkey::new_from_array(owner_bytes);
 
-    // Build account metas - ALL 8 accounts in correct order
-    // Optional accounts that are not used should still be included (use program ID as placeholder)
-    let accounts = vec![
-        AccountMeta::new(asset.key(), true),                       // 1. asset (mutable, signer)
-        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 2. collection (optional) - use program ID as None
-        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 3. authority (optional) - use program ID as None
-        AccountMeta::new(payer.key(), true),                       // 4. payer (mutable, signer)
-        AccountMeta::new_readonly(owner.key(), false),             // 5. owner
-        AccountMeta::new_readonly(update_authority.key(), false),  // 6. updateAuthority
-        AccountMeta::new_readonly(system_program.key(), false),    // 7. systemProgram
-        AccountMeta::new_readonly(MPL_CORE_ID, false),             // 8. logWrapper (optional) - use program ID as None
-    ];
+    // Check owner matches expected
+    if owner != *expected_owner {
+        return Ok(false);
+    }
 
-    let ix = Instruction {
-        program_id: MPL_CORE_ID,
-        accounts,
-        data,
-    };
+    // Extract UpdateAuthority type (byte 33)
+    let update_authority_type = data[33];
 
-    invoke(
-        &ix,
-        &[
-            asset.clone(),
-            mpl_core_program.clone(),  // for collection placeholder
-            mpl_core_program.clone(),  // for authority placeholder
-            payer.clone(),
-            owner.clone(),
-            update_authority.clone(),
-            system_program.clone(),
-            mpl_core_program.clone(),  // for logWrapper placeholder
-        ],
-    )?;
+    // Type 2 = Collection
+    if update_authority_type != 2 {
+        return Ok(false);
+    }
+
+    // Extract collection address (bytes 34-65)
+    let collection_bytes: [u8; 32] = data[34..66].try_into().map_err(|_| ContentRegistryError::InvalidNftAsset)?;
+    let collection = Pubkey::new_from_array(collection_bytes);
+
+    // Check collection matches expected
+    if collection != *expected_collection {
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+/// Create a Metaplex Core NFT within a collection
+/// When an asset is in a collection, the collection's update_authority applies
+fn create_core_nft<'info>(
+    mpl_core_program: &AccountInfo<'info>,
+    asset: &AccountInfo<'info>,
+    collection: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    owner: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    name: String,
+    uri: String,
+) -> Result<()> {
+    // Create NFT within the collection
+    // Note: Cannot specify update_authority when adding to collection
+    // The collection's update_authority becomes the asset's authority
+    CreateV2CpiBuilder::new(mpl_core_program)
+        .asset(asset)
+        .collection(Some(collection))
+        .payer(payer)
+        .owner(Some(owner))
+        .system_program(system_program)
+        .name(name)
+        .uri(uri)
+        .data_state(DataState::AccountState)
+        .invoke()?;
 
     Ok(())
 }
@@ -230,8 +135,9 @@ use state::{
     CidRegistry, CID_REGISTRY_SEED, hash_cid,
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     EcosystemConfig, ECOSYSTEM_CONFIG_SEED,
-    ContentRewardPool, WalletContentState,
-    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED,
+    ContentRewardPool, WalletContentState, NftRewardState, PRECISION,
+    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED, NFT_REWARD_STATE_SEED,
+    ContentCollection, CONTENT_COLLECTION_SEED,
 };
 use errors::ContentRegistryError;
 
@@ -403,6 +309,28 @@ pub mod content_registry {
         mint_config.is_active = true;
         mint_config.created_at = timestamp;
         mint_config.updated_at = timestamp;
+
+        // Initialize content collection tracker
+        let content_collection = &mut ctx.accounts.content_collection;
+        content_collection.content = content.key();
+        content_collection.collection_asset = ctx.accounts.collection_asset.key();
+        content_collection.creator = ctx.accounts.authority.key();
+        content_collection.created_at = timestamp;
+
+        // Create Metaplex Core Collection for this content
+        // NFT ownership is verified at claim time instead of using lifecycle hooks
+        let collection_name = format!("Handcraft Collection");
+        let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+
+        create_collection(
+            &ctx.accounts.mpl_core_program.to_account_info(),
+            &ctx.accounts.collection_asset.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            collection_name,
+            collection_uri,
+        )?;
 
         Ok(())
     }
@@ -594,6 +522,19 @@ pub mod content_registry {
         let buyer_wallet_state = &mut ctx.accounts.buyer_wallet_state;
         let timestamp = Clock::get()?.unix_timestamp;
 
+        // Verify collection_asset matches what's stored in content_collection
+        // We manually deserialize since we use AccountInfo to save stack space
+        {
+            let collection_data = ctx.accounts.content_collection.try_borrow_data()?;
+            let content_collection: ContentCollection = ContentCollection::try_deserialize(
+                &mut &collection_data[..]
+            )?;
+            require!(
+                content_collection.collection_asset == ctx.accounts.collection_asset.key(),
+                ContentRegistryError::ContentMismatch
+            );
+        }
+
         // Check ecosystem not paused
         require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
 
@@ -726,7 +667,7 @@ pub mod content_registry {
             content.is_locked = true;
         }
 
-        // Initialize or update buyer's wallet state for this content
+        // Initialize or update buyer's wallet state for this content (for UI display)
         if buyer_wallet_state.nft_count == 0 {
             // First NFT for this wallet-content pair
             buyer_wallet_state.wallet = ctx.accounts.buyer.key();
@@ -737,8 +678,56 @@ pub mod content_registry {
             buyer_wallet_state.updated_at = timestamp;
         }
 
-        // Add NFT to buyer's wallet state (records current reward_per_share as debt)
+        // Add NFT to buyer's wallet state (for backwards compatibility / UI)
         buyer_wallet_state.add_nft(content_reward_pool.reward_per_share, timestamp);
+
+        // Initialize per-NFT reward state - this is the source of truth for rewards
+        // Manual account creation to reduce stack size
+        let nft_reward_state_info = &ctx.accounts.nft_reward_state;
+        let nft_asset_key = ctx.accounts.nft_asset.key();
+        let (expected_pda, bump) = Pubkey::find_program_address(
+            &[NFT_REWARD_STATE_SEED, nft_asset_key.as_ref()],
+            ctx.program_id,
+        );
+        require!(nft_reward_state_info.key() == expected_pda, ContentRegistryError::InvalidNftRewardState);
+
+        // Create the account
+        let space = 8 + NftRewardState::INIT_SPACE;
+        let rent = Rent::get()?;
+        let lamports = rent.minimum_balance(space);
+
+        let seeds: &[&[u8]] = &[NFT_REWARD_STATE_SEED, nft_asset_key.as_ref(), &[bump]];
+        let signer_seeds = &[seeds];
+
+        anchor_lang::system_program::create_account(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::CreateAccount {
+                    from: ctx.accounts.buyer.to_account_info(),
+                    to: nft_reward_state_info.clone(),
+                },
+                signer_seeds,
+            ),
+            lamports,
+            space as u64,
+            ctx.program_id,
+        )?;
+
+        // Initialize the data manually
+        {
+            let mut data = nft_reward_state_info.try_borrow_mut_data()?;
+            let discriminator = NftRewardState::DISCRIMINATOR;
+            data[0..8].copy_from_slice(&discriminator);
+
+            // Write nft_asset (32 bytes)
+            data[8..40].copy_from_slice(&nft_asset_key.to_bytes());
+            // Write content (32 bytes)
+            data[40..72].copy_from_slice(&content.key().to_bytes());
+            // Write reward_debt (16 bytes, little endian)
+            data[72..88].copy_from_slice(&content_reward_pool.reward_per_share.to_le_bytes());
+            // Write created_at (8 bytes, little endian)
+            data[88..96].copy_from_slice(&timestamp.to_le_bytes());
+        }
 
         // Increment content's NFT count in the pool AFTER updating buyer state
         content_reward_pool.increment_nfts();
@@ -754,22 +743,20 @@ pub mod content_registry {
             ecosystem_mut.total_fees_sol += ecosystem_amount;
         }
 
-        // Create Metaplex Core NFT with lifecycle hook for transfer tracking
+        // Create Metaplex Core NFT within the content's collection
+        // NFT ownership is verified at claim time for reward distribution
         let nft_name = format!("Handcraft #{}", content.minted_count);
         let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
-        let content_key = content.key();
 
         create_core_nft(
             &ctx.accounts.mpl_core_program.to_account_info(),
             &ctx.accounts.nft_asset.to_account_info(),
+            &ctx.accounts.collection_asset.to_account_info(),
             &ctx.accounts.buyer.to_account_info(),
             &ctx.accounts.buyer.to_account_info(),
-            &ctx.accounts.creator.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
             nft_name,
             nft_uri,
-            &content_key,
-            &crate::ID,
         )?;
 
         // Emit mint event
@@ -814,6 +801,133 @@ pub mod content_registry {
             holder: ctx.accounts.holder.key(),
             content: content_reward_pool.content,
             amount: pending,
+            timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Claim rewards with on-chain NFT verification using per-NFT reward tracking
+    /// This is the recommended claim method - it verifies actual NFT ownership at claim time
+    /// and uses per-NFT reward_debt for fair distribution regardless of transfers
+    ///
+    /// Pass pairs of (nft_asset, nft_reward_state) as remaining_accounts:
+    /// [nft_asset_1, nft_reward_state_1, nft_asset_2, nft_reward_state_2, ...]
+    ///
+    /// The instruction will:
+    /// 1. Verify each NFT belongs to the content's collection
+    /// 2. Verify each NFT is owned by the claimer
+    /// 3. Calculate rewards for each NFT: (reward_per_share - nft.reward_debt) / PRECISION
+    /// 4. Update each NFT's reward_debt
+    /// 5. Transfer total rewards to claimer
+    pub fn claim_rewards_verified<'info>(
+        ctx: Context<'_, '_, '_, 'info, ClaimRewardsVerified<'info>>,
+    ) -> Result<()> {
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let wallet_state = &mut ctx.accounts.wallet_content_state;
+        let content_collection = &ctx.accounts.content_collection;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        // Get the collection asset address from ContentCollection
+        let collection_asset = content_collection.collection_asset;
+        let content_key = content_reward_pool.content;
+        let current_rps = content_reward_pool.reward_per_share;
+
+        // Must have pairs of accounts (nft_asset, nft_reward_state)
+        let remaining = &ctx.remaining_accounts;
+        require!(remaining.len() % 2 == 0, ContentRegistryError::InvalidAccountPairs);
+
+        let num_pairs = remaining.len() / 2;
+        let mut total_pending: u64 = 0;
+        let mut verified_count: u64 = 0;
+
+        for i in 0..num_pairs {
+            let nft_asset_info = &remaining[i * 2];
+            let nft_reward_state_info = &remaining[i * 2 + 1];
+
+            // Verify NFT ownership and collection membership
+            if !verify_core_nft_ownership(
+                nft_asset_info,
+                &ctx.accounts.holder.key(),
+                &collection_asset,
+            )? {
+                continue; // Skip NFTs not owned by claimer or not in collection
+            }
+
+            verified_count += 1;
+
+            // Verify NftRewardState PDA
+            let (expected_pda, _bump) = Pubkey::find_program_address(
+                &[NFT_REWARD_STATE_SEED, nft_asset_info.key.as_ref()],
+                ctx.program_id,
+            );
+            require!(
+                nft_reward_state_info.key() == expected_pda,
+                ContentRegistryError::InvalidNftRewardState
+            );
+
+            // Deserialize NftRewardState
+            let nft_state_data = nft_reward_state_info.try_borrow_data()?;
+            let nft_state: NftRewardState = NftRewardState::try_deserialize(
+                &mut &nft_state_data[..]
+            )?;
+
+            // Verify NftRewardState belongs to this content
+            require!(
+                nft_state.content == content_key,
+                ContentRegistryError::ContentMismatch
+            );
+
+            // Calculate pending for this NFT
+            let nft_pending = if current_rps > nft_state.reward_debt {
+                ((current_rps - nft_state.reward_debt) / PRECISION) as u64
+            } else {
+                0
+            };
+
+            total_pending += nft_pending;
+
+            // Drop the borrow before mutating
+            drop(nft_state_data);
+
+            // Update NftRewardState's reward_debt
+            {
+                let mut nft_state_data = nft_reward_state_info.try_borrow_mut_data()?;
+                let mut updated_state = NftRewardState::try_deserialize(
+                    &mut &nft_state_data[..]
+                )?;
+                updated_state.reward_debt = current_rps;
+                updated_state.try_serialize(&mut &mut nft_state_data[..])?;
+            }
+        }
+
+        // Update wallet state for UI display (not used for reward calculation)
+        wallet_state.nft_count = verified_count;
+        wallet_state.reward_debt = verified_count as u128 * current_rps;
+        wallet_state.updated_at = timestamp;
+
+        // Transfer total pending rewards
+        if total_pending > 0 {
+            **content_reward_pool.to_account_info().try_borrow_mut_lamports()? -= total_pending;
+            **ctx.accounts.holder.to_account_info().try_borrow_mut_lamports()? += total_pending;
+
+            content_reward_pool.total_claimed += total_pending;
+
+            emit!(ClaimRewardEvent {
+                holder: ctx.accounts.holder.key(),
+                content: content_key,
+                amount: total_pending,
+                timestamp,
+            });
+        }
+
+        // Emit verification event
+        emit!(VerifiedClaimEvent {
+            holder: ctx.accounts.holder.key(),
+            content: content_key,
+            verified_nft_count: verified_count,
+            stored_nft_count: wallet_state.nft_count,
+            amount_claimed: total_pending,
             timestamp,
         });
 
@@ -1183,6 +1297,24 @@ pub struct RegisterContentWithMint<'info> {
     )]
     pub mint_config: Account<'info, MintConfig>,
 
+    /// ContentCollection PDA to track the collection for this content
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + ContentCollection::INIT_SPACE,
+        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
+        bump
+    )]
+    pub content_collection: Account<'info, ContentCollection>,
+
+    /// The Metaplex Core Collection asset (must be a new keypair)
+    #[account(mut)]
+    pub collection_asset: Signer<'info>,
+
+    /// CHECK: Metaplex Core program
+    #[account(address = MPL_CORE_ID)]
+    pub mpl_core_program: AccountInfo<'info>,
+
     #[account(mut)]
     pub authority: Signer<'info>,
 
@@ -1309,16 +1441,30 @@ pub struct MintNftSol<'info> {
         seeds = [ECOSYSTEM_CONFIG_SEED],
         bump
     )]
-    pub ecosystem_config: Account<'info, EcosystemConfig>,
+    pub ecosystem_config: Box<Account<'info, EcosystemConfig>>,
 
     #[account(mut)]
-    pub content: Account<'info, ContentEntry>,
+    pub content: Box<Account<'info, ContentEntry>>,
 
     #[account(
         seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, MintConfig>,
+    pub mint_config: Box<Account<'info, MintConfig>>,
+
+    /// CHECK: ContentCollection tracker PDA - verified via seeds
+    /// We use AccountInfo to reduce stack size (saves 8+ bytes)
+    #[account(
+        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
+        bump
+    )]
+    pub content_collection: AccountInfo<'info>,
+
+    /// CHECK: The Metaplex Core Collection asset for this content
+    /// NFT will be added to this collection, inheriting its LinkedLifecycleHook
+    /// Verification: collection_asset address is read from content_collection data
+    #[account(mut)]
+    pub collection_asset: AccountInfo<'info>,
 
     /// Content-specific reward pool
     /// Holder rewards from this content's sales accumulate here
@@ -1329,10 +1475,10 @@ pub struct MintNftSol<'info> {
         seeds = [CONTENT_REWARD_POOL_SEED, content.key().as_ref()],
         bump
     )]
-    pub content_reward_pool: Account<'info, ContentRewardPool>,
+    pub content_reward_pool: Box<Account<'info, ContentRewardPool>>,
 
-    /// Buyer's wallet state for this content
-    /// Tracks how many NFTs they own and their reward debt
+    /// Buyer's wallet state for this content (kept for backwards compatibility)
+    /// Now primarily used for UI display, actual rewards tracked per-NFT
     #[account(
         init_if_needed,
         payer = buyer,
@@ -1340,7 +1486,17 @@ pub struct MintNftSol<'info> {
         seeds = [WALLET_CONTENT_STATE_SEED, buyer.key().as_ref(), content.key().as_ref()],
         bump
     )]
-    pub buyer_wallet_state: Account<'info, WalletContentState>,
+    pub buyer_wallet_state: Box<Account<'info, WalletContentState>>,
+
+    /// CHECK: Per-NFT reward state - tracks reward_debt for this specific NFT
+    /// This is the source of truth for reward calculations
+    /// Using AccountInfo to reduce stack size - manually initialized in instruction
+    #[account(
+        mut,
+        seeds = [NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+        bump
+    )]
+    pub nft_reward_state: AccountInfo<'info>,
 
     /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(mut, constraint = content.creator == creator.key())]
@@ -1399,6 +1555,42 @@ pub struct ClaimContentRewards<'info> {
 #[derive(Accounts)]
 pub struct ClaimAllRewards<'info> {
     /// The holder claiming rewards from multiple content pools
+    #[account(mut)]
+    pub holder: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for claim_rewards_verified instruction
+/// This is the recommended claim method that verifies NFT ownership at claim time
+#[derive(Accounts)]
+pub struct ClaimRewardsVerified<'info> {
+    /// The content's reward pool to claim from
+    #[account(
+        mut,
+        seeds = [CONTENT_REWARD_POOL_SEED, content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub content_reward_pool: Account<'info, ContentRewardPool>,
+
+    /// The holder's wallet state for this content
+    #[account(
+        mut,
+        seeds = [WALLET_CONTENT_STATE_SEED, holder.key().as_ref(), wallet_content_state.content.as_ref()],
+        bump,
+        constraint = wallet_content_state.wallet == holder.key() @ ContentRegistryError::Unauthorized,
+        constraint = wallet_content_state.content == content_reward_pool.content @ ContentRegistryError::ContentMismatch
+    )]
+    pub wallet_content_state: Account<'info, WalletContentState>,
+
+    /// The content collection to verify NFTs against
+    #[account(
+        seeds = [CONTENT_COLLECTION_SEED, content_reward_pool.content.as_ref()],
+        bump
+    )]
+    pub content_collection: Account<'info, ContentCollection>,
+
+    /// The holder claiming the reward
     #[account(mut)]
     pub holder: Signer<'info>,
 
@@ -1584,5 +1776,15 @@ pub struct NftTransferSyncEvent {
     pub sender: Pubkey,
     pub receiver: Pubkey,
     pub sender_claimed: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct VerifiedClaimEvent {
+    pub holder: Pubkey,
+    pub content: Pubkey,
+    pub verified_nft_count: u64,
+    pub stored_nft_count: u64,
+    pub amount_claimed: u64,
     pub timestamp: i64,
 }

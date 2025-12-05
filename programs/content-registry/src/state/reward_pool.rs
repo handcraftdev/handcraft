@@ -110,8 +110,11 @@ impl WalletContentState {
     }
 }
 
-// Keep old structures for migration compatibility (can be removed after migration)
+// Legacy seed (can be removed after migration)
 pub const GLOBAL_REWARD_POOL_SEED: &[u8] = b"global_reward_pool";
+
+/// Seed for per-NFT reward tracking
+/// PDA seeds: ["nft_reward", nft_asset_pubkey]
 pub const NFT_REWARD_STATE_SEED: &[u8] = b"nft_reward";
 
 /// @deprecated - Use ContentRewardPool instead
@@ -126,12 +129,20 @@ pub struct GlobalRewardPool {
     pub created_at: i64,
 }
 
-/// @deprecated - Use WalletContentState instead
-/// Per-NFT reward state (legacy)
+/// Per-NFT reward state
+/// Tracks reward_debt per individual NFT, not per wallet
+/// This allows fair reward distribution even when NFTs transfer externally
+/// PDA seeds: ["nft_reward", nft_asset_pubkey]
 #[account]
 #[derive(InitSpace)]
 pub struct NftRewardState {
+    /// The NFT asset this state belongs to
     pub nft_asset: Pubkey,
+    /// The content this NFT belongs to (for verification)
+    pub content: Pubkey,
+    /// Reward debt for this specific NFT (scaled by PRECISION)
+    /// Represents the reward_per_share at the time of last claim or mint
     pub reward_debt: u128,
+    /// Timestamp when this state was created (at mint time)
     pub created_at: i64,
 }

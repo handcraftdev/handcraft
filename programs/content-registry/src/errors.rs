@@ -64,4 +64,16 @@ pub enum ContentRegistryError {
     InvalidAsset,
     #[msg("Sender does not own this NFT")]
     SenderNotOwner,
+
+    // Claim-time verification errors
+    #[msg("Invalid NFT asset - not a valid Metaplex Core asset")]
+    InvalidNftAsset,
+    #[msg("NFT does not belong to the content's collection")]
+    NftNotInCollection,
+    #[msg("Claimer does not own this NFT")]
+    ClaimerNotOwner,
+    #[msg("No NFTs provided for verification")]
+    NoNftsProvided,
+    #[msg("Invalid NftRewardState PDA")]
+    InvalidNftRewardState,
 }
