@@ -340,7 +340,7 @@ export function MintConfigModal({
             <div className="space-y-1 text-sm text-gray-400">
               <div className="flex justify-between">
                 <span>Creator (you)</span>
-                <span className="text-green-400">76%</span>
+                <span className="text-green-400">80%</span>
               </div>
               <div className="flex justify-between">
                 <span>Existing Holders</span>
@@ -348,11 +348,11 @@ export function MintConfigModal({
               </div>
               <div className="flex justify-between">
                 <span>Platform</span>
-                <span>10%</span>
+                <span>5%</span>
               </div>
               <div className="flex justify-between">
                 <span>Ecosystem</span>
-                <span>2%</span>
+                <span>3%</span>
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
