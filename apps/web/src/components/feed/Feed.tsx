@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry, ContentType } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentCategory } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel } from "@handcraft/sdk";
 import { MintConfigModal, BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { ClaimRewardsModal } from "@/components/claim";
@@ -220,7 +220,20 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const previewUrl = content.previewCid ? getIpfsUrl(content.previewCid) : null;
   const fullContentUrl = getIpfsUrl(content.contentCid);
   const contentTypeLabel = getContentTypeLabel(content.contentType);
+  const contentDomain = getContentDomain(content.contentType);
+  const domainLabel = getDomainLabel(contentDomain);
   const timeAgo = getTimeAgo(Number(content.createdAt) * 1000);
+
+  // Context metadata from the new architecture
+  const contextData = content.metadata?.context || {};
+  const genre = contextData.genre || content.metadata?.genre;
+  const artist = contextData.artist || content.metadata?.artist;
+  const album = contextData.album || content.metadata?.album;
+  const showName = contextData.showName;
+  const season = contextData.season;
+  const episode = contextData.episode;
+  const bundleInfo = content.metadata?.bundle;
+
   const shortAddress = content.creatorAddress
     ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}`
     : "Unknown";
@@ -257,8 +270,8 @@ function ContentCard({ content }: { content: EnrichedContent }) {
 
     const walletAddress = publicKey.toBase58();
 
-    // Check decrypted content cache first
-    const cachedContent = getCachedDecryptedUrl(walletAddress, content.contentCid);
+    // Check decrypted content cache first (validates against current session)
+    const cachedContent = getCachedDecryptedUrl(walletAddress, content.contentCid, sessionToken);
     if (cachedContent) {
       setDecryptedUrl(cachedContent);
       setHasAccess(true);
@@ -279,7 +292,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         setDecryptedUrl(url);
-        setCachedDecryptedUrl(walletAddress, content.contentCid, url);
+        setCachedDecryptedUrl(walletAddress, content.contentCid, url, sessionToken);
         setHasAccess(true);
       } else if (response.status === 403) {
         setHasAccess(false);
@@ -305,15 +318,20 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       setHasAccess(false);
       return;
     }
-    // Check cache first
-    const cached = getCachedDecryptedUrl(publicKey.toBase58(), content.contentCid);
+    // Only proceed if we have a valid session
+    if (!sessionToken) {
+      // No session - clear any stale decrypted state
+      if (decryptedUrl) {
+        setDecryptedUrl(null);
+        setHasAccess(null);
+      }
+      return;
+    }
+    // Check cache first (validates against current session)
+    const cached = getCachedDecryptedUrl(publicKey.toBase58(), content.contentCid, sessionToken);
     if (cached) {
       setDecryptedUrl(cached);
       setHasAccess(true);
-      return;
-    }
-    // Only auto-decrypt if we have a valid session
-    if (!sessionToken) {
       return;
     }
     // Auto-decrypt if creator or owns NFT and hasn't decrypted yet
@@ -340,9 +358,17 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           <span className="text-xs text-gray-500">{timeAgo}</span>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
+            {domainLabel}
+          </span>
           <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-full">
             {contentTypeLabel}
           </span>
+          {genre && (
+            <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-1 rounded-full">
+              {genre}
+            </span>
+          )}
           {isCreator && isLocked && (
             <span className="text-xs text-amber-500 bg-amber-500/20 px-2 py-1 rounded-full flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -470,6 +496,49 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       {content.metadata && (
         <div className="px-4 py-3">
           <h2 className="font-medium line-clamp-2">{content.metadata.title || content.metadata.name}</h2>
+
+          {/* Context info: artist, album, series info */}
+          {(artist || album || showName) && (
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-gray-400 mt-1">
+              {artist && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {artist}
+                </span>
+              )}
+              {album && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                  </svg>
+                  {album}
+                </span>
+              )}
+              {showName && (
+                <span className="flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M7 8h8a2 2 0 002-2V4M7 12h10M7 16h10" />
+                  </svg>
+                  {showName}
+                  {season && ` S${season}`}
+                  {episode && `E${episode}`}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Bundle reference */}
+          {bundleInfo && bundleInfo.id && (
+            <div className="flex items-center gap-1 text-xs text-secondary-400 mt-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              Part of bundle{bundleInfo.position !== undefined ? ` (#${bundleInfo.position + 1})` : ''}
+            </div>
+          )}
+
           {content.metadata.description && (
             <p className="text-sm text-gray-400 mt-1 line-clamp-2">
               {content.metadata.description}
@@ -477,7 +546,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           )}
           {content.metadata.tags && content.metadata.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
-              {content.metadata.tags.slice(0, 5).map((tag) => (
+              {content.metadata.tags.slice(0, 5).map((tag: string) => (
                 <span
                   key={tag}
                   className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full"

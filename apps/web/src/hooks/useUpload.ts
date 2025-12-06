@@ -408,9 +408,34 @@ export function useContentUpload(options: UseUploadOptions = {}) {
     async (
       file: File,
       metadata: {
+        // Required
         title: string;
+        // Content Architecture - Layer 1 & 2 (domain derived from type)
+        contentType?: string; // e.g., "movie", "music", "photo"
+        contentDomain?: string; // e.g., "video", "audio", "image" (derived, for reference)
+        // Layer 3: Context (metadata for discovery)
         description?: string;
         tags?: string[];
+        genre?: string; // For music, movies, etc.
+        category?: string; // For posts, assets
+        // Type-specific context fields
+        artist?: string;
+        album?: string;
+        director?: string;
+        cast?: string;
+        showName?: string;
+        season?: string;
+        episode?: string;
+        author?: string;
+        narrator?: string;
+        publisher?: string;
+        year?: string;
+        duration?: string;
+        // Layer 4: Bundle reference
+        bundleId?: string; // If part of a bundle (album, series, course)
+        bundlePosition?: number; // Position within bundle (track #, episode #)
+        // All other fields passed through
+        [key: string]: string | string[] | number | undefined;
       },
       thumbnail?: Blob
     ): Promise<ContentUploadResult | null> => {
@@ -467,6 +492,15 @@ export function useContentUpload(options: UseUploadOptions = {}) {
         const isVideo = file.type.startsWith("video/");
         const isAudio = file.type.startsWith("audio/");
         const isImage = file.type.startsWith("image/");
+        const isDocument = file.type === "application/pdf" || file.type.includes("epub");
+
+        // Derive domain from file type if not provided
+        const contentDomain = metadata.contentDomain || (
+          isVideo ? "video" :
+          isAudio ? "audio" :
+          isImage ? "image" :
+          isDocument ? "document" : "file"
+        );
 
         // Determine the display image (preview for encrypted, thumbnail, or original for images)
         const displayImage = contentResult.previewCid
@@ -474,21 +508,66 @@ export function useContentUpload(options: UseUploadOptions = {}) {
           : thumbResult?.url
           || (isImage ? contentResult.url : null);
 
-        // Build standard Metaplex metadata
+        // Build attributes array for marketplace display
+        // Include content architecture attributes
+        const attributes: Array<{ trait_type: string; value: string }> = [];
+
+        // Layer 1: Domain (derived)
+        if (contentDomain) {
+          attributes.push({ trait_type: "Domain", value: contentDomain });
+        }
+
+        // Layer 2: Content Type
+        if (metadata.contentType) {
+          attributes.push({ trait_type: "Type", value: metadata.contentType });
+        }
+
+        // Layer 3: Context attributes
+        if (metadata.genre) {
+          attributes.push({ trait_type: "Genre", value: metadata.genre });
+        }
+        if (metadata.category) {
+          attributes.push({ trait_type: "Category", value: metadata.category });
+        }
+        if (metadata.artist) {
+          attributes.push({ trait_type: "Artist", value: metadata.artist });
+        }
+        if (metadata.director) {
+          attributes.push({ trait_type: "Director", value: metadata.director });
+        }
+        if (metadata.author) {
+          attributes.push({ trait_type: "Author", value: metadata.author });
+        }
+        if (metadata.album) {
+          attributes.push({ trait_type: "Album", value: metadata.album });
+        }
+        if (metadata.showName) {
+          attributes.push({ trait_type: "Show", value: metadata.showName });
+        }
+        if (metadata.year) {
+          attributes.push({ trait_type: "Year", value: metadata.year });
+        }
+
+        // Tags
+        if (metadata.tags) {
+          metadata.tags.forEach(tag => {
+            attributes.push({ trait_type: "Tag", value: tag });
+          });
+        }
+
+        // Build standard Metaplex metadata with full content architecture
         const fullMetadata: Record<string, unknown> = {
           // Standard fields - these are required for marketplace display
           name: metadata.title,
           description: metadata.description || "",
           image: displayImage,
-          external_url: `https://handcraft.app`, // TODO: Add content page URL
+          external_url: `https://handcraft.app`,
 
           // Animation URL for video/audio content
           ...(isVideo || isAudio ? { animation_url: contentResult.url } : {}),
 
           // Standard attributes array for marketplace trait display
-          attributes: [
-            ...(metadata.tags?.map(tag => ({ trait_type: "Tag", value: tag })) || []),
-          ],
+          attributes,
 
           // Properties object - standard Metaplex format
           properties: {
@@ -502,10 +581,43 @@ export function useContentUpload(options: UseUploadOptions = {}) {
                 type: "image/jpeg",
               }] : []),
             ],
-            category: isVideo ? "video" : isAudio ? "audio" : isImage ? "image" : "document",
+            category: contentDomain,
           },
 
-          // Handcraft-specific fields (kept for our platform)
+          // ========== HANDCRAFT CONTENT ARCHITECTURE ==========
+          // Layer 1: Domain (derived from type)
+          domain: contentDomain,
+
+          // Layer 2: Content Type (atomic type)
+          contentType: metadata.contentType || null,
+
+          // Layer 3: Context (discovery metadata)
+          context: {
+            genre: metadata.genre || null,
+            category: metadata.category || null,
+            tags: metadata.tags || [],
+            // Type-specific context
+            artist: metadata.artist || null,
+            album: metadata.album || null,
+            director: metadata.director || null,
+            cast: metadata.cast || null,
+            showName: metadata.showName || null,
+            season: metadata.season || null,
+            episode: metadata.episode || null,
+            author: metadata.author || null,
+            narrator: metadata.narrator || null,
+            publisher: metadata.publisher || null,
+            year: metadata.year || null,
+            duration: metadata.duration || null,
+          },
+
+          // Layer 4: Bundle reference
+          bundle: metadata.bundleId ? {
+            id: metadata.bundleId,
+            position: metadata.bundlePosition || null,
+          } : null,
+
+          // Technical metadata
           contentCid: contentResult.cid,
           thumbnailCid: thumbResult?.cid || null,
           mimeType: file.type,
