@@ -1,0 +1,203 @@
+use anchor_lang::prelude::*;
+use crate::state::{
+    Bundle, BundleItem, BundleType, ContentEntry,
+    BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
+};
+use crate::errors::ContentError;
+
+/// Create a new bundle
+#[derive(Accounts)]
+#[instruction(bundle_id: String, metadata_cid: String)]
+pub struct CreateBundle<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = Bundle::space(),
+        seeds = [BUNDLE_SEED, creator.key().as_ref(), bundle_id.as_bytes()],
+        bump
+    )]
+    pub bundle: Account<'info, Bundle>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Add content to a bundle
+#[derive(Accounts)]
+pub struct AddBundleItem<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = creator,
+        constraint = bundle.is_active @ ContentError::BundleNotActive
+    )]
+    pub bundle: Account<'info, Bundle>,
+
+    /// The content to add to the bundle
+    #[account(
+        constraint = content.creator == creator.key() @ ContentError::NotContentCreator
+    )]
+    pub content: Account<'info, ContentEntry>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = BundleItem::space(),
+        seeds = [BUNDLE_ITEM_SEED, bundle.key().as_ref(), content.key().as_ref()],
+        bump
+    )]
+    pub bundle_item: Account<'info, BundleItem>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Remove content from a bundle
+#[derive(Accounts)]
+pub struct RemoveBundleItem<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = creator
+    )]
+    pub bundle: Account<'info, Bundle>,
+
+    #[account(
+        mut,
+        has_one = bundle,
+        close = creator
+    )]
+    pub bundle_item: Account<'info, BundleItem>,
+}
+
+/// Update bundle metadata
+#[derive(Accounts)]
+pub struct UpdateBundle<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = creator
+    )]
+    pub bundle: Account<'info, Bundle>,
+}
+
+/// Delete a bundle (only if empty)
+#[derive(Accounts)]
+pub struct DeleteBundle<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = creator,
+        constraint = bundle.item_count == 0 @ ContentError::BundleNotEmpty,
+        close = creator
+    )]
+    pub bundle: Account<'info, Bundle>,
+}
+
+// ========== HANDLER IMPLEMENTATIONS ==========
+
+pub fn handle_create_bundle(
+    ctx: Context<CreateBundle>,
+    bundle_id: String,
+    metadata_cid: String,
+    bundle_type: BundleType,
+) -> Result<()> {
+    let bundle = &mut ctx.accounts.bundle;
+    let clock = Clock::get()?;
+
+    bundle.creator = ctx.accounts.creator.key();
+    bundle.bundle_id = bundle_id;
+    bundle.metadata_cid = metadata_cid;
+    bundle.bundle_type = bundle_type;
+    bundle.item_count = 0;
+    bundle.is_active = true;
+    bundle.created_at = clock.unix_timestamp;
+    bundle.updated_at = clock.unix_timestamp;
+
+    msg!("Bundle created: {} (type: {:?})", bundle.bundle_id, bundle.bundle_type);
+
+    Ok(())
+}
+
+pub fn handle_add_bundle_item(
+    ctx: Context<AddBundleItem>,
+    position: Option<u16>,
+) -> Result<()> {
+    let bundle = &mut ctx.accounts.bundle;
+    let bundle_item = &mut ctx.accounts.bundle_item;
+    let clock = Clock::get()?;
+
+    // Check max items
+    require!(
+        bundle.item_count < MAX_BUNDLE_ITEMS,
+        ContentError::BundleItemLimitReached
+    );
+
+    // Use provided position or append at end
+    let item_position = position.unwrap_or(bundle.item_count);
+
+    bundle_item.bundle = bundle.key();
+    bundle_item.content = ctx.accounts.content.key();
+    bundle_item.position = item_position;
+    bundle_item.added_at = clock.unix_timestamp;
+
+    bundle.item_count = bundle.item_count.checked_add(1).unwrap();
+    bundle.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Added content to bundle at position {}. Total items: {}",
+        item_position,
+        bundle.item_count
+    );
+
+    Ok(())
+}
+
+pub fn handle_remove_bundle_item(ctx: Context<RemoveBundleItem>) -> Result<()> {
+    let bundle = &mut ctx.accounts.bundle;
+    let clock = Clock::get()?;
+
+    bundle.item_count = bundle.item_count.saturating_sub(1);
+    bundle.updated_at = clock.unix_timestamp;
+
+    msg!("Removed item from bundle. Remaining items: {}", bundle.item_count);
+
+    Ok(())
+}
+
+pub fn handle_update_bundle(
+    ctx: Context<UpdateBundle>,
+    metadata_cid: Option<String>,
+    is_active: Option<bool>,
+) -> Result<()> {
+    let bundle = &mut ctx.accounts.bundle;
+    let clock = Clock::get()?;
+
+    if let Some(cid) = metadata_cid {
+        bundle.metadata_cid = cid;
+    }
+
+    if let Some(active) = is_active {
+        bundle.is_active = active;
+    }
+
+    bundle.updated_at = clock.unix_timestamp;
+
+    msg!("Bundle updated: {}", bundle.bundle_id);
+
+    Ok(())
+}
+
+pub fn handle_delete_bundle(_ctx: Context<DeleteBundle>) -> Result<()> {
+    msg!("Bundle deleted");
+    Ok(())
+}

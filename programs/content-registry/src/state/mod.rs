@@ -5,6 +5,7 @@ pub mod ecosystem_config;
 pub mod reward_pool;
 pub mod collection;
 pub mod rent;
+pub mod bundle;
 
 pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
@@ -32,4 +33,8 @@ pub use rent::{
     RENT_CONFIG_SEED, RENT_ENTRY_SEED,
     RENT_PERIOD_6H, RENT_PERIOD_1D, RENT_PERIOD_7D,
     MIN_RENT_FEE_LAMPORTS,
+};
+pub use bundle::{
+    Bundle, BundleItem, BundleType,
+    BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
 };

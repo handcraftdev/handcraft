@@ -241,6 +241,7 @@ use state::{
     ContentRewardPool, WalletContentState, NftRewardState, PRECISION,
     NFT_REWARD_STATE_SEED, ContentCollection, CONTENT_COLLECTION_SEED,
     RentConfig, RentEntry, RentTier, RENT_ENTRY_SEED,
+    BundleType,
 };
 use errors::ContentRegistryError;
 use contexts::*;
@@ -1677,6 +1678,51 @@ pub mod content_registry {
         );
 
         Ok(())
+    }
+
+    // ============================================
+    // BUNDLE MANAGEMENT (Layer 4 of Content Architecture)
+    // ============================================
+
+    /// Create a new bundle (album, series, playlist, course, etc.)
+    /// Bundles group related content with ordering and shared metadata
+    pub fn create_bundle(
+        ctx: Context<CreateBundle>,
+        bundle_id: String,
+        metadata_cid: String,
+        bundle_type: BundleType,
+    ) -> Result<()> {
+        handle_create_bundle(ctx, bundle_id, metadata_cid, bundle_type)
+    }
+
+    /// Add content to an existing bundle
+    /// Only the bundle creator can add content, and only their own content
+    pub fn add_bundle_item(
+        ctx: Context<AddBundleItem>,
+        position: Option<u16>,
+    ) -> Result<()> {
+        handle_add_bundle_item(ctx, position)
+    }
+
+    /// Remove content from a bundle
+    /// Only the bundle creator can remove items
+    pub fn remove_bundle_item(ctx: Context<RemoveBundleItem>) -> Result<()> {
+        handle_remove_bundle_item(ctx)
+    }
+
+    /// Update bundle metadata or active status
+    pub fn update_bundle(
+        ctx: Context<UpdateBundle>,
+        metadata_cid: Option<String>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        handle_update_bundle(ctx, metadata_cid, is_active)
+    }
+
+    /// Delete an empty bundle
+    /// Bundle must have no items (item_count == 0) to be deleted
+    pub fn delete_bundle(ctx: Context<DeleteBundle>) -> Result<()> {
+        handle_delete_bundle(ctx)
     }
 }
 

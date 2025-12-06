@@ -92,4 +92,17 @@ pub enum ContentRegistryError {
     InvalidRentEntry,
     #[msg("Rent config already exists for this content")]
     RentConfigExists,
+
+    // Bundle errors
+    #[msg("Bundle is not active")]
+    BundleNotActive,
+    #[msg("Bundle must be empty to delete")]
+    BundleNotEmpty,
+    #[msg("Bundle item limit reached (max 1000)")]
+    BundleItemLimitReached,
+    #[msg("Only the content creator can add to bundles")]
+    NotContentCreator,
 }
+
+// Alias for backward compatibility
+pub use ContentRegistryError as ContentError;

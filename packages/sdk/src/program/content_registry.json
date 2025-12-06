@@ -8,6 +8,87 @@
   },
   "instructions": [
     {
+      "name": "add_bundle_item",
+      "docs": [
+        "Add content to an existing bundle",
+        "Only the bundle creator can add content, and only their own content"
+      ],
+      "discriminator": [
+        134,
+        206,
+        210,
+        166,
+        87,
+        228,
+        132,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "writable": true
+        },
+        {
+          "name": "content",
+          "docs": [
+            "The content to add to the bundle"
+          ]
+        },
+        {
+          "name": "bundle_item",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  105,
+                  116,
+                  101,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "position",
+          "type": {
+            "option": "u16"
+          }
+        }
+      ]
+    },
+    {
       "name": "check_rent_expiry",
       "docs": [
         "Check if a rental has expired",
@@ -515,6 +596,111 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "create_bundle",
+      "docs": [
+        "Create a new bundle (album, series, playlist, course, etc.)",
+        "Bundles group related content with ordering and shared metadata"
+      ],
+      "discriminator": [
+        108,
+        43,
+        176,
+        128,
+        45,
+        94,
+        197,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bundle",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "bundle_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bundle_id",
+          "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "bundle_type",
+          "type": {
+            "defined": {
+              "name": "BundleType"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete_bundle",
+      "docs": [
+        "Delete an empty bundle",
+        "Bundle must have no items (item_count == 0) to be deleted"
+      ],
+      "discriminator": [
+        177,
+        17,
+        72,
+        4,
+        226,
+        205,
+        171,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "writable": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "delete_content",
@@ -1442,6 +1628,45 @@
       ]
     },
     {
+      "name": "remove_bundle_item",
+      "docs": [
+        "Remove content from a bundle",
+        "Only the bundle creator can remove items"
+      ],
+      "discriminator": [
+        165,
+        239,
+        118,
+        61,
+        150,
+        244,
+        36,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "writable": true,
+          "relations": [
+            "bundle_item"
+          ]
+        },
+        {
+          "name": "bundle_item",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "rent_content_sol",
       "docs": [
         "Rent content with SOL payment",
@@ -2021,6 +2246,50 @@
       ]
     },
     {
+      "name": "update_bundle",
+      "docs": [
+        "Update bundle metadata or active status"
+      ],
+      "discriminator": [
+        243,
+        102,
+        200,
+        60,
+        41,
+        167,
+        95,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata_cid",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
       "name": "update_content",
       "docs": [
         "Update content metadata (creator only, not locked)"
@@ -2292,6 +2561,32 @@
     }
   ],
   "accounts": [
+    {
+      "name": "Bundle",
+      "discriminator": [
+        15,
+        82,
+        167,
+        230,
+        37,
+        214,
+        82,
+        80
+      ]
+    },
+    {
+      "name": "BundleItem",
+      "discriminator": [
+        114,
+        244,
+        72,
+        150,
+        255,
+        71,
+        81,
+        93
+      ]
+    },
     {
       "name": "CidRegistry",
       "discriminator": [
@@ -2729,6 +3024,26 @@
       "code": 6039,
       "name": "RentConfigExists",
       "msg": "Rent config already exists for this content"
+    },
+    {
+      "code": 6040,
+      "name": "BundleNotActive",
+      "msg": "Bundle is not active"
+    },
+    {
+      "code": 6041,
+      "name": "BundleNotEmpty",
+      "msg": "Bundle must be empty to delete"
+    },
+    {
+      "code": 6042,
+      "name": "BundleItemLimitReached",
+      "msg": "Bundle item limit reached (max 1000)"
+    },
+    {
+      "code": 6043,
+      "name": "NotContentCreator",
+      "msg": "Only the content creator can add to bundles"
     }
   ],
   "types": [
@@ -2752,6 +3067,149 @@
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bundle",
+      "docs": [
+        "Bundle account - stores bundle metadata reference and stats"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "docs": [
+              "Creator of the bundle"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle_id",
+            "docs": [
+              "Unique bundle identifier (e.g., slug or CID-based)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "metadata_cid",
+            "docs": [
+              "IPFS CID pointing to bundle metadata JSON"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "bundle_type",
+            "docs": [
+              "Type of bundle (determines semantics)"
+            ],
+            "type": {
+              "defined": {
+                "name": "BundleType"
+              }
+            }
+          },
+          {
+            "name": "item_count",
+            "docs": [
+              "Number of items in the bundle"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether the bundle is active (visible/purchasable)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp of creation"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp of last update"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleItem",
+      "docs": [
+        "BundleItem account - links content to a bundle with ordering"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bundle",
+            "docs": [
+              "Reference to the Bundle account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "Reference to the ContentEntry account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "docs": [
+              "Position within the bundle (0-indexed)",
+              "Used for ordered bundles like albums, courses"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "added_at",
+            "docs": [
+              "Timestamp when item was added"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleType",
+      "docs": [
+        "Bundle types - defines the semantics of the collection"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Album"
+          },
+          {
+            "name": "Series"
+          },
+          {
+            "name": "Playlist"
+          },
+          {
+            "name": "Course"
+          },
+          {
+            "name": "Newsletter"
+          },
+          {
+            "name": "Collection"
+          },
+          {
+            "name": "ProductPack"
           }
         ]
       }
