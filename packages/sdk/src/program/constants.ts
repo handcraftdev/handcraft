@@ -174,3 +174,66 @@ export const getContentCategory = getContentDomain;
 export enum PaymentCurrency {
   Sol = 0,
 }
+
+// ========== BUNDLE CONSTANTS ==========
+
+// Bundle seeds for PDA derivation
+export const BUNDLE_SEED = "bundle";
+export const BUNDLE_ITEM_SEED = "bundle_item";
+
+// Re-export BundleType from types for convenience
+export { BundleType } from "./types";
+
+// Bundle type labels
+export function getBundleTypeLabel(type: import("./types").BundleType): string {
+  const { BundleType } = require("./types");
+  switch (type) {
+    case BundleType.Album: return "Album";
+    case BundleType.Series: return "Series";
+    case BundleType.Playlist: return "Playlist";
+    case BundleType.Course: return "Course";
+    case BundleType.Newsletter: return "Newsletter";
+    case BundleType.Collection: return "Collection";
+    case BundleType.ProductPack: return "Product Pack";
+    default: return "Unknown";
+  }
+}
+
+// Get bundle type from string
+export function getBundleTypeFromString(str: string): import("./types").BundleType {
+  const { BundleType } = require("./types");
+  const normalized = str.toLowerCase();
+  switch (normalized) {
+    case "album": return BundleType.Album;
+    case "series": return BundleType.Series;
+    case "playlist": return BundleType.Playlist;
+    case "course": return BundleType.Course;
+    case "newsletter": return BundleType.Newsletter;
+    case "collection": return BundleType.Collection;
+    case "productpack":
+    case "product_pack":
+    case "product-pack": return BundleType.ProductPack;
+    default: return BundleType.Collection;
+  }
+}
+
+// Suggested bundle types per content domain
+export function getSuggestedBundleTypes(domain: ContentDomain): import("./types").BundleType[] {
+  const { BundleType } = require("./types");
+  switch (domain) {
+    case "audio":
+      return [BundleType.Album, BundleType.Playlist];
+    case "video":
+      return [BundleType.Series, BundleType.Playlist, BundleType.Course];
+    case "image":
+      return [BundleType.Collection];
+    case "document":
+      return [BundleType.Course, BundleType.Collection];
+    case "file":
+      return [BundleType.ProductPack, BundleType.Course];
+    case "text":
+      return [BundleType.Newsletter, BundleType.Course];
+    default:
+      return [BundleType.Collection, BundleType.Playlist];
+  }
+}
