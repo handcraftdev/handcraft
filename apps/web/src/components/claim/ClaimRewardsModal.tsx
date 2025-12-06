@@ -7,6 +7,20 @@ import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
+// Chevron icon component for expand/collapse
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
 interface ClaimRewardsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,6 +35,7 @@ export function ClaimRewardsModal({
   const { publicKey } = useWallet();
   const {
     claimRewardsVerified,
+    claimAllRewards,
     isClaimingReward,
     usePendingRewards,
     globalContent,
@@ -41,8 +56,20 @@ export function ClaimRewardsModal({
   }, [globalContent]);
 
   const [error, setError] = useState<string | null>(null);
-  const [claimingIndex, setClaimingIndex] = useState<number | null>(null);
   const [claimingAll, setClaimingAll] = useState(false);
+  const [expandedContentCids, setExpandedContentCids] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (contentCid: string) => {
+    setExpandedContentCids((prev) => {
+      const next = new Set(prev);
+      if (next.has(contentCid)) {
+        next.delete(contentCid);
+      } else {
+        next.add(contentCid);
+      }
+      return next;
+    });
+  };
 
   // Calculate total pending rewards (SOL only)
   const totalPending = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
@@ -61,23 +88,21 @@ export function ClaimRewardsModal({
     if (!reward) return;
 
     setError(null);
-    setClaimingIndex(index);
+    setClaimingAll(true);
 
     try {
       // Use verified claim which checks NFT ownership per-NFT
       await claimRewardsVerified({
         contentCid: reward.contentCid,
       });
-      await refetch();
-      if (pendingRewards.length === 1) {
-        onSuccess?.();
-        onClose();
-      }
+      refetch();
+      onSuccess?.();
+      onClose();
     } catch (err) {
       console.error("Failed to claim reward:", err);
       setError(getTransactionErrorMessage(err));
     } finally {
-      setClaimingIndex(null);
+      setClaimingAll(false);
     }
   };
 
@@ -87,14 +112,16 @@ export function ClaimRewardsModal({
     setError(null);
     setClaimingAll(true);
 
+    // Capture content CIDs before starting
+    const contentCidsToClaim = pendingRewards
+      .filter(r => r.pending > BigInt(0))
+      .map(r => r.contentCid);
+
     try {
-      // Claim each content position with verified claim (per-NFT tracking)
-      for (const reward of pendingRewards) {
-        if (reward.pending > BigInt(0)) {
-          await claimRewardsVerified({ contentCid: reward.contentCid });
-        }
-      }
-      await refetch();
+      // Batch all claims into a single transaction
+      await claimAllRewards({ contentCids: contentCidsToClaim });
+      // Mutation's onSuccess already invalidates queries, just trigger refetch without awaiting
+      refetch();
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -102,7 +129,6 @@ export function ClaimRewardsModal({
       setError(getTransactionErrorMessage(err));
     } finally {
       setClaimingAll(false);
-      setClaimingIndex(null);
     }
   };
 
@@ -160,31 +186,64 @@ export function ClaimRewardsModal({
               <h3 className="text-sm font-medium text-gray-400">Your Content Positions with Pending Rewards</h3>
               {pendingRewards.filter(r => r.pending > BigInt(0)).map((reward, index) => {
                 const contentInfo = contentMetadataMap.get(reward.contentCid);
+                const isExpanded = expandedContentCids.has(reward.contentCid);
+                const hasMultipleNfts = reward.nftCount > BigInt(1);
+                const nftRewards = reward.nftRewards || [];
+
                 return (
                   <div
                     key={reward.contentCid}
-                    className="bg-gray-800 rounded-lg p-3 flex items-center justify-between"
+                    className="bg-gray-800 rounded-lg overflow-hidden"
                   >
-                    <div className="flex-1 min-w-0 mr-3">
-                      <div className="text-sm font-medium truncate">
-                        {contentInfo?.title || "Unknown Content"}
+                    {/* Content Position Header */}
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0 mr-3">
+                        {hasMultipleNfts && (
+                          <button
+                            onClick={() => toggleExpanded(reward.contentCid)}
+                            className="text-gray-400 hover:text-white p-1 -ml-1"
+                            title={isExpanded ? "Collapse" : "Show per-NFT breakdown"}
+                          >
+                            <ChevronIcon expanded={isExpanded} />
+                          </button>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {contentInfo?.title && contentInfo.title !== "Untitled"
+                              ? contentInfo.title
+                              : `Content ${reward.contentCid.slice(0, 8)}...`}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {reward.nftCount.toString()} NFT{hasMultipleNfts ? "s" : ""} owned
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {reward.nftCount.toString()} NFT{reward.nftCount > BigInt(1) ? "s" : ""} owned
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-green-400 font-medium">
+                      <span className="text-green-400 font-medium flex-shrink-0">
                         {formatSol(reward.pending)}
                       </span>
-                      <button
-                        onClick={() => handleClaimSingle(index)}
-                        disabled={isClaimingReward || claimingAll}
-                        className="px-3 py-1 text-sm bg-primary-500 hover:bg-primary-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {claimingIndex === index ? "Claiming..." : "Claim"}
-                      </button>
                     </div>
+
+                    {/* Per-NFT Breakdown (Expandable) */}
+                    {isExpanded && nftRewards.length > 0 && (
+                      <div className="border-t border-gray-700 bg-gray-900/50 px-3 py-2">
+                        <div className="text-xs text-gray-500 mb-2">Per-NFT Breakdown</div>
+                        <div className="space-y-1">
+                          {nftRewards.map((nft, nftIndex) => (
+                            <div
+                              key={nft.nftAsset.toBase58()}
+                              className="flex items-center justify-between text-xs py-1"
+                            >
+                              <span className="text-gray-400 font-mono">
+                                NFT #{nftIndex + 1} ({nft.nftAsset.toBase58().slice(0, 4)}...{nft.nftAsset.toBase58().slice(-4)})
+                              </span>
+                              <span className={nft.pending > BigInt(0) ? "text-green-400" : "text-gray-500"}>
+                                {formatSol(nft.pending)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -204,8 +263,8 @@ export function ClaimRewardsModal({
                 className="w-full py-3 rounded-lg font-medium bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
               >
                 {claimingAll
-                  ? "Claiming all..."
-                  : `Claim All (${pendingRewards.filter(r => r.pending > BigInt(0)).length} transactions)`}
+                  ? "Claiming..."
+                  : `Claim All (${pendingRewards.filter(r => r.pending > BigInt(0)).length} positions)`}
               </button>
             )}
 

@@ -9,20 +9,25 @@ import { useQuery } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { ClaimRewardsModal } from "@/components/claim";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
-type Tab = "content" | "collected";
+type Tab = "content" | "collected" | "rewards";
 
 export default function ProfilePage() {
   const params = useParams();
   const addressParam = params.address as string;
   const { publicKey: connectedWallet } = useWallet();
   const { connection } = useConnection();
-  const { globalContent, client } = useContentRegistry();
+  const { globalContent, client, usePendingRewards } = useContentRegistry();
 
   const [activeTab, setActiveTab] = useState<Tab>("content");
+  const [showClaimModal, setShowClaimModal] = useState(false);
+
+  // Fetch pending rewards (only relevant for own profile)
+  const { data: pendingRewards = [], isLoading: isLoadingRewards } = usePendingRewards();
 
   // Validate address
   const profileAddress = useMemo(() => {
@@ -48,15 +53,31 @@ export default function ProfilePage() {
   });
 
   // Fetch owned NFTs with react-query (properly cached)
-  const { data: ownedNfts = [], isLoading: isLoadingNfts } = useQuery({
+  const { data: allNfts = [], isLoading: isLoadingNfts } = useQuery({
     queryKey: ["profileNfts", profileAddress?.toBase58()],
     queryFn: async () => {
-      if (!profileAddress) return [];
+      if (!profileAddress || !client) return [];
       return client.fetchWalletNftMetadata(profileAddress);
     },
-    enabled: !!profileAddress,
+    enabled: !!profileAddress && !!client,
     staleTime: 60000, // Cache for 60 seconds
   });
+
+  // Fetch rental NFT assets to exclude from owned count
+  const { data: rentalNftAssets = new Set<string>(), isLoading: isLoadingRentals } = useQuery({
+    queryKey: ["profileRentalNfts", profileAddress?.toBase58(), allNfts.length],
+    queryFn: async () => {
+      if (!profileAddress || !client || allNfts.length === 0) return new Set<string>();
+      return client.fetchRentalNftsFromMetadata(allNfts);
+    },
+    enabled: !!profileAddress && !!client && allNfts.length > 0,
+    staleTime: 60000,
+  });
+
+  // Filter out rental NFTs from owned NFTs
+  const ownedNfts = useMemo(() => {
+    return allNfts.filter(nft => !rentalNftAssets.has(nft.nftAsset.toBase58()));
+  }, [allNfts, rentalNftAssets]);
 
   // Filter to this user's content
   const userContent = useMemo(() => {
@@ -72,12 +93,20 @@ export default function ProfilePage() {
       totalMints += Number(c.mintedCount || 0);
     }
 
+    // Calculate total pending rewards
+    const totalPendingRewards = pendingRewards.reduce(
+      (acc, r) => acc + r.pending,
+      BigInt(0)
+    );
+
     return {
       totalMints,
       contentCount: userContent.length,
       collectedCount: ownedNfts.length,
+      totalPendingRewards,
+      rewardPositions: pendingRewards.filter(r => r.pending > BigInt(0)).length,
     };
-  }, [userContent, ownedNfts]);
+  }, [userContent, ownedNfts, pendingRewards]);
 
   // Invalid address
   if (!profileAddress) {
@@ -156,6 +185,17 @@ export default function ProfilePage() {
                         <p className="text-sm text-gray-400">SOL</p>
                       </div>
                     )}
+                    {isOwnProfile && stats.totalPendingRewards > BigInt(0) && (
+                      <button
+                        onClick={() => setShowClaimModal(true)}
+                        className="text-left hover:bg-green-500/10 rounded-lg p-2 -m-2 transition-colors"
+                      >
+                        <p className="text-xl font-bold text-green-400">
+                          {(Number(stats.totalPendingRewards) / LAMPORTS_PER_SOL).toFixed(4)}
+                        </p>
+                        <p className="text-sm text-green-400/70">Claimable SOL</p>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -190,6 +230,26 @@ export default function ProfilePage() {
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
                   )}
                 </button>
+                {isOwnProfile && (
+                  <button
+                    onClick={() => setActiveTab("rewards")}
+                    className={`pb-3 text-sm font-medium transition-colors relative ${
+                      activeTab === "rewards"
+                        ? "text-white"
+                        : "text-gray-400 hover:text-gray-300"
+                    }`}
+                  >
+                    Rewards
+                    {stats.rewardPositions > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
+                        {stats.rewardPositions}
+                      </span>
+                    )}
+                    {activeTab === "rewards" && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -265,7 +325,7 @@ export default function ProfilePage() {
             {/* Collected NFTs Grid */}
             {activeTab === "collected" && (
               <>
-                {isLoadingNfts ? (
+                {(isLoadingNfts || isLoadingRentals) ? (
                   <div className="flex items-center justify-center py-16">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
                   </div>
@@ -326,9 +386,118 @@ export default function ProfilePage() {
                 )}
               </>
             )}
+
+            {/* Rewards Tab */}
+            {activeTab === "rewards" && isOwnProfile && (
+              <>
+                {isLoadingRewards ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
+                  </div>
+                ) : pendingRewards.length === 0 || stats.totalPendingRewards === BigInt(0) ? (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">No pending rewards</h3>
+                    <p className="text-gray-400">You'll earn rewards when new NFTs are minted for content you hold.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Summary Card */}
+                    <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-6 border border-green-500/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-400 mb-1">Total Claimable</h3>
+                          <p className="text-3xl font-bold text-green-400">
+                            {(Number(stats.totalPendingRewards) / LAMPORTS_PER_SOL).toFixed(6)} SOL
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            From {stats.rewardPositions} content position{stats.rewardPositions > 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowClaimModal(true)}
+                          className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors"
+                        >
+                          Claim All
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Per-Content Breakdown */}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-400 mb-4">Reward Breakdown by Content</h3>
+                      <div className="space-y-3">
+                        {pendingRewards.filter(r => r.pending > BigInt(0)).map((reward) => {
+                          const contentData = globalContent.find(c => c.contentCid === reward.contentCid);
+                          const metadata = (contentData as any)?.metadata;
+                          const title = metadata?.title || metadata?.name || `Content ${reward.contentCid.slice(0, 8)}...`;
+                          const previewUrl = contentData?.previewCid ? getIpfsUrl(contentData.previewCid) : null;
+
+                          return (
+                            <div
+                              key={reward.contentCid}
+                              className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-4"
+                            >
+                              {/* Thumbnail */}
+                              <div className="w-16 h-16 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden">
+                                {previewUrl ? (
+                                  <img src={previewUrl} alt={title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium truncate">{title}</h4>
+                                <p className="text-sm text-gray-500">
+                                  {reward.nftCount.toString()} NFT{reward.nftCount > BigInt(1) ? "s" : ""} owned
+                                </p>
+                              </div>
+
+                              {/* Reward Amount */}
+                              <div className="text-right flex-shrink-0">
+                                <p className="text-lg font-bold text-green-400">
+                                  {(Number(reward.pending) / LAMPORTS_PER_SOL).toFixed(6)}
+                                </p>
+                                <p className="text-xs text-gray-500">SOL</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="bg-gray-800/50 rounded-lg p-4">
+                      <p className="text-sm text-gray-400 text-center">
+                        Rewards accumulate from the 12% holder share when NFTs are minted.
+                      </p>
+                      <p className="text-sm text-amber-400/80 mt-2 text-center">
+                        Tip: Claim before selling your NFTs - unclaimed rewards transfer to the new owner.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </main>
       </div>
+
+      {/* Claim Rewards Modal */}
+      <ClaimRewardsModal
+        isOpen={showClaimModal}
+        onClose={() => setShowClaimModal(false)}
+      />
     </div>
   );
 }
