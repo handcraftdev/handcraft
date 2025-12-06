@@ -8,6 +8,8 @@ import {
   WALLET_CONTENT_STATE_SEED,
   CONTENT_COLLECTION_SEED,
   NFT_REWARD_STATE_SEED,
+  RENT_CONFIG_SEED,
+  RENT_ENTRY_SEED,
   PRECISION,
   CREATOR_FEE_PRIMARY_BPS,
   PLATFORM_FEE_PRIMARY_BPS,
@@ -96,4 +98,18 @@ export function calculatePendingReward(nftCount: bigint, rewardPerShare: bigint,
 export function calculatePendingRewardForNft(rewardPerShare: bigint, nftRewardDebt: bigint): bigint {
   if (rewardPerShare <= nftRewardDebt) return BigInt(0);
   return (rewardPerShare - nftRewardDebt) / PRECISION;
+}
+
+export function getRentConfigPda(contentPda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(RENT_CONFIG_SEED), contentPda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+export function getRentEntryPda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(RENT_ENTRY_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
 }

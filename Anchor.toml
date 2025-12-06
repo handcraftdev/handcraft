@@ -1,12 +1,12 @@
 [toolchain]
-anchor_version = "0.29.0"
+anchor_version = "0.32.1"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.devnet]
-content_registry = "EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU"
+content_registry = "3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn"
 
 [registry]
 url = "https://api.apr.dev"

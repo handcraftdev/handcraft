@@ -79,3 +79,39 @@ export interface WalletNftMetadata {
   collectionAsset: PublicKey | null;
   name: string;
 }
+
+export interface NftPendingReward {
+  nftAsset: PublicKey;
+  pending: bigint;
+  rewardDebt: bigint;
+}
+
+export interface ContentPendingRewardDetails {
+  contentCid: string;
+  pending: bigint;
+  nftCount: bigint;
+  nftRewards: NftPendingReward[];
+}
+
+export interface RentConfig {
+  content: PublicKey;
+  creator: PublicKey;
+  rentFee6h: bigint;
+  rentFee1d: bigint;
+  rentFee7d: bigint;
+  isActive: boolean;
+  totalRentals: bigint;
+  totalFeesCollected: bigint;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+export interface RentEntry {
+  renter: PublicKey;
+  content: PublicKey;
+  nftAsset: PublicKey;
+  rentedAt: bigint;
+  expiresAt: bigint;
+  isActive: boolean;
+  feePaid: bigint;
+}

@@ -2,8 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 
 // Import mpl-core types and CPI builders
-use mpl_core::instructions::{CreateCollectionV2CpiBuilder, CreateV2CpiBuilder};
-use mpl_core::types::DataState;
+use mpl_core::instructions::{CreateCollectionV2CpiBuilder, CreateV2CpiBuilder, AddPluginV1CpiBuilder};
+use mpl_core::types::{
+    DataState, Plugin, PluginAuthorityPair, PluginAuthority,
+    Royalties, Creator, RuleSet, FreezeDelegate,
+};
 
 // Metaplex Core Program ID: CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
 pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
@@ -13,9 +16,15 @@ pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
     0xc9, 0x7e, 0xbe, 0x2d, 0x23, 0x5b, 0xa7, 0x48,
 ]);
 
-/// Create a Metaplex Core Collection
-/// NFTs minted into this collection can be verified at claim time
-/// (LinkedLifecycleHook is not used since it's not available on devnet)
+/// Create a Metaplex Core Collection with Royalties plugin
+/// NFTs minted into this collection inherit the royalty configuration
+/// This enforces secondary sale royalties on-chain
+///
+/// Royalty distribution on secondary sales:
+/// - Creator: 2-10% (configurable)
+/// - Platform: 1%
+/// - Ecosystem (Treasury): 1%
+/// - Holder Reward Pool: 8%
 fn create_collection<'info>(
     mpl_core_program: &AccountInfo<'info>,
     collection: &AccountInfo<'info>,
@@ -24,9 +33,100 @@ fn create_collection<'info>(
     system_program: &AccountInfo<'info>,
     name: String,
     uri: String,
+    creator: Pubkey,
+    platform: Pubkey,
+    treasury: Pubkey,
+    holder_reward_pool: Pubkey,
+    creator_royalty_bps: u16,
 ) -> Result<()> {
-    // Create the collection without external plugins
-    // Reward tracking is done via claim-time verification instead of lifecycle hooks
+    // Calculate total royalty in basis points
+    // Creator royalty (2-10%) + Platform (1%) + Ecosystem (1%) + Holders (8%)
+    let total_royalty_bps = EcosystemConfig::total_secondary_royalty_bps(creator_royalty_bps);
+
+    // Calculate percentage share for each recipient (must sum to 100)
+    // Using basis points for precision, then converting to percentage
+    let creator_share = (creator_royalty_bps as u32 * 100 / total_royalty_bps as u32) as u8;
+    let platform_share = (100_u32 * 100 / total_royalty_bps as u32) as u8;  // 1% = 100 bps
+    let treasury_share = (100_u32 * 100 / total_royalty_bps as u32) as u8;  // 1% = 100 bps
+    let holder_share = 100 - creator_share - platform_share - treasury_share; // Remainder to holders
+
+    // Log the values for debugging
+    msg!("=== Royalties Debug START ===");
+    msg!("Step 1: Input values");
+    msg!("  creator_royalty_bps: {}", creator_royalty_bps);
+    msg!("  total_royalty_bps: {}", total_royalty_bps);
+
+    msg!("Step 2: Calculated shares (u8 percentages)");
+    msg!("  creator_share: {} (type u8)", creator_share);
+    msg!("  platform_share: {} (type u8)", platform_share);
+    msg!("  treasury_share: {} (type u8)", treasury_share);
+    msg!("  holder_share: {} (type u8)", holder_share);
+    msg!("  sum: {}", creator_share as u16 + platform_share as u16 + treasury_share as u16 + holder_share as u16);
+
+    msg!("Step 3: Addresses");
+    msg!("  creator (param 1): {}", creator);
+    msg!("  platform (param 2): {}", platform);
+    msg!("  treasury (param 3): {}", treasury);
+    msg!("  holder_reward_pool (param 4): {}", holder_reward_pool);
+
+    msg!("Step 4: Checking for duplicate addresses");
+    msg!("  creator == platform: {}", creator == platform);
+    msg!("  creator == treasury: {}", creator == treasury);
+    msg!("  creator == holder_reward_pool: {}", creator == holder_reward_pool);
+    msg!("  platform == treasury: {}", platform == treasury);
+    msg!("  platform == holder_reward_pool: {}", platform == holder_reward_pool);
+    msg!("  treasury == holder_reward_pool: {}", treasury == holder_reward_pool);
+
+    msg!("Step 5: Account info keys");
+    msg!("  collection.key(): {}", collection.key());
+    msg!("  update_authority.key(): {}", update_authority.key());
+    msg!("  payer.key(): {}", payer.key());
+    msg!("  mpl_core_program.key(): {}", mpl_core_program.key());
+
+    msg!("Step 6: Building creators vec (deduplicating if needed)");
+    // Metaplex Core requires unique addresses - deduplicate by combining percentages
+    let mut creators_map: std::collections::BTreeMap<Pubkey, u8> = std::collections::BTreeMap::new();
+
+    // Add each recipient, combining percentages if address already exists
+    *creators_map.entry(creator).or_insert(0) += creator_share;
+    *creators_map.entry(platform).or_insert(0) += platform_share;
+    *creators_map.entry(treasury).or_insert(0) += treasury_share;
+    *creators_map.entry(holder_reward_pool).or_insert(0) += holder_share;
+
+    // Convert to Creator vec
+    let creators_vec: Vec<Creator> = creators_map
+        .into_iter()
+        .map(|(address, percentage)| Creator { address, percentage })
+        .collect();
+
+    for (i, c) in creators_vec.iter().enumerate() {
+        msg!("  Creator {}: addr={}, pct={}", i + 1, c.address, c.percentage);
+    }
+    msg!("  creators_vec len: {} (deduplicated from 4)", creators_vec.len());
+
+    msg!("Step 7: Building Royalties struct");
+    let royalties = Royalties {
+        basis_points: total_royalty_bps,
+        creators: creators_vec,
+        rule_set: RuleSet::None,
+    };
+    msg!("  royalties.basis_points: {}", royalties.basis_points);
+    msg!("  royalties.creators.len(): {}", royalties.creators.len());
+
+    msg!("Step 8: Building Plugin enum");
+    let plugin = Plugin::Royalties(royalties);
+    msg!("  Plugin variant: Royalties");
+
+    msg!("Step 9: Building PluginAuthorityPair");
+    // Create the Royalties plugin with all recipients
+    let royalties_plugin = PluginAuthorityPair {
+        plugin,
+        authority: None,
+    };
+    msg!("  authority: None");
+    msg!("=== Royalties Debug END ===");
+
+    // Create the collection with Royalties plugin
     CreateCollectionV2CpiBuilder::new(mpl_core_program)
         .collection(collection)
         .payer(payer)
@@ -34,6 +134,7 @@ fn create_collection<'info>(
         .system_program(system_program)
         .name(name)
         .uri(uri)
+        .plugins(vec![royalties_plugin])
         .invoke()?;
 
     Ok(())
@@ -139,12 +240,13 @@ use state::{
     EcosystemConfig,
     ContentRewardPool, WalletContentState, NftRewardState, PRECISION,
     NFT_REWARD_STATE_SEED, ContentCollection, CONTENT_COLLECTION_SEED,
+    RentConfig, RentEntry, RentTier, RENT_ENTRY_SEED,
 };
 use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
 
-declare_id!("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
+declare_id!("3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn");
 
 #[program]
 pub mod content_registry {
@@ -320,10 +422,17 @@ pub mod content_registry {
         content_collection.creator = ctx.accounts.authority.key();
         content_collection.created_at = timestamp;
 
-        // Create Metaplex Core Collection for this content
+        // Create Metaplex Core Collection for this content with Royalties plugin
         // NFT ownership is verified at claim time instead of using lifecycle hooks
+        // Royalties are enforced on-chain via Metaplex Core plugin
         let collection_name = format!("Handcraft Collection");
         let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+
+        // Derive ContentRewardPool PDA for holder royalties
+        let (holder_reward_pool, _) = Pubkey::find_program_address(
+            &[b"content_reward_pool", content.key().as_ref()],
+            ctx.program_id,
+        );
 
         // Use content_collection PDA as update_authority so program can sign mints
         create_collection(
@@ -334,6 +443,11 @@ pub mod content_registry {
             &ctx.accounts.system_program.to_account_info(),
             collection_name,
             collection_uri,
+            ctx.accounts.authority.key(),              // Creator receives creator royalties
+            ctx.accounts.platform.key(),               // Platform receives 1%
+            ctx.accounts.ecosystem_config.treasury,    // Ecosystem treasury receives 1%
+            holder_reward_pool,                        // Holder reward pool receives 8%
+            creator_royalty_bps,                       // Creator royalty percentage
         )?;
 
         Ok(())
@@ -686,52 +800,12 @@ pub mod content_registry {
         buyer_wallet_state.add_nft(content_reward_pool.reward_per_share, timestamp);
 
         // Initialize per-NFT reward state - this is the source of truth for rewards
-        // Manual account creation to reduce stack size
-        let nft_reward_state_info = &ctx.accounts.nft_reward_state;
-        let nft_asset_key = ctx.accounts.nft_asset.key();
-        let (expected_pda, bump) = Pubkey::find_program_address(
-            &[NFT_REWARD_STATE_SEED, nft_asset_key.as_ref()],
-            ctx.program_id,
-        );
-        require!(nft_reward_state_info.key() == expected_pda, ContentRegistryError::InvalidNftRewardState);
-
-        // Create the account
-        let space = 8 + NftRewardState::INIT_SPACE;
-        let rent = Rent::get()?;
-        let lamports = rent.minimum_balance(space);
-
-        let seeds: &[&[u8]] = &[NFT_REWARD_STATE_SEED, nft_asset_key.as_ref(), &[bump]];
-        let signer_seeds = &[seeds];
-
-        anchor_lang::system_program::create_account(
-            CpiContext::new_with_signer(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::CreateAccount {
-                    from: ctx.accounts.buyer.to_account_info(),
-                    to: nft_reward_state_info.clone(),
-                },
-                signer_seeds,
-            ),
-            lamports,
-            space as u64,
-            ctx.program_id,
-        )?;
-
-        // Initialize the data manually
-        {
-            let mut data = nft_reward_state_info.try_borrow_mut_data()?;
-            let discriminator = NftRewardState::DISCRIMINATOR;
-            data[0..8].copy_from_slice(&discriminator);
-
-            // Write nft_asset (32 bytes)
-            data[8..40].copy_from_slice(&nft_asset_key.to_bytes());
-            // Write content (32 bytes)
-            data[40..72].copy_from_slice(&content.key().to_bytes());
-            // Write reward_debt (16 bytes, little endian)
-            data[72..88].copy_from_slice(&content_reward_pool.reward_per_share.to_le_bytes());
-            // Write created_at (8 bytes, little endian)
-            data[88..96].copy_from_slice(&timestamp.to_le_bytes());
-        }
+        // Account is created by Anchor's #[account(init)] constraint
+        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+        nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
+        nft_reward_state.content = content.key();
+        nft_reward_state.reward_debt = content_reward_pool.reward_per_share;
+        nft_reward_state.created_at = timestamp;
 
         // Increment content's NFT count in the pool AFTER updating buyer state
         content_reward_pool.increment_nfts();
@@ -833,11 +907,12 @@ pub mod content_registry {
     /// [nft_asset_1, nft_reward_state_1, nft_asset_2, nft_reward_state_2, ...]
     ///
     /// The instruction will:
-    /// 1. Verify each NFT belongs to the content's collection
-    /// 2. Verify each NFT is owned by the claimer
-    /// 3. Calculate rewards for each NFT: (reward_per_share - nft.reward_debt) / PRECISION
-    /// 4. Update each NFT's reward_debt
-    /// 5. Transfer total rewards to claimer
+    /// 1. Auto-sync any secondary sale royalties that arrived via Metaplex Royalties plugin
+    /// 2. Verify each NFT belongs to the content's collection
+    /// 3. Verify each NFT is owned by the claimer
+    /// 4. Calculate rewards for each NFT: (reward_per_share - nft.reward_debt) / PRECISION
+    /// 5. Update each NFT's reward_debt
+    /// 6. Transfer total rewards to claimer
     pub fn claim_rewards_verified<'info>(
         ctx: Context<'_, '_, '_, 'info, ClaimRewardsVerified<'info>>,
     ) -> Result<()> {
@@ -845,6 +920,23 @@ pub mod content_registry {
         let wallet_state = &mut ctx.accounts.wallet_content_state;
         let content_collection = &ctx.accounts.content_collection;
         let timestamp = Clock::get()?.unix_timestamp;
+
+        // Auto-sync secondary sale royalties before calculating rewards
+        // This handles SOL that arrived from Metaplex Royalties plugin on secondary sales
+        let rent = Rent::get()?;
+        let pool_account_info = content_reward_pool.to_account_info();
+        let current_lamports = pool_account_info.lamports();
+        let rent_lamports = rent.minimum_balance(pool_account_info.data_len());
+
+        let synced_amount = content_reward_pool.sync_secondary_royalties(current_lamports, rent_lamports);
+        if synced_amount > 0 {
+            emit!(SecondaryRoyaltySyncEvent {
+                content: content_reward_pool.content,
+                amount: synced_amount,
+                new_reward_per_share: content_reward_pool.reward_per_share,
+                timestamp,
+            });
+        }
 
         // Get the collection asset address from ContentCollection
         let collection_asset = content_collection.collection_asset;
@@ -1216,6 +1308,373 @@ pub mod content_registry {
             sender_claimed: sender_pending,
             timestamp,
         });
+
+        Ok(())
+    }
+
+    // ============================================
+    // CONTENT RENTAL
+    // ============================================
+
+    /// Configure rental settings for content (creator only)
+    /// Sets the rent fee and rental period
+    /// Configure rental with 3-tier pricing: 6 hours, 1 day, 7 days
+    /// Creator must set fees for all three tiers
+    pub fn configure_rent(
+        ctx: Context<ConfigureRent>,
+        rent_fee_6h: u64,
+        rent_fee_1d: u64,
+        rent_fee_7d: u64,
+    ) -> Result<()> {
+        // Validate all rent fees meet minimum
+        require!(
+            RentConfig::validate_fee(rent_fee_6h),
+            ContentRegistryError::RentFeeTooLow
+        );
+        require!(
+            RentConfig::validate_fee(rent_fee_1d),
+            ContentRegistryError::RentFeeTooLow
+        );
+        require!(
+            RentConfig::validate_fee(rent_fee_7d),
+            ContentRegistryError::RentFeeTooLow
+        );
+
+        let rent_config = &mut ctx.accounts.rent_config;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        rent_config.content = ctx.accounts.content.key();
+        rent_config.creator = ctx.accounts.creator.key();
+        rent_config.rent_fee_6h = rent_fee_6h;
+        rent_config.rent_fee_1d = rent_fee_1d;
+        rent_config.rent_fee_7d = rent_fee_7d;
+        rent_config.is_active = true;
+        rent_config.total_rentals = 0;
+        rent_config.total_fees_collected = 0;
+        rent_config.created_at = timestamp;
+        rent_config.updated_at = timestamp;
+
+        Ok(())
+    }
+
+    /// Update rental settings (creator only)
+    /// Allows updating individual tier fees or all at once
+    pub fn update_rent_config(
+        ctx: Context<UpdateRentConfig>,
+        rent_fee_6h: Option<u64>,
+        rent_fee_1d: Option<u64>,
+        rent_fee_7d: Option<u64>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        let rent_config = &mut ctx.accounts.rent_config;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        if let Some(fee) = rent_fee_6h {
+            require!(
+                RentConfig::validate_fee(fee),
+                ContentRegistryError::RentFeeTooLow
+            );
+            rent_config.rent_fee_6h = fee;
+        }
+
+        if let Some(fee) = rent_fee_1d {
+            require!(
+                RentConfig::validate_fee(fee),
+                ContentRegistryError::RentFeeTooLow
+            );
+            rent_config.rent_fee_1d = fee;
+        }
+
+        if let Some(fee) = rent_fee_7d {
+            require!(
+                RentConfig::validate_fee(fee),
+                ContentRegistryError::RentFeeTooLow
+            );
+            rent_config.rent_fee_7d = fee;
+        }
+
+        if let Some(active) = is_active {
+            rent_config.is_active = active;
+        }
+
+        rent_config.updated_at = timestamp;
+
+        Ok(())
+    }
+
+    /// Rent content with SOL payment
+    /// Creates a frozen (non-transferable) NFT that expires after the rental period
+    /// User selects one of 3 tiers: 6 hours, 1 day, or 7 days
+    /// Payment is distributed according to primary sale percentages
+    pub fn rent_content_sol(ctx: Context<RentContentSol>, tier: RentTier) -> Result<()> {
+        let ecosystem = &ctx.accounts.ecosystem_config;
+        let rent_config = &ctx.accounts.rent_config;
+        let content = &ctx.accounts.content;
+        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        // Check ecosystem not paused
+        require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
+
+        // Verify collection_asset matches what's stored in content_collection
+        {
+            let content_collection_info = ctx.accounts.content_collection.to_account_info();
+            let collection_data = content_collection_info.try_borrow_data()?;
+            let content_collection: ContentCollection = ContentCollection::try_deserialize(
+                &mut &collection_data[..]
+            )?;
+            require!(
+                content_collection.collection_asset == ctx.accounts.collection_asset.key(),
+                ContentRegistryError::ContentMismatch
+            );
+        }
+
+        // Verify creator matches content
+        require!(
+            content.creator == ctx.accounts.creator.key(),
+            ContentRegistryError::Unauthorized
+        );
+
+        // Initialize content reward pool if this is the first rent/mint for this content
+        if content_reward_pool.content == Pubkey::default() {
+            content_reward_pool.content = content.key();
+            content_reward_pool.created_at = timestamp;
+        }
+
+        // Get fee and period based on selected tier
+        let rent_fee = rent_config.get_fee_for_tier(tier);
+        let rent_period = tier.period_seconds();
+        let expires_at = timestamp + rent_period;
+        let has_existing_nfts = content_reward_pool.total_nfts > 0;
+
+        // Process payment using primary sale distribution
+        if rent_fee > 0 {
+            let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
+                EcosystemConfig::calculate_primary_split(rent_fee);
+
+            // For rentals, if no existing NFTs, holder reward goes to creator
+            let final_creator_amount = if !has_existing_nfts {
+                creator_amount + holder_reward_amount
+            } else {
+                creator_amount
+            };
+
+            // Transfer to creator
+            if final_creator_amount > 0 {
+                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.renter.key(),
+                    &ctx.accounts.creator.key(),
+                    final_creator_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &transfer_ix,
+                    &[
+                        ctx.accounts.renter.to_account_info(),
+                        ctx.accounts.creator.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
+            }
+
+            // Transfer holder reward to content reward pool (if existing NFTs)
+            if has_existing_nfts && holder_reward_amount > 0 {
+                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.renter.key(),
+                    &content_reward_pool.to_account_info().key,
+                    holder_reward_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &transfer_ix,
+                    &[
+                        ctx.accounts.renter.to_account_info(),
+                        content_reward_pool.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
+
+                // Update reward_per_share for existing holders
+                content_reward_pool.add_rewards(holder_reward_amount);
+            }
+
+            // Transfer to platform
+            if platform_amount > 0 {
+                let platform_wallet = ctx.accounts.platform.as_ref()
+                    .map(|p| p.key())
+                    .unwrap_or(ecosystem.treasury);
+
+                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.renter.key(),
+                    &platform_wallet,
+                    platform_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &transfer_ix,
+                    &[
+                        ctx.accounts.renter.to_account_info(),
+                        ctx.accounts.platform.as_ref()
+                            .map(|p| p.to_account_info())
+                            .unwrap_or(ctx.accounts.treasury.to_account_info()),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
+            }
+
+            // Transfer to ecosystem treasury
+            if ecosystem_amount > 0 {
+                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.renter.key(),
+                    &ctx.accounts.treasury.key(),
+                    ecosystem_amount,
+                );
+                anchor_lang::solana_program::program::invoke(
+                    &transfer_ix,
+                    &[
+                        ctx.accounts.renter.to_account_info(),
+                        ctx.accounts.treasury.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                    ],
+                )?;
+            }
+        }
+
+        // Create RentEntry PDA to track this rental
+        let nft_asset_key = ctx.accounts.nft_asset.key();
+        let (rent_entry_pda, rent_entry_bump) = Pubkey::find_program_address(
+            &[RENT_ENTRY_SEED, nft_asset_key.as_ref()],
+            ctx.program_id,
+        );
+        require!(
+            ctx.accounts.rent_entry.key() == rent_entry_pda,
+            ContentRegistryError::InvalidRentEntry
+        );
+
+        // Create the RentEntry account
+        let space = 8 + RentEntry::INIT_SPACE;
+        let rent = Rent::get()?;
+        let lamports = rent.minimum_balance(space);
+
+        let seeds: &[&[u8]] = &[RENT_ENTRY_SEED, nft_asset_key.as_ref(), &[rent_entry_bump]];
+        let signer_seeds = &[seeds];
+
+        anchor_lang::system_program::create_account(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::CreateAccount {
+                    from: ctx.accounts.renter.to_account_info(),
+                    to: ctx.accounts.rent_entry.clone(),
+                },
+                signer_seeds,
+            ),
+            lamports,
+            space as u64,
+            ctx.program_id,
+        )?;
+
+        // Initialize RentEntry data
+        {
+            let mut data = ctx.accounts.rent_entry.try_borrow_mut_data()?;
+            let discriminator = RentEntry::DISCRIMINATOR;
+            data[0..8].copy_from_slice(&discriminator);
+
+            // Write renter (32 bytes)
+            data[8..40].copy_from_slice(&ctx.accounts.renter.key().to_bytes());
+            // Write content (32 bytes)
+            data[40..72].copy_from_slice(&content.key().to_bytes());
+            // Write nft_asset (32 bytes)
+            data[72..104].copy_from_slice(&nft_asset_key.to_bytes());
+            // Write rented_at (8 bytes)
+            data[104..112].copy_from_slice(&timestamp.to_le_bytes());
+            // Write expires_at (8 bytes)
+            data[112..120].copy_from_slice(&expires_at.to_le_bytes());
+            // Write is_active (1 byte)
+            data[120] = 1; // true
+            // Write fee_paid (8 bytes)
+            data[121..129].copy_from_slice(&rent_fee.to_le_bytes());
+        }
+
+        // Create frozen rental NFT (non-transferable to prevent resale of expired rentals)
+        let rental_nft_name = format!("Rental Access #{}", rent_config.total_rentals + 1);
+        let rental_nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+
+        // Derive content_collection PDA for signing
+        let content_key = content.key();
+        let (_, content_collection_bump) = Pubkey::find_program_address(
+            &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
+            ctx.program_id,
+        );
+
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            CONTENT_COLLECTION_SEED,
+            content_key.as_ref(),
+            &[content_collection_bump],
+        ]];
+
+        // Step 1: Create rental NFT within the content's collection (no plugins yet)
+        create_core_nft(
+            &ctx.accounts.mpl_core_program.to_account_info(),
+            &ctx.accounts.nft_asset.to_account_info(),
+            &ctx.accounts.collection_asset.to_account_info(),
+            &ctx.accounts.content_collection.to_account_info(),
+            &ctx.accounts.renter.to_account_info(),
+            &ctx.accounts.renter.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            rental_nft_name,
+            rental_nft_uri,
+            signer_seeds,
+        )?;
+
+        // Step 2: Add FreezeDelegate plugin and freeze it
+        // Owner (renter) must be the authority to add plugins to their own asset
+        AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+            .asset(&ctx.accounts.nft_asset.to_account_info())
+            .collection(Some(&ctx.accounts.collection_asset.to_account_info()))
+            .payer(&ctx.accounts.renter.to_account_info())
+            .authority(Some(&ctx.accounts.renter.to_account_info()))
+            .system_program(&ctx.accounts.system_program.to_account_info())
+            .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: true }))
+            .init_authority(PluginAuthority::None)  // No one can unfreeze - permanently frozen
+            .invoke()?;
+
+        // Update rent config stats (manual update to avoid borrow issues)
+        {
+            let rent_config_info = ctx.accounts.rent_config.to_account_info();
+            let mut rent_config_data = rent_config_info.try_borrow_mut_data()?;
+            let mut updated_config = RentConfig::try_deserialize(&mut &rent_config_data[..])?;
+            updated_config.total_rentals += 1;
+            updated_config.total_fees_collected += rent_fee;
+            updated_config.updated_at = timestamp;
+            updated_config.try_serialize(&mut &mut rent_config_data[..])?;
+        }
+
+        // Emit rental event
+        emit!(ContentRentedEvent {
+            content: content.key(),
+            renter: ctx.accounts.renter.key(),
+            creator: ctx.accounts.creator.key(),
+            nft_asset: nft_asset_key,
+            fee_paid: rent_fee,
+            rented_at: timestamp,
+            expires_at,
+        });
+
+        Ok(())
+    }
+
+    /// Check if a rental has expired
+    /// Returns the rental status (can be used for access control)
+    pub fn check_rent_expiry(ctx: Context<CheckRentExpiry>) -> Result<()> {
+        let rent_entry = &ctx.accounts.rent_entry;
+        let timestamp = Clock::get()?.unix_timestamp;
+
+        if rent_entry.is_expired(timestamp) {
+            msg!("Rental expired at {}, current time {}", rent_entry.expires_at, timestamp);
+            return Err(ContentRegistryError::RentalExpired.into());
+        }
+
+        msg!("Rental valid until {}, remaining {} seconds",
+            rent_entry.expires_at,
+            rent_entry.remaining_time(timestamp)
+        );
 
         Ok(())
     }

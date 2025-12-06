@@ -76,4 +76,20 @@ pub enum ContentRegistryError {
     NoNftsProvided,
     #[msg("Invalid NftRewardState PDA")]
     InvalidNftRewardState,
+
+    // Rental errors
+    #[msg("Renting is not active for this content")]
+    RentingNotActive,
+    #[msg("Rent fee below minimum allowed")]
+    RentFeeTooLow,
+    #[msg("Rent period must be between 1 hour and 365 days")]
+    InvalidRentPeriod,
+    #[msg("Rental has expired")]
+    RentalExpired,
+    #[msg("Rental NFT cannot be transferred")]
+    RentalNonTransferable,
+    #[msg("Invalid RentEntry PDA")]
+    InvalidRentEntry,
+    #[msg("Rent config already exists for this content")]
+    RentConfigExists,
 }

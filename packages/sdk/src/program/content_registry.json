@@ -1,5 +1,5 @@
 {
-  "address": "EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU",
+  "address": "3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn",
   "metadata": {
     "name": "content_registry",
     "version": "0.1.0",
@@ -8,20 +8,403 @@
   },
   "instructions": [
     {
+      "name": "check_rent_expiry",
+      "docs": [
+        "Check if a rental has expired",
+        "Returns the rental status (can be used for access control)"
+      ],
+      "discriminator": [
+        30,
+        131,
+        63,
+        182,
+        220,
+        128,
+        231,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "rent_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_all_rewards",
+      "docs": [
+        "Batch claim rewards from multiple content pools",
+        "Pass WalletContentState and ContentRewardPool pairs as remaining_accounts",
+        "Order: [wallet_state_1, pool_1, wallet_state_2, pool_2, ...]"
+      ],
+      "discriminator": [
+        132,
+        203,
+        246,
+        173,
+        206,
+        240,
+        85,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "holder",
+          "docs": [
+            "The holder claiming rewards from multiple content pools"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_content_rewards",
+      "docs": [
+        "Claim accumulated holder rewards for a single content",
+        "Rewards = (nft_count * reward_per_share - reward_debt) / PRECISION"
+      ],
+      "discriminator": [
+        199,
+        71,
+        194,
+        156,
+        230,
+        105,
+        182,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool to claim from"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_content_state",
+          "docs": [
+            "The holder's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "account",
+                "path": "wallet_content_state.content",
+                "account": "WalletContentState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "docs": [
+            "The holder claiming the reward"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_rewards_verified",
+      "docs": [
+        "Claim rewards with on-chain NFT verification using per-NFT reward tracking",
+        "This is the recommended claim method - it verifies actual NFT ownership at claim time",
+        "and uses per-NFT reward_debt for fair distribution regardless of transfers",
+        "",
+        "Pass pairs of (nft_asset, nft_reward_state) as remaining_accounts:",
+        "[nft_asset_1, nft_reward_state_1, nft_asset_2, nft_reward_state_2, ...]",
+        "",
+        "The instruction will:",
+        "1. Auto-sync any secondary sale royalties that arrived via Metaplex Royalties plugin",
+        "2. Verify each NFT belongs to the content's collection",
+        "3. Verify each NFT is owned by the claimer",
+        "4. Calculate rewards for each NFT: (reward_per_share - nft.reward_debt) / PRECISION",
+        "5. Update each NFT's reward_debt",
+        "6. Transfer total rewards to claimer"
+      ],
+      "discriminator": [
+        29,
+        80,
+        232,
+        144,
+        185,
+        167,
+        250,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool to claim from"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet_content_state",
+          "docs": [
+            "The holder's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "holder"
+              },
+              {
+                "kind": "account",
+                "path": "wallet_content_state.content",
+                "account": "WalletContentState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_collection",
+          "docs": [
+            "The content collection to verify NFTs against"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "docs": [
+            "The holder claiming the reward"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "configure_mint",
       "docs": [
-        "Configure NFT minting for content (creator only)"
+        "Configure NFT minting for content (creator only, SOL only)"
       ],
-      "discriminator": [194, 40, 217, 137, 179, 23, 131, 160],
+      "discriminator": [
+        194,
+        40,
+        217,
+        137,
+        179,
+        23,
+        131,
+        160
+      ],
       "accounts": [
-        { "name": "content" },
+        {
+          "name": "content"
+        },
         {
           "name": "mint_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [109, 105, 110, 116, 95, 99, 111, 110, 102, 105, 103] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
@@ -29,46 +412,194 @@
           "name": "creator",
           "writable": true,
           "signer": true,
-          "relations": ["content"]
+          "relations": [
+            "content"
+          ]
         },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "price", "type": "u64" },
-        { "name": "max_supply", "type": { "option": "u64" } },
-        { "name": "creator_royalty_bps", "type": "u16" }
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
+        }
       ]
     },
     {
-      "name": "delete_content",
-      "docs": ["Delete content (creator only, not locked)"],
-      "discriminator": [5, 233, 219, 88, 173, 220, 96, 213],
+      "name": "configure_rent",
+      "docs": [
+        "Configure rental settings for content (creator only)",
+        "Sets the rent fee and rental period",
+        "Configure rental with 3-tier pricing: 6 hours, 1 day, 7 days",
+        "Creator must set fees for all three tiers"
+      ],
+      "discriminator": [
+        81,
+        237,
+        166,
+        229,
+        27,
+        191,
+        41,
+        192
+      ],
       "accounts": [
-        { "name": "content", "writable": true },
-        { "name": "cid_registry", "writable": true },
+        {
+          "name": "content"
+        },
+        {
+          "name": "rent_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
         {
           "name": "creator",
           "writable": true,
           "signer": true,
-          "relations": ["content"]
+          "relations": [
+            "content"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "rent_fee_6h",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_1d",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_7d",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "delete_content",
+      "docs": [
+        "Delete content (creator only, not locked)"
+      ],
+      "discriminator": [
+        5,
+        233,
+        219,
+        88,
+        173,
+        220,
+        96,
+        213
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "cid_registry",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "content"
+          ]
         }
       ],
       "args": []
     },
     {
       "name": "delete_content_with_mint",
-      "docs": ["Delete content with associated mint config (creator only, not locked)"],
-      "discriminator": [217, 53, 24, 118, 52, 28, 241, 83],
+      "docs": [
+        "Delete content with associated mint config (creator only, not locked)"
+      ],
+      "discriminator": [
+        217,
+        53,
+        24,
+        118,
+        52,
+        28,
+        241,
+        83
+      ],
       "accounts": [
-        { "name": "content", "writable": true },
-        { "name": "cid_registry", "writable": true },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "cid_registry",
+          "writable": true
+        },
         {
           "name": "mint_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [109, 105, 110, 116, 95, 99, 111, 110, 102, 105, 103] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
@@ -76,321 +607,538 @@
           "name": "creator",
           "writable": true,
           "signer": true,
-          "relations": ["content", "mint_config"]
+          "relations": [
+            "content",
+            "mint_config"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "execute_lifecycle_hook",
+      "docs": [
+        "Handle lifecycle hook callback from Metaplex Core",
+        "Called automatically when NFTs with our hook are transferred",
+        "This updates the wallet states for sender and receiver"
+      ],
+      "discriminator": [
+        152,
+        6,
+        57,
+        45,
+        26,
+        166,
+        207,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "mpl_core_program",
+          "docs": [
+            "We verify the asset has our lifecycle hook configured"
+          ],
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "asset"
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool (passed as extra account by Metaplex Core)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "docs": [
+            "The sender's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "sender"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "docs": [
+            "The receiver's wallet state for this content (created if needed)",
+            "Sender pays for account creation as part of transfer cost"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "receiver"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "receiver",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
       "name": "initialize_ecosystem",
-      "docs": ["Initialize the ecosystem config (admin only, once)"],
-      "discriminator": [103, 159, 177, 39, 191, 146, 190, 22],
+      "docs": [
+        "Initialize the ecosystem config (admin only, once)"
+      ],
+      "discriminator": [
+        103,
+        159,
+        177,
+        39,
+        191,
+        146,
+        190,
+        22
+      ],
       "accounts": [
         {
           "name": "ecosystem_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [101, 99, 111, 115, 121, 115, 116, 101, 109] }
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
             ]
           }
         },
-        { "name": "treasury" },
-        { "name": "admin", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "usdc_mint", "type": "pubkey" }
+        {
+          "name": "usdc_mint",
+          "type": "pubkey"
+        }
       ]
     },
     {
       "name": "mint_nft_sol",
-      "docs": ["Mint NFT with SOL payment using per-content reward pool"],
-      "discriminator": [246, 203, 253, 176, 41, 171, 75, 92],
+      "docs": [
+        "Mint NFT with SOL payment",
+        "Uses per-content reward pools with wallet-level tracking:",
+        "- Each content has its own reward pool",
+        "- 12% holder rewards go to that content's pool only",
+        "- Wallet-level tracking allows batch claiming"
+      ],
+      "discriminator": [
+        246,
+        203,
+        253,
+        176,
+        41,
+        171,
+        75,
+        92
+      ],
       "accounts": [
         {
           "name": "ecosystem_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [101, 99, 111, 115, 121, 115, 116, 101, 109] }
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
             ]
           }
         },
-        { "name": "content", "writable": true },
+        {
+          "name": "content",
+          "writable": true
+        },
         {
           "name": "mint_config",
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [109, 105, 110, 116, 95, 99, 111, 110, 102, 105, 103] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
         {
           "name": "content_collection",
+          "docs": [
+            "We use AccountInfo to reduce stack size (saves 8+ bytes)"
+          ],
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
-        { "name": "collection_asset", "writable": true },
+        {
+          "name": "collection_asset",
+          "docs": [
+            "NFT will be added to this collection, inheriting its LinkedLifecycleHook",
+            "Verification: collection_asset address is read from content_collection data"
+          ],
+          "writable": true
+        },
         {
           "name": "content_reward_pool",
+          "docs": [
+            "Content-specific reward pool",
+            "Holder rewards from this content's sales accumulate here"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
         {
           "name": "buyer_wallet_state",
+          "docs": [
+            "Buyer's wallet state for this content (kept for backwards compatibility)",
+            "Now primarily used for UI display, actual rewards tracked per-NFT"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "buyer" },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
         {
           "name": "nft_reward_state",
+          "docs": [
+            "Per-NFT reward state - tracks reward_debt for this specific NFT",
+            "This is the source of truth for reward calculations"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [110, 102, 116, 95, 114, 101, 119, 97, 114, 100] },
-              { "kind": "account", "path": "nft_asset" }
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
             ]
           }
         },
-        { "name": "creator", "writable": true },
-        { "name": "platform", "writable": true, "optional": true },
-        { "name": "treasury", "writable": true },
-        { "name": "buyer", "writable": true, "signer": true },
-        { "name": "nft_asset", "writable": true, "signer": true },
-        { "name": "mpl_core_program", "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": []
-    },
-    {
-      "name": "claim_content_rewards",
-      "docs": ["Claim accumulated rewards for a single content position"],
-      "discriminator": [199, 71, 194, 156, 230, 105, 182, 161],
-      "accounts": [
         {
-          "name": "content_reward_pool",
+          "name": "creator",
           "writable": true
         },
         {
-          "name": "wallet_content_state",
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "treasury",
           "writable": true
         },
-        { "name": "holder", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": []
-    },
-    {
-      "name": "claim_all_rewards",
-      "docs": ["Batch claim rewards from multiple content pools"],
-      "discriminator": [132, 203, 246, 173, 206, 240, 85, 120],
-      "accounts": [
-        { "name": "holder", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": []
-    },
-    {
-      "name": "claim_rewards_verified",
-      "docs": ["Claim rewards with on-chain NFT verification - verifies actual NFT ownership at claim time"],
-      "discriminator": [29, 80, 232, 144, 185, 167, 250, 79],
-      "accounts": [
         {
-          "name": "content_reward_pool",
+          "name": "buyer",
           "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
+          "signer": true
         },
         {
-          "name": "wallet_content_state",
+          "name": "nft_asset",
+          "docs": [
+            "The NFT asset account (Metaplex Core asset)",
+            "This must be a new keypair generated client-side"
+          ],
           "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "holder" },
-              { "kind": "account", "path": "wallet_content_state.content" }
-            ]
-          }
+          "signer": true
         },
         {
-          "name": "content_collection",
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110] },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        { "name": "holder", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": []
-    },
-    {
-      "name": "sync_nft_transfer",
-      "docs": ["Sync NFT transfer - call after transferring to update reward state"],
-      "discriminator": [153, 72, 61, 154, 198, 149, 126, 145],
-      "accounts": [
-        {
-          "name": "content_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         },
         {
-          "name": "sender_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "sender" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        {
-          "name": "receiver_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "receiver" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        { "name": "sender", "writable": true, "signer": true },
-        { "name": "receiver", "writable": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": []
-    },
-    {
-      "name": "sync_nft_transfers_batch",
-      "docs": ["Sync multiple NFT transfers at once"],
-      "discriminator": [117, 138, 233, 11, 152, 81, 245, 83],
-      "accounts": [
-        {
-          "name": "content_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        {
-          "name": "sender_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "sender" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        {
-          "name": "receiver_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "receiver" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        { "name": "sender", "writable": true, "signer": true },
-        { "name": "receiver", "writable": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
-      ],
-      "args": [
-        { "name": "count", "type": "u8" }
-      ]
-    },
-    {
-      "name": "execute_lifecycle_hook",
-      "docs": ["Handle lifecycle hook callback from Metaplex Core - called automatically on NFT transfers"],
-      "discriminator": [152, 6, 57, 45, 26, 166, 207, 223],
-      "accounts": [
-        { "name": "mpl_core_program", "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" },
-        { "name": "asset" },
-        {
-          "name": "content_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 114, 101, 119, 97, 114, 100, 95, 112, 111, 111, 108] },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        {
-          "name": "sender_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "sender" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        {
-          "name": "receiver_wallet_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              { "kind": "const", "value": [119, 97, 108, 108, 101, 116, 95, 99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "account", "path": "receiver" },
-              { "kind": "account", "path": "content_reward_pool.content" }
-            ]
-          }
-        },
-        { "name": "sender", "writable": true },
-        { "name": "receiver", "writable": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": []
     },
     {
       "name": "register_content",
-      "docs": ["Register new content with CID uniqueness enforcement"],
-      "discriminator": [170, 55, 41, 115, 252, 248, 38, 144],
+      "docs": [
+        "Register new content with CID uniqueness enforcement"
+      ],
+      "discriminator": [
+        170,
+        55,
+        41,
+        115,
+        252,
+        248,
+        38,
+        144
+      ],
       "accounts": [
         {
           "name": "content",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "arg", "path": "cid_hash" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
             ]
           }
         },
@@ -399,36 +1147,108 @@
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 105, 100] },
-              { "kind": "arg", "path": "cid_hash" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
             ]
           }
         },
-        { "name": "authority", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "cid_hash", "type": { "array": ["u8", 32] } },
-        { "name": "content_cid", "type": "string" },
-        { "name": "metadata_cid", "type": "string" },
-        { "name": "content_type", "type": { "defined": { "name": "ContentType" } } },
-        { "name": "is_encrypted", "type": "bool" },
-        { "name": "preview_cid", "type": "string" },
-        { "name": "encryption_meta_cid", "type": "string" }
+        {
+          "name": "cid_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "content_cid",
+          "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "content_type",
+          "type": {
+            "defined": {
+              "name": "ContentType"
+            }
+          }
+        },
+        {
+          "name": "is_encrypted",
+          "type": "bool"
+        },
+        {
+          "name": "preview_cid",
+          "type": "string"
+        },
+        {
+          "name": "encryption_meta_cid",
+          "type": "string"
+        }
       ]
     },
     {
       "name": "register_content_with_mint",
-      "docs": ["Register new content with optional NFT mint configuration"],
-      "discriminator": [126, 168, 92, 147, 68, 165, 193, 127],
+      "docs": [
+        "Register new content with optional NFT mint configuration"
+      ],
+      "discriminator": [
+        126,
+        168,
+        92,
+        147,
+        68,
+        165,
+        193,
+        127
+      ],
       "accounts": [
         {
           "name": "content",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116] },
-              { "kind": "arg", "path": "cid_hash" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
             ]
           }
         },
@@ -437,8 +1257,18 @@
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 105, 100] },
-              { "kind": "arg", "path": "cid_hash" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cid_hash"
+              }
             ]
           }
         },
@@ -447,270 +1277,1582 @@
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [109, 105, 110, 116, 95, 99, 111, 110, 102, 105, 103] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
         {
           "name": "content_collection",
+          "docs": [
+            "ContentCollection PDA to track the collection for this content"
+          ],
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [99, 111, 110, 116, 101, 110, 116, 95, 99, 111, 108, 108, 101, 99, 116, 105, 111, 110] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
-        { "name": "collection_asset", "writable": true, "signer": true },
-        { "name": "mpl_core_program", "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d" },
-        { "name": "authority", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+        {
+          "name": "collection_asset",
+          "docs": [
+            "The Metaplex Core Collection asset (must be a new keypair)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "ecosystem_config",
+          "docs": [
+            "Ecosystem config to get treasury address for royalties"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "cid_hash", "type": { "array": ["u8", 32] } },
-        { "name": "content_cid", "type": "string" },
-        { "name": "metadata_cid", "type": "string" },
-        { "name": "content_type", "type": { "defined": { "name": "ContentType" } } },
-        { "name": "price", "type": "u64" },
-        { "name": "max_supply", "type": { "option": "u64" } },
-        { "name": "creator_royalty_bps", "type": "u16" },
-        { "name": "is_encrypted", "type": "bool" },
-        { "name": "preview_cid", "type": "string" },
-        { "name": "encryption_meta_cid", "type": "string" }
+        {
+          "name": "cid_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "content_cid",
+          "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "content_type",
+          "type": {
+            "defined": {
+              "name": "ContentType"
+            }
+          }
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
+        },
+        {
+          "name": "is_encrypted",
+          "type": "bool"
+        },
+        {
+          "name": "preview_cid",
+          "type": "string"
+        },
+        {
+          "name": "encryption_meta_cid",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "rent_content_sol",
+      "docs": [
+        "Rent content with SOL payment",
+        "Creates a frozen (non-transferable) NFT that expires after the rental period",
+        "User selects one of 3 tiers: 6 hours, 1 day, or 7 days",
+        "Payment is distributed according to primary sale percentages"
+      ],
+      "discriminator": [
+        3,
+        120,
+        198,
+        143,
+        190,
+        90,
+        206,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content"
+        },
+        {
+          "name": "rent_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_collection",
+          "docs": [
+            "Content collection for minting the rental NFT"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "docs": [
+            "The collection asset for this content"
+          ],
+          "writable": true
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "Content reward pool for holder rewards",
+            "Created on first mint or rent"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_entry",
+          "docs": [
+            "Rental entry tracking expiry",
+            "PDA seeds: [\"rent_entry\", nft_asset]"
+          ],
+          "writable": true
+        },
+        {
+          "name": "nft_asset",
+          "docs": [
+            "The rental NFT asset (new keypair, signer)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator",
+          "docs": [
+            "Creator receives payment"
+          ],
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "docs": [
+            "Platform receives fees"
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury receives ecosystem fees"
+          ],
+          "writable": true
+        },
+        {
+          "name": "renter",
+          "docs": [
+            "Renter paying for rental"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tier",
+          "type": {
+            "defined": {
+              "name": "RentTier"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sync_nft_transfer",
+      "docs": [
+        "Handle NFT transfer - called by Metaplex Core lifecycle hook",
+        "This is NOT called via CPI from Metaplex - it's a separate instruction",
+        "that must be called after the transfer to sync reward state.",
+        "",
+        "For now, we implement a manual sync approach where users call this",
+        "after transferring NFTs to update their reward positions."
+      ],
+      "discriminator": [
+        153,
+        72,
+        61,
+        154,
+        198,
+        149,
+        126,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "docs": [
+            "The sender's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "sender"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "docs": [
+            "The receiver's wallet state for this content (created if needed)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "receiver"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender",
+          "docs": [
+            "The sender (must sign to authorize the sync)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "receiver",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sync_nft_transfers_batch",
+      "docs": [
+        "Batch sync multiple NFT transfers at once",
+        "Useful when transferring multiple NFTs from same content"
+      ],
+      "discriminator": [
+        117,
+        138,
+        233,
+        11,
+        152,
+        81,
+        245,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender_wallet_state",
+          "docs": [
+            "The sender's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "sender"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "receiver_wallet_state",
+          "docs": [
+            "The receiver's wallet state for this content (created if needed)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "receiver"
+              },
+              {
+                "kind": "account",
+                "path": "content_reward_pool.content",
+                "account": "ContentRewardPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sender",
+          "docs": [
+            "The sender (must sign to authorize the sync)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "receiver",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "count",
+          "type": "u8"
+        }
       ]
     },
     {
       "name": "tip_content",
-      "docs": ["Tip a creator for their content"],
-      "discriminator": [12, 29, 43, 141, 181, 42, 144, 92],
+      "docs": [
+        "Tip a creator for their content"
+      ],
+      "discriminator": [
+        12,
+        29,
+        43,
+        141,
+        181,
+        42,
+        144,
+        92
+      ],
       "accounts": [
-        { "name": "content", "writable": true },
-        { "name": "creator", "writable": true },
-        { "name": "tipper", "writable": true, "signer": true },
-        { "name": "system_program", "address": "11111111111111111111111111111111" }
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "tipper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
       ],
       "args": [
-        { "name": "amount", "type": "u64" }
+        {
+          "name": "amount",
+          "type": "u64"
+        }
       ]
     },
     {
       "name": "update_content",
-      "docs": ["Update content metadata (creator only, not locked)"],
-      "discriminator": [201, 145, 238, 112, 36, 231, 69, 8],
+      "docs": [
+        "Update content metadata (creator only, not locked)"
+      ],
+      "discriminator": [
+        201,
+        145,
+        238,
+        112,
+        36,
+        231,
+        69,
+        8
+      ],
       "accounts": [
-        { "name": "content", "writable": true },
-        { "name": "creator", "signer": true, "relations": ["content"] }
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "content"
+          ]
+        }
       ],
       "args": [
-        { "name": "metadata_cid", "type": "string" }
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        }
       ]
     },
     {
       "name": "update_ecosystem",
-      "docs": ["Update ecosystem settings (admin only)"],
-      "discriminator": [116, 15, 145, 34, 144, 187, 120, 42],
+      "docs": [
+        "Update ecosystem settings (admin only)"
+      ],
+      "discriminator": [
+        116,
+        15,
+        145,
+        34,
+        144,
+        187,
+        120,
+        42
+      ],
       "accounts": [
         {
           "name": "ecosystem_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [101, 99, 111, 115, 121, 115, 116, 101, 109] }
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
             ]
           }
         },
-        { "name": "admin", "signer": true, "relations": ["ecosystem_config"] }
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "ecosystem_config"
+          ]
+        }
       ],
       "args": [
-        { "name": "new_treasury", "type": { "option": "pubkey" } },
-        { "name": "new_usdc_mint", "type": { "option": "pubkey" } },
-        { "name": "is_paused", "type": { "option": "bool" } }
+        {
+          "name": "new_treasury",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "new_usdc_mint",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "is_paused",
+          "type": {
+            "option": "bool"
+          }
+        }
       ]
     },
     {
       "name": "update_mint_settings",
-      "docs": ["Update mint settings (creator only, with restrictions after first mint)"],
-      "discriminator": [46, 150, 169, 122, 14, 20, 173, 18],
+      "docs": [
+        "Update mint settings (creator only, with restrictions after first mint)"
+      ],
+      "discriminator": [
+        46,
+        150,
+        169,
+        122,
+        14,
+        20,
+        173,
+        18
+      ],
       "accounts": [
-        { "name": "content" },
+        {
+          "name": "content"
+        },
         {
           "name": "mint_config",
           "writable": true,
           "pda": {
             "seeds": [
-              { "kind": "const", "value": [109, 105, 110, 116, 95, 99, 111, 110, 102, 105, 103] },
-              { "kind": "account", "path": "content" }
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
             ]
           }
         },
-        { "name": "creator", "signer": true, "relations": ["content", "mint_config"] }
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "content",
+            "mint_config"
+          ]
+        }
       ],
       "args": [
-        { "name": "price", "type": { "option": "u64" } },
-        { "name": "max_supply", "type": { "option": { "option": "u64" } } },
-        { "name": "creator_royalty_bps", "type": { "option": "u16" } },
-        { "name": "is_active", "type": { "option": "bool" } }
+        {
+          "name": "price",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": {
+              "option": "u64"
+            }
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_rent_config",
+      "docs": [
+        "Update rental settings (creator only)",
+        "Allows updating individual tier fees or all at once"
+      ],
+      "discriminator": [
+        218,
+        3,
+        152,
+        241,
+        29,
+        176,
+        232,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "content"
+        },
+        {
+          "name": "rent_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "rent_config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "rent_fee_6h",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "rent_fee_1d",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "rent_fee_7d",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
       ]
     }
   ],
   "accounts": [
     {
       "name": "CidRegistry",
-      "discriminator": [76, 59, 180, 103, 33, 99, 115, 244]
+      "discriminator": [
+        76,
+        59,
+        180,
+        103,
+        33,
+        99,
+        115,
+        244
+      ]
     },
     {
       "name": "ContentCollection",
-      "discriminator": [4, 172, 24, 57, 39, 232, 166, 61]
-    },
-    {
-      "name": "ContentRewardPool",
-      "discriminator": [118, 173, 137, 83, 204, 183, 229, 79]
-    },
-    {
-      "name": "WalletContentState",
-      "discriminator": [107, 170, 127, 220, 5, 80, 117, 30]
-    },
-    {
-      "name": "NftRewardState",
-      "discriminator": [117, 51, 192, 35, 172, 30, 218, 77]
+      "discriminator": [
+        4,
+        172,
+        24,
+        57,
+        39,
+        232,
+        166,
+        61
+      ]
     },
     {
       "name": "ContentEntry",
-      "discriminator": [8, 200, 227, 175, 3, 190, 190, 31]
+      "discriminator": [
+        8,
+        200,
+        227,
+        175,
+        3,
+        190,
+        190,
+        31
+      ]
+    },
+    {
+      "name": "ContentRewardPool",
+      "discriminator": [
+        118,
+        173,
+        137,
+        83,
+        204,
+        183,
+        229,
+        79
+      ]
     },
     {
       "name": "EcosystemConfig",
-      "discriminator": [230, 1, 147, 206, 55, 106, 39, 15]
+      "discriminator": [
+        230,
+        1,
+        147,
+        206,
+        55,
+        106,
+        39,
+        15
+      ]
     },
     {
       "name": "MintConfig",
-      "discriminator": [168, 252, 88, 182, 219, 205, 39, 53]
+      "discriminator": [
+        168,
+        252,
+        88,
+        182,
+        219,
+        205,
+        39,
+        53
+      ]
+    },
+    {
+      "name": "NftRewardState",
+      "discriminator": [
+        117,
+        51,
+        192,
+        35,
+        172,
+        30,
+        218,
+        77
+      ]
+    },
+    {
+      "name": "RentConfig",
+      "discriminator": [
+        51,
+        146,
+        60,
+        164,
+        221,
+        99,
+        142,
+        200
+      ]
+    },
+    {
+      "name": "RentEntry",
+      "discriminator": [
+        231,
+        216,
+        91,
+        217,
+        209,
+        179,
+        219,
+        202
+      ]
+    },
+    {
+      "name": "WalletContentState",
+      "discriminator": [
+        107,
+        170,
+        127,
+        220,
+        5,
+        80,
+        117,
+        30
+      ]
     }
   ],
   "events": [
     {
-      "name": "NftMintEvent",
-      "discriminator": [114, 195, 97, 207, 65, 217, 173, 157]
-    },
-    {
-      "name": "TipEvent",
-      "discriminator": [213, 36, 191, 50, 28, 25, 189, 252]
+      "name": "BatchClaimEvent",
+      "discriminator": [
+        197,
+        90,
+        252,
+        93,
+        78,
+        87,
+        115,
+        63
+      ]
     },
     {
       "name": "ClaimRewardEvent",
-      "discriminator": [156, 47, 92, 165, 31, 204, 187, 72]
+      "discriminator": [
+        207,
+        16,
+        14,
+        170,
+        176,
+        71,
+        40,
+        53
+      ]
     },
     {
-      "name": "BatchClaimEvent",
-      "discriminator": [197, 90, 252, 93, 78, 87, 115, 63]
+      "name": "ContentRentedEvent",
+      "discriminator": [
+        8,
+        53,
+        121,
+        199,
+        185,
+        133,
+        223,
+        139
+      ]
+    },
+    {
+      "name": "NftMintEvent",
+      "discriminator": [
+        114,
+        195,
+        97,
+        207,
+        65,
+        217,
+        173,
+        157
+      ]
     },
     {
       "name": "NftTransferSyncEvent",
-      "discriminator": [142, 50, 252, 230, 228, 220, 59, 23]
+      "discriminator": [
+        142,
+        50,
+        252,
+        230,
+        228,
+        220,
+        59,
+        23
+      ]
+    },
+    {
+      "name": "SecondaryRoyaltySyncEvent",
+      "discriminator": [
+        133,
+        14,
+        86,
+        195,
+        89,
+        156,
+        56,
+        21
+      ]
+    },
+    {
+      "name": "TipEvent",
+      "discriminator": [
+        213,
+        36,
+        191,
+        50,
+        28,
+        25,
+        189,
+        252
+      ]
+    },
+    {
+      "name": "VerifiedClaimEvent",
+      "discriminator": [
+        42,
+        42,
+        170,
+        98,
+        52,
+        148,
+        142,
+        140
+      ]
     }
   ],
   "errors": [
-    { "code": 6000, "name": "CidTooLong", "msg": "CID must be 64 characters or less" },
-    { "code": 6001, "name": "InvalidTipAmount", "msg": "Tip amount must be greater than 0" },
-    { "code": 6002, "name": "Unauthorized", "msg": "Unauthorized" },
-    { "code": 6003, "name": "CidAlreadyRegistered", "msg": "Content CID already registered by another user" },
-    { "code": 6004, "name": "CidHashMismatch", "msg": "CID hash does not match the provided CID" },
-    { "code": 6005, "name": "ContentLocked", "msg": "Content is locked after first NFT mint" },
-    { "code": 6006, "name": "MintConfigExists", "msg": "Mint configuration already exists for this content" },
-    { "code": 6007, "name": "MintConfigNotFound", "msg": "Mint configuration not found" },
-    { "code": 6008, "name": "MintingNotActive", "msg": "Minting is not active for this content" },
-    { "code": 6009, "name": "MaxSupplyReached", "msg": "Maximum supply reached" },
-    { "code": 6010, "name": "PriceTooLow", "msg": "Price below minimum allowed" },
-    { "code": 6011, "name": "InvalidRoyalty", "msg": "Royalty percentage out of allowed range (2-10%)" },
-    { "code": 6012, "name": "InsufficientPayment", "msg": "Insufficient payment amount" },
-    { "code": 6013, "name": "InvalidCurrency", "msg": "Invalid payment currency" },
-    { "code": 6014, "name": "CannotIncreaseSupply", "msg": "Cannot increase supply after minting has started" },
-    { "code": 6015, "name": "SupplyBelowMinted", "msg": "Cannot set supply below already minted count" },
-    { "code": 6016, "name": "EcosystemPaused", "msg": "Ecosystem is paused" },
-    { "code": 6017, "name": "EcosystemAlreadyInitialized", "msg": "Ecosystem config already initialized" },
-    { "code": 6018, "name": "InvalidUsdcMint", "msg": "Invalid USDC mint address" },
-    { "code": 6019, "name": "NftMismatch", "msg": "NFT asset does not match the reward state" },
-    { "code": 6020, "name": "ContentMismatch", "msg": "Content does not match the reward pool" },
-    { "code": 6021, "name": "NotNftOwner", "msg": "Holder does not own this NFT" },
-    { "code": 6022, "name": "NothingToClaim", "msg": "No rewards available to claim" },
-    { "code": 6023, "name": "InvalidAccountPairs", "msg": "Invalid account pairs for batch claim" },
-    { "code": 6024, "name": "InvalidAccountData", "msg": "Invalid account data" },
-    { "code": 6025, "name": "InvalidHookCaller", "msg": "Invalid lifecycle hook caller - must be Metaplex Core" },
-    { "code": 6026, "name": "InvalidAsset", "msg": "Invalid asset for transfer hook" },
-    { "code": 6027, "name": "SenderNotOwner", "msg": "Sender does not own this NFT" },
-    { "code": 6028, "name": "InvalidNftAsset", "msg": "Invalid NFT asset - not a valid Metaplex Core asset" },
-    { "code": 6029, "name": "NftNotInCollection", "msg": "NFT does not belong to the content's collection" },
-    { "code": 6030, "name": "ClaimerNotOwner", "msg": "Claimer does not own this NFT" },
-    { "code": 6031, "name": "NoNftsProvided", "msg": "No NFTs provided for verification" },
-    { "code": 6032, "name": "InvalidNftRewardState", "msg": "Invalid NftRewardState PDA" }
+    {
+      "code": 6000,
+      "name": "CidTooLong",
+      "msg": "CID must be 64 characters or less"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidTipAmount",
+      "msg": "Tip amount must be greater than 0"
+    },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Unauthorized"
+    },
+    {
+      "code": 6003,
+      "name": "CidAlreadyRegistered",
+      "msg": "Content CID already registered by another user"
+    },
+    {
+      "code": 6004,
+      "name": "CidHashMismatch",
+      "msg": "CID hash does not match the provided CID"
+    },
+    {
+      "code": 6005,
+      "name": "ContentLocked",
+      "msg": "Content is locked after first NFT mint"
+    },
+    {
+      "code": 6006,
+      "name": "MintConfigExists",
+      "msg": "Mint configuration already exists for this content"
+    },
+    {
+      "code": 6007,
+      "name": "MintConfigNotFound",
+      "msg": "Mint configuration not found"
+    },
+    {
+      "code": 6008,
+      "name": "MintingNotActive",
+      "msg": "Minting is not active for this content"
+    },
+    {
+      "code": 6009,
+      "name": "MaxSupplyReached",
+      "msg": "Maximum supply reached"
+    },
+    {
+      "code": 6010,
+      "name": "PriceTooLow",
+      "msg": "Price below minimum allowed"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidRoyalty",
+      "msg": "Royalty percentage out of allowed range (2-10%)"
+    },
+    {
+      "code": 6012,
+      "name": "InsufficientPayment",
+      "msg": "Insufficient payment amount"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidCurrency",
+      "msg": "Invalid payment currency"
+    },
+    {
+      "code": 6014,
+      "name": "CannotIncreaseSupply",
+      "msg": "Cannot increase supply after minting has started"
+    },
+    {
+      "code": 6015,
+      "name": "SupplyBelowMinted",
+      "msg": "Cannot set supply below already minted count"
+    },
+    {
+      "code": 6016,
+      "name": "EcosystemPaused",
+      "msg": "Ecosystem is paused"
+    },
+    {
+      "code": 6017,
+      "name": "EcosystemAlreadyInitialized",
+      "msg": "Ecosystem config already initialized"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidUsdcMint",
+      "msg": "Invalid USDC mint address"
+    },
+    {
+      "code": 6019,
+      "name": "NftMismatch",
+      "msg": "NFT asset does not match the reward state"
+    },
+    {
+      "code": 6020,
+      "name": "ContentMismatch",
+      "msg": "Content does not match the reward pool"
+    },
+    {
+      "code": 6021,
+      "name": "NotNftOwner",
+      "msg": "Holder does not own this NFT"
+    },
+    {
+      "code": 6022,
+      "name": "NothingToClaim",
+      "msg": "No rewards available to claim"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidAccountPairs",
+      "msg": "Invalid account pairs for batch claim"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidAccountData",
+      "msg": "Invalid account data"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidHookCaller",
+      "msg": "Invalid lifecycle hook caller - must be Metaplex Core"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidAsset",
+      "msg": "Invalid asset for transfer hook"
+    },
+    {
+      "code": 6027,
+      "name": "SenderNotOwner",
+      "msg": "Sender does not own this NFT"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidNftAsset",
+      "msg": "Invalid NFT asset - not a valid Metaplex Core asset"
+    },
+    {
+      "code": 6029,
+      "name": "NftNotInCollection",
+      "msg": "NFT does not belong to the content's collection"
+    },
+    {
+      "code": 6030,
+      "name": "ClaimerNotOwner",
+      "msg": "Claimer does not own this NFT"
+    },
+    {
+      "code": 6031,
+      "name": "NoNftsProvided",
+      "msg": "No NFTs provided for verification"
+    },
+    {
+      "code": 6032,
+      "name": "InvalidNftRewardState",
+      "msg": "Invalid NftRewardState PDA"
+    },
+    {
+      "code": 6033,
+      "name": "RentingNotActive",
+      "msg": "Renting is not active for this content"
+    },
+    {
+      "code": 6034,
+      "name": "RentFeeTooLow",
+      "msg": "Rent fee below minimum allowed"
+    },
+    {
+      "code": 6035,
+      "name": "InvalidRentPeriod",
+      "msg": "Rent period must be between 1 hour and 365 days"
+    },
+    {
+      "code": 6036,
+      "name": "RentalExpired",
+      "msg": "Rental has expired"
+    },
+    {
+      "code": 6037,
+      "name": "RentalNonTransferable",
+      "msg": "Rental NFT cannot be transferred"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidRentEntry",
+      "msg": "Invalid RentEntry PDA"
+    },
+    {
+      "code": 6039,
+      "name": "RentConfigExists",
+      "msg": "Rent config already exists for this content"
+    }
   ],
   "types": [
     {
-      "name": "CidRegistry",
-      "docs": ["Registry to ensure CID uniqueness across all content."],
+      "name": "BatchClaimEvent",
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "owner", "docs": ["The owner who registered this CID"], "type": "pubkey" },
-          { "name": "content_pda", "docs": ["The content PDA associated with this CID"], "type": "pubkey" },
-          { "name": "registered_at", "docs": ["When this CID was registered"], "type": "i64" }
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_amount",
+            "type": "u64"
+          },
+          {
+            "name": "num_contents",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CidRegistry",
+      "docs": [
+        "Registry to ensure CID uniqueness across all content.",
+        "PDA seeds: [\"cid\", hash(content_cid)]",
+        "",
+        "This prevents multiple users from claiming the same content CID.",
+        "The first user to register a CID becomes its permanent owner."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The owner who registered this CID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content_pda",
+            "docs": [
+              "The content PDA associated with this CID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "When this CID was registered"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimRewardEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
         ]
       }
     },
     {
       "name": "ContentCollection",
-      "docs": ["Tracks the Metaplex Core Collection associated with a content"],
+      "docs": [
+        "Tracks the Metaplex Core Collection associated with a content",
+        "Each content has one collection, and all NFTs minted from that content belong to it"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "content", "docs": ["The content PDA this collection belongs to"], "type": "pubkey" },
-          { "name": "collection_asset", "docs": ["The Metaplex Core collection asset address"], "type": "pubkey" },
-          { "name": "creator", "docs": ["The creator of the content/collection"], "type": "pubkey" },
-          { "name": "created_at", "docs": ["Timestamp when collection was created"], "type": "i64" }
-        ]
-      }
-    },
-    {
-      "name": "ContentRewardPool",
-      "docs": ["Per-content reward pool for holder rewards"],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "content", "docs": ["The content this pool belongs to"], "type": "pubkey" },
-          { "name": "reward_per_share", "docs": ["Accumulated reward per share (scaled by PRECISION)"], "type": "u128" },
-          { "name": "total_nfts", "docs": ["Total NFTs minted for this content"], "type": "u64" },
-          { "name": "total_deposited", "docs": ["Total rewards ever deposited to this pool (lamports)"], "type": "u64" },
-          { "name": "total_claimed", "docs": ["Total rewards claimed from this pool (lamports)"], "type": "u64" },
-          { "name": "created_at", "docs": ["Timestamp when pool was created"], "type": "i64" }
-        ]
-      }
-    },
-    {
-      "name": "WalletContentState",
-      "docs": ["Per-wallet content state tracking NFT ownership and reward debt"],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "wallet", "docs": ["The wallet this state belongs to"], "type": "pubkey" },
-          { "name": "content", "docs": ["The content this state tracks"], "type": "pubkey" },
-          { "name": "nft_count", "docs": ["Number of NFTs this wallet owns for this content"], "type": "u64" },
-          { "name": "reward_debt", "docs": ["Cumulative reward debt"], "type": "u128" },
-          { "name": "created_at", "docs": ["Timestamp when first NFT was acquired"], "type": "i64" },
-          { "name": "updated_at", "docs": ["Timestamp of last update"], "type": "i64" }
-        ]
-      }
-    },
-    {
-      "name": "NftRewardState",
-      "docs": ["Per-NFT reward state - tracks reward_debt for this specific NFT"],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "nft_asset", "docs": ["The NFT asset this state belongs to"], "type": "pubkey" },
-          { "name": "content", "docs": ["The content this NFT belongs to"], "type": "pubkey" },
-          { "name": "reward_debt", "docs": ["Reward debt for this specific NFT (scaled by PRECISION)"], "type": "u128" },
-          { "name": "created_at", "docs": ["Timestamp when this state was created (at mint time)"], "type": "i64" }
+          {
+            "name": "content",
+            "docs": [
+              "The content PDA this collection belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "collection_asset",
+            "docs": [
+              "The Metaplex Core collection asset address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "The creator of the content/collection"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when collection was created"
+            ],
+            "type": "i64"
+          }
         ]
       }
     },
@@ -719,17 +2861,170 @@
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "creator", "type": "pubkey" },
-          { "name": "content_cid", "type": "string" },
-          { "name": "metadata_cid", "type": "string" },
-          { "name": "content_type", "type": { "defined": { "name": "ContentType" } } },
-          { "name": "tips_received", "type": "u64" },
-          { "name": "created_at", "type": "i64" },
-          { "name": "is_locked", "type": "bool" },
-          { "name": "minted_count", "type": "u64" },
-          { "name": "is_encrypted", "type": "bool" },
-          { "name": "preview_cid", "type": "string" },
-          { "name": "encryption_meta_cid", "type": "string" }
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "content_cid",
+            "type": "string"
+          },
+          {
+            "name": "metadata_cid",
+            "type": "string"
+          },
+          {
+            "name": "content_type",
+            "type": {
+              "defined": {
+                "name": "ContentType"
+              }
+            }
+          },
+          {
+            "name": "tips_received",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "is_locked",
+            "type": "bool"
+          },
+          {
+            "name": "minted_count",
+            "type": "u64"
+          },
+          {
+            "name": "is_encrypted",
+            "type": "bool"
+          },
+          {
+            "name": "preview_cid",
+            "type": "string"
+          },
+          {
+            "name": "encryption_meta_cid",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ContentRentedEvent",
+      "docs": [
+        "Emitted when content is rented"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "Content being rented"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "renter",
+            "docs": [
+              "Renter's wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator receiving payment"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The rental NFT asset"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_paid",
+            "docs": [
+              "Rent fee paid (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rented_at",
+            "docs": [
+              "Rental start timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Rental expiry timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ContentRewardPool",
+      "docs": [
+        "Per-content reward pool",
+        "Each content piece has its own pool tracking holder rewards from that content's sales",
+        "PDA seeds: [\"content_reward_pool\", content_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "The content this pool belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_per_share",
+            "docs": [
+              "Accumulated reward per share (scaled by PRECISION)",
+              "Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_nfts"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "total_nfts",
+            "docs": [
+              "Total NFTs minted for this content"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_deposited",
+            "docs": [
+              "Total rewards ever deposited to this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "docs": [
+              "Total rewards claimed from this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when pool was created"
+            ],
+            "type": "i64"
+          }
         ]
       }
     },
@@ -738,54 +3033,207 @@
       "type": {
         "kind": "enum",
         "variants": [
-          { "name": "Movie" },
-          { "name": "TvSeries" },
-          { "name": "MusicVideo" },
-          { "name": "ShortVideo" },
-          { "name": "GeneralVideo" },
-          { "name": "Comic" },
-          { "name": "GeneralBook" },
-          { "name": "Podcast" },
-          { "name": "Audiobook" },
-          { "name": "GeneralAudio" },
-          { "name": "Photo" },
-          { "name": "Art" },
-          { "name": "GeneralImage" }
+          {
+            "name": "Video"
+          },
+          {
+            "name": "Movie"
+          },
+          {
+            "name": "Television"
+          },
+          {
+            "name": "MusicVideo"
+          },
+          {
+            "name": "Short"
+          },
+          {
+            "name": "Music"
+          },
+          {
+            "name": "Podcast"
+          },
+          {
+            "name": "Audiobook"
+          },
+          {
+            "name": "Photo"
+          },
+          {
+            "name": "Artwork"
+          },
+          {
+            "name": "Book"
+          },
+          {
+            "name": "Comic"
+          },
+          {
+            "name": "Asset"
+          },
+          {
+            "name": "Game"
+          },
+          {
+            "name": "Software"
+          },
+          {
+            "name": "Dataset"
+          },
+          {
+            "name": "Post"
+          }
         ]
       }
     },
     {
       "name": "EcosystemConfig",
-      "docs": ["Global ecosystem configuration"],
+      "docs": [
+        "Global ecosystem configuration",
+        "PDA seeds: [\"ecosystem\"]",
+        "Only one instance exists, controlled by admin"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "admin", "docs": ["Admin who can update ecosystem settings"], "type": "pubkey" },
-          { "name": "treasury", "docs": ["Treasury wallet to receive ecosystem fees"], "type": "pubkey" },
-          { "name": "usdc_mint", "docs": ["USDC mint address (for USDC payments)"], "type": "pubkey" },
-          { "name": "total_fees_sol", "docs": ["Total fees collected (SOL, in lamports)"], "type": "u64" },
-          { "name": "total_fees_usdc", "docs": ["Total fees collected (USDC, in base units)"], "type": "u64" },
-          { "name": "total_nfts_minted", "docs": ["Total NFTs minted across all content"], "type": "u64" },
-          { "name": "is_paused", "docs": ["Whether the ecosystem is paused (emergency stop)"], "type": "bool" },
-          { "name": "created_at", "docs": ["Timestamp when config was created"], "type": "i64" }
+          {
+            "name": "admin",
+            "docs": [
+              "Admin who can update ecosystem settings"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury wallet to receive ecosystem fees"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "USDC mint address (for USDC payments)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_fees_sol",
+            "docs": [
+              "Total fees collected (SOL, in lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_fees_usdc",
+            "docs": [
+              "Total fees collected (USDC, in base units)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_nfts_minted",
+            "docs": [
+              "Total NFTs minted across all content"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_paused",
+            "docs": [
+              "Whether the ecosystem is paused (emergency stop)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          }
         ]
       }
     },
     {
       "name": "MintConfig",
-      "docs": ["Mint configuration for a content entry"],
+      "docs": [
+        "Mint configuration for a content entry",
+        "PDA seeds: [\"mint_config\", content_pda]"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "content", "docs": ["The content entry this config belongs to"], "type": "pubkey" },
-          { "name": "creator", "docs": ["Creator who owns this config"], "type": "pubkey" },
-          { "name": "price", "docs": ["Price per NFT (0 = free mint)"], "type": "u64" },
-          { "name": "currency", "docs": ["Payment currency (SOL or USDC)"], "type": { "defined": { "name": "PaymentCurrency" } } },
-          { "name": "max_supply", "docs": ["Maximum supply (None = unlimited)"], "type": { "option": "u64" } },
-          { "name": "creator_royalty_bps", "docs": ["Creator royalty on secondary sales (basis points)"], "type": "u16" },
-          { "name": "is_active", "docs": ["Whether minting is currently enabled"], "type": "bool" },
-          { "name": "created_at", "docs": ["Timestamp when config was created"], "type": "i64" },
-          { "name": "updated_at", "docs": ["Timestamp when config was last updated"], "type": "i64" }
+          {
+            "name": "content",
+            "docs": [
+              "The content entry this config belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator who owns this config"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Price per NFT (0 = free mint)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "docs": [
+              "Payment currency (SOL or USDC)"
+            ],
+            "type": {
+              "defined": {
+                "name": "PaymentCurrency"
+              }
+            }
+          },
+          {
+            "name": "max_supply",
+            "docs": [
+              "Maximum supply (None = unlimited)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creator_royalty_bps",
+            "docs": [
+              "Creator royalty on secondary sales (basis points, e.g., 500 = 5%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether minting is currently enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
         ]
       }
     },
@@ -794,61 +3242,77 @@
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "content", "type": "pubkey" },
-          { "name": "buyer", "type": "pubkey" },
-          { "name": "creator", "type": "pubkey" },
-          { "name": "edition_number", "type": "u64" },
-          { "name": "price", "type": "u64" },
-          { "name": "timestamp", "type": "i64" },
-          { "name": "nft_asset", "type": "pubkey" }
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "edition_number",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "nft_asset",
+            "type": "pubkey"
+          }
         ]
       }
     },
     {
-      "name": "PaymentCurrency",
-      "docs": ["Payment currency options"],
-      "type": {
-        "kind": "enum",
-        "variants": [
-          { "name": "Sol" },
-          { "name": "Usdc" }
-        ]
-      }
-    },
-    {
-      "name": "TipEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "content", "type": "pubkey" },
-          { "name": "tipper", "type": "pubkey" },
-          { "name": "creator", "type": "pubkey" },
-          { "name": "amount", "type": "u64" },
-          { "name": "timestamp", "type": "i64" }
-        ]
-      }
-    },
-    {
-      "name": "ClaimRewardEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          { "name": "holder", "type": "pubkey" },
-          { "name": "content", "type": "pubkey" },
-          { "name": "amount", "type": "u64" },
-          { "name": "timestamp", "type": "i64" }
-        ]
-      }
-    },
-    {
-      "name": "BatchClaimEvent",
+      "name": "NftRewardState",
+      "docs": [
+        "Per-NFT reward state",
+        "Tracks reward_debt per individual NFT, not per wallet",
+        "This allows fair reward distribution even when NFTs transfer externally",
+        "PDA seeds: [\"nft_reward\", nft_asset_pubkey]"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "holder", "type": "pubkey" },
-          { "name": "total_amount", "type": "u64" },
-          { "name": "num_contents", "type": "u32" },
-          { "name": "timestamp", "type": "i64" }
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The NFT asset this state belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "The content this NFT belongs to (for verification)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "Reward debt for this specific NFT (scaled by PRECISION)",
+              "Represents the reward_per_share at the time of last claim or mint"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when this state was created (at mint time)"
+            ],
+            "type": "i64"
+          }
         ]
       }
     },
@@ -857,11 +3321,365 @@
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "content", "type": "pubkey" },
-          { "name": "sender", "type": "pubkey" },
-          { "name": "receiver", "type": "pubkey" },
-          { "name": "sender_claimed", "type": "u64" },
-          { "name": "timestamp", "type": "i64" }
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender",
+            "type": "pubkey"
+          },
+          {
+            "name": "receiver",
+            "type": "pubkey"
+          },
+          {
+            "name": "sender_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentCurrency",
+      "docs": [
+        "Payment currency options"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Sol"
+          },
+          {
+            "name": "Usdc"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RentConfig",
+      "docs": [
+        "Rent configuration for a content piece",
+        "Uses 3-tier pricing: 6 hours, 1 day, 7 days",
+        "PDA seeds: [\"rent_config\", content_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "The content this rent config belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator who can update rent settings"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_fee_6h",
+            "docs": [
+              "Rent fee for 6-hour access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rent_fee_1d",
+            "docs": [
+              "Rent fee for 1-day access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rent_fee_7d",
+            "docs": [
+              "Rent fee for 7-day access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether renting is currently enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "total_rentals",
+            "docs": [
+              "Total number of times this content has been rented"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_fees_collected",
+            "docs": [
+              "Total fees collected from rentals (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RentEntry",
+      "docs": [
+        "Active rental entry tracking",
+        "Created when user rents content, tracks expiry",
+        "PDA seeds: [\"rent_entry\", nft_asset]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "renter",
+            "docs": [
+              "The renter's wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "The content being rented"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The rental NFT asset (Metaplex Core)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rented_at",
+            "docs": [
+              "Timestamp when rental started"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Timestamp when rental expires"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether this rental is still active (not expired/burned)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "fee_paid",
+            "docs": [
+              "Rent fee paid (for record keeping)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RentTier",
+      "docs": [
+        "Rental tier selection (0 = 6h, 1 = 1d, 2 = 7d)"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "SixHours"
+          },
+          {
+            "name": "OneDay"
+          },
+          {
+            "name": "SevenDays"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SecondaryRoyaltySyncEvent",
+      "docs": [
+        "Emitted when secondary sale royalties are synced into the reward pool",
+        "This happens automatically when anyone claims rewards"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "Content whose reward pool received secondary royalties"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount of secondary royalties synced (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "new_reward_per_share",
+            "docs": [
+              "New reward_per_share after sync"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp of sync"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TipEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "tipper",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VerifiedClaimEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "type": "pubkey"
+          },
+          {
+            "name": "verified_nft_count",
+            "type": "u64"
+          },
+          {
+            "name": "stored_nft_count",
+            "type": "u64"
+          },
+          {
+            "name": "amount_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WalletContentState",
+      "docs": [
+        "Wallet-content state tracking",
+        "Tracks a wallet's position in a specific content's reward pool",
+        "Aggregates all NFTs a wallet owns for a given content",
+        "PDA seeds: [\"wallet_content\", wallet, content_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "docs": [
+              "The wallet this state belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "The content this state tracks"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_count",
+            "docs": [
+              "Number of NFTs this wallet owns for this content"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "Cumulative reward debt (sum of reward_per_share at each NFT acquisition)",
+              "Used to calculate pending: (nft_count * current_rps) - reward_debt"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when first NFT was acquired"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp of last update"
+            ],
+            "type": "i64"
+          }
         ]
       }
     }

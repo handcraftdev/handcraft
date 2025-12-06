@@ -4,6 +4,7 @@ pub mod tip;
 pub mod mint;
 pub mod rewards;
 pub mod sync;
+pub mod rent;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -11,3 +12,4 @@ pub use tip::*;
 pub use mint::*;
 pub use rewards::*;
 pub use sync::*;
+pub use rent::*;

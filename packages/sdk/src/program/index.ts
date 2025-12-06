@@ -4,15 +4,17 @@ export * from "./types";
 export * from "./pda";
 
 // Main program code
-import { Program, AnchorProvider, Idl, BN } from "@coral-xyz/anchor";
+import { Program, Idl, BN } from "@coral-xyz/anchor";
 import { Connection, PublicKey, SystemProgram, TransactionInstruction, Keypair } from "@solana/web3.js";
 import idlJson from "./content_registry.json";
 
 import {
   PROGRAM_ID,
+  PROGRAM_ID_STRING,
   MPL_CORE_PROGRAM_ID,
   ContentType,
   PaymentCurrency,
+  RentTier,
   getContentCategory,
 } from "./constants";
 
@@ -25,6 +27,8 @@ import {
   ContentCollection,
   NftRewardState,
   WalletNftMetadata,
+  RentConfig,
+  RentEntry,
 } from "./types";
 
 import {
@@ -37,55 +41,75 @@ import {
   getWalletContentStatePda,
   getContentCollectionPda,
   getNftRewardStatePda,
+  getRentConfigPda,
+  getRentEntryPda,
   calculatePendingRewardForNft,
 } from "./pda";
 
 // Convert ContentType enum to Anchor format
 function contentTypeToAnchor(type: ContentType): object {
   switch (type) {
+    // Video domain
+    case ContentType.Video: return { video: {} };
     case ContentType.Movie: return { movie: {} };
-    case ContentType.TvSeries: return { tvSeries: {} };
+    case ContentType.Television: return { television: {} };
     case ContentType.MusicVideo: return { musicVideo: {} };
-    case ContentType.ShortVideo: return { shortVideo: {} };
-    case ContentType.GeneralVideo: return { generalVideo: {} };
-    case ContentType.Comic: return { comic: {} };
-    case ContentType.GeneralBook: return { generalBook: {} };
+    case ContentType.Short: return { short: {} };
+    // Audio domain
+    case ContentType.Music: return { music: {} };
     case ContentType.Podcast: return { podcast: {} };
     case ContentType.Audiobook: return { audiobook: {} };
-    case ContentType.GeneralAudio: return { generalAudio: {} };
+    // Image domain
     case ContentType.Photo: return { photo: {} };
-    case ContentType.Art: return { art: {} };
-    case ContentType.GeneralImage: return { generalImage: {} };
+    case ContentType.Artwork: return { artwork: {} };
+    // Document domain
+    case ContentType.Book: return { book: {} };
+    case ContentType.Comic: return { comic: {} };
+    // File domain
+    case ContentType.Asset: return { asset: {} };
+    case ContentType.Game: return { game: {} };
+    case ContentType.Software: return { software: {} };
+    case ContentType.Dataset: return { dataset: {} };
+    // Text domain
+    case ContentType.Post: return { post: {} };
+    default: return { video: {} };
   }
 }
 
 // Convert Anchor format to ContentType enum
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function anchorToContentType(anchorType: any): ContentType {
+  // Video domain
+  if (anchorType.video) return ContentType.Video;
   if (anchorType.movie) return ContentType.Movie;
-  if (anchorType.tvSeries) return ContentType.TvSeries;
+  if (anchorType.television) return ContentType.Television;
   if (anchorType.musicVideo) return ContentType.MusicVideo;
-  if (anchorType.shortVideo) return ContentType.ShortVideo;
-  if (anchorType.generalVideo) return ContentType.GeneralVideo;
-  if (anchorType.comic) return ContentType.Comic;
-  if (anchorType.generalBook) return ContentType.GeneralBook;
+  if (anchorType.short) return ContentType.Short;
+  // Audio domain
+  if (anchorType.music) return ContentType.Music;
   if (anchorType.podcast) return ContentType.Podcast;
   if (anchorType.audiobook) return ContentType.Audiobook;
-  if (anchorType.generalAudio) return ContentType.GeneralAudio;
+  // Image domain
   if (anchorType.photo) return ContentType.Photo;
-  if (anchorType.art) return ContentType.Art;
-  if (anchorType.generalImage) return ContentType.GeneralImage;
-  return ContentType.GeneralVideo;
+  if (anchorType.artwork) return ContentType.Artwork;
+  // Document domain
+  if (anchorType.book) return ContentType.Book;
+  if (anchorType.comic) return ContentType.Comic;
+  // File domain
+  if (anchorType.asset) return ContentType.Asset;
+  if (anchorType.game) return ContentType.Game;
+  if (anchorType.software) return ContentType.Software;
+  if (anchorType.dataset) return ContentType.Dataset;
+  // Text domain
+  if (anchorType.post) return ContentType.Post;
+  return ContentType.Video;
 }
 
 // Create Anchor program instance (read-only, no wallet)
+// In Anchor 0.30+, use { connection } instead of a full AnchorProvider for read-only access
 export function createProgram(connection: Connection): Program {
-  const provider = {
-    connection,
-    publicKey: null,
-  } as unknown as AnchorProvider;
-
-  return new Program(idlJson as Idl, provider);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new Program(idlJson as any, { connection });
 }
 
 // ============================================
@@ -139,6 +163,7 @@ export async function registerContentWithMintInstruction(
   price: bigint,
   maxSupply: bigint | null,
   creatorRoyaltyBps: number,
+  platform: PublicKey,
   isEncrypted: boolean = false,
   previewCid: string = "",
   encryptionMetaCid: string = ""
@@ -148,6 +173,7 @@ export async function registerContentWithMintInstruction(
   const [cidRegistryPda] = getCidRegistryPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
 
   const collectionAssetKeypair = Keypair.generate();
 
@@ -171,6 +197,8 @@ export async function registerContentWithMintInstruction(
       contentCollection: contentCollectionPda,
       collectionAsset: collectionAssetKeypair.publicKey,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      ecosystemConfig: ecosystemConfigPda,
+      platform: platform,
       authority: authority,
       systemProgram: SystemProgram.programId,
     })
@@ -526,6 +554,154 @@ export async function syncNftTransfersBatchInstruction(
 }
 
 // ============================================
+// RENT INSTRUCTION BUILDERS
+// ============================================
+
+// Convert RentTier enum to Anchor format
+function rentTierToAnchor(tier: RentTier): object {
+  switch (tier) {
+    case RentTier.SixHours: return { sixHours: {} };
+    case RentTier.OneDay: return { oneDay: {} };
+    case RentTier.SevenDays: return { sevenDays: {} };
+  }
+}
+
+export async function configureRentInstruction(
+  program: Program,
+  creator: PublicKey,
+  contentCid: string,
+  rentFee6h: bigint,
+  rentFee1d: bigint,
+  rentFee7d: bigint
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [rentConfigPda] = getRentConfigPda(contentPda);
+
+  console.log("[configureRentInstruction] Building instruction:");
+  console.log("  contentCid:", contentCid);
+  console.log("  contentPda:", contentPda.toBase58());
+  console.log("  rentConfigPda:", rentConfigPda.toBase58());
+  console.log("  creator:", creator.toBase58());
+  console.log("  rentFee6h:", rentFee6h.toString());
+  console.log("  rentFee1d:", rentFee1d.toString());
+  console.log("  rentFee7d:", rentFee7d.toString());
+
+  const ix = await program.methods
+    .configureRent(
+      new BN(rentFee6h.toString()),
+      new BN(rentFee1d.toString()),
+      new BN(rentFee7d.toString())
+    )
+    .accounts({
+      content: contentPda,
+      rentConfig: rentConfigPda,
+      creator: creator,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  console.log("[configureRentInstruction] Instruction built:");
+  console.log("  programId:", ix.programId.toBase58());
+  console.log("  keys:", ix.keys.map(k => ({
+    pubkey: k.pubkey.toBase58(),
+    isSigner: k.isSigner,
+    isWritable: k.isWritable
+  })));
+  console.log("  data:", Array.from(ix.data));
+
+  return ix;
+}
+
+export async function updateRentConfigInstruction(
+  program: Program,
+  creator: PublicKey,
+  contentCid: string,
+  rentFee6h: bigint | null,
+  rentFee1d: bigint | null,
+  rentFee7d: bigint | null,
+  isActive: boolean | null
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [rentConfigPda] = getRentConfigPda(contentPda);
+
+  return await program.methods
+    .updateRentConfig(
+      rentFee6h !== null ? new BN(rentFee6h.toString()) : null,
+      rentFee1d !== null ? new BN(rentFee1d.toString()) : null,
+      rentFee7d !== null ? new BN(rentFee7d.toString()) : null,
+      isActive
+    )
+    .accounts({
+      content: contentPda,
+      rentConfig: rentConfigPda,
+      creator: creator,
+    })
+    .instruction();
+}
+
+export interface RentContentResult {
+  instruction: TransactionInstruction;
+  nftAssetKeypair: Keypair;
+}
+
+export async function rentContentSolInstruction(
+  program: Program,
+  renter: PublicKey,
+  contentCid: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey,
+  collectionAsset: PublicKey,
+  tier: RentTier
+): Promise<RentContentResult> {
+  const [contentPda] = getContentPda(contentCid);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [rentConfigPda] = getRentConfigPda(contentPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+
+  const nftAssetKeypair = Keypair.generate();
+  const [rentEntryPda] = getRentEntryPda(nftAssetKeypair.publicKey);
+
+  const instruction = await program.methods
+    .rentContentSol(rentTierToAnchor(tier))
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      content: contentPda,
+      rentConfig: rentConfigPda,
+      contentCollection: contentCollectionPda,
+      collectionAsset: collectionAsset,
+      contentRewardPool: contentRewardPoolPda,
+      rentEntry: rentEntryPda,
+      nftAsset: nftAssetKeypair.publicKey,
+      creator: creator,
+      platform: platform,
+      treasury: treasury,
+      renter: renter,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return { instruction, nftAssetKeypair };
+}
+
+export async function checkRentExpiryInstruction(
+  program: Program,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [rentEntryPda] = getRentEntryPda(nftAsset);
+
+  return await program.methods
+    .checkRentExpiry()
+    .accounts({
+      rentEntry: rentEntryPda,
+      nftAsset: nftAsset,
+    })
+    .instruction();
+}
+
+// ============================================
 // FETCH FUNCTIONS
 // ============================================
 
@@ -537,11 +713,11 @@ export async function fetchContent(
     const program = createProgram(connection);
     const [contentPda] = getContentPda(contentCid);
 
-    const account = await connection.getAccountInfo(contentPda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).contentEntry.fetch(contentPda);
 
-    const decoded = program.coder.accounts.decode("contentEntry", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       creator: decoded.creator,
       contentCid: decoded.contentCid,
@@ -566,11 +742,12 @@ export async function fetchContentByPda(
 ): Promise<ContentEntry | null> {
   try {
     const program = createProgram(connection);
-    const account = await connection.getAccountInfo(pda);
-    if (!account) return null;
 
-    const decoded = program.coder.accounts.decode("contentEntry", account.data);
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).contentEntry.fetch(pda);
 
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       creator: decoded.creator,
       contentCid: decoded.contentCid,
@@ -598,11 +775,11 @@ export async function fetchMintConfig(
     const [contentPda] = getContentPda(contentCid);
     const [mintConfigPda] = getMintConfigPda(contentPda);
 
-    const account = await connection.getAccountInfo(mintConfigPda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).mintConfig.fetch(mintConfigPda);
 
-    const decoded = program.coder.accounts.decode("mintConfig", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       content: decoded.content,
       creator: decoded.creator,
@@ -617,6 +794,175 @@ export async function fetchMintConfig(
   }
 }
 
+/**
+ * Batch fetch all mint configs in a single RPC call.
+ * Returns a Map keyed by content PDA base58 string.
+ */
+export async function fetchAllMintConfigs(
+  connection: Connection
+): Promise<Map<string, MintConfig>> {
+  const configs = new Map<string, MintConfig>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allConfigs = await (program.account as any).mintConfig.all();
+
+    for (const { account } of allConfigs) {
+      const contentKey = account.content.toBase58();
+      configs.set(contentKey, {
+        content: account.content,
+        creator: account.creator,
+        priceSol: BigInt(account.price.toString()),
+        maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
+        creatorRoyaltyBps: account.creatorRoyaltyBps,
+        isActive: account.isActive,
+        createdAt: BigInt(account.createdAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllMintConfigs] Error:", err);
+  }
+  return configs;
+}
+
+/**
+ * Batch fetch all rent configs in a single RPC call.
+ * Returns a Map keyed by content PDA base58 string.
+ */
+export async function fetchAllRentConfigs(
+  connection: Connection
+): Promise<Map<string, RentConfig>> {
+  const configs = new Map<string, RentConfig>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allConfigs = await (program.account as any).rentConfig.all();
+
+    for (const { account } of allConfigs) {
+      const contentKey = account.content.toBase58();
+      // Anchor converts rent_fee_6h -> rentFee6H (capital H, D)
+      configs.set(contentKey, {
+        content: account.content,
+        creator: account.creator,
+        rentFee6h: BigInt(account.rentFee6H.toString()),
+        rentFee1d: BigInt(account.rentFee1D.toString()),
+        rentFee7d: BigInt(account.rentFee7D.toString()),
+        isActive: account.isActive,
+        totalRentals: BigInt(account.totalRentals.toString()),
+        totalFeesCollected: BigInt(account.totalFeesCollected.toString()),
+        createdAt: BigInt(account.createdAt.toString()),
+        updatedAt: BigInt(account.updatedAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllRentConfigs] Error:", err);
+  }
+  return configs;
+}
+
+/**
+ * Batch fetch all content collections in a single RPC call.
+ * Returns a Map keyed by content PDA base58 string.
+ */
+export async function fetchAllContentCollections(
+  connection: Connection
+): Promise<Map<string, ContentCollection>> {
+  const collections = new Map<string, ContentCollection>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allCollections = await (program.account as any).contentCollection.all();
+
+    for (const { account } of allCollections) {
+      const contentKey = account.content.toBase58();
+      collections.set(contentKey, {
+        content: account.content,
+        collectionAsset: account.collectionAsset,
+        createdAt: BigInt(account.createdAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllContentCollections] Error:", err);
+  }
+  return collections;
+}
+
+/**
+ * Batch fetch all content reward pools in a single RPC call.
+ * Returns a Map keyed by content PDA base58 string.
+ */
+export async function fetchAllContentRewardPools(
+  connection: Connection
+): Promise<Map<string, ContentRewardPool>> {
+  const pools = new Map<string, ContentRewardPool>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allPools = await (program.account as any).contentRewardPool.all();
+
+    for (const { account } of allPools) {
+      const contentKey = account.content.toBase58();
+      pools.set(contentKey, {
+        content: account.content,
+        rewardPerShare: BigInt(account.rewardPerShare.toString()),
+        totalNfts: BigInt(account.totalNfts.toString()),
+        totalDeposited: BigInt(account.totalDeposited.toString()),
+        totalClaimed: BigInt(account.totalClaimed.toString()),
+        createdAt: BigInt(account.createdAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllContentRewardPools] Error:", err);
+  }
+  return pools;
+}
+
+/**
+ * Batch fetch NFT reward states for multiple NFT assets using getMultipleAccountsInfo.
+ * Returns a Map keyed by NFT asset base58 string.
+ */
+export async function fetchNftRewardStatesBatch(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Map<string, NftRewardState>> {
+  const states = new Map<string, NftRewardState>();
+  if (nftAssets.length === 0) return states;
+
+  try {
+    const program = createProgram(connection);
+    const nftRewardStatePdas = nftAssets.map(nft => getNftRewardStatePda(nft)[0]);
+
+    // Batch fetch all accounts in a single RPC call
+    const accounts = await connection.getMultipleAccountsInfo(nftRewardStatePdas);
+
+    for (let i = 0; i < nftAssets.length; i++) {
+      const accountInfo = accounts[i];
+      if (accountInfo) {
+        try {
+          // Decode the account data using Anchor
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const decoded = (program.account as any).nftRewardState.coder.accounts.decode(
+            "nftRewardState",
+            accountInfo.data
+          );
+
+          states.set(nftAssets[i].toBase58(), {
+            nftAsset: decoded.nftAsset,
+            content: decoded.content,
+            rewardDebt: BigInt(decoded.rewardDebt.toString()),
+            createdAt: BigInt(decoded.createdAt.toString()),
+          });
+        } catch {
+          // Skip invalid account data
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[fetchNftRewardStatesBatch] Error:", err);
+  }
+  return states;
+}
+
 export async function fetchEcosystemConfig(
   connection: Connection
 ): Promise<EcosystemConfig | null> {
@@ -624,11 +970,11 @@ export async function fetchEcosystemConfig(
     const program = createProgram(connection);
     const [ecosystemConfigPda] = getEcosystemConfigPda();
 
-    const account = await connection.getAccountInfo(ecosystemConfigPda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
 
-    const decoded = program.coder.accounts.decode("ecosystemConfig", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       admin: decoded.admin,
       treasury: decoded.treasury,
@@ -653,11 +999,11 @@ export async function fetchContentRewardPool(
     const [contentPda] = getContentPda(contentCid);
     const [rewardPoolPda] = getContentRewardPoolPda(contentPda);
 
-    const account = await connection.getAccountInfo(rewardPoolPda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).contentRewardPool.fetch(rewardPoolPda);
 
-    const decoded = program.coder.accounts.decode("contentRewardPool", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       content: decoded.content,
       rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
@@ -680,11 +1026,11 @@ export async function fetchContentCollection(
     const [contentPda] = getContentPda(contentCid);
     const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
-    const account = await connection.getAccountInfo(contentCollectionPda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).contentCollection.fetch(contentCollectionPda);
 
-    const decoded = program.coder.accounts.decode("contentCollection", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       content: decoded.content,
       collectionAsset: decoded.collectionAsset,
@@ -705,11 +1051,11 @@ export async function fetchWalletContentState(
     const [contentPda] = getContentPda(contentCid);
     const [walletStatePda] = getWalletContentStatePda(wallet, contentPda);
 
-    const account = await connection.getAccountInfo(walletStatePda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).walletContentState.fetch(walletStatePda);
 
-    const decoded = program.coder.accounts.decode("walletContentState", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       wallet: decoded.wallet,
       content: decoded.content,
@@ -731,11 +1077,11 @@ export async function fetchNftRewardState(
     const program = createProgram(connection);
     const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
 
-    const account = await connection.getAccountInfo(nftRewardStatePda);
-    if (!account) return null;
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).nftRewardState.fetch(nftRewardStatePda);
 
-    const decoded = program.coder.accounts.decode("nftRewardState", account.data);
-
+    // Anchor auto-converts snake_case to camelCase in returned objects
     return {
       nftAsset: decoded.nftAsset,
       content: decoded.content,
@@ -745,6 +1091,81 @@ export async function fetchNftRewardState(
   } catch {
     return null;
   }
+}
+
+export async function fetchRentConfig(
+  connection: Connection,
+  contentCid: string
+): Promise<RentConfig | null> {
+  try {
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [rentConfigPda] = getRentConfigPda(contentPda);
+
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).rentConfig.fetch(rentConfigPda);
+
+    // Anchor converts rent_fee_6h -> rentFee6H (capital H, D)
+    return {
+      content: decoded.content,
+      creator: decoded.creator,
+      rentFee6h: BigInt(decoded.rentFee6H.toString()),
+      rentFee1d: BigInt(decoded.rentFee1D.toString()),
+      rentFee7d: BigInt(decoded.rentFee7D.toString()),
+      isActive: decoded.isActive,
+      totalRentals: BigInt(decoded.totalRentals.toString()),
+      totalFeesCollected: BigInt(decoded.totalFeesCollected.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    // Account doesn't exist = no rent config for this content (expected)
+    return null;
+  }
+}
+
+export async function fetchRentEntry(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<RentEntry | null> {
+  try {
+    const program = createProgram(connection);
+    const [rentEntryPda] = getRentEntryPda(nftAsset);
+
+    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).rentEntry.fetch(rentEntryPda);
+
+    // Anchor auto-converts snake_case to camelCase in returned objects
+    return {
+      renter: decoded.renter,
+      content: decoded.content,
+      nftAsset: decoded.nftAsset,
+      rentedAt: BigInt(decoded.rentedAt.toString()),
+      expiresAt: BigInt(decoded.expiresAt.toString()),
+      isActive: decoded.isActive,
+      feePaid: BigInt(decoded.feePaid.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function checkRentalAccess(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<{ hasAccess: boolean; expiresAt: bigint | null; remainingSeconds: number }> {
+  const rentEntry = await fetchRentEntry(connection, nftAsset);
+  if (!rentEntry || !rentEntry.isActive) {
+    return { hasAccess: false, expiresAt: null, remainingSeconds: 0 };
+  }
+
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const hasAccess = now < rentEntry.expiresAt;
+  const remainingSeconds = hasAccess ? Number(rentEntry.expiresAt - now) : 0;
+
+  return { hasAccess, expiresAt: rentEntry.expiresAt, remainingSeconds };
 }
 
 export async function getPendingRewardForContent(
@@ -783,7 +1204,16 @@ export async function getPendingRewardsForWallet(
   wallet: PublicKey,
   contentCids: string[]
 ): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint }>> {
-  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint }> = [];
+  const detailed = await getPendingRewardsForWalletDetailed(connection, wallet, contentCids);
+  return detailed.map(d => ({ contentCid: d.contentCid, pending: d.pending, nftCount: d.nftCount }));
+}
+
+export async function getPendingRewardsForWalletDetailed(
+  connection: Connection,
+  wallet: PublicKey,
+  contentCids: string[]
+): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }>> {
+  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }> = [];
 
   for (const contentCid of contentCids) {
     // Get reward pool and collection info
@@ -791,7 +1221,7 @@ export async function getPendingRewardsForWallet(
     const contentCollection = await fetchContentCollection(connection, contentCid);
 
     if (!rewardPool || !contentCollection) {
-      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(0) });
+      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(0), nftRewards: [] });
       continue;
     }
 
@@ -800,12 +1230,14 @@ export async function getPendingRewardsForWallet(
     const nftCount = BigInt(nftAssets.length);
 
     if (nftAssets.length === 0) {
-      results.push({ contentCid, pending: BigInt(0), nftCount });
+      results.push({ contentCid, pending: BigInt(0), nftCount, nftRewards: [] });
       continue;
     }
 
     // Calculate pending rewards for each NFT using per-NFT tracking
     let totalPending = BigInt(0);
+    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> = [];
+
     for (const nftAsset of nftAssets) {
       const nftRewardState = await fetchNftRewardState(connection, nftAsset);
       if (nftRewardState) {
@@ -814,10 +1246,86 @@ export async function getPendingRewardsForWallet(
           ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
           : BigInt(0);
         totalPending += pending;
+        nftRewards.push({ nftAsset, pending, rewardDebt: nftRewardState.rewardDebt });
       }
     }
 
-    results.push({ contentCid, pending: totalPending, nftCount });
+    results.push({ contentCid, pending: totalPending, nftCount, nftRewards });
+  }
+
+  return results;
+}
+
+/**
+ * Optimized version of getPendingRewardsForWalletDetailed that accepts pre-fetched batch data.
+ * Uses batch fetching for NFT reward states to minimize RPC calls.
+ *
+ * Instead of N*M individual calls, this uses:
+ * - Pre-fetched rewardPools and collections (0 calls - passed in)
+ * - 1 call per unique collection to get NFTs (via getProgramAccounts filter)
+ * - 1 batch call for all NFT reward states
+ */
+export async function getPendingRewardsOptimized(
+  connection: Connection,
+  wallet: PublicKey,
+  walletNfts: WalletNftMetadata[],
+  rewardPools: Map<string, ContentRewardPool>,
+  contentCollections: Map<string, ContentCollection>
+): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }>> {
+  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }> = [];
+
+  // Group NFTs by contentCid
+  const nftsByContent = new Map<string, WalletNftMetadata[]>();
+  for (const nft of walletNfts) {
+    if (nft.contentCid) {
+      const existing = nftsByContent.get(nft.contentCid) || [];
+      existing.push(nft);
+      nftsByContent.set(nft.contentCid, existing);
+    }
+  }
+
+  // Get all NFT assets that need reward state lookup
+  const allNftAssets: PublicKey[] = [];
+  for (const nfts of nftsByContent.values()) {
+    for (const nft of nfts) {
+      allNftAssets.push(nft.nftAsset);
+    }
+  }
+
+  // Batch fetch all NFT reward states in a single call
+  const nftRewardStates = await fetchNftRewardStatesBatch(connection, allNftAssets);
+
+  // Calculate pending rewards for each content
+  for (const [contentCid, nfts] of nftsByContent) {
+    const [contentPda] = getContentPda(contentCid);
+    const contentKey = contentPda.toBase58();
+
+    const rewardPool = rewardPools.get(contentKey);
+    if (!rewardPool) {
+      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: [] });
+      continue;
+    }
+
+    let totalPending = BigInt(0);
+    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> = [];
+
+    for (const nft of nfts) {
+      const nftRewardState = nftRewardStates.get(nft.nftAsset.toBase58());
+      if (nftRewardState) {
+        const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
+          ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
+          : BigInt(0);
+        totalPending += pending;
+        nftRewards.push({ nftAsset: nft.nftAsset, pending, rewardDebt: nftRewardState.rewardDebt });
+      }
+    }
+
+    results.push({
+      contentCid,
+      pending: totalPending,
+      nftCount: BigInt(nfts.length),
+      nftRewards,
+    });
   }
 
   return results;
@@ -826,6 +1334,36 @@ export async function getPendingRewardsForWallet(
 export async function fetchWalletNftMetadata(
   connection: Connection,
   wallet: PublicKey
+): Promise<WalletNftMetadata[]> {
+  // Fetch collections and content entries once upfront
+  const collections = await fetchAllContentCollections(connection);
+  const program = createProgram(connection);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allContentEntries = await (program.account as any).contentEntry.all();
+
+  // Build a map from collectionAsset -> contentCid for quick lookup
+  const collectionToContentCid = new Map<string, string>();
+  for (const collection of collections.values()) {
+    // Find the content entry for this collection
+    for (const { account: entry } of allContentEntries) {
+      if (entry.creator && collection.content.equals(getContentPda(entry.contentCid)[0])) {
+        collectionToContentCid.set(collection.collectionAsset.toBase58(), entry.contentCid);
+        break;
+      }
+    }
+  }
+
+  return fetchWalletNftMetadataWithCollections(connection, wallet, collectionToContentCid);
+}
+
+/**
+ * Optimized version that accepts pre-built collection->contentCid map.
+ * This avoids re-fetching collections for each NFT.
+ */
+export async function fetchWalletNftMetadataWithCollections(
+  connection: Connection,
+  wallet: PublicKey,
+  collectionToContentCid: Map<string, string>
 ): Promise<WalletNftMetadata[]> {
   try {
     const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
@@ -863,33 +1401,20 @@ export async function fetchWalletNftMetadata(
           // Use default name
         }
 
-        let contentCid: string | null = null;
-        if (collectionAsset) {
-          const program = createProgram(connection);
-          const allAccounts = await connection.getProgramAccounts(PROGRAM_ID);
-          for (const { account: acc } of allAccounts) {
-            try {
-              const decoded = program.coder.accounts.decode("contentCollection", acc.data);
-              if (decoded.collectionAsset.equals(collectionAsset)) {
-                const contentAccount = await connection.getAccountInfo(decoded.content);
-                if (contentAccount) {
-                  const contentDecoded = program.coder.accounts.decode("contentEntry", contentAccount.data);
-                  contentCid = contentDecoded.contentCid;
-                }
-                break;
-              }
-            } catch {
-              // Not a content collection
-            }
-          }
-        }
+        // Use pre-fetched collection map instead of fetching for each NFT
+        const contentCid = collectionAsset
+          ? collectionToContentCid.get(collectionAsset.toBase58()) || null
+          : null;
 
-        results.push({
-          nftAsset: pubkey,
-          contentCid,
-          collectionAsset,
-          name,
-        });
+        // Only include NFTs that belong to Handcraft content collections
+        if (contentCid) {
+          results.push({
+            nftAsset: pubkey,
+            contentCid,
+            collectionAsset,
+            name,
+          });
+        }
       } catch {
         // Skip invalid account
       }
@@ -926,20 +1451,18 @@ export async function getContentNftHolders(
     const program = createProgram(connection);
     const [contentPda] = getContentPda(contentCid);
 
-    const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+    // Use program.account.<name>.all() to fetch all WalletContentState accounts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allWalletStates = await (program.account as any).walletContentState.all();
     const holders: Array<{ wallet: PublicKey; nftCount: bigint }> = [];
 
-    for (const { account } of accounts) {
-      try {
-        const decoded = program.coder.accounts.decode("walletContentState", account.data);
-        if (decoded.content.equals(contentPda) && decoded.nftCount > 0) {
-          holders.push({
-            wallet: decoded.wallet,
-            nftCount: BigInt(decoded.nftCount.toString()),
-          });
-        }
-      } catch {
-        // Not a wallet content state
+    for (const { account } of allWalletStates) {
+      // Anchor auto-converts to camelCase
+      if (account.content.equals(contentPda) && account.nftCount > 0) {
+        holders.push({
+          wallet: account.wallet,
+          nftCount: BigInt(account.nftCount.toString()),
+        });
       }
     }
 
@@ -988,6 +1511,85 @@ export async function fetchWalletNftsForCollection(
   }
 }
 
+export async function fetchActiveRentalForContent(
+  connection: Connection,
+  wallet: PublicKey,
+  contentCid: string
+): Promise<RentEntry | null> {
+  try {
+    // First get the content collection to find NFTs in this collection
+    const contentCollection = await fetchContentCollection(connection, contentCid);
+    if (!contentCollection) return null;
+
+    // Get all NFTs owned by wallet in this collection
+    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+    if (nftAssets.length === 0) return null;
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    let latestActiveRental: RentEntry | null = null;
+
+    // Check each NFT for an active rent entry
+    for (const nftAsset of nftAssets) {
+      const rentEntry = await fetchRentEntry(connection, nftAsset);
+      if (rentEntry && rentEntry.isActive && rentEntry.expiresAt > now) {
+        // Keep track of the rental with the latest expiry
+        if (!latestActiveRental || rentEntry.expiresAt > latestActiveRental.expiresAt) {
+          latestActiveRental = rentEntry;
+        }
+      }
+    }
+
+    return latestActiveRental;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWalletRentalNfts(
+  connection: Connection,
+  wallet: PublicKey
+): Promise<Set<string>> {
+  try {
+    // Get all NFTs owned by wallet
+    const nftMetadata = await fetchWalletNftMetadata(connection, wallet);
+    return fetchRentalNftsFromMetadata(connection, nftMetadata);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Optimized version that accepts pre-fetched NFT metadata to avoid redundant RPC calls.
+ * Uses batch fetching via getMultipleAccountsInfo instead of individual calls.
+ */
+export async function fetchRentalNftsFromMetadata(
+  connection: Connection,
+  nftMetadata: WalletNftMetadata[]
+): Promise<Set<string>> {
+  try {
+    if (nftMetadata.length === 0) return new Set<string>();
+
+    // Get all rent entry PDAs in one go
+    const rentEntryPdas = nftMetadata.map(nft => getRentEntryPda(nft.nftAsset)[0]);
+
+    // Batch fetch all rent entries in a single RPC call
+    const rentEntryAccounts = await connection.getMultipleAccountsInfo(rentEntryPdas);
+
+    const rentalNftAssets = new Set<string>();
+
+    // Check which NFTs have rent entries (account exists = is a rental NFT)
+    for (let i = 0; i < nftMetadata.length; i++) {
+      if (rentEntryAccounts[i] !== null) {
+        rentalNftAssets.add(nftMetadata[i].nftAsset.toBase58());
+      }
+    }
+
+    return rentalNftAssets;
+  } catch {
+    return new Set();
+  }
+}
+
 export async function countTotalMintedNfts(
   connection: Connection,
   contentCid: string
@@ -1014,6 +1616,8 @@ export function createContentRegistryClient(connection: Connection) {
     getWalletContentStatePda,
     getContentCollectionPda,
     getNftRewardStatePda,
+    getRentConfigPda,
+    getRentEntryPda,
     hashCid,
 
     // Content management
@@ -1035,11 +1639,12 @@ export function createContentRegistryClient(connection: Connection) {
       price: bigint,
       maxSupply: bigint | null,
       creatorRoyaltyBps: number,
+      platform: PublicKey,
       isEncrypted: boolean = false,
       previewCid: string = "",
       encryptionMetaCid: string = ""
     ) => registerContentWithMintInstruction(
-      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, isEncrypted, previewCid, encryptionMetaCid
+      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, platform, isEncrypted, previewCid, encryptionMetaCid
     ),
 
     updateContentInstruction: (creator: PublicKey, contentCid: string, metadataCid: string) =>
@@ -1082,6 +1687,19 @@ export function createContentRegistryClient(connection: Connection) {
     syncNftTransfersBatchInstruction: (sender: PublicKey, receiver: PublicKey, contentCid: string, count: number) =>
       syncNftTransfersBatchInstruction(program, sender, receiver, contentCid, count),
 
+    // Rent management (3-tier pricing)
+    configureRentInstruction: (creator: PublicKey, contentCid: string, rentFee6h: bigint, rentFee1d: bigint, rentFee7d: bigint) =>
+      configureRentInstruction(program, creator, contentCid, rentFee6h, rentFee1d, rentFee7d),
+
+    updateRentConfigInstruction: (creator: PublicKey, contentCid: string, rentFee6h: bigint | null, rentFee1d: bigint | null, rentFee7d: bigint | null, isActive: boolean | null) =>
+      updateRentConfigInstruction(program, creator, contentCid, rentFee6h, rentFee1d, rentFee7d, isActive),
+
+    rentContentSolInstruction: (renter: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, collectionAsset: PublicKey, tier: RentTier): Promise<RentContentResult> =>
+      rentContentSolInstruction(program, renter, contentCid, creator, treasury, platform, collectionAsset, tier),
+
+    checkRentExpiryInstruction: (nftAsset: PublicKey) =>
+      checkRentExpiryInstruction(program, nftAsset),
+
     // Ecosystem management
     initializeEcosystemInstruction: (admin: PublicKey, treasury: PublicKey, usdcMint: PublicKey) =>
       initializeEcosystemInstruction(program, admin, treasury, usdcMint),
@@ -1093,49 +1711,69 @@ export function createContentRegistryClient(connection: Connection) {
     fetchContent: (contentCid: string) => fetchContent(connection, contentCid),
     fetchContentByPda: (pda: PublicKey) => fetchContentByPda(connection, pda),
     fetchMintConfig: (contentCid: string) => fetchMintConfig(connection, contentCid),
+    fetchAllMintConfigs: () => fetchAllMintConfigs(connection),
+    fetchAllRentConfigs: () => fetchAllRentConfigs(connection),
+    fetchAllContentCollections: () => fetchAllContentCollections(connection),
+    fetchAllContentRewardPools: () => fetchAllContentRewardPools(connection),
+    fetchNftRewardStatesBatch: (nftAssets: PublicKey[]) => fetchNftRewardStatesBatch(connection, nftAssets),
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
     fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
     fetchContentCollection: (contentCid: string) => fetchContentCollection(connection, contentCid),
     fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),
     fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
+    // Rent fetching
+    fetchRentConfig: (contentCid: string) => fetchRentConfig(connection, contentCid),
+    fetchRentEntry: (nftAsset: PublicKey) => fetchRentEntry(connection, nftAsset),
+    checkRentalAccess: (nftAsset: PublicKey) => checkRentalAccess(connection, nftAsset),
+    fetchActiveRentalForContent: (wallet: PublicKey, contentCid: string) => fetchActiveRentalForContent(connection, wallet, contentCid),
+    fetchWalletRentalNfts: (wallet: PublicKey) => fetchWalletRentalNfts(connection, wallet),
+    fetchRentalNftsFromMetadata: (nftMetadata: WalletNftMetadata[]) => fetchRentalNftsFromMetadata(connection, nftMetadata),
+
     // Reward calculations
     getPendingRewardForContent: (wallet: PublicKey, contentCid: string) => getPendingRewardForContent(connection, wallet, contentCid),
     getPendingRewardsForWallet: (wallet: PublicKey, contentCids: string[]) => getPendingRewardsForWallet(connection, wallet, contentCids),
+    getPendingRewardsForWalletDetailed: (wallet: PublicKey, contentCids: string[]) => getPendingRewardsForWalletDetailed(connection, wallet, contentCids),
+    getPendingRewardsOptimized: (
+      wallet: PublicKey,
+      walletNfts: WalletNftMetadata[],
+      rewardPools: Map<string, ContentRewardPool>,
+      contentCollections: Map<string, ContentCollection>
+    ) => getPendingRewardsOptimized(connection, wallet, walletNfts, rewardPools, contentCollections),
 
     // NFT ownership
     checkNftOwnership: (wallet: PublicKey, contentCid: string) => checkNftOwnership(connection, wallet, contentCid),
     countNftsOwned: (wallet: PublicKey, contentCid: string) => countNftsOwned(connection, wallet, contentCid),
     countTotalMintedNfts: (contentCid: string) => countTotalMintedNfts(connection, contentCid),
     fetchWalletNftMetadata: (wallet: PublicKey) => fetchWalletNftMetadata(connection, wallet),
+    fetchWalletNftMetadataWithCollections: (wallet: PublicKey, collectionToContentCid: Map<string, string>) =>
+      fetchWalletNftMetadataWithCollections(connection, wallet, collectionToContentCid),
     getContentNftHolders: (contentCid: string) => getContentNftHolders(connection, contentCid),
     fetchWalletNftsForCollection: (wallet: PublicKey, collectionAsset: PublicKey) => fetchWalletNftsForCollection(connection, wallet, collectionAsset),
 
     // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {
       try {
-        const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allContentEntries = await (program.account as any).contentEntry.all();
         const entries: ContentEntry[] = [];
 
-        for (const { account } of accounts) {
-          try {
-            const decoded = program.coder.accounts.decode("contentEntry", account.data);
-            entries.push({
-              creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
-              tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
-              isLocked: decoded.isLocked ?? false,
-              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
-              isEncrypted: decoded.isEncrypted ?? false,
-              previewCid: decoded.previewCid ?? "",
-              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
-            });
-          } catch {
-            // Not a content entry
-          }
+        for (const { account } of allContentEntries) {
+          // Anchor auto-converts to camelCase
+          entries.push({
+            creator: account.creator,
+            contentCid: account.contentCid,
+            metadataCid: account.metadataCid,
+            contentType: anchorToContentType(account.contentType),
+            tipsReceived: BigInt(account.tipsReceived.toString()),
+            createdAt: BigInt(account.createdAt.toString()),
+            isLocked: account.isLocked ?? false,
+            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
+            isEncrypted: account.isEncrypted ?? false,
+            previewCid: account.previewCid ?? "",
+            encryptionMetaCid: account.encryptionMetaCid ?? "",
+          });
         }
 
         return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
@@ -1146,30 +1784,28 @@ export function createContentRegistryClient(connection: Connection) {
 
     async fetchContentByCreator(creator: PublicKey): Promise<ContentEntry[]> {
       try {
-        const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allContentEntries = await (program.account as any).contentEntry.all();
         const entries: ContentEntry[] = [];
 
-        for (const { account } of accounts) {
-          try {
-            const decoded = program.coder.accounts.decode("contentEntry", account.data);
-            if (!decoded.creator.equals(creator)) continue;
+        for (const { account } of allContentEntries) {
+          // Anchor auto-converts to camelCase
+          if (!account.creator.equals(creator)) continue;
 
-            entries.push({
-              creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
-              tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
-              isLocked: decoded.isLocked ?? false,
-              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
-              isEncrypted: decoded.isEncrypted ?? false,
-              previewCid: decoded.previewCid ?? "",
-              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
-            });
-          } catch {
-            // Not a content entry
-          }
+          entries.push({
+            creator: account.creator,
+            contentCid: account.contentCid,
+            metadataCid: account.metadataCid,
+            contentType: anchorToContentType(account.contentType),
+            tipsReceived: BigInt(account.tipsReceived.toString()),
+            createdAt: BigInt(account.createdAt.toString()),
+            isLocked: account.isLocked ?? false,
+            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
+            isEncrypted: account.isEncrypted ?? false,
+            previewCid: account.previewCid ?? "",
+            encryptionMetaCid: account.encryptionMetaCid ?? "",
+          });
         }
 
         return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
@@ -1180,55 +1816,53 @@ export function createContentRegistryClient(connection: Connection) {
 
     async fetchMintableContent(): Promise<Array<{ content: ContentEntry; mintConfig: MintConfig }>> {
       try {
-        const accounts = await connection.getProgramAccounts(PROGRAM_ID);
+        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allContentEntries = await (program.account as any).contentEntry.all();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allMintConfigs = await (program.account as any).mintConfig.all();
+
         const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
 
+        // Build content entries map
         const contentEntries: Map<string, ContentEntry> = new Map();
-        for (const { account } of accounts) {
-          try {
-            const decoded = program.coder.accounts.decode("contentEntry", account.data);
-            contentEntries.set(decoded.contentCid, {
-              creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
-              tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
-              isLocked: decoded.isLocked ?? false,
-              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
-              isEncrypted: decoded.isEncrypted ?? false,
-              previewCid: decoded.previewCid ?? "",
-              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
-            });
-          } catch {
-            // Not a content entry
-          }
+        for (const { account } of allContentEntries) {
+          // Anchor auto-converts to camelCase
+          contentEntries.set(account.contentCid, {
+            creator: account.creator,
+            contentCid: account.contentCid,
+            metadataCid: account.metadataCid,
+            contentType: anchorToContentType(account.contentType),
+            tipsReceived: BigInt(account.tipsReceived.toString()),
+            createdAt: BigInt(account.createdAt.toString()),
+            isLocked: account.isLocked ?? false,
+            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
+            isEncrypted: account.isEncrypted ?? false,
+            previewCid: account.previewCid ?? "",
+            encryptionMetaCid: account.encryptionMetaCid ?? "",
+          });
         }
 
-        for (const { account } of accounts) {
-          try {
-            const decoded = program.coder.accounts.decode("mintConfig", account.data);
-
-            for (const [cid, content] of contentEntries) {
-              const [contentPda] = getContentPda(cid);
-              if (contentPda.equals(decoded.content)) {
-                results.push({
-                  content,
-                  mintConfig: {
-                    content: decoded.content,
-                    creator: decoded.creator,
-                    priceSol: BigInt(decoded.price.toString()),
-                    maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
-                    creatorRoyaltyBps: decoded.creatorRoyaltyBps,
-                    isActive: decoded.isActive,
-                    createdAt: BigInt(decoded.createdAt.toString()),
-                  },
-                });
-                break;
-              }
+        // Match mint configs with content entries
+        for (const { account: mintConfig } of allMintConfigs) {
+          for (const [cid, content] of contentEntries) {
+            const [contentPda] = getContentPda(cid);
+            if (contentPda.equals(mintConfig.content)) {
+              // Anchor auto-converts to camelCase
+              results.push({
+                content,
+                mintConfig: {
+                  content: mintConfig.content,
+                  creator: mintConfig.creator,
+                  priceSol: BigInt(mintConfig.price.toString()),
+                  maxSupply: mintConfig.maxSupply ? BigInt(mintConfig.maxSupply.toString()) : null,
+                  creatorRoyaltyBps: mintConfig.creatorRoyaltyBps,
+                  isActive: mintConfig.isActive,
+                  createdAt: BigInt(mintConfig.createdAt.toString()),
+                },
+              });
+              break;
             }
-          } catch {
-            // Not a mint config
           }
         }
 

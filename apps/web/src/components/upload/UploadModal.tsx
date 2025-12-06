@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, ReactNode } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import { useContentUpload } from "@/hooks/useUpload";
 import { useContentRegistry, ContentType as OnChainContentType } from "@/hooks/useContentRegistry";
 import { isUserRejection, getTransactionErrorMessage } from "@/utils/wallet-errors";
+
+const DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
+  ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
+  : null;
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -15,80 +20,389 @@ interface UploadModalProps {
   }) => void;
 }
 
-type ContentCategory = "video" | "book" | "audio" | "image";
+// Content type keys matching new structure
+type ContentTypeKey =
+  // Video domain
+  | "video"
+  | "movie"
+  | "television"
+  | "musicVideo"
+  | "short"
+  // Audio domain
+  | "music"
+  | "podcast"
+  | "audiobook"
+  // Image domain
+  | "photo"
+  | "artwork"
+  // Document domain
+  | "book"
+  | "comic"
+  // File domain
+  | "asset"
+  | "game"
+  | "software"
+  | "dataset"
+  // Text domain
+  | "post";
 
-interface ContentTypeOption {
-  value: OnChainContentType;
+type ContentDomain = "video" | "audio" | "image" | "document" | "file" | "text";
+type MonetizationTab = "minting" | "renting";
+type Step = "domain" | "type" | "file" | "details" | "monetization" | "uploading" | "registering" | "done";
+
+interface ContentTypeConfig {
+  key: ContentTypeKey;
   label: string;
-  category: ContentCategory;
+  onChainType: OnChainContentType;
+  icon: ReactNode;
+  description: string;
+  accept: string;
+  domain: ContentDomain;
 }
 
-const CONTENT_TYPES: ContentTypeOption[] = [
-  // Video types
-  { value: OnChainContentType.Movie, label: "Movie", category: "video" },
-  { value: OnChainContentType.TvSeries, label: "TV Series", category: "video" },
-  { value: OnChainContentType.MusicVideo, label: "Music Video", category: "video" },
-  { value: OnChainContentType.ShortVideo, label: "Short Video", category: "video" },
-  { value: OnChainContentType.GeneralVideo, label: "General", category: "video" },
-  // Book types
-  { value: OnChainContentType.Comic, label: "Comic", category: "book" },
-  { value: OnChainContentType.GeneralBook, label: "General", category: "book" },
-  // Audio types
-  { value: OnChainContentType.Podcast, label: "Podcast", category: "audio" },
-  { value: OnChainContentType.Audiobook, label: "Audiobook", category: "audio" },
-  { value: OnChainContentType.GeneralAudio, label: "General", category: "audio" },
-  // Image types
-  { value: OnChainContentType.Photo, label: "Photo", category: "image" },
-  { value: OnChainContentType.Art, label: "Art", category: "image" },
-  { value: OnChainContentType.GeneralImage, label: "General", category: "image" },
+interface DomainConfig {
+  key: ContentDomain;
+  label: string;
+  icon: ReactNode;
+  description: string;
+  accept: string;
+}
+
+const DOMAINS: DomainConfig[] = [
+  {
+    key: "video",
+    label: "Video",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    ),
+    description: "Movies, shows, clips",
+    accept: "video/*",
+  },
+  {
+    key: "audio",
+    label: "Audio",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+      </svg>
+    ),
+    description: "Music, podcasts, audiobooks",
+    accept: "audio/*",
+  },
+  {
+    key: "image",
+    label: "Image",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+    description: "Photos, artwork, illustrations",
+    accept: "image/*",
+  },
+  {
+    key: "document",
+    label: "Document",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    ),
+    description: "Books, comics, PDFs",
+    accept: ".pdf,.epub,.cbz,.cbr",
+  },
+  {
+    key: "file",
+    label: "File",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+    ),
+    description: "Assets, software, games, data",
+    accept: "*/*",
+  },
+  {
+    key: "text",
+    label: "Text",
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+    description: "Posts, articles, newsletters",
+    accept: ".pdf,.md,.txt,.html,text/*",
+  },
 ];
 
-const CATEGORY_LABELS: Record<ContentCategory, string> = {
-  video: "Video",
-  book: "Book",
-  audio: "Audio",
-  image: "Image",
-};
+const CONTENT_TYPES: ContentTypeConfig[] = [
+  // Video domain
+  {
+    key: "video",
+    label: "Video",
+    onChainType: OnChainContentType.Video,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    ),
+    description: "General video content",
+    accept: "video/*",
+    domain: "video",
+  },
+  {
+    key: "movie",
+    label: "Movie",
+    onChainType: OnChainContentType.Movie,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+      </svg>
+    ),
+    description: "Feature films, documentaries",
+    accept: "video/*",
+    domain: "video",
+  },
+  {
+    key: "television",
+    label: "Television",
+    onChainType: OnChainContentType.Television,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    ),
+    description: "TV episodes, series content",
+    accept: "video/*",
+    domain: "video",
+  },
+  {
+    key: "musicVideo",
+    label: "Music Video",
+    onChainType: OnChainContentType.MusicVideo,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+      </svg>
+    ),
+    description: "Music videos, live performances",
+    accept: "video/*",
+    domain: "video",
+  },
+  {
+    key: "short",
+    label: "Short",
+    onChainType: OnChainContentType.Short,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+      </svg>
+    ),
+    description: "Clips, shorts, reels",
+    accept: "video/*",
+    domain: "video",
+  },
+  // Audio domain
+  {
+    key: "music",
+    label: "Music",
+    onChainType: OnChainContentType.Music,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+      </svg>
+    ),
+    description: "Songs, tracks, albums",
+    accept: "audio/*",
+    domain: "audio",
+  },
+  {
+    key: "podcast",
+    label: "Podcast",
+    onChainType: OnChainContentType.Podcast,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+      </svg>
+    ),
+    description: "Podcast episodes",
+    accept: "audio/*",
+    domain: "audio",
+  },
+  {
+    key: "audiobook",
+    label: "Audiobook",
+    onChainType: OnChainContentType.Audiobook,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    ),
+    description: "Audiobooks, chapters",
+    accept: "audio/*",
+    domain: "audio",
+  },
+  // Image domain
+  {
+    key: "photo",
+    label: "Photo",
+    onChainType: OnChainContentType.Photo,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    description: "Photography",
+    accept: "image/*",
+    domain: "image",
+  },
+  {
+    key: "artwork",
+    label: "Artwork",
+    onChainType: OnChainContentType.Artwork,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+    description: "Digital art, illustrations",
+    accept: "image/*",
+    domain: "image",
+  },
+  // Document domain
+  {
+    key: "book",
+    label: "Book",
+    onChainType: OnChainContentType.Book,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    ),
+    description: "Ebooks, documents, PDFs",
+    accept: ".pdf,.epub,application/pdf",
+    domain: "document",
+  },
+  {
+    key: "comic",
+    label: "Comic",
+    onChainType: OnChainContentType.Comic,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+      </svg>
+    ),
+    description: "Comics, manga, graphic novels",
+    accept: ".pdf,.cbz,.cbr,image/*",
+    domain: "document",
+  },
+  // File domain
+  {
+    key: "asset",
+    label: "Asset",
+    onChainType: OnChainContentType.Asset,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+    ),
+    description: "Templates, mockups, resources",
+    accept: "*/*",
+    domain: "file",
+  },
+  {
+    key: "game",
+    label: "Game",
+    onChainType: OnChainContentType.Game,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    description: "Games, interactive content",
+    accept: "*/*",
+    domain: "file",
+  },
+  {
+    key: "software",
+    label: "Software",
+    onChainType: OnChainContentType.Software,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+      </svg>
+    ),
+    description: "Apps, plugins, tools",
+    accept: "*/*",
+    domain: "file",
+  },
+  {
+    key: "dataset",
+    label: "Dataset",
+    onChainType: OnChainContentType.Dataset,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    ),
+    description: "Data files, CSVs, models",
+    accept: ".csv,.json,.xml,.sql,*/*",
+    domain: "file",
+  },
+  // Text domain
+  {
+    key: "post",
+    label: "Post",
+    onChainType: OnChainContentType.Post,
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+    description: "Blog posts, newsletters, articles",
+    accept: ".pdf,.md,.txt,.html,text/*",
+    domain: "text",
+  },
+];
 
-function getTypesForCategory(category: ContentCategory): ContentTypeOption[] {
-  return CONTENT_TYPES.filter(t => t.category === category);
-}
-
-function detectCategory(file: File): ContentCategory {
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type.startsWith("audio/")) return "audio";
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type === "application/pdf" || file.type.includes("epub")) return "book";
-  return "image";
-}
-
-function getDefaultTypeForCategory(category: ContentCategory): OnChainContentType {
-  switch (category) {
-    case "video": return OnChainContentType.GeneralVideo;
-    case "book": return OnChainContentType.GeneralBook;
-    case "audio": return OnChainContentType.GeneralAudio;
-    case "image": return OnChainContentType.GeneralImage;
-  }
+function getTypesForDomain(domain: ContentDomain) {
+  return CONTENT_TYPES.filter(t => t.domain === domain);
 }
 
 export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const { publicKey } = useWallet();
-  const [step, setStep] = useState<"select" | "details" | "uploading" | "registering" | "done">(
-    "select"
-  );
+  const [step, setStep] = useState<Step>("domain");
+  const [selectedDomain, setSelectedDomain] = useState<ContentDomain | null>(null);
+  const [contentType, setContentType] = useState<ContentTypeConfig | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [category, setCategory] = useState<ContentCategory>("video");
-  const [contentType, setContentType] = useState<OnChainContentType>(OnChainContentType.GeneralVideo);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [tags, setTags] = useState("");
-  // NFT configuration state (always enabled by default, SOL only)
+
+  // Monetization tab
+  const [monetizationTab, setMonetizationTab] = useState<MonetizationTab>("minting");
+
+  // Type-specific metadata state
+  const [metadata, setMetadata] = useState<Record<string, string>>({
+    title: "",
+    description: "",
+    tags: "",
+  });
+
+  // NFT minting config
   const [nftPrice, setNftPrice] = useState("");
   const [nftSupplyType, setNftSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [nftMaxSupply, setNftMaxSupply] = useState("");
   const [nftRoyaltyPercent, setNftRoyaltyPercent] = useState("5");
-  // Store upload result so we can retry on-chain registration without re-uploading
+
+  // Rental config
+  const [rentFee6h, setRentFee6h] = useState("");
+  const [rentFee1d, setRentFee1d] = useState("");
+  const [rentFee7d, setRentFee7d] = useState("");
+
+  // Upload state
   const [uploadResult, setUploadResult] = useState<{
     content: { cid: string; url: string };
     metadata: { cid: string; url: string } | null;
@@ -96,169 +410,162 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     previewCid?: string | null;
     encryptionMetaCid?: string | null;
   } | null>(null);
-  // Store registration error to display in UI
   const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { registerContentWithMint, isRegisteringContent } = useContentRegistry();
+  const { registerContentWithMint, configureRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig } = useContentRegistry();
 
   const LAMPORTS_PER_SOL = 1_000_000_000;
 
-  const { isUploading, progress, error, uploadContent, reset } =
-    useContentUpload({
-      onSuccess: (result) => {
-        if (!publicKey) {
-          setStep("done");
-        }
-      },
-      onError: (err) => {
-        console.error("Upload error:", err);
-      },
-    });
+  const {
+    isUploading,
+    progress,
+    error,
+    uploadContent,
+    reset,
+    markComplete,
+    markCancelled,
+    session,
+    resetSession,
+  } = useContentUpload({
+    onError: (err) => console.error("Upload error:", err),
+  });
 
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFile = e.target.files?.[0];
-      if (!selectedFile) return;
-
-      setFile(selectedFile);
-
-      // Determine content category from file type
-      const detectedCategory = detectCategory(selectedFile);
-      setCategory(detectedCategory);
-      setContentType(getDefaultTypeForCategory(detectedCategory));
-
-      // Create preview
-      const url = URL.createObjectURL(selectedFile);
-      setPreview(url);
-
-      // Auto-fill title from filename
-      const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
-      setTitle(nameWithoutExt);
-
-      setStep("details");
-    },
-    []
-  );
-
-  const handleCategoryChange = useCallback((newCategory: ContentCategory) => {
-    setCategory(newCategory);
-    setContentType(getDefaultTypeForCategory(newCategory));
+  const updateMetadata = useCallback((field: string, value: string) => {
+    setMetadata(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleUpload = useCallback(async () => {
-    if (!file) return;
+  const handleDomainSelect = useCallback((domain: ContentDomain) => {
+    setSelectedDomain(domain);
+    const types = getTypesForDomain(domain);
+    // If only one type in domain, skip type selection
+    if (types.length === 1) {
+      setContentType(types[0]);
+      setStep("file");
+    } else {
+      setStep("type");
+    }
+  }, []);
 
-    // Capture current values before async operations
+  const handleTypeSelect = useCallback((type: ContentTypeConfig) => {
+    setContentType(type);
+    setStep("file");
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+
+    // Create preview
+    const url = URL.createObjectURL(selectedFile);
+    setPreview(url);
+
+    // Auto-fill title from filename
+    const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
+    updateMetadata("title", nameWithoutExt);
+
+    setStep("details");
+  }, [updateMetadata]);
+
+  const handleUpload = useCallback(async () => {
+    if (!file || !contentType) return;
+
     const currentNftPrice = nftPrice;
     const currentNftSupplyType = nftSupplyType;
     const currentNftMaxSupply = nftMaxSupply;
     const currentNftRoyaltyPercent = nftRoyaltyPercent;
-    const currentContentType = contentType;
+    const currentContentType = contentType.onChainType;
+    const currentRentFee6h = rentFee6h;
+    const currentRentFee1d = rentFee1d;
+    const currentRentFee7d = rentFee7d;
+    const currentMetadata = { ...metadata };
 
-    console.log("handleUpload called with NFT config:", {
-      price: currentNftPrice,
-      supplyType: currentNftSupplyType,
-      maxSupply: currentNftMaxSupply,
-      royaltyPercent: currentNftRoyaltyPercent,
-    });
-
-    // Clear any previous registration error
     setRegistrationError(null);
 
-    // Use cached upload result if available (for retry after wallet rejection)
     let result = uploadResult;
 
     if (!result) {
       setStep("uploading");
 
+      // Build full metadata with type-specific fields
+      const tags = currentMetadata.tags?.split(",").map((t: string) => t.trim()).filter(Boolean) || [];
+
       result = await uploadContent(file, {
-        title,
-        description,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        title: currentMetadata.title || "Untitled",
+        description: currentMetadata.description || "",
+        tags,
+        // Include all type-specific metadata
+        ...currentMetadata,
       });
 
-      console.log("Upload result:", result);
-
-      // Cache the result for potential retry
       if (result) {
         setUploadResult(result);
       }
-    } else {
-      console.log("Using cached upload result:", result);
     }
 
-    console.log("publicKey:", publicKey?.toBase58());
-
     if (result) {
-      // Register on-chain (always when wallet connected)
       if (publicKey && result.metadata) {
-        console.log("Starting on-chain registration...");
-        console.log("Content CID:", result.content.cid);
-        console.log("Metadata CID:", result.metadata.cid);
         setStep("registering");
         try {
-          // Always register with NFT mint config in one transaction
-          // Parse price (SOL only)
           let priceValue: bigint;
           if (currentNftPrice === "" || currentNftPrice === "0") {
-            priceValue = BigInt(0); // Free mint
+            priceValue = BigInt(0);
           } else {
             const priceFloat = parseFloat(currentNftPrice);
             priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
           }
 
-          // Parse supply
           let maxSupplyValue: bigint | null = null;
           if (currentNftSupplyType === "limited" && currentNftMaxSupply) {
             maxSupplyValue = BigInt(parseInt(currentNftMaxSupply));
           }
 
-          // Parse royalty
           const royaltyBps = Math.floor(parseFloat(currentNftRoyaltyPercent) * 100);
 
-          console.log("Registering with NFT config:", {
-            price: priceValue,
-            maxSupply: maxSupplyValue,
-            royaltyBps,
-            isEncrypted: result.isEncrypted,
-            previewCid: result.previewCid,
-            encryptionMetaCid: result.encryptionMetaCid,
-          });
+          if (!ecosystemConfig) {
+            throw new Error("Ecosystem config not loaded. Please try again.");
+          }
+          const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
 
-          const txSig = await registerContentWithMint({
+          await registerContentWithMint({
             contentCid: result.content.cid,
             metadataCid: result.metadata.cid,
             contentType: currentContentType,
             price: priceValue,
             maxSupply: maxSupplyValue,
             creatorRoyaltyBps: royaltyBps,
+            platform: platformWallet,
             isEncrypted: result.isEncrypted || false,
             previewCid: result.previewCid || "",
             encryptionMetaCid: result.encryptionMetaCid || "",
           });
-          console.log("On-chain registration with NFT successful:", txSig);
+
+          if (currentRentFee6h && currentRentFee1d && currentRentFee7d) {
+            const fee6h = BigInt(Math.floor(parseFloat(currentRentFee6h) * LAMPORTS_PER_SOL));
+            const fee1d = BigInt(Math.floor(parseFloat(currentRentFee1d) * LAMPORTS_PER_SOL));
+            const fee7d = BigInt(Math.floor(parseFloat(currentRentFee7d) * LAMPORTS_PER_SOL));
+
+            await configureRent({
+              contentCid: result.content.cid,
+              rentFee6h: fee6h,
+              rentFee1d: fee1d,
+              rentFee7d: fee7d,
+            });
+          }
+
+          markComplete();
         } catch (err) {
           console.error("Failed to register on-chain:", err);
-          // Go back to details step so they can retry
-          // uploadResult is already cached, so retry won't re-upload
-          setStep("details");
+          setStep("monetization");
 
           if (!isUserRejection(err)) {
-            // Show error message for non-cancellation errors
             setRegistrationError(getTransactionErrorMessage(err));
           }
           return;
         }
-      } else {
-        console.log("Skipping on-chain registration:", {
-          hasWallet: !!publicKey,
-          hasMetadata: !!result.metadata,
-        });
       }
 
       setStep("done");
@@ -268,418 +575,792 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       });
     }
   }, [
-    file,
-    title,
-    description,
-    tags,
-    nftPrice,
-    nftSupplyType,
-    nftMaxSupply,
-    nftRoyaltyPercent,
-    contentType,
-    uploadResult,
-    publicKey,
-    uploadContent,
-    registerContentWithMint,
-    onSuccess,
+    file, contentType, metadata, nftPrice, nftSupplyType, nftMaxSupply,
+    nftRoyaltyPercent, rentFee6h, rentFee1d, rentFee7d,
+    uploadResult, publicKey, uploadContent, registerContentWithMint, configureRent,
+    ecosystemConfig, onSuccess, markComplete, LAMPORTS_PER_SOL,
   ]);
 
   const handleClose = () => {
-    // Cleanup
-    if (preview) {
-      URL.revokeObjectURL(preview);
+    if (session && session.status === "in_progress" && session.uploadedCids.length > 0) {
+      markCancelled();
     }
+
+    if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview(null);
-    setTitle("");
-    setDescription("");
-    setTags("");
-    setStep("select");
-    // Reset NFT state
+    setMetadata({ title: "", description: "", tags: "" });
+    setSelectedDomain(null);
+    setContentType(null);
+    setStep("domain");
+    setMonetizationTab("minting");
     setNftPrice("");
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
     setNftRoyaltyPercent("5");
-    // Reset cached upload result and error
+    setRentFee6h("");
+    setRentFee1d("");
+    setRentFee7d("");
     setUploadResult(null);
     setRegistrationError(null);
     reset();
+    resetSession();
     onClose();
+  };
+
+  const goBack = () => {
+    switch (step) {
+      case "type":
+        setStep("domain");
+        setSelectedDomain(null);
+        break;
+      case "file":
+        const types = selectedDomain ? getTypesForDomain(selectedDomain) : [];
+        if (types.length === 1) {
+          // Domain only had one type, go back to domain
+          setStep("domain");
+          setSelectedDomain(null);
+        } else {
+          setStep("type");
+        }
+        setContentType(null);
+        break;
+      case "details":
+        setStep("file");
+        if (preview) URL.revokeObjectURL(preview);
+        setFile(null);
+        setPreview(null);
+        break;
+      case "monetization":
+        setStep("details");
+        break;
+    }
+  };
+
+  const getStepTitle = () => {
+    switch (step) {
+      case "domain": return "What are you uploading?";
+      case "type": return `What type of ${selectedDomain}?`;
+      case "file": return `Upload ${contentType?.label || ""}`;
+      case "details": return `${contentType?.label || ""} Details`;
+      case "monetization": return "Monetization";
+      case "uploading": return "Uploading...";
+      case "registering": return "Registering...";
+      case "done": return "Published!";
+    }
+  };
+
+  // Render type-specific metadata form
+  const renderMetadataForm = () => {
+    if (!contentType) return null;
+
+    const InputField = ({ label, field, placeholder, type = "text", required = false }: {
+      label: string;
+      field: string;
+      placeholder?: string;
+      type?: string;
+      required?: boolean;
+    }) => (
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-300">
+          {label} {required && <span className="text-red-400">*</span>}
+        </label>
+        <input
+          type={type}
+          value={metadata[field] || ""}
+          onChange={(e) => updateMetadata(field, e.target.value)}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
+        />
+      </div>
+    );
+
+    const TextAreaField = ({ label, field, placeholder, rows = 3 }: {
+      label: string;
+      field: string;
+      placeholder?: string;
+      rows?: number;
+    }) => (
+      <div>
+        <label className="block text-sm font-medium mb-1.5 text-gray-300">{label}</label>
+        <textarea
+          value={metadata[field] || ""}
+          onChange={(e) => updateMetadata(field, e.target.value)}
+          placeholder={placeholder}
+          rows={rows}
+          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm resize-none"
+        />
+      </div>
+    );
+
+    const commonFields = (
+      <>
+        <InputField label="Title" field="title" placeholder="Enter title" required />
+        <TextAreaField label="Description" field="description" placeholder="Brief description..." rows={2} />
+        <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+      </>
+    );
+
+    switch (contentType.key) {
+      // Video domain
+      case "video":
+        return (
+          <div className="space-y-3">
+            {commonFields}
+            <InputField label="Duration" field="duration" placeholder="10:30" />
+          </div>
+        );
+
+      case "movie":
+        return (
+          <div className="space-y-3">
+            {commonFields}
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Year" field="year" placeholder="2024" />
+              <InputField label="Duration" field="duration" placeholder="120 min" />
+            </div>
+            <InputField label="Director" field="director" placeholder="Director name" />
+            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." />
+            <InputField label="Genre" field="genre" placeholder="Action, Drama..." />
+          </div>
+        );
+
+      case "television":
+        return (
+          <div className="space-y-3">
+            <InputField label="Show Name" field="showName" placeholder="Series title" required />
+            <InputField label="Episode Title" field="title" placeholder="Episode title" required />
+            <div className="grid grid-cols-3 gap-3">
+              <InputField label="Season" field="season" placeholder="1" type="number" />
+              <InputField label="Episode" field="episode" placeholder="1" type="number" />
+              <InputField label="Year" field="year" placeholder="2024" />
+            </div>
+            <TextAreaField label="Synopsis" field="description" placeholder="Episode synopsis..." rows={2} />
+            <InputField label="Duration" field="duration" placeholder="45 min" />
+            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "musicVideo":
+        return (
+          <div className="space-y-3">
+            <InputField label="Song Title" field="title" placeholder="Song title" required />
+            <InputField label="Artist" field="artist" placeholder="Artist name" required />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Album" field="album" placeholder="Album name" />
+              <InputField label="Year" field="year" placeholder="2024" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Genre" field="genre" placeholder="Pop, Rock..." />
+              <InputField label="Duration" field="duration" placeholder="3:45" />
+            </div>
+            <TextAreaField label="Description" field="description" placeholder="About this video..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "short":
+        return (
+          <div className="space-y-3">
+            {commonFields}
+            <InputField label="Duration" field="duration" placeholder="0:30" />
+          </div>
+        );
+
+      // Audio domain
+      case "music":
+        return (
+          <div className="space-y-3">
+            <InputField label="Track Title" field="title" placeholder="Song title" required />
+            <InputField label="Artist" field="artist" placeholder="Artist name" required />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Album" field="album" placeholder="Album name" />
+              <InputField label="Duration" field="duration" placeholder="3:45" />
+            </div>
+            <InputField label="Genre" field="genre" placeholder="Electronic, Jazz..." />
+            <TextAreaField label="Description" field="description" placeholder="About this track..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "podcast":
+        return (
+          <div className="space-y-3">
+            <InputField label="Show Name" field="showName" placeholder="Podcast name" required />
+            <InputField label="Episode Title" field="title" placeholder="Episode title" required />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Episode #" field="episodeNumber" placeholder="42" type="number" />
+              <InputField label="Duration" field="duration" placeholder="45:00" />
+            </div>
+            <InputField label="Host(s)" field="host" placeholder="Host names" />
+            <TextAreaField label="Show Notes" field="description" placeholder="Episode description..." rows={3} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "audiobook":
+        return (
+          <div className="space-y-3">
+            <InputField label="Book Title" field="title" placeholder="Book title" required />
+            <InputField label="Author" field="author" placeholder="Author name" required />
+            <InputField label="Narrator" field="narrator" placeholder="Narrator name" />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Chapter" field="chapter" placeholder="Chapter 1" />
+              <InputField label="Duration" field="duration" placeholder="8:30:00" />
+            </div>
+            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      // Image domain
+      case "photo":
+        return (
+          <div className="space-y-3">
+            {commonFields}
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Location" field="location" placeholder="City, Country" />
+              <InputField label="Date Taken" field="dateTaken" type="date" />
+            </div>
+            <InputField label="Camera" field="camera" placeholder="Camera model" />
+          </div>
+        );
+
+      case "artwork":
+        return (
+          <div className="space-y-3">
+            <InputField label="Artwork Title" field="title" placeholder="Title" required />
+            <InputField label="Artist" field="artist" placeholder="Your name" />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Medium" field="medium" placeholder="Digital, 3D..." />
+              <InputField label="Dimensions" field="dimensions" placeholder="1920x1080" />
+            </div>
+            <TextAreaField label="Description" field="description" placeholder="About this artwork..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      // Document domain
+      case "book":
+        return (
+          <div className="space-y-3">
+            <InputField label="Book Title" field="title" placeholder="Book title" required />
+            <InputField label="Author" field="author" placeholder="Author name" required />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Publisher" field="publisher" placeholder="Publisher" />
+              <InputField label="Year" field="year" placeholder="2024" />
+            </div>
+            <InputField label="ISBN" field="isbn" placeholder="978-..." />
+            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={3} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "comic":
+        return (
+          <div className="space-y-3">
+            <InputField label="Title" field="title" placeholder="Comic title" required />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Issue #" field="issueNumber" placeholder="1" type="number" />
+              <InputField label="Year" field="year" placeholder="2024" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Writer" field="writer" placeholder="Writer name" />
+              <InputField label="Artist" field="artist" placeholder="Artist name" />
+            </div>
+            <InputField label="Publisher" field="publisher" placeholder="Publisher name" />
+            <TextAreaField label="Synopsis" field="description" placeholder="Issue synopsis..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      // File domain
+      case "asset":
+        return (
+          <div className="space-y-3">
+            <InputField label="Asset Name" field="title" placeholder="Asset name" required />
+            <InputField label="Format" field="format" placeholder="PSD, AI, Figma..." />
+            <InputField label="Category" field="category" placeholder="Template, mockup, icon..." />
+            <InputField label="Software" field="software" placeholder="Compatible software" />
+            <TextAreaField label="Description" field="description" placeholder="What's included..." rows={2} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "game":
+        return (
+          <div className="space-y-3">
+            <InputField label="Game Title" field="title" placeholder="Game name" required />
+            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web..." />
+            <InputField label="Genre" field="genre" placeholder="Puzzle, RPG, Action..." />
+            <InputField label="Version" field="version" placeholder="1.0.0" />
+            <TextAreaField label="Description" field="description" placeholder="Game description..." rows={2} />
+            <InputField label="Requirements" field="requirements" placeholder="System requirements" />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "software":
+        return (
+          <div className="space-y-3">
+            <InputField label="Software Name" field="title" placeholder="App name" required />
+            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web, Mobile..." />
+            <InputField label="Version" field="version" placeholder="1.0.0" />
+            <InputField label="License" field="license" placeholder="MIT, Commercial..." />
+            <TextAreaField label="Description" field="description" placeholder="What it does..." rows={2} />
+            <InputField label="Requirements" field="requirements" placeholder="System requirements" />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      case "dataset":
+        return (
+          <div className="space-y-3">
+            <InputField label="Dataset Name" field="title" placeholder="Dataset name" required />
+            <InputField label="Format" field="format" placeholder="CSV, JSON, SQL..." />
+            <div className="grid grid-cols-2 gap-3">
+              <InputField label="Size/Rows" field="size" placeholder="10,000 rows" />
+              <InputField label="Updated" field="updated" type="date" />
+            </div>
+            <TextAreaField label="Description" field="description" placeholder="What data is included..." rows={2} />
+            <InputField label="Schema" field="schema" placeholder="Brief schema description" />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      // Text domain
+      case "post":
+        return (
+          <div className="space-y-3">
+            <InputField label="Title" field="title" placeholder="Post title" required />
+            <InputField label="Author" field="author" placeholder="Your name" />
+            <TextAreaField label="Excerpt" field="excerpt" placeholder="Brief summary or teaser..." rows={2} />
+            <TextAreaField label="Content Preview" field="description" placeholder="First paragraph or overview..." rows={3} />
+            <InputField label="Category" field="category" placeholder="Tech, Finance, Art..." />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+          </div>
+        );
+
+      default:
+        return commonFields;
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={handleClose}
-      />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative bg-gray-900 rounded-2xl w-full max-w-lg mx-4 overflow-hidden border border-gray-800 max-h-[90vh] flex flex-col">
+      <div className="relative bg-gray-900 rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-gray-800 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="text-xl font-semibold">
-            {step === "select" && "Upload Content"}
-            {step === "details" && "Content Details"}
-            {step === "uploading" && "Uploading..."}
-            {step === "registering" && "Registering..."}
-            {step === "done" && "Upload Complete!"}
-          </h2>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-gray-800 rounded-full transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+          <div className="flex items-center gap-3">
+            {step !== "domain" && step !== "uploading" && step !== "registering" && step !== "done" && (
+              <button onClick={goBack} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            <h2 className="text-xl font-semibold">{getStepTitle()}</h2>
+          </div>
+          <button onClick={handleClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
-          {/* Step: Select File */}
-          {step === "select" && (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center cursor-pointer hover:border-primary-500 hover:bg-gray-800/50 transition-all"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          {/* Step: Domain Selection */}
+          {step === "domain" && (
+            <div className="grid grid-cols-2 gap-3">
+              {DOMAINS.map(domain => (
+                <button
+                  key={domain.key}
+                  onClick={() => handleDomainSelect(domain.key)}
+                  className="p-5 rounded-xl border border-gray-700 hover:border-primary-500 hover:bg-gray-800/50 transition-all text-left group"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
+                  <div className="text-gray-400 group-hover:text-primary-400 transition-colors mb-3">
+                    {domain.icon}
+                  </div>
+                  <p className="font-medium text-lg">{domain.label}</p>
+                  <p className="text-sm text-gray-500 mt-1">{domain.description}</p>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Step: Type Selection */}
+          {step === "type" && selectedDomain && (
+            <div className="space-y-3">
+              {getTypesForDomain(selectedDomain).map(type => (
+                <button
+                  key={type.key}
+                  onClick={() => handleTypeSelect(type)}
+                  className="w-full p-4 rounded-xl border border-gray-700 hover:border-primary-500 hover:bg-gray-800/50 transition-all text-left group flex items-center gap-4"
+                >
+                  <div className="text-gray-400 group-hover:text-primary-400 transition-colors">
+                    {type.icon}
+                  </div>
+                  <div>
+                    <p className="font-medium">{type.label}</p>
+                    <p className="text-sm text-gray-500">{type.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Step: File Upload */}
+          {step === "file" && contentType && (
+            <div>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center cursor-pointer hover:border-primary-500 hover:bg-gray-800/50 transition-all"
+              >
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center text-gray-400">
+                  {contentType.icon}
+                </div>
+                <p className="text-lg font-medium mb-2">
+                  Drop your {contentType.label.toLowerCase()} here
+                </p>
+                <p className="text-sm text-gray-500">or click to browse</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={contentType.accept}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
               </div>
-              <p className="text-lg font-medium mb-2">
-                Drop your file here or click to browse
-              </p>
-              <p className="text-sm text-gray-500">
-                Video, Audio, or Images up to 500MB
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="video/*,audio/*,image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
             </div>
           )}
 
           {/* Step: Details */}
-          {step === "details" && file && (
+          {step === "details" && file && contentType && (
             <div className="space-y-4">
               {/* Preview */}
               <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden">
-                {category === "video" && preview && (
-                  <video
-                    src={preview}
-                    className="w-full h-full object-contain"
-                    controls
-                  />
+                {contentType.domain === "video" && preview && (
+                  <video src={preview} className="w-full h-full object-contain" controls />
                 )}
-                {category === "audio" && preview && (
+                {contentType.domain === "audio" && preview && (
                   <div className="w-full h-full flex items-center justify-center">
                     <audio src={preview} controls className="w-full max-w-md" />
                   </div>
                 )}
-                {category === "image" && preview && (
-                  <img
-                    src={preview}
-                    alt="Preview"
-                    className="w-full h-full object-contain"
-                  />
+                {contentType.domain === "image" && preview && (
+                  <img src={preview} alt="Preview" className="w-full h-full object-contain" />
                 )}
-                {category === "book" && (
+                {(contentType.domain === "document" || contentType.domain === "file" || contentType.domain === "text") && (
                   <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-center">
-                      <svg className="w-16 h-16 mx-auto text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                      <p className="text-gray-400 mt-2">{file.name}</p>
+                    <div className="text-center text-gray-400">
+                      {contentType.icon}
+                      <p className="mt-2 text-sm">{file.name}</p>
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Category and Type Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => handleCategoryChange(e.target.value as ContentCategory)}
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                  >
-                    {(Object.keys(CATEGORY_LABELS) as ContentCategory[]).map((cat) => (
-                      <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Type</label>
-                  <select
-                    value={contentType}
-                    onChange={(e) => setContentType(Number(e.target.value) as OnChainContentType)}
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                  >
-                    {getTypesForCategory(category).map((type) => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter a title"
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What's this about?"
-                  rows={3}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 resize-none"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tags (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="crypto, solana, tutorial"
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                />
               </div>
 
               {/* File info */}
-              <div className="text-sm text-gray-500">
+              <div className="text-xs text-gray-500 px-1">
                 {file.name} • {(file.size / (1024 * 1024)).toFixed(2)} MB
               </div>
 
-              {/* NFT Configuration */}
-              {publicKey && (
-                <div className="border border-gray-700 rounded-lg overflow-hidden">
-                  <div className="flex items-center gap-3 p-3 bg-gray-800">
-                    <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    <div>
-                      <p className="font-medium">NFT Minting Settings</p>
-                      <p className="text-xs text-gray-400">Configure how others can mint NFTs of your content</p>
-                    </div>
-                  </div>
+              {/* Type-specific metadata form */}
+              {renderMetadataForm()}
 
-                  <div className="p-3 space-y-3 border-t border-gray-700">
-                      {/* Price */}
-                      <div>
-                        <label className="block text-xs font-medium mb-1.5 text-gray-400">Price (SOL)</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            step="0.001"
-                            min="0"
-                            value={nftPrice}
-                            onChange={(e) => setNftPrice(e.target.value)}
-                            placeholder="0 for free"
-                            className="flex-1 px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                          />
-                          <span className="px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-400">
-                            SOL
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Supply */}
-                      <div>
-                        <label className="block text-xs font-medium mb-1.5 text-gray-400">Supply</label>
-                        <div className="flex gap-3 mb-2">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-sm">
-                            <input
-                              type="radio"
-                              checked={nftSupplyType === "unlimited"}
-                              onChange={() => setNftSupplyType("unlimited")}
-                              className="text-primary-500"
-                            />
-                            <span>Unlimited</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer text-sm">
-                            <input
-                              type="radio"
-                              checked={nftSupplyType === "limited"}
-                              onChange={() => setNftSupplyType("limited")}
-                              className="text-primary-500"
-                            />
-                            <span>Limited</span>
-                          </label>
-                        </div>
-                        {nftSupplyType === "limited" && (
-                          <input
-                            type="number"
-                            min="1"
-                            value={nftMaxSupply}
-                            onChange={(e) => setNftMaxSupply(e.target.value)}
-                            placeholder="Max editions (e.g., 100)"
-                            className="w-full px-3 py-1.5 text-sm bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                          />
-                        )}
-                      </div>
-
-                      {/* Royalty */}
-                      <div>
-                        <label className="block text-xs font-medium mb-1.5 text-gray-400">
-                          Secondary Sale Royalty: {nftRoyaltyPercent}%
-                        </label>
-                        <input
-                          type="range"
-                          min="2"
-                          max="10"
-                          step="0.5"
-                          value={nftRoyaltyPercent}
-                          onChange={(e) => setNftRoyaltyPercent(e.target.value)}
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-xs text-gray-500">
-                          <span>2%</span>
-                          <span>10%</span>
-                        </div>
-                      </div>
-
-                      {/* Revenue Split Info */}
-                      <div className="bg-gray-900 rounded-lg p-2.5 text-xs">
-                        <p className="text-gray-400 mb-1.5">Primary Sale Split:</p>
-                        <div className="flex justify-between text-gray-300">
-                          <span>You (Creator)</span>
-                          <span className="text-green-400">80%</span>
-                        </div>
-                        <div className="flex justify-between text-gray-300">
-                          <span>Existing Holders</span>
-                          <span className="text-blue-400">12%</span>
-                        </div>
-                        <div className="flex justify-between text-gray-500">
-                          <span>Platform</span>
-                          <span>5%</span>
-                        </div>
-                        <div className="flex justify-between text-gray-500">
-                          <span>Ecosystem</span>
-                          <span>3%</span>
-                        </div>
-                      </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Registration error */}
-              {registrationError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm">
-                  <div className="flex items-center gap-2 text-red-400">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>{registrationError}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Already uploaded notice */}
-              {uploadResult && !registrationError && (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm">
-                  <div className="flex items-center gap-2 text-green-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>File uploaded to IPFS. Click below to register on-chain.</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setStep("select");
-                    setFile(null);
-                    if (preview) URL.revokeObjectURL(preview);
-                    setPreview(null);
-                    setUploadResult(null);
-                    setRegistrationError(null);
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleUpload}
-                  disabled={!title.trim()}
-                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
-                >
-                  {uploadResult ? "Register on Solana" : "Upload to IPFS"}
-                </button>
-              </div>
+              {/* Continue button */}
+              <button
+                onClick={() => setStep("monetization")}
+                disabled={!metadata.title?.trim()}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+              >
+                Continue to Monetization
+              </button>
             </div>
           )}
 
-          {/* Step: Uploading */}
-          {(step === "uploading" || step === "registering") && (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4">
-                <svg
-                  className="animate-spin w-full h-full text-primary-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
+          {/* Step: Monetization */}
+          {step === "monetization" && publicKey && (
+            <div className="space-y-4">
+              {/* Tabs */}
+              <div className="flex border-b border-gray-700">
+                <button
+                  onClick={() => setMonetizationTab("minting")}
+                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
+                    monetizationTab === "minting" ? "text-primary-400" : "text-gray-400 hover:text-gray-300"
+                  }`}
                 >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    NFT Minting
+                  </div>
+                  {monetizationTab === "minting" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setMonetizationTab("renting")}
+                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
+                    monetizationTab === "renting" ? "text-amber-400" : "text-gray-400 hover:text-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Rentals
+                  </div>
+                  {monetizationTab === "renting" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+                  )}
+                </button>
+              </div>
+
+              {/* Minting Tab Content */}
+              {monetizationTab === "minting" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-400">
+                    Configure how others can mint NFTs to permanently own your content.
+                  </p>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Mint Price (SOL)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        value={nftPrice}
+                        onChange={(e) => setNftPrice(e.target.value)}
+                        placeholder="0 for free"
+                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                      />
+                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Supply</label>
+                    <div className="flex gap-4 mb-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={nftSupplyType === "unlimited"}
+                          onChange={() => setNftSupplyType("unlimited")}
+                          className="text-primary-500"
+                        />
+                        <span>Unlimited</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={nftSupplyType === "limited"}
+                          onChange={() => setNftSupplyType("limited")}
+                          className="text-primary-500"
+                        />
+                        <span>Limited Edition</span>
+                      </label>
+                    </div>
+                    {nftSupplyType === "limited" && (
+                      <input
+                        type="number"
+                        min="1"
+                        value={nftMaxSupply}
+                        onChange={(e) => setNftMaxSupply(e.target.value)}
+                        placeholder="Max editions (e.g., 100)"
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Secondary Sale Royalty: {nftRoyaltyPercent}%
+                    </label>
+                    <input
+                      type="range"
+                      min="2"
+                      max="10"
+                      step="0.5"
+                      value={nftRoyaltyPercent}
+                      onChange={(e) => setNftRoyaltyPercent(e.target.value)}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>2%</span>
+                      <span>10%</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <p className="text-sm font-medium mb-3">Primary Sale Split</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">You (Creator)</span>
+                        <span className="text-green-400 font-medium">80%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Existing Holders</span>
+                        <span className="text-blue-400 font-medium">12%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Platform</span>
+                        <span className="text-gray-500">5%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Ecosystem</span>
+                        <span className="text-gray-500">3%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Renting Tab Content */}
+              {monetizationTab === "renting" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-400">
+                    Set rental prices for each duration tier. Leave empty to disable rentals.
+                  </p>
+
+                  <div className="flex items-center gap-4">
+                    <label className="w-24 text-sm text-gray-400">6 Hours</label>
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={rentFee6h}
+                        onChange={(e) => setRentFee6h(e.target.value)}
+                        placeholder="0.01"
+                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <label className="w-24 text-sm text-gray-400">1 Day</label>
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={rentFee1d}
+                        onChange={(e) => setRentFee1d(e.target.value)}
+                        placeholder="0.02"
+                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <label className="w-24 text-sm text-gray-400">7 Days</label>
+                    <div className="flex-1 flex gap-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={rentFee7d}
+                        onChange={(e) => setRentFee7d(e.target.value)}
+                        placeholder="0.05"
+                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 text-sm">
+                    <p className="text-amber-400 font-medium mb-2">About Rentals</p>
+                    <ul className="text-amber-200/80 space-y-1">
+                      <li>• Temporary access via non-transferable NFTs</li>
+                      <li>• Access expires automatically after rental period</li>
+                      <li>• Same revenue split as minting (80% to creator)</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Error states */}
+              {isLoadingEcosystemConfig && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span>Loading blockchain configuration...</span>
+                  </div>
+                </div>
+              )}
+
+              {!isLoadingEcosystemConfig && !ecosystemConfig && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-yellow-400">
+                      {isEcosystemConfigError ? "Network error." : "Config not found."}
+                    </span>
+                    <button
+                      onClick={() => refetchEcosystemConfig()}
+                      className="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {registrationError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                  {registrationError}
+                </div>
+              )}
+
+              {uploadResult && !registrationError && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-green-400">
+                  File uploaded to IPFS. Click below to register on-chain.
+                </div>
+              )}
+
+              <button
+                onClick={handleUpload}
+                disabled={isLoadingEcosystemConfig || !ecosystemConfig}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+              >
+                {uploadResult ? "Register on Solana" : "Publish Content"}
+              </button>
+            </div>
+          )}
+
+          {/* Non-wallet user */}
+          {step === "monetization" && !publicKey && (
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-4">Connect your wallet to configure monetization and register on-chain.</p>
+              <button
+                onClick={handleUpload}
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+              >
+                Upload to IPFS Only
+              </button>
+            </div>
+          )}
+
+          {/* Step: Uploading/Registering */}
+          {(step === "uploading" || step === "registering") && (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4">
+                <svg className="animate-spin w-full h-full text-primary-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </div>
               <p className="text-lg font-medium mb-2">
@@ -687,11 +1368,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               </p>
               {step === "uploading" && (
                 <>
-                  <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
-                    <div
-                      className="bg-primary-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    />
+                  <div className="w-full max-w-xs mx-auto bg-gray-800 rounded-full h-2 mb-2">
+                    <div className="bg-primary-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
                   </div>
                   <p className="text-sm text-gray-500">{progress}% complete</p>
                 </>
@@ -705,46 +1383,32 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
           {/* Step: Done */}
           {step === "done" && (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
+                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">
-                Content Published!
-              </p>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-lg font-medium mb-2">Content Published!</p>
+              <p className="text-sm text-gray-500 mb-6">
                 {publicKey
                   ? "Your content is stored on IPFS and registered on Solana."
                   : "Your content is now stored on IPFS."}
               </p>
               {publicKey && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-500/10 text-green-400 rounded-full text-sm mb-4">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 rounded-full text-sm mb-6">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   On-chain verified
                 </div>
               )}
-              <div>
-                <button
-                  onClick={handleClose}
-                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
-                >
-                  Done
-                </button>
-              </div>
+              <button
+                onClick={handleClose}
+                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+              >
+                Done
+              </button>
             </div>
           )}
         </div>

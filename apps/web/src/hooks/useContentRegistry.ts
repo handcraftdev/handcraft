@@ -8,6 +8,7 @@ import {
   createContentRegistryClient,
   ContentType,
   PaymentCurrency,
+  RentTier,
   getContentPda,
   getCidRegistryPda,
   getEcosystemConfigPda,
@@ -15,27 +16,40 @@ import {
   getContentRewardPoolPda,
   getWalletContentStatePda,
   getContentCollectionPda,
+  getRentConfigPda,
   ContentRewardPool,
   WalletContentState,
   MintConfig,
   EcosystemConfig,
   ContentCollection,
+  RentConfig,
+  RentEntry,
+  ContentEntry,
   calculatePrimarySplit,
   calculatePendingReward,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
+  RENT_PERIOD_6H,
+  RENT_PERIOD_1D,
+  RENT_PERIOD_7D,
+  MIN_RENT_FEE_LAMPORTS,
 } from "@handcraft/sdk";
 import { simulateTransaction, simulatePartiallySignedTransaction } from "@/utils/transaction";
 
 export {
   ContentType,
   PaymentCurrency,
+  RentTier,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
+  RENT_PERIOD_6H,
+  RENT_PERIOD_1D,
+  RENT_PERIOD_7D,
+  MIN_RENT_FEE_LAMPORTS,
 };
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -43,22 +57,35 @@ export function useContentRegistry() {
   const queryClient = useQueryClient();
 
   // Memoize client to prevent recreating on every render
-  const client = useMemo(() => createContentRegistryClient(connection), [connection]);
+  // Only create client on client-side to avoid SSR issues with @solana/web3.js PublicKey._bn
+  const client = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return createContentRegistryClient(connection);
+  }, [connection]);
 
-  // Fetch current user's content
-  const contentQuery = useQuery({
-    queryKey: ["content", publicKey?.toBase58()],
-    queryFn: () => (publicKey ? client.fetchContentByCreator(publicKey) : []),
-    enabled: !!publicKey,
-    staleTime: 30000, // Cache for 30 seconds
-  });
-
-  // Fetch global content (all creators)
+  // Fetch global content (all creators) - this is the ONLY content fetch
   const globalContentQuery = useQuery({
     queryKey: ["globalContent"],
-    queryFn: () => client.fetchGlobalContent(),
-    staleTime: 30000, // Cache for 30 seconds
+    queryFn: () => client?.fetchGlobalContent() ?? [],
+    enabled: !!client,
+    staleTime: 60000, // Cache for 60 seconds
+    gcTime: 120000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
   });
+
+  // Derive user's content from globalContent (avoids duplicate RPC call)
+  const userContent = useMemo(() => {
+    if (!publicKey) return [];
+    const allContent = globalContentQuery.data || [];
+    return allContent.filter(c => c.creator.equals(publicKey));
+  }, [publicKey, globalContentQuery.data]);
+
+  const isLoadingUserContent = globalContentQuery.isLoading;
 
   // Register content mutation (without NFT config)
   const registerContent = useMutation({
@@ -78,6 +105,7 @@ export function useContentRegistry() {
       encryptionMetaCid?: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Registering content...");
       console.log("Content CID:", contentCid);
@@ -129,6 +157,7 @@ export function useContentRegistry() {
       price,
       maxSupply,
       creatorRoyaltyBps,
+      platform,
       isEncrypted = false,
       previewCid = "",
       encryptionMetaCid = "",
@@ -139,11 +168,13 @@ export function useContentRegistry() {
       price: bigint;
       maxSupply: bigint | null;
       creatorRoyaltyBps: number;
+      platform: PublicKey;
       isEncrypted?: boolean;
       previewCid?: string;
       encryptionMetaCid?: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Registering content with mint config...", {
         contentCid,
@@ -151,6 +182,7 @@ export function useContentRegistry() {
         price,
         maxSupply,
         creatorRoyaltyBps,
+        platform: platform.toBase58(),
         isEncrypted,
         previewCid,
         encryptionMetaCid,
@@ -166,6 +198,7 @@ export function useContentRegistry() {
         price,
         maxSupply,
         creatorRoyaltyBps,
+        platform,
         isEncrypted,
         previewCid,
         encryptionMetaCid
@@ -216,6 +249,7 @@ export function useContentRegistry() {
       amountLamports: number;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       const ix = await client.tipContentInstruction(publicKey, contentCid, creator, amountLamports);
       const tx = new Transaction().add(ix);
@@ -246,6 +280,7 @@ export function useContentRegistry() {
       creatorRoyaltyBps: number;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Configuring mint...", { contentCid, price, maxSupply, creatorRoyaltyBps });
 
@@ -272,6 +307,7 @@ export function useContentRegistry() {
     },
     onSuccess: (_, { contentCid }) => {
       queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
       queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
     },
   });
@@ -292,6 +328,7 @@ export function useContentRegistry() {
       isActive: boolean | null;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Updating mint settings...", { contentCid, price, maxSupply, creatorRoyaltyBps, isActive });
 
@@ -319,6 +356,7 @@ export function useContentRegistry() {
     },
     onSuccess: (_, { contentCid }) => {
       queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
       queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
     },
   });
@@ -339,6 +377,7 @@ export function useContentRegistry() {
       platform: PublicKey;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Minting NFT with SOL...", {
         contentCid,
@@ -395,6 +434,7 @@ export function useContentRegistry() {
     onSuccess: (_, { contentCid }) => {
       queryClient.invalidateQueries({ queryKey: ["globalContent"] });
       queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
       queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
       queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
       queryClient.invalidateQueries({ queryKey: ["walletContentState"] });
@@ -412,6 +452,7 @@ export function useContentRegistry() {
       metadataCid: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Updating content...", { contentCid, metadataCid });
 
@@ -450,6 +491,7 @@ export function useContentRegistry() {
       hasMintConfig?: boolean;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Deleting content...", { contentCid, hasMintConfig });
 
@@ -487,6 +529,7 @@ export function useContentRegistry() {
       contentCid: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Claiming rewards for content...", {
         contentCid,
@@ -526,6 +569,7 @@ export function useContentRegistry() {
       contentCid: string;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
 
       console.log("Claiming verified rewards for content...", {
         contentCid,
@@ -572,6 +616,7 @@ export function useContentRegistry() {
   });
 
   // Batch claim rewards mutation (claims from multiple content positions in one transaction)
+  // Uses verified claims with per-NFT tracking
   const claimAllRewards = useMutation({
     mutationFn: async ({
       contentCids,
@@ -579,22 +624,49 @@ export function useContentRegistry() {
       contentCids: string[];
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
       if (contentCids.length === 0) throw new Error("No content to claim from");
 
-      console.log("Claiming all rewards...", {
+      console.log("Claiming all rewards (verified)...", {
         contentCids,
         count: contentCids.length,
       });
 
-      const ix = await client.claimAllRewardsInstruction(
-        publicKey,
-        contentCids
-      );
+      const tx = new Transaction();
 
-      const tx = new Transaction().add(ix);
+      // Build verified claim instructions for each content
+      for (const contentCid of contentCids) {
+        const contentCollection = await client.fetchContentCollection(contentCid);
+        if (!contentCollection) {
+          console.warn(`Skipping ${contentCid}: collection not found`);
+          continue;
+        }
+
+        const nftAssets = await client.fetchWalletNftsForCollection(
+          publicKey,
+          contentCollection.collectionAsset
+        );
+
+        if (nftAssets.length === 0) {
+          console.warn(`Skipping ${contentCid}: no NFTs owned`);
+          continue;
+        }
+
+        console.log(`Adding claim for ${contentCid} with ${nftAssets.length} NFTs`);
+        const ix = await client.claimRewardsVerifiedInstruction(
+          publicKey,
+          contentCid,
+          nftAssets
+        );
+        tx.add(ix);
+      }
+
+      if (tx.instructions.length === 0) {
+        throw new Error("No valid claims to process");
+      }
 
       // Simulate transaction before prompting wallet
-      console.log("Simulating batch claim transaction...");
+      console.log(`Simulating batch claim transaction (${tx.instructions.length} instructions)...`);
       await simulateTransaction(connection, tx, publicKey);
       console.log("Simulation successful, sending to wallet...");
 
@@ -612,23 +684,334 @@ export function useContentRegistry() {
     },
   });
 
-  // Fetch mint config for a specific content
+  // Configure rent for content with 3-tier pricing (creator only)
+  const configureRent = useMutation({
+    mutationFn: async ({
+      contentCid,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+    }: {
+      contentCid: string;
+      rentFee6h: bigint;
+      rentFee1d: bigint;
+      rentFee7d: bigint;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Configuring rent...", { contentCid, rentFee6h, rentFee1d, rentFee7d });
+
+      const ix = await client.configureRentInstruction(
+        publicKey,
+        contentCid,
+        rentFee6h,
+        rentFee1d,
+        rentFee7d
+      );
+
+      const tx = new Transaction().add(ix);
+
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Configure rent tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Configure rent confirmed!");
+
+      // Check if transaction actually succeeded
+      const txResult = await connection.getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      console.log("Transaction result:", txResult?.meta?.err);
+      if (txResult?.meta?.err) {
+        console.error("Transaction failed with error:", txResult.meta.err);
+        console.error("Transaction logs:", txResult.meta.logMessages);
+        throw new Error(`Transaction failed: ${JSON.stringify(txResult.meta.err)}`);
+      }
+
+      // Debug: Check if account was created
+      console.log("Checking if RentConfig account was created...");
+      const rentConfig = await client.fetchRentConfig(contentCid);
+      console.log("RentConfig immediately after tx:", rentConfig);
+
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["rentConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allRentConfigs"] });
+    },
+  });
+
+  // Update rent config with 3-tier pricing (creator only)
+  const updateRentConfig = useMutation({
+    mutationFn: async ({
+      contentCid,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+      isActive,
+    }: {
+      contentCid: string;
+      rentFee6h: bigint | null;
+      rentFee1d: bigint | null;
+      rentFee7d: bigint | null;
+      isActive: boolean | null;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Updating rent config...", { contentCid, rentFee6h, rentFee1d, rentFee7d, isActive });
+
+      const ix = await client.updateRentConfigInstruction(
+        publicKey,
+        contentCid,
+        rentFee6h,
+        rentFee1d,
+        rentFee7d,
+        isActive
+      );
+
+      const tx = new Transaction().add(ix);
+
+      console.log("Simulating transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Update rent config tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Update rent config confirmed!");
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["rentConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allRentConfigs"] });
+    },
+  });
+
+  // Rent content with SOL (select tier: 6h, 1d, or 7d)
+  const rentContentSol = useMutation({
+    mutationFn: async ({
+      contentCid,
+      creator,
+      treasury,
+      platform,
+      tier,
+    }: {
+      contentCid: string;
+      creator: PublicKey;
+      treasury: PublicKey;
+      platform: PublicKey;
+      tier: RentTier;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Renting content...", {
+        contentCid,
+        creator: creator.toBase58(),
+        treasury: treasury.toBase58(),
+        platform: platform.toBase58(),
+        renter: publicKey.toBase58(),
+        tier,
+      });
+
+      // Fetch the content collection to get the collection asset address
+      const contentCollection = await client.fetchContentCollection(contentCid);
+      if (!contentCollection) {
+        throw new Error("Content collection not found.");
+      }
+
+      console.log("Collection Asset:", contentCollection.collectionAsset.toBase58());
+
+      const { instruction, nftAssetKeypair } = await client.rentContentSolInstruction(
+        publicKey,
+        contentCid,
+        creator,
+        treasury,
+        platform,
+        contentCollection.collectionAsset,
+        tier
+      );
+
+      console.log("Rental NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
+
+      const tx = new Transaction().add(instruction);
+
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.partialSign(nftAssetKeypair);
+
+      console.log("Simulating transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection, {
+        signers: [nftAssetKeypair],
+      });
+      console.log("Rent content tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Rent content confirmed!");
+      return { signature, nftAsset: nftAssetKeypair.publicKey };
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["rentConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allRentConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["walletRentals"] });
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+    },
+  });
+
+  // Batch fetch ALL mint configs in one RPC call (much more efficient)
+  const allMintConfigsQuery = useQuery({
+    queryKey: ["allMintConfigs"],
+    queryFn: async () => {
+      if (!client) return new Map<string, MintConfig>();
+      return client.fetchAllMintConfigs();
+    },
+    enabled: !!client,
+    staleTime: 60000, // Cache for 60 seconds
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Batch fetch ALL rent configs in one RPC call (much more efficient)
+  const allRentConfigsQuery = useQuery({
+    queryKey: ["allRentConfigs"],
+    queryFn: async () => {
+      if (!client) return new Map<string, RentConfig>();
+      return client.fetchAllRentConfigs();
+    },
+    enabled: !!client,
+    staleTime: 60000, // Cache for 60 seconds
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Batch fetch ALL content collections in one RPC call
+  const allContentCollectionsQuery = useQuery({
+    queryKey: ["allContentCollections"],
+    queryFn: async () => {
+      if (!client) return new Map<string, ContentCollection>();
+      return client.fetchAllContentCollections();
+    },
+    enabled: !!client,
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Batch fetch ALL content reward pools in one RPC call
+  const allRewardPoolsQuery = useQuery({
+    queryKey: ["allRewardPools"],
+    queryFn: async () => {
+      if (!client) return new Map<string, ContentRewardPool>();
+      return client.fetchAllContentRewardPools();
+    },
+    enabled: !!client,
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Fetch mint config for a specific content - uses batch data if available
   const useMintConfig = (contentCid: string | null) => {
     return useQuery({
       queryKey: ["mintConfig", contentCid],
-      queryFn: () => contentCid ? client.fetchMintConfig(contentCid) : null,
-      enabled: !!contentCid,
+      queryFn: async () => {
+        if (!contentCid || !client) return null;
+        // First check batch data
+        const allConfigs = allMintConfigsQuery.data;
+        if (allConfigs && allConfigs.size > 0) {
+          const [contentPda] = getContentPda(contentCid);
+          return allConfigs.get(contentPda.toBase58()) || null;
+        }
+        // Fallback to individual fetch if batch not loaded
+        return client.fetchMintConfig(contentCid);
+      },
+      enabled: !!contentCid && !!client,
       staleTime: 60000, // Cache for 60 seconds
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
     });
+  };
+
+  // Fetch rent config for a specific content - uses batch data if available
+  const useRentConfig = (contentCid: string | null) => {
+    return useQuery({
+      queryKey: ["rentConfig", contentCid],
+      queryFn: async () => {
+        if (!contentCid || !client) return null;
+        // First check batch data
+        const allConfigs = allRentConfigsQuery.data;
+        if (allConfigs && allConfigs.size > 0) {
+          const [contentPda] = getContentPda(contentCid);
+          return allConfigs.get(contentPda.toBase58()) || null;
+        }
+        // Fallback to individual fetch if batch not loaded
+        return client.fetchRentConfig(contentCid);
+      },
+      enabled: !!contentCid && !!client,
+      staleTime: 60000, // Cache for 60 seconds
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
+    });
+  };
+
+  // Check rental access for a specific NFT
+  const checkRentalAccess = async (nftAsset: PublicKey) => {
+    if (!client) throw new Error("Client not initialized");
+    return client.checkRentalAccess(nftAsset);
   };
 
   // Fetch content reward pool
   const useContentRewardPool = (contentCid: string | null) => {
     return useQuery({
       queryKey: ["contentRewardPool", contentCid],
-      queryFn: () => contentCid ? client.fetchContentRewardPool(contentCid) : null,
-      enabled: !!contentCid,
-      staleTime: 30000, // Cache for 30 seconds
+      queryFn: () => contentCid && client ? client.fetchContentRewardPool(contentCid) : null,
+      enabled: !!contentCid && !!client,
+      staleTime: 60000, // Cache for 60 seconds
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
     });
   };
 
@@ -636,56 +1019,125 @@ export function useContentRegistry() {
   const useWalletContentState = (contentCid: string | null) => {
     return useQuery({
       queryKey: ["walletContentState", publicKey?.toBase58(), contentCid],
-      queryFn: () => publicKey && contentCid ? client.fetchWalletContentState(publicKey, contentCid) : null,
-      enabled: !!publicKey && !!contentCid,
-      staleTime: 30000, // Cache for 30 seconds
+      queryFn: () => publicKey && contentCid && client ? client.fetchWalletContentState(publicKey, contentCid) : null,
+      enabled: !!publicKey && !!contentCid && !!client,
+      staleTime: 60000, // Cache for 60 seconds
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
     });
   };
 
   // Fetch ALL NFTs owned by wallet ONCE (batch query)
+  // This uses getProgramAccounts which is expensive - cache aggressively to avoid 429 rate limits
   const walletNftsQuery = useQuery({
     queryKey: ["walletNfts", publicKey?.toBase58()],
     queryFn: async () => {
-      if (!publicKey) return [];
+      if (!publicKey || !client) return [];
       // Fetch all NFT metadata for wallet once
       return client.fetchWalletNftMetadata(publicKey);
     },
-    enabled: !!publicKey,
-    staleTime: 60000, // Cache for 60 seconds
+    enabled: !!publicKey && !!client,
+    staleTime: 300000, // Cache for 5 minutes (expensive query)
+    gcTime: 600000, // Keep in cache for 10 minutes
+    refetchOnMount: false, // Don't refetch on component remount (Fast Refresh)
+    refetchOnWindowFocus: false, // Don't refetch on tab focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
+    retry: (failureCount, error) => {
+      // Don't retry on 429 rate limit errors
+      if (error instanceof Error && error.message.includes('429')) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Per-content pending reward info
+  // Fetch rental NFT assets for the wallet (to exclude from ownership count)
+  // Uses optimized function that reuses pre-fetched NFT data instead of re-fetching
+  const walletRentalNftsQuery = useQuery({
+    queryKey: ["walletRentalNfts", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey || !client) return new Set<string>();
+      // Use the optimized version that accepts pre-fetched NFT metadata
+      // This avoids a redundant fetchWalletNftMetadata call and uses batch fetching
+      const nftMetadata = walletNftsQuery.data || [];
+      return client.fetchRentalNftsFromMetadata(nftMetadata);
+    },
+    enabled: !!publicKey && !!client && walletNftsQuery.isSuccess && (walletNftsQuery.data?.length ?? 0) > 0,
+    staleTime: 300000, // Cache for 5 minutes
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Set of rental NFT asset addresses
+  const rentalNftAssets = walletRentalNftsQuery.data || new Set<string>();
+
+  // Per-NFT pending reward info
+  interface NftPendingReward {
+    nftAsset: { toBase58(): string };
+    pending: bigint;
+    rewardDebt: bigint;
+  }
+
+  // Per-content pending reward info with NFT details
   interface ContentPendingReward {
     contentCid: string;
     pending: bigint;
     nftCount: bigint;
+    nftRewards: NftPendingReward[];
   }
 
-  // Get wallet NFTs data (may be undefined while loading)
-  const walletNfts = walletNftsQuery.data || [];
+  // Get wallet NFTs data (may be undefined while loading), excluding rental NFTs
+  const walletNfts = (walletNftsQuery.data || []).filter(
+    nft => !rentalNftAssets.has(nft.nftAsset.toBase58())
+  );
 
   // Fetch pending rewards for ALL user's content positions (per-content pools)
-  // This query depends on walletNftsQuery being loaded first to know which content the user owns NFTs for
+  // Uses optimized batch fetching - only 1 RPC call for NFT reward states instead of N*M calls
+  // Excludes rental NFTs since they don't earn rewards
   const pendingRewardsQuery = useQuery({
-    queryKey: ["pendingRewards", publicKey?.toBase58(), walletNftsQuery.dataUpdatedAt],
+    queryKey: ["pendingRewards", publicKey?.toBase58()],
     queryFn: async (): Promise<ContentPendingReward[]> => {
-      if (!publicKey) return [];
+      if (!publicKey || !client) return [];
 
-      // Get unique content CIDs the user has NFTs for
-      const nfts = walletNftsQuery.data || [];
-      const contentCids = [...new Set(
-        nfts
-          .map(nft => nft.contentCid)
-          .filter((cid): cid is string => cid !== null)
-      )];
+      // Use filtered walletNfts that excludes rental NFTs
+      // Rental NFTs don't accumulate rewards
+      const nfts = walletNfts;
+      if (nfts.length === 0) return [];
 
-      if (contentCids.length === 0) return [];
+      // Use pre-fetched batch data for reward pools and collections
+      const rewardPools = allRewardPoolsQuery.data || new Map();
+      const collections = allContentCollectionsQuery.data || new Map();
 
-      // Use the SDK function to get pending rewards for each content
-      return client.getPendingRewardsForWallet(publicKey, contentCids);
+      // Use optimized function that accepts pre-fetched data
+      // This reduces N*M individual calls to just 1 batch call
+      return client.getPendingRewardsOptimized(publicKey, nfts, rewardPools, collections);
     },
-    enabled: walletNftsQuery.isSuccess && walletNfts.length > 0 && !!publicKey,
-    staleTime: 30000,
+    enabled: walletNftsQuery.isSuccess &&
+             walletRentalNftsQuery.isSuccess &&
+             walletNfts.length > 0 &&
+             !!publicKey &&
+             !!client &&
+             allRewardPoolsQuery.isSuccess &&
+             allContentCollectionsQuery.isSuccess,
+    staleTime: 120000, // Cache for 2 minutes
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
   });
 
   // Helper to get all pending rewards
@@ -697,7 +1149,7 @@ export function useContentRegistry() {
     return pendingRewardsQuery.data.find(r => r.contentCid === contentCid) || null;
   };
 
-  // Count NFTs owned for a specific content (uses cached wallet NFTs)
+  // Count NFTs owned for a specific content (uses cached wallet NFTs, excludes rental NFTs)
   const useNftOwnership = (contentCid: string | null) => {
     // Filter from cached wallet NFTs instead of making new RPC call
     const count = contentCid
@@ -706,9 +1158,32 @@ export function useContentRegistry() {
 
     return {
       data: count,
-      isLoading: walletNftsQuery.isLoading,
-      refetch: walletNftsQuery.refetch,
+      isLoading: walletNftsQuery.isLoading || walletRentalNftsQuery.isLoading,
+      refetch: () => {
+        walletNftsQuery.refetch();
+        walletRentalNftsQuery.refetch();
+      },
     };
+  };
+
+  // Fetch active rental for a specific content
+  const useActiveRental = (contentCid: string | null) => {
+    return useQuery({
+      queryKey: ["activeRental", publicKey?.toBase58(), contentCid],
+      queryFn: async (): Promise<RentEntry | null> => {
+        if (!publicKey || !contentCid || !client) return null;
+        return client.fetchActiveRentalForContent(publicKey, contentCid);
+      },
+      enabled: !!publicKey && !!contentCid && !!client,
+      staleTime: 60000, // Cache for 1 minute
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
+    });
   };
 
   // Count total NFTs minted for a content (on-chain count)
@@ -716,37 +1191,76 @@ export function useContentRegistry() {
     return useQuery({
       queryKey: ["totalMintedNfts", contentCid],
       queryFn: async () => {
-        if (!contentCid) return 0;
+        if (!contentCid || !client) return 0;
         return client.countTotalMintedNfts(contentCid);
       },
-      enabled: !!contentCid,
-      staleTime: 30000, // Cache for 30 seconds
+      enabled: !!contentCid && !!client,
+      staleTime: 60000, // Cache for 60 seconds
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof Error && error.message.includes('429')) return false;
+        return failureCount < 2;
+      },
     });
   };
 
   // Fetch ecosystem config
   const ecosystemConfigQuery = useQuery({
     queryKey: ["ecosystemConfig"],
-    queryFn: () => client.fetchEcosystemConfig(),
+    queryFn: () => client?.fetchEcosystemConfig() ?? null,
+    enabled: !!client,
     staleTime: 300000, // Cache for 5 minutes (rarely changes)
+    gcTime: 600000, // Keep in cache for 10 minutes
+    refetchOnMount: false, // Don't refetch on Fast Refresh
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      // Don't retry on 429 rate limit errors
+      if (error instanceof Error && error.message.includes('429')) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Fetch all mintable content (includes mint configs!)
-  const mintableContentQuery = useQuery({
-    queryKey: ["mintableContent"],
-    queryFn: () => client.fetchMintableContent(),
-    staleTime: 30000, // Cache for 30 seconds
-  });
+  // Derive mintable content from already-cached globalContent + allMintConfigs
+  // This avoids duplicate RPC calls by reusing data from other queries
+  const mintableContent = useMemo(() => {
+    const content = globalContentQuery.data || [];
+    const mintConfigs = allMintConfigsQuery.data;
+
+    if (!mintConfigs || mintConfigs.size === 0) return [];
+
+    const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
+
+    for (const item of content) {
+      const [contentPda] = getContentPda(item.contentCid);
+      const mintConfig = mintConfigs.get(contentPda.toBase58());
+      if (mintConfig && mintConfig.isActive) {
+        results.push({ content: item, mintConfig });
+      }
+    }
+
+    return results;
+  }, [globalContentQuery.data, allMintConfigsQuery.data]);
+
+  const isLoadingMintableContent = globalContentQuery.isLoading || allMintConfigsQuery.isLoading;
 
   return {
     // State
-    content: contentQuery.data || [],
+    content: userContent, // Derived from cached globalContent
     globalContent: globalContentQuery.data || [],
-    mintableContent: mintableContentQuery.data || [],
+    mintableContent, // Derived from cached globalContent + allMintConfigs
     ecosystemConfig: ecosystemConfigQuery.data,
-    isLoadingContent: contentQuery.isLoading,
+    isLoadingContent: isLoadingUserContent,
     isLoadingGlobalContent: globalContentQuery.isLoading,
-    isLoadingMintableContent: mintableContentQuery.isLoading,
+    isLoadingMintableContent,
+    isLoadingEcosystemConfig: ecosystemConfigQuery.isLoading,
+    ecosystemConfigError: ecosystemConfigQuery.error,
+    isEcosystemConfigError: ecosystemConfigQuery.isError,
+    refetchEcosystemConfig: ecosystemConfigQuery.refetch,
 
     // Actions
     registerContent: registerContent.mutateAsync,
@@ -761,6 +1275,12 @@ export function useContentRegistry() {
     claimRewardsVerified: claimRewardsVerified.mutateAsync,  // Recommended: verifies NFT ownership
     claimAllRewards: claimAllRewards.mutateAsync,
 
+    // Rent actions
+    configureRent: configureRent.mutateAsync,
+    updateRentConfig: updateRentConfig.mutateAsync,
+    rentContentSol: rentContentSol.mutateAsync,
+    checkRentalAccess,
+
     // Mutation states
     isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending,
     isTipping: tipContent.isPending,
@@ -770,16 +1290,22 @@ export function useContentRegistry() {
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
     isClaimingReward: claimContentRewards.isPending || claimRewardsVerified.isPending || claimAllRewards.isPending,
+    isConfiguringRent: configureRent.isPending,
+    isUpdatingRentConfig: updateRentConfig.isPending,
+    isRentingContent: rentContentSol.isPending,
 
     // Hooks for specific data
     useMintConfig,
+    useRentConfig,
     useNftOwnership,
+    useActiveRental,
     useTotalMintedNfts,
     useContentRewardPool,
     useWalletContentState,
     usePendingRewards,
     getPendingRewardForContent,
     pendingRewardsQuery,
+    walletNfts,
 
     // Utilities
     client,
@@ -790,6 +1316,7 @@ export function useContentRegistry() {
     getContentRewardPoolPda,
     getWalletContentStatePda,
     getContentCollectionPda,
+    getRentConfigPda,
     calculatePrimarySplit,
     calculatePendingReward,
   };

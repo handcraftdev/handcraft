@@ -54,3 +54,36 @@ pub struct VerifiedClaimEvent {
     pub amount_claimed: u64,
     pub timestamp: i64,
 }
+
+/// Emitted when secondary sale royalties are synced into the reward pool
+/// This happens automatically when anyone claims rewards
+#[event]
+pub struct SecondaryRoyaltySyncEvent {
+    /// Content whose reward pool received secondary royalties
+    pub content: Pubkey,
+    /// Amount of secondary royalties synced (lamports)
+    pub amount: u64,
+    /// New reward_per_share after sync
+    pub new_reward_per_share: u128,
+    /// Timestamp of sync
+    pub timestamp: i64,
+}
+
+/// Emitted when content is rented
+#[event]
+pub struct ContentRentedEvent {
+    /// Content being rented
+    pub content: Pubkey,
+    /// Renter's wallet
+    pub renter: Pubkey,
+    /// Creator receiving payment
+    pub creator: Pubkey,
+    /// The rental NFT asset
+    pub nft_asset: Pubkey,
+    /// Rent fee paid (lamports)
+    pub fee_paid: u64,
+    /// Rental start timestamp
+    pub rented_at: i64,
+    /// Rental expiry timestamp
+    pub expires_at: i64,
+}

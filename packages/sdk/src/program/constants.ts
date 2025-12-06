@@ -1,9 +1,15 @@
 import { PublicKey } from "@solana/web3.js";
+import idl from "./content_registry.json";
 
-export const PROGRAM_ID = new PublicKey("EvnyqtTHHeNYoeauSgXMAUSu4EFeEsbxUxVzhC2NaDHU");
+// Program ID from IDL (single source of truth - updated by `anchor build`)
+export const PROGRAM_ID_STRING = idl.address;
 
-// Metaplex Core Program ID
-export const MPL_CORE_PROGRAM_ID = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
+// Metaplex Core Program ID as string
+export const MPL_CORE_PROGRAM_ID_STRING = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
+
+// PublicKey instances - only use these client-side, not during SSR
+export const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
+export const MPL_CORE_PROGRAM_ID = new PublicKey(MPL_CORE_PROGRAM_ID_STRING);
 
 // Seeds for PDA derivation
 export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
@@ -15,6 +21,43 @@ export const CONTENT_COLLECTION_SEED = "content_collection";
 // Legacy seeds (for migration)
 export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
 export const NFT_REWARD_STATE_SEED = "nft_reward";
+
+// Rent seeds
+export const RENT_CONFIG_SEED = "rent_config";
+export const RENT_ENTRY_SEED = "rent_entry";
+
+// Rent tier periods (in seconds)
+export const RENT_PERIOD_6H = 6 * 3600;        // 6 hours = 21,600 seconds
+export const RENT_PERIOD_1D = 24 * 3600;       // 1 day = 86,400 seconds
+export const RENT_PERIOD_7D = 7 * 24 * 3600;   // 7 days = 604,800 seconds
+
+// Rent fee minimum
+export const MIN_RENT_FEE_LAMPORTS = 1_000_000; // 0.001 SOL
+
+// Rent tier enum (matches program)
+export enum RentTier {
+  SixHours = 0,
+  OneDay = 1,
+  SevenDays = 2,
+}
+
+// Helper to get period seconds for a tier
+export function getRentTierPeriod(tier: RentTier): number {
+  switch (tier) {
+    case RentTier.SixHours: return RENT_PERIOD_6H;
+    case RentTier.OneDay: return RENT_PERIOD_1D;
+    case RentTier.SevenDays: return RENT_PERIOD_7D;
+  }
+}
+
+// Helper to get tier label
+export function getRentTierLabel(tier: RentTier): string {
+  switch (tier) {
+    case RentTier.SixHours: return "6 Hours";
+    case RentTier.OneDay: return "1 Day";
+    case RentTier.SevenDays: return "7 Days";
+  }
+}
 
 // Fee constants (basis points)
 // Primary sale: Creator 80%, Platform 5%, Ecosystem 3%, Existing Holders 12%
@@ -34,67 +77,98 @@ export const MIN_PRICE_LAMPORTS = 1_000_000;   // 0.001 SOL
 export const PRECISION = BigInt("1000000000000"); // 1e12
 
 export enum ContentType {
-  // Video types
-  Movie = 0,
-  TvSeries = 1,
-  MusicVideo = 2,
-  ShortVideo = 3,
-  GeneralVideo = 4,
-  // Book types
-  Comic = 5,
-  GeneralBook = 6,
-  // Audio types
-  Podcast = 7,
-  Audiobook = 8,
-  GeneralAudio = 9,
-  // Image types
-  Photo = 10,
-  Art = 11,
-  GeneralImage = 12,
+  // Video domain (0-4)
+  Video = 0,
+  Movie = 1,
+  Television = 2,
+  MusicVideo = 3,
+  Short = 4,
+  // Audio domain (5-7)
+  Music = 5,
+  Podcast = 6,
+  Audiobook = 7,
+  // Image domain (8-9)
+  Photo = 8,
+  Artwork = 9,
+  // Document domain (10-11)
+  Book = 10,
+  Comic = 11,
+  // File domain (12-15)
+  Asset = 12,
+  Game = 13,
+  Software = 14,
+  Dataset = 15,
+  // Text domain (16)
+  Post = 16,
 }
 
-// Category helpers
-export type ContentCategory = "video" | "book" | "audio" | "image";
+// Domain helpers
+export type ContentDomain = "video" | "audio" | "image" | "document" | "file" | "text";
 
-export function getContentCategory(type: ContentType): ContentCategory {
+export function getContentDomain(type: ContentType): ContentDomain {
   switch (type) {
+    case ContentType.Video:
     case ContentType.Movie:
-    case ContentType.TvSeries:
+    case ContentType.Television:
     case ContentType.MusicVideo:
-    case ContentType.ShortVideo:
-    case ContentType.GeneralVideo:
+    case ContentType.Short:
       return "video";
-    case ContentType.Comic:
-    case ContentType.GeneralBook:
-      return "book";
+    case ContentType.Music:
     case ContentType.Podcast:
     case ContentType.Audiobook:
-    case ContentType.GeneralAudio:
       return "audio";
     case ContentType.Photo:
-    case ContentType.Art:
-    case ContentType.GeneralImage:
+    case ContentType.Artwork:
       return "image";
+    case ContentType.Book:
+    case ContentType.Comic:
+      return "document";
+    case ContentType.Asset:
+    case ContentType.Game:
+    case ContentType.Software:
+    case ContentType.Dataset:
+      return "file";
+    case ContentType.Post:
+      return "text";
   }
 }
 
 export function getContentTypeLabel(type: ContentType): string {
   switch (type) {
+    case ContentType.Video: return "Video";
     case ContentType.Movie: return "Movie";
-    case ContentType.TvSeries: return "TV Series";
+    case ContentType.Television: return "Television";
     case ContentType.MusicVideo: return "Music Video";
-    case ContentType.ShortVideo: return "Short Video";
-    case ContentType.GeneralVideo: return "Video";
-    case ContentType.Comic: return "Comic";
-    case ContentType.GeneralBook: return "Book";
+    case ContentType.Short: return "Short";
+    case ContentType.Music: return "Music";
     case ContentType.Podcast: return "Podcast";
     case ContentType.Audiobook: return "Audiobook";
-    case ContentType.GeneralAudio: return "Audio";
     case ContentType.Photo: return "Photo";
-    case ContentType.Art: return "Art";
-    case ContentType.GeneralImage: return "Image";
+    case ContentType.Artwork: return "Artwork";
+    case ContentType.Book: return "Book";
+    case ContentType.Comic: return "Comic";
+    case ContentType.Asset: return "Asset";
+    case ContentType.Game: return "Game";
+    case ContentType.Software: return "Software";
+    case ContentType.Dataset: return "Dataset";
+    case ContentType.Post: return "Post";
   }
 }
+
+export function getDomainLabel(domain: ContentDomain): string {
+  switch (domain) {
+    case "video": return "Video";
+    case "audio": return "Audio";
+    case "image": return "Image";
+    case "document": return "Document";
+    case "file": return "File";
+    case "text": return "Text";
+  }
+}
+
+// Legacy alias for backward compatibility
+export type ContentCategory = ContentDomain;
+export const getContentCategory = getContentDomain;
 
 // Payment currency enum (SOL only now)
 export enum PaymentCurrency {
