@@ -10,8 +10,9 @@ pub const CREATOR_FEE_PRIMARY_BPS: u16 = 8000;   // 80%
 pub const HOLDER_REWARD_PRIMARY_BPS: u16 = 1200; // 12% - distributed to existing NFT holders
 
 /// Secondary sale fixed fees (on top of creator royalty)
-pub const PLATFORM_FEE_SECONDARY_BPS: u16 = 100; // 1%
-pub const ECOSYSTEM_FEE_SECONDARY_BPS: u16 = 50; // 0.5%
+pub const PLATFORM_FEE_SECONDARY_BPS: u16 = 100;      // 1%
+pub const ECOSYSTEM_FEE_SECONDARY_BPS: u16 = 100;     // 1%
+pub const HOLDER_REWARD_SECONDARY_BPS: u16 = 800;     // 8% - distributed to existing NFT holders
 
 /// Global ecosystem configuration
 /// PDA seeds: ["ecosystem"]
@@ -56,17 +57,24 @@ impl EcosystemConfig {
     }
 
     /// Calculate fee split for secondary sale
-    /// Returns (creator_royalty, platform_amount, ecosystem_amount, seller_amount)
-    pub fn calculate_secondary_split(price: u64, creator_royalty_bps: u16) -> (u64, u64, u64, u64) {
+    /// Returns (creator_royalty, platform_amount, ecosystem_amount, holder_reward_amount, seller_amount)
+    pub fn calculate_secondary_split(price: u64, creator_royalty_bps: u16) -> (u64, u64, u64, u64, u64) {
         if price == 0 {
-            return (0, 0, 0, 0);
+            return (0, 0, 0, 0, 0);
         }
 
         let creator_royalty = (price as u128 * creator_royalty_bps as u128 / 10000) as u64;
         let platform_amount = (price as u128 * PLATFORM_FEE_SECONDARY_BPS as u128 / 10000) as u64;
         let ecosystem_amount = (price as u128 * ECOSYSTEM_FEE_SECONDARY_BPS as u128 / 10000) as u64;
-        let seller_amount = price - creator_royalty - platform_amount - ecosystem_amount;
+        let holder_reward_amount = (price as u128 * HOLDER_REWARD_SECONDARY_BPS as u128 / 10000) as u64;
+        let seller_amount = price - creator_royalty - platform_amount - ecosystem_amount - holder_reward_amount;
 
-        (creator_royalty, platform_amount, ecosystem_amount, seller_amount)
+        (creator_royalty, platform_amount, ecosystem_amount, holder_reward_amount, seller_amount)
+    }
+
+    /// Calculate total secondary sale royalty percentage (for Metaplex Core plugin)
+    /// This is the sum of creator royalty + platform + ecosystem + holder rewards
+    pub fn total_secondary_royalty_bps(creator_royalty_bps: u16) -> u16 {
+        creator_royalty_bps + PLATFORM_FEE_SECONDARY_BPS + ECOSYSTEM_FEE_SECONDARY_BPS + HOLDER_REWARD_SECONDARY_BPS
     }
 }

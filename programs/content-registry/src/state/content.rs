@@ -24,21 +24,27 @@ pub struct ContentEntry {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
 pub enum ContentType {
-    // Video types
+    // Video domain (0-4)
+    Video,
     Movie,
-    TvSeries,
+    Television,
     MusicVideo,
-    ShortVideo,
-    GeneralVideo,
-    // Book types
-    Comic,
-    GeneralBook,
-    // Audio types
+    Short,
+    // Audio domain (5-7)
+    Music,
     Podcast,
     Audiobook,
-    GeneralAudio,
-    // Image types
+    // Image domain (8-9)
     Photo,
-    Art,
-    GeneralImage,
+    Artwork,
+    // Document domain (10-11)
+    Book,
+    Comic,
+    // File domain (12-15)
+    Asset,
+    Game,
+    Software,
+    Dataset,
+    // Text domain (16)
+    Post,
 }

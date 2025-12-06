@@ -43,6 +43,37 @@ impl ContentRewardPool {
     pub fn increment_nfts(&mut self) {
         self.total_nfts += 1;
     }
+
+    /// Sync secondary sale royalties that arrived from Metaplex Core Royalties plugin
+    ///
+    /// Secondary sales on marketplaces transfer SOL directly to the reward pool PDA
+    /// via the Royalties plugin, but don't call any program instruction. This method
+    /// detects those deposits and updates reward_per_share accordingly.
+    ///
+    /// Call this at the start of claim instructions to auto-sync before calculating rewards.
+    ///
+    /// Returns the amount of new secondary royalties processed (0 if none)
+    pub fn sync_secondary_royalties(&mut self, current_lamports: u64, rent_lamports: u64) -> u64 {
+        // Calculate expected balance: rent + total_deposited - total_claimed
+        let expected_balance = rent_lamports
+            .saturating_add(self.total_deposited)
+            .saturating_sub(self.total_claimed);
+
+        // If current balance exceeds expected, we have new secondary royalties
+        if current_lamports > expected_balance {
+            let new_royalties = current_lamports - expected_balance;
+
+            // Only process if we have existing NFTs to distribute to
+            if self.total_nfts > 0 && new_royalties > 0 {
+                // Update reward_per_share with new royalties
+                self.reward_per_share += (new_royalties as u128 * PRECISION) / self.total_nfts as u128;
+                self.total_deposited += new_royalties;
+                return new_royalties;
+            }
+        }
+
+        0
+    }
 }
 
 /// Wallet-content state tracking

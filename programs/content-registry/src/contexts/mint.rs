@@ -97,15 +97,16 @@ pub struct MintNftSol<'info> {
     )]
     pub buyer_wallet_state: Box<Account<'info, WalletContentState>>,
 
-    /// CHECK: Per-NFT reward state - tracks reward_debt for this specific NFT
+    /// Per-NFT reward state - tracks reward_debt for this specific NFT
     /// This is the source of truth for reward calculations
-    /// Using AccountInfo to reduce stack size - manually initialized in instruction
     #[account(
-        mut,
+        init,
+        payer = buyer,
+        space = 8 + NftRewardState::INIT_SPACE,
         seeds = [NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
         bump
     )]
-    pub nft_reward_state: AccountInfo<'info>,
+    pub nft_reward_state: Box<Account<'info, NftRewardState>>,
 
     /// CHECK: Creator to receive payment and be update authority of NFT
     #[account(mut, constraint = content.creator == creator.key())]

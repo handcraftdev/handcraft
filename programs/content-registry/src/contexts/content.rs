@@ -40,7 +40,7 @@ pub struct RegisterContentWithMint<'info> {
         seeds = [b"content", cid_hash.as_ref()],
         bump
     )]
-    pub content: Account<'info, ContentEntry>,
+    pub content: Box<Account<'info, ContentEntry>>,
 
     #[account(
         init,
@@ -49,7 +49,7 @@ pub struct RegisterContentWithMint<'info> {
         seeds = [CID_REGISTRY_SEED, cid_hash.as_ref()],
         bump
     )]
-    pub cid_registry: Account<'info, CidRegistry>,
+    pub cid_registry: Box<Account<'info, CidRegistry>>,
 
     #[account(
         init,
@@ -58,7 +58,7 @@ pub struct RegisterContentWithMint<'info> {
         seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, MintConfig>,
+    pub mint_config: Box<Account<'info, MintConfig>>,
 
     /// ContentCollection PDA to track the collection for this content
     #[account(
@@ -68,7 +68,7 @@ pub struct RegisterContentWithMint<'info> {
         seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
         bump
     )]
-    pub content_collection: Account<'info, ContentCollection>,
+    pub content_collection: Box<Account<'info, ContentCollection>>,
 
     /// The Metaplex Core Collection asset (must be a new keypair)
     #[account(mut)]
@@ -77,6 +77,16 @@ pub struct RegisterContentWithMint<'info> {
     /// CHECK: Metaplex Core program
     #[account(address = MPL_CORE_ID)]
     pub mpl_core_program: AccountInfo<'info>,
+
+    /// Ecosystem config to get treasury address for royalties
+    #[account(
+        seeds = [ECOSYSTEM_CONFIG_SEED],
+        bump
+    )]
+    pub ecosystem_config: Box<Account<'info, EcosystemConfig>>,
+
+    /// CHECK: Platform wallet for royalties
+    pub platform: AccountInfo<'info>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
