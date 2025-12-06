@@ -414,7 +414,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { registerContentWithMint, configureRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig } = useContentRegistry();
+  const { registerContentWithMintAndRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig } = useContentRegistry();
 
   const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -494,10 +494,30 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       const tags = currentMetadata.tags?.split(",").map((t: string) => t.trim()).filter(Boolean) || [];
 
       result = await uploadContent(file, {
+        // Required
         title: currentMetadata.title || "Untitled",
+        // Content Architecture - Layer 1 & 2
+        contentType: contentType?.key || undefined,
+        contentDomain: contentType?.domain || undefined,
+        // Layer 3: Context
         description: currentMetadata.description || "",
         tags,
-        // Include all type-specific metadata
+        genre: currentMetadata.genre || undefined,
+        category: currentMetadata.category || undefined,
+        // Type-specific context
+        artist: currentMetadata.artist || undefined,
+        album: currentMetadata.album || undefined,
+        director: currentMetadata.director || undefined,
+        cast: currentMetadata.cast || undefined,
+        showName: currentMetadata.showName || undefined,
+        season: currentMetadata.season || undefined,
+        episode: currentMetadata.episode || undefined,
+        author: currentMetadata.author || undefined,
+        narrator: currentMetadata.narrator || undefined,
+        publisher: currentMetadata.publisher || undefined,
+        year: currentMetadata.year || undefined,
+        duration: currentMetadata.duration || undefined,
+        // Include any other metadata fields
         ...currentMetadata,
       });
 
@@ -530,7 +550,18 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           }
           const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
 
-          await registerContentWithMint({
+          // Build rent fees if provided (all three must be set)
+          let rentFees: { rentFee6h: bigint; rentFee1d: bigint; rentFee7d: bigint } | undefined;
+          if (currentRentFee6h && currentRentFee1d && currentRentFee7d) {
+            rentFees = {
+              rentFee6h: BigInt(Math.floor(parseFloat(currentRentFee6h) * LAMPORTS_PER_SOL)),
+              rentFee1d: BigInt(Math.floor(parseFloat(currentRentFee1d) * LAMPORTS_PER_SOL)),
+              rentFee7d: BigInt(Math.floor(parseFloat(currentRentFee7d) * LAMPORTS_PER_SOL)),
+            };
+          }
+
+          // Single transaction for content + mint + optional rent
+          await registerContentWithMintAndRent({
             contentCid: result.content.cid,
             metadataCid: result.metadata.cid,
             contentType: currentContentType,
@@ -541,20 +572,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             isEncrypted: result.isEncrypted || false,
             previewCid: result.previewCid || "",
             encryptionMetaCid: result.encryptionMetaCid || "",
+            ...rentFees,
           });
-
-          if (currentRentFee6h && currentRentFee1d && currentRentFee7d) {
-            const fee6h = BigInt(Math.floor(parseFloat(currentRentFee6h) * LAMPORTS_PER_SOL));
-            const fee1d = BigInt(Math.floor(parseFloat(currentRentFee1d) * LAMPORTS_PER_SOL));
-            const fee7d = BigInt(Math.floor(parseFloat(currentRentFee7d) * LAMPORTS_PER_SOL));
-
-            await configureRent({
-              contentCid: result.content.cid,
-              rentFee6h: fee6h,
-              rentFee1d: fee1d,
-              rentFee7d: fee7d,
-            });
-          }
 
           markComplete();
         } catch (err) {
@@ -577,7 +596,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   }, [
     file, contentType, metadata, nftPrice, nftSupplyType, nftMaxSupply,
     nftRoyaltyPercent, rentFee6h, rentFee1d, rentFee7d,
-    uploadResult, publicKey, uploadContent, registerContentWithMint, configureRent,
+    uploadResult, publicKey, uploadContent, registerContentWithMintAndRent,
     ecosystemConfig, onSuccess, markComplete, LAMPORTS_PER_SOL,
   ]);
 
@@ -1319,6 +1338,18 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 </div>
               )}
 
+              {/* Rental validation - require all or none */}
+              {(() => {
+                const hasAnyRent = rentFee6h || rentFee1d || rentFee7d;
+                const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
+                const hasPartialRent = hasAnyRent && !hasAllRent;
+                return hasPartialRent ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-400">
+                    Please set all three rental tiers or leave them all empty.
+                  </div>
+                ) : null;
+              })()}
+
               {registrationError && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                   {registrationError}
@@ -1333,7 +1364,12 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
               <button
                 onClick={handleUpload}
-                disabled={isLoadingEcosystemConfig || !ecosystemConfig}
+                disabled={
+                  isLoadingEcosystemConfig ||
+                  !ecosystemConfig ||
+                  // Disable if partial rental fees (require all or none)
+                  Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
+                }
                 className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
               >
                 {uploadResult ? "Register on Solana" : "Publish Content"}
@@ -1395,14 +1431,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   ? "Your content is stored on IPFS and registered on Solana."
                   : "Your content is now stored on IPFS."}
               </p>
-              {publicKey && (
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 rounded-full text-sm mb-6">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  On-chain verified
-                </div>
-              )}
               <button
                 onClick={handleClose}
                 className="px-8 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"

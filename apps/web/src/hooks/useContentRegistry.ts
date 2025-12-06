@@ -237,6 +237,116 @@ export function useContentRegistry() {
     },
   });
 
+  // Register content with mint config AND rent config in a single transaction
+  const registerContentWithMintAndRent = useMutation({
+    mutationFn: async ({
+      contentCid,
+      metadataCid,
+      contentType,
+      price,
+      maxSupply,
+      creatorRoyaltyBps,
+      platform,
+      isEncrypted = false,
+      previewCid = "",
+      encryptionMetaCid = "",
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+    }: {
+      contentCid: string;
+      metadataCid: string;
+      contentType: ContentType;
+      price: bigint;
+      maxSupply: bigint | null;
+      creatorRoyaltyBps: number;
+      platform: PublicKey;
+      isEncrypted?: boolean;
+      previewCid?: string;
+      encryptionMetaCid?: string;
+      rentFee6h?: bigint;
+      rentFee1d?: bigint;
+      rentFee7d?: bigint;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Registering content with mint + rent config...", {
+        contentCid,
+        metadataCid,
+        price,
+        maxSupply,
+        creatorRoyaltyBps,
+        platform: platform.toBase58(),
+        isEncrypted,
+        rentFee6h: rentFee6h?.toString(),
+        rentFee1d: rentFee1d?.toString(),
+        rentFee7d: rentFee7d?.toString(),
+      });
+
+      // Get the register content + mint instruction
+      const { instruction: registerIx, collectionAssetKeypair } = await client.registerContentWithMintInstruction(
+        publicKey,
+        contentCid,
+        metadataCid,
+        contentType,
+        price,
+        maxSupply,
+        creatorRoyaltyBps,
+        platform,
+        isEncrypted,
+        previewCid,
+        encryptionMetaCid
+      );
+
+      console.log("Collection Asset pubkey:", collectionAssetKeypair.publicKey.toBase58());
+
+      // Build transaction with register + mint instruction
+      const tx = new Transaction().add(registerIx);
+
+      // If rent fees are provided, add the configure rent instruction to the same transaction
+      if (rentFee6h !== undefined && rentFee1d !== undefined && rentFee7d !== undefined) {
+        console.log("Adding configure rent instruction to transaction...");
+        const rentIx = await client.configureRentInstruction(
+          publicKey,
+          contentCid,
+          rentFee6h,
+          rentFee1d,
+          rentFee7d
+        );
+        tx.add(rentIx);
+      }
+
+      // Set up the transaction
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Sign with the collection asset keypair
+      tx.partialSign(collectionAssetKeypair);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating combined transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      // Send transaction
+      const signature = await sendTransaction(tx, connection, {
+        signers: [collectionAssetKeypair],
+      });
+      console.log("Content + mint + rent registration tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Content + mint + rent registration confirmed!");
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      console.log("Invalidating queries after content + mint + rent registration");
+      queryClient.invalidateQueries({ queryKey: ["content", publicKey?.toBase58()] });
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
+      queryClient.invalidateQueries({ queryKey: ["rentConfig", contentCid] });
+    },
+  });
+
   // Tip content mutation
   const tipContent = useMutation({
     mutationFn: async ({
@@ -1265,6 +1375,7 @@ export function useContentRegistry() {
     // Actions
     registerContent: registerContent.mutateAsync,
     registerContentWithMint: registerContentWithMint.mutateAsync,
+    registerContentWithMintAndRent: registerContentWithMintAndRent.mutateAsync,
     tipContent: tipContent.mutateAsync,
     configureMint: configureMint.mutateAsync,
     updateMintSettings: updateMintSettings.mutateAsync,
@@ -1282,7 +1393,7 @@ export function useContentRegistry() {
     checkRentalAccess,
 
     // Mutation states
-    isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending,
+    isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending || registerContentWithMintAndRent.isPending,
     isTipping: tipContent.isPending,
     isConfiguringMint: configureMint.isPending,
     isUpdatingMintSettings: updateMintSettings.isPending,
