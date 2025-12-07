@@ -89,6 +89,169 @@
       ]
     },
     {
+      "name": "burn_nft",
+      "docs": [
+        "Burn an NFT via Metaplex Core CPI",
+        "This does NOT atomically clean up reward state - used to test if",
+        "lifecycle hooks fire during burn so we can handle cleanup there"
+      ],
+      "discriminator": [
+        119,
+        13,
+        183,
+        17,
+        194,
+        243,
+        38,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "docs": [
+            "The content entry this NFT belongs to"
+          ]
+        },
+        {
+          "name": "content_collection",
+          "docs": [
+            "ContentCollection PDA - holds collection info and is the burn delegate authority"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "The content's reward pool - needs to decrement totalWeight and totalNfts"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "Per-NFT reward state - will be closed and rent refunded to owner"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset",
+          "docs": [
+            "The NFT asset to burn (Metaplex Core asset)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "collection_asset",
+          "docs": [
+            "The collection the NFT belongs to"
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "The NFT owner who is burning (also receives rent refund from NftRewardState)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "check_rent_expiry",
       "docs": [
         "Check if a rental has expired",
@@ -432,6 +595,180 @@
           "docs": [
             "The holder claiming the reward"
           ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_mint",
+      "docs": [
+        "Step 1: Commit to mint with VRF randomness",
+        "Takes payment and commits to a future slot for randomness determination",
+        "User must call reveal_mint after randomness is available (~1-2 slots)"
+      ],
+      "discriminator": [
+        181,
+        103,
+        14,
+        29,
+        178,
+        21,
+        41,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_mint",
+          "docs": [
+            "Pending mint request - tracks commit until reveal"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "Content-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "randomness_account"
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "buyer",
           "writable": true,
           "signer": true
         },
@@ -1888,6 +2225,318 @@
       ]
     },
     {
+      "name": "reveal_mint",
+      "docs": [
+        "Step 2: Reveal randomness and complete mint with rarity",
+        "Called after the committed slot has passed and VRF randomness is available",
+        "Determines rarity (Common/Uncommon/Rare/Epic/Legendary) and mints NFT"
+      ],
+      "discriminator": [
+        132,
+        33,
+        197,
+        46,
+        225,
+        238,
+        41,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_mint",
+          "docs": [
+            "Pending mint to reveal"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_collection",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "Content-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_wallet_state",
+          "docs": [
+            "Buyer's wallet state for this content"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "Per-NFT reward state with weight"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity state"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "randomness_account"
+        },
+        {
+          "name": "creator"
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "nft_asset",
+          "docs": [
+            "The NFT asset account (Metaplex Core asset)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sync_nft_transfer",
       "docs": [
         "Handle NFT transfer - called by Metaplex Core lifecycle hook",
@@ -2666,6 +3315,19 @@
       ]
     },
     {
+      "name": "NftRarity",
+      "discriminator": [
+        101,
+        7,
+        104,
+        37,
+        174,
+        66,
+        101,
+        172
+      ]
+    },
+    {
       "name": "NftRewardState",
       "discriminator": [
         117,
@@ -2676,6 +3338,19 @@
         30,
         218,
         77
+      ]
+    },
+    {
+      "name": "PendingMint",
+      "discriminator": [
+        49,
+        154,
+        10,
+        122,
+        115,
+        84,
+        32,
+        175
       ]
     },
     {
@@ -3044,6 +3719,36 @@
       "code": 6043,
       "name": "NotContentCreator",
       "msg": "Only the content creator can add to bundles"
+    },
+    {
+      "code": 6044,
+      "name": "RandomnessAlreadyRevealed",
+      "msg": "Randomness has already been revealed"
+    },
+    {
+      "code": 6045,
+      "name": "RandomnessNotResolved",
+      "msg": "Randomness not yet resolved"
+    },
+    {
+      "code": 6046,
+      "name": "InvalidRandomnessAccount",
+      "msg": "Invalid randomness account"
+    },
+    {
+      "code": 6047,
+      "name": "RarityAlreadyRevealed",
+      "msg": "NFT rarity already revealed"
+    },
+    {
+      "code": 6048,
+      "name": "PendingMintNotFound",
+      "msg": "Pending mint request not found"
+    },
+    {
+      "code": 6049,
+      "name": "InvalidNftRarity",
+      "msg": "Invalid NftRarity PDA"
     }
   ],
   "types": [
@@ -3433,8 +4138,9 @@
     {
       "name": "ContentRewardPool",
       "docs": [
-        "Per-content reward pool",
+        "Per-content reward pool with rarity-weighted distribution",
         "Each content piece has its own pool tracking holder rewards from that content's sales",
+        "Rewards are distributed proportionally based on NFT weight (rarity)",
         "PDA seeds: [\"content_reward_pool\", content_pda]"
       ],
       "type": {
@@ -3450,8 +4156,9 @@
           {
             "name": "reward_per_share",
             "docs": [
-              "Accumulated reward per share (scaled by PRECISION)",
-              "Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_nfts"
+              "Accumulated reward per weight unit (scaled by PRECISION)",
+              "Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_weight",
+              "Note: Named reward_per_share for backwards compatibility, but represents per-weight-unit"
             ],
             "type": "u128"
           },
@@ -3459,6 +4166,14 @@
             "name": "total_nfts",
             "docs": [
               "Total NFTs minted for this content"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_weight",
+            "docs": [
+              "Total weight of all NFTs (sum of individual rarity weights)",
+              "Used for weighted reward distribution"
             ],
             "type": "u64"
           },
@@ -3732,6 +4447,72 @@
       }
     },
     {
+      "name": "NftRarity",
+      "docs": [
+        "Per-NFT rarity state",
+        "Stores the rarity for each minted NFT",
+        "PDA seeds: [\"nft_rarity\", nft_asset_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The NFT asset this rarity belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "The content this NFT belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rarity",
+            "docs": [
+              "The rarity tier"
+            ],
+            "type": {
+              "defined": {
+                "name": "Rarity"
+              }
+            }
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Weight for reward calculation (cached for efficiency)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "randomness_account",
+            "docs": [
+              "The randomness account used to determine rarity"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "commit_slot",
+            "docs": [
+              "Slot at which randomness was committed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "revealed_at",
+            "docs": [
+              "Timestamp when rarity was revealed"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "NftRewardState",
       "docs": [
         "Per-NFT reward state",
@@ -3760,9 +4541,16 @@
             "name": "reward_debt",
             "docs": [
               "Reward debt for this specific NFT (scaled by PRECISION)",
-              "Represents the reward_per_share at the time of last claim or mint"
+              "Now weighted: reward_debt = weight * reward_per_share at mint/claim time"
             ],
             "type": "u128"
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Weight of this NFT based on rarity (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)"
+            ],
+            "type": "u16"
           },
           {
             "name": "created_at",
@@ -3815,6 +4603,86 @@
           },
           {
             "name": "Usdc"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingMint",
+      "docs": [
+        "Pending mint request - stores state between commit and reveal"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "docs": [
+              "Buyer who initiated the mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "content",
+            "docs": [
+              "Content being minted"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "randomness_account",
+            "docs": [
+              "Randomness account to use for rarity"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "commit_slot",
+            "docs": [
+              "Slot at which randomness was committed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "amount_paid",
+            "docs": [
+              "Amount paid (to verify on reveal)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp of request"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rarity",
+      "docs": [
+        "Rarity tiers with their probabilities and weights",
+        "Probability is in basis points (out of 10000)"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Common"
+          },
+          {
+            "name": "Uncommon"
+          },
+          {
+            "name": "Rare"
+          },
+          {
+            "name": "Epic"
+          },
+          {
+            "name": "Legendary"
           }
         ]
       }

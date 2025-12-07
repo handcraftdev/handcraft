@@ -43,7 +43,10 @@ import {
   getNftRewardStatePda,
   getRentConfigPda,
   getRentEntryPda,
+  getPendingMintPda,
+  getNftRarityPda,
   calculatePendingRewardForNft,
+  calculateWeightedPendingReward,
 } from "./pda";
 
 // Convert ContentType enum to Anchor format
@@ -427,6 +430,98 @@ export async function mintNftSolInstruction(
   return { instruction, nftAssetKeypair };
 }
 
+// ============================================
+// VRF-BASED MINT WITH RARITY (Two-step flow)
+// ============================================
+
+/**
+ * Step 1: Commit to mint with VRF randomness
+ * Takes payment and commits to a future slot for randomness determination
+ * User must call revealMintInstruction after randomness is available (~1-2 slots / 0.4-0.8 seconds)
+ */
+export async function commitMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey,
+  randomnessAccount: PublicKey
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
+
+  return await program.methods
+    .commitMint()
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      content: contentPda,
+      mintConfig: mintConfigPda,
+      pendingMint: pendingMintPda,
+      contentRewardPool: contentRewardPoolPda,
+      randomnessAccount: randomnessAccount,
+      creator: creator,
+      platform: platform,
+      treasury: treasury,
+      buyer: buyer,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Step 2: Reveal randomness and complete mint with rarity
+ * Called after the committed slot has passed and VRF randomness is available
+ * Returns { instruction, nftAssetKeypair } - the keypair MUST be added as signer
+ */
+export async function revealMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  creator: PublicKey,
+  collectionAsset: PublicKey,
+  randomnessAccount: PublicKey
+): Promise<MintNftResult> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
+
+  const nftAssetKeypair = Keypair.generate();
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
+  const [nftRarityPda] = getNftRarityPda(nftAssetKeypair.publicKey);
+
+  const instruction = await program.methods
+    .revealMint()
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      content: contentPda,
+      mintConfig: mintConfigPda,
+      pendingMint: pendingMintPda,
+      contentCollection: contentCollectionPda,
+      collectionAsset: collectionAsset,
+      contentRewardPool: contentRewardPoolPda,
+      buyerWalletState: buyerWalletStatePda,
+      nftRewardState: nftRewardStatePda,
+      nftRarity: nftRarityPda,
+      randomnessAccount: randomnessAccount,
+      creator: creator,
+      buyer: buyer,
+      nftAsset: nftAssetKeypair.publicKey,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return { instruction, nftAssetKeypair };
+}
+
 export async function claimContentRewardsInstruction(
   program: Program,
   holder: PublicKey,
@@ -702,6 +797,45 @@ export async function checkRentExpiryInstruction(
 }
 
 // ============================================
+// BURN NFT
+// ============================================
+
+/**
+ * Burn an NFT with proper reward state cleanup
+ * - Decrements totalWeight and totalNfts in ContentRewardPool
+ * - Closes NftRewardState account (refunds rent to owner)
+ * - Burns the NFT via Metaplex Core CPI
+ */
+export async function burnNftInstruction(
+  program: Program,
+  owner: PublicKey,
+  nftAsset: PublicKey,
+  collectionAsset: PublicKey,
+  contentCid: string
+): Promise<TransactionInstruction> {
+  // Derive all required PDAs
+  const [contentPda] = getContentPda(contentCid);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+
+  return await program.methods
+    .burnNft()
+    .accounts({
+      content: contentPda,
+      contentCollection: contentCollectionPda,
+      contentRewardPool: contentRewardPoolPda,
+      nftRewardState: nftRewardStatePda,
+      nftAsset: nftAsset,
+      collectionAsset: collectionAsset,
+      owner: owner,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+// ============================================
 // FETCH FUNCTIONS
 // ============================================
 
@@ -906,6 +1040,7 @@ export async function fetchAllContentRewardPools(
         content: account.content,
         rewardPerShare: BigInt(account.rewardPerShare.toString()),
         totalNfts: BigInt(account.totalNfts.toString()),
+        totalWeight: BigInt(account.totalWeight?.toString() || "0"),
         totalDeposited: BigInt(account.totalDeposited.toString()),
         totalClaimed: BigInt(account.totalClaimed.toString()),
         createdAt: BigInt(account.createdAt.toString()),
@@ -950,6 +1085,7 @@ export async function fetchNftRewardStatesBatch(
             nftAsset: decoded.nftAsset,
             content: decoded.content,
             rewardDebt: BigInt(decoded.rewardDebt.toString()),
+            weight: decoded.weight || 100,
             createdAt: BigInt(decoded.createdAt.toString()),
           });
         } catch {
@@ -1008,6 +1144,7 @@ export async function fetchContentRewardPool(
       content: decoded.content,
       rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
       totalNfts: BigInt(decoded.totalNfts.toString()),
+      totalWeight: BigInt(decoded.totalWeight?.toString() || "0"),
       totalDeposited: BigInt(decoded.totalDeposited.toString()),
       totalClaimed: BigInt(decoded.totalClaimed.toString()),
       createdAt: BigInt(decoded.createdAt.toString()),
@@ -1086,6 +1223,7 @@ export async function fetchNftRewardState(
       nftAsset: decoded.nftAsset,
       content: decoded.content,
       rewardDebt: BigInt(decoded.rewardDebt.toString()),
+      weight: decoded.weight || 100,
       createdAt: BigInt(decoded.createdAt.toString()),
     };
   } catch {
@@ -1618,7 +1756,10 @@ export function createContentRegistryClient(connection: Connection) {
     getNftRewardStatePda,
     getRentConfigPda,
     getRentEntryPda,
+    getPendingMintPda,
+    getNftRarityPda,
     hashCid,
+    calculateWeightedPendingReward,
 
     // Content management
     registerContentInstruction: (
@@ -1666,9 +1807,16 @@ export function createContentRegistryClient(connection: Connection) {
     updateMintSettingsInstruction: (creator: PublicKey, contentCid: string, price: bigint | null, maxSupply: bigint | null | undefined, creatorRoyaltyBps: number | null, isActive: boolean | null) =>
       updateMintSettingsInstruction(program, creator, contentCid, price, maxSupply, creatorRoyaltyBps, isActive),
 
-    // NFT minting
+    // NFT minting (legacy - without rarity)
     mintNftSolInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, collectionAsset: PublicKey): Promise<MintNftResult> =>
       mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
+
+    // VRF-based minting with rarity (two-step flow)
+    commitMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, randomnessAccount: PublicKey): Promise<TransactionInstruction> =>
+      commitMintInstruction(program, buyer, contentCid, creator, treasury, platform, randomnessAccount),
+
+    revealMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, collectionAsset: PublicKey, randomnessAccount: PublicKey): Promise<MintNftResult> =>
+      revealMintInstruction(program, buyer, contentCid, creator, collectionAsset, randomnessAccount),
 
     // Claim rewards
     claimContentRewardsInstruction: (holder: PublicKey, contentCid: string) =>
@@ -1699,6 +1847,10 @@ export function createContentRegistryClient(connection: Connection) {
 
     checkRentExpiryInstruction: (nftAsset: PublicKey) =>
       checkRentExpiryInstruction(program, nftAsset),
+
+    // Burn NFT (with reward state cleanup)
+    burnNftInstruction: (owner: PublicKey, nftAsset: PublicKey, collectionAsset: PublicKey, contentCid: string) =>
+      burnNftInstruction(program, owner, nftAsset, collectionAsset, contentCid),
 
     // Ecosystem management
     initializeEcosystemInstruction: (admin: PublicKey, treasury: PublicKey, usdcMint: PublicKey) =>

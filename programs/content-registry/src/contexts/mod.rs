@@ -6,6 +6,8 @@ pub mod rewards;
 pub mod sync;
 pub mod rent;
 pub mod bundle;
+pub mod rarity_mint;
+pub mod burn;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -15,3 +17,5 @@ pub use rewards::*;
 pub use sync::*;
 pub use rent::*;
 pub use bundle::*;
+pub use rarity_mint::*;
+pub use burn::*;

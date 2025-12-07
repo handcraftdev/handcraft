@@ -1,0 +1,1 @@
+export { BurnNftModal } from "./BurnNftModal";

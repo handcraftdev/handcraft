@@ -2,10 +2,10 @@ use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 
 // Import mpl-core types and CPI builders
-use mpl_core::instructions::{CreateCollectionV2CpiBuilder, CreateV2CpiBuilder, AddPluginV1CpiBuilder};
+use mpl_core::instructions::{CreateCollectionV2CpiBuilder, CreateV2CpiBuilder, AddPluginV1CpiBuilder, BurnV1CpiBuilder};
 use mpl_core::types::{
     DataState, Plugin, PluginAuthorityPair, PluginAuthority,
-    Royalties, Creator, RuleSet, FreezeDelegate,
+    Royalties, Creator, RuleSet, FreezeDelegate, PermanentBurnDelegate,
 };
 
 // Metaplex Core Program ID: CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d
@@ -201,6 +201,7 @@ fn verify_core_nft_ownership(
 
 /// Create a Metaplex Core NFT within a collection
 /// The content_collection PDA is the update_authority and must sign
+/// Adds PermanentBurnDelegate plugin so only our program can burn NFTs
 fn create_core_nft<'info>(
     mpl_core_program: &AccountInfo<'info>,
     asset: &AccountInfo<'info>,
@@ -213,7 +214,14 @@ fn create_core_nft<'info>(
     uri: String,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    // Create NFT within the collection with PDA signing
+    // Create PermanentBurnDelegate plugin with content_collection PDA as authority
+    // This ensures only our program can burn NFTs (through the burn_nft instruction)
+    let burn_delegate_plugin = PluginAuthorityPair {
+        plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
+        authority: Some(PluginAuthority::Address { address: authority.key() }),
+    };
+
+    // Create NFT within the collection with PDA signing and PermanentBurnDelegate
     CreateV2CpiBuilder::new(mpl_core_program)
         .asset(asset)
         .collection(Some(collection))
@@ -224,6 +232,7 @@ fn create_core_nft<'info>(
         .name(name)
         .uri(uri)
         .data_state(DataState::AccountState)
+        .plugins(vec![burn_delegate_plugin])
         .invoke_signed(signer_seeds)?;
 
     Ok(())
@@ -242,6 +251,7 @@ use state::{
     NFT_REWARD_STATE_SEED, ContentCollection, CONTENT_COLLECTION_SEED,
     RentConfig, RentEntry, RentTier, RENT_ENTRY_SEED,
     BundleType,
+    Rarity, NftRarity, NFT_RARITY_SEED,
 };
 use errors::ContentRegistryError;
 use contexts::*;
@@ -806,6 +816,7 @@ pub mod content_registry {
         nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
         nft_reward_state.content = content.key();
         nft_reward_state.reward_debt = content_reward_pool.reward_per_share;
+        nft_reward_state.weight = Rarity::Common.weight(); // Default to Common (100) for non-VRF mints
         nft_reward_state.created_at = timestamp;
 
         // Increment content's NFT count in the pool AFTER updating buyer state
@@ -989,12 +1000,10 @@ pub mod content_registry {
                 ContentRegistryError::ContentMismatch
             );
 
-            // Calculate pending for this NFT
-            let nft_pending = if current_rps > nft_state.reward_debt {
-                ((current_rps - nft_state.reward_debt) / PRECISION) as u64
-            } else {
-                0
-            };
+            // Calculate pending for this NFT using weight-based formula
+            // For legacy NFTs without weight, default to 100 (Common)
+            let weight = if nft_state.weight == 0 { 100u16 } else { nft_state.weight };
+            let nft_pending = nft_state.pending_reward(current_rps);
 
             total_pending += nft_pending;
 
@@ -1007,7 +1016,12 @@ pub mod content_registry {
                 let mut updated_state = NftRewardState::try_deserialize(
                     &mut &nft_state_data[..]
                 )?;
-                updated_state.reward_debt = current_rps;
+                // Update reward_debt based on weight
+                updated_state.update_reward_debt(current_rps);
+                // For legacy NFTs, set weight if not set
+                if updated_state.weight == 0 {
+                    updated_state.weight = weight;
+                }
                 updated_state.try_serialize(&mut &mut nft_state_data[..])?;
             }
         }
@@ -1723,6 +1737,35 @@ pub mod content_registry {
     /// Bundle must have no items (item_count == 0) to be deleted
     pub fn delete_bundle(ctx: Context<DeleteBundle>) -> Result<()> {
         handle_delete_bundle(ctx)
+    }
+
+    // ============================================
+    // NFT MINTING WITH RARITY (VRF-based)
+    // ============================================
+
+    /// Step 1: Commit to mint with VRF randomness
+    /// Takes payment and commits to a future slot for randomness determination
+    /// User must call reveal_mint after randomness is available (~1-2 slots)
+    pub fn commit_mint(ctx: Context<CommitMint>) -> Result<()> {
+        handle_commit_mint(ctx)
+    }
+
+    /// Step 2: Reveal randomness and complete mint with rarity
+    /// Called after the committed slot has passed and VRF randomness is available
+    /// Determines rarity (Common/Uncommon/Rare/Epic/Legendary) and mints NFT
+    pub fn reveal_mint(ctx: Context<RevealMint>) -> Result<()> {
+        handle_reveal_mint(ctx)
+    }
+
+    // ============================================
+    // NFT BURN (Testing lifecycle hooks)
+    // ============================================
+
+    /// Burn an NFT via Metaplex Core CPI
+    /// This does NOT atomically clean up reward state - used to test if
+    /// lifecycle hooks fire during burn so we can handle cleanup there
+    pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
+        handle_burn_nft(ctx)
     }
 }
 

@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
-import { getIpfsUrl } from "@handcraft/sdk";
+import { BurnNftModal } from "@/components/nft";
+import { getIpfsUrl, getContentCollectionPda, getContentPda } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -21,10 +22,18 @@ export default function ProfilePage() {
   const addressParam = params.address as string;
   const { publicKey: connectedWallet } = useWallet();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   const { globalContent, client, usePendingRewards } = useContentRegistry();
 
   const [activeTab, setActiveTab] = useState<Tab>("content");
   const [showClaimModal, setShowClaimModal] = useState(false);
+  const [burnModalData, setBurnModalData] = useState<{
+    nftAsset: PublicKey;
+    collectionAsset: PublicKey;
+    contentCid: string;
+    title: string;
+    previewUrl: string | null;
+  } | null>(null);
 
   // Fetch pending rewards (only relevant for own profile)
   const { data: pendingRewards = [], isLoading: isLoadingRewards } = usePendingRewards();
@@ -84,6 +93,41 @@ export default function ProfilePage() {
     if (!profileAddress) return [];
     return globalContent.filter(c => c.creator?.toBase58() === profileAddress.toBase58());
   }, [globalContent, profileAddress]);
+
+  // Fetch all content collections (for getting collection asset when burning)
+  const { data: allContentCollections = new Map() } = useQuery({
+    queryKey: ["allContentCollections"],
+    queryFn: async () => {
+      if (!client) return new Map();
+      return client.fetchAllContentCollections();
+    },
+    enabled: !!client,
+    staleTime: 60000,
+  });
+
+  // Open burn NFT modal
+  const openBurnModal = (nftAsset: PublicKey, contentCid: string, title: string, previewUrl: string | null) => {
+    // Get collection asset from content collections
+    const [contentPda] = getContentPda(contentCid);
+    const collection = allContentCollections.get(contentPda.toBase58());
+
+    if (!collection) {
+      console.error("Collection not found for this content");
+      return;
+    }
+
+    setBurnModalData({
+      nftAsset,
+      collectionAsset: collection.collectionAsset,
+      contentCid,
+      title,
+      previewUrl,
+    });
+  };
+
+  const handleBurnSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
+  };
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -374,10 +418,29 @@ export default function ProfilePage() {
 
                           {/* Info */}
                           <div className="p-3">
-                            <h3 className="font-medium text-sm truncate">{title}</h3>
-                            <p className="text-xs text-gray-500 truncate">
-                              {nft.nftAsset.toBase58().slice(0, 8)}...
-                            </p>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-medium text-sm truncate">{title}</h3>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {nft.nftAsset.toBase58().slice(0, 8)}...
+                                </p>
+                              </div>
+                              {isOwnProfile && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openBurnModal(nft.nftAsset, nft.contentCid, title, previewUrl);
+                                  }}
+                                  className="flex-shrink-0 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                                  title="Burn NFT"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -498,6 +561,20 @@ export default function ProfilePage() {
         isOpen={showClaimModal}
         onClose={() => setShowClaimModal(false)}
       />
+
+      {/* Burn NFT Modal */}
+      {burnModalData && (
+        <BurnNftModal
+          isOpen={!!burnModalData}
+          onClose={() => setBurnModalData(null)}
+          nftAsset={burnModalData.nftAsset}
+          collectionAsset={burnModalData.collectionAsset}
+          contentCid={burnModalData.contentCid}
+          nftTitle={burnModalData.title}
+          previewUrl={burnModalData.previewUrl}
+          onSuccess={handleBurnSuccess}
+        />
+      )}
     </div>
   );
 }

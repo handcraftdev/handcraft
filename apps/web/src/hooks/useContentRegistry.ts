@@ -9,6 +9,9 @@ import {
   ContentType,
   PaymentCurrency,
   RentTier,
+  Rarity,
+  getRarityName,
+  getRarityWeight,
   getContentPda,
   getCidRegistryPda,
   getEcosystemConfigPda,
@@ -17,6 +20,8 @@ import {
   getWalletContentStatePda,
   getContentCollectionPda,
   getRentConfigPda,
+  getPendingMintPda,
+  getNftRarityPda,
   ContentRewardPool,
   WalletContentState,
   MintConfig,
@@ -41,6 +46,9 @@ export {
   ContentType,
   PaymentCurrency,
   RentTier,
+  Rarity,
+  getRarityName,
+  getRarityWeight,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
@@ -552,6 +560,140 @@ export function useContentRegistry() {
     },
   });
 
+  // Commit mint with VRF randomness - Step 1 of two-step flow
+  // Takes payment and commits to a future slot for randomness determination
+  // Returns the randomness account pubkey needed for step 2
+  const commitMint = useMutation({
+    mutationFn: async ({
+      contentCid,
+      creator,
+      treasury,
+      platform,
+      randomnessAccount,
+    }: {
+      contentCid: string;
+      creator: PublicKey;
+      treasury: PublicKey;
+      platform: PublicKey;
+      randomnessAccount: PublicKey;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Committing mint with VRF...", {
+        contentCid,
+        creator: creator.toBase58(),
+        treasury: treasury.toBase58(),
+        platform: platform.toBase58(),
+        randomnessAccount: randomnessAccount.toBase58(),
+        buyer: publicKey.toBase58(),
+      });
+
+      const commitIx = await client.commitMintInstruction(
+        publicKey,
+        contentCid,
+        creator,
+        treasury,
+        platform,
+        randomnessAccount
+      );
+
+      const tx = new Transaction().add(commitIx);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating commit transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Commit mint tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Commit mint confirmed!");
+      return { signature, randomnessAccount };
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+    },
+  });
+
+  // Reveal mint with VRF randomness - Step 2 of two-step flow
+  // Called after the committed slot has passed and VRF randomness is available
+  // Creates the NFT with randomized rarity
+  const revealMint = useMutation({
+    mutationFn: async ({
+      contentCid,
+      creator,
+      randomnessAccount,
+    }: {
+      contentCid: string;
+      creator: PublicKey;
+      randomnessAccount: PublicKey;
+    }): Promise<{ signature: string; nftAsset: PublicKey; rarity?: Rarity }> => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Revealing mint with VRF...", {
+        contentCid,
+        creator: creator.toBase58(),
+        randomnessAccount: randomnessAccount.toBase58(),
+        buyer: publicKey.toBase58(),
+      });
+
+      // Fetch the content collection to get the collection asset address
+      const contentCollection = await client.fetchContentCollection(contentCid);
+      if (!contentCollection) {
+        throw new Error("Content collection not found. Make sure the content was registered with mint config.");
+      }
+
+      console.log("Collection Asset:", contentCollection.collectionAsset.toBase58());
+
+      const { instruction, nftAssetKeypair } = await client.revealMintInstruction(
+        publicKey,
+        contentCid,
+        creator,
+        contentCollection.collectionAsset,
+        randomnessAccount
+      );
+
+      console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
+
+      const tx = new Transaction().add(instruction);
+
+      // Set up the transaction for simulation
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Sign with the NFT asset keypair (partial sign before wallet signs)
+      tx.partialSign(nftAssetKeypair);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating reveal transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      // Send transaction with the NFT keypair as additional signer
+      const signature = await sendTransaction(tx, connection, {
+        signers: [nftAssetKeypair],
+      });
+      console.log("Reveal mint tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Reveal mint confirmed!");
+
+      return { signature, nftAsset: nftAssetKeypair.publicKey };
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["walletContentState"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+      queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+    },
+  });
+
   // Update content metadata mutation (only before first mint)
   const updateContent = useMutation({
     mutationFn: async ({
@@ -976,6 +1118,50 @@ export function useContentRegistry() {
     },
   });
 
+  // Burn NFT mutation - burns with proper reward state cleanup
+  // Decrements totalWeight/totalNfts and closes NftRewardState (refunds rent)
+  const burnNft = useMutation({
+    mutationFn: async ({
+      nftAsset,
+      collectionAsset,
+      contentCid,
+    }: {
+      nftAsset: PublicKey;
+      collectionAsset: PublicKey;
+      contentCid: string;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Burning NFT with reward cleanup...", {
+        nftAsset: nftAsset.toBase58(),
+        collectionAsset: collectionAsset.toBase58(),
+        contentCid,
+        owner: publicKey.toBase58(),
+      });
+
+      const ix = await client.burnNftInstruction(publicKey, nftAsset, collectionAsset, contentCid);
+      const tx = new Transaction().add(ix);
+
+      console.log("Simulating burn transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Burn NFT tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Burn NFT confirmed!");
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+      queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
+    },
+  });
+
   // Batch fetch ALL mint configs in one RPC call (much more efficient)
   const allMintConfigsQuery = useQuery({
     queryKey: ["allMintConfigs"],
@@ -1380,6 +1566,9 @@ export function useContentRegistry() {
     configureMint: configureMint.mutateAsync,
     updateMintSettings: updateMintSettings.mutateAsync,
     mintNftSol: mintNftSol.mutateAsync,
+    // VRF-based minting with rarity (two-step flow)
+    commitMint: commitMint.mutateAsync,
+    revealMint: revealMint.mutateAsync,
     updateContent: updateContent.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
     claimContentRewards: claimContentRewards.mutateAsync,
@@ -1392,18 +1581,24 @@ export function useContentRegistry() {
     rentContentSol: rentContentSol.mutateAsync,
     checkRentalAccess,
 
+    // Burn NFT
+    burnNft: burnNft.mutateAsync,
+
     // Mutation states
     isRegisteringContent: registerContent.isPending || registerContentWithMint.isPending || registerContentWithMintAndRent.isPending,
     isTipping: tipContent.isPending,
     isConfiguringMint: configureMint.isPending,
     isUpdatingMintSettings: updateMintSettings.isPending,
-    isMintingNft: mintNftSol.isPending,
+    isMintingNft: mintNftSol.isPending || commitMint.isPending || revealMint.isPending,
+    isCommittingMint: commitMint.isPending,
+    isRevealingMint: revealMint.isPending,
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
     isClaimingReward: claimContentRewards.isPending || claimRewardsVerified.isPending || claimAllRewards.isPending,
     isConfiguringRent: configureRent.isPending,
     isUpdatingRentConfig: updateRentConfig.isPending,
     isRentingContent: rentContentSol.isPending,
+    isBurningNft: burnNft.isPending,
 
     // Hooks for specific data
     useMintConfig,
@@ -1428,6 +1623,8 @@ export function useContentRegistry() {
     getWalletContentStatePda,
     getContentCollectionPda,
     getRentConfigPda,
+    getPendingMintPda,
+    getNftRarityPda,
     calculatePrimarySplit,
     calculatePendingReward,
   };
