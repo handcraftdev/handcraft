@@ -7,6 +7,8 @@ Decentralized content platform combining the best of Reddit, TikTok, YouTube, Ne
 - **Short-form video** - TikTok-style vertical feed
 - **Long-form video** - YouTube-style player
 - **Audio/Podcasts** - Spotify-style player
+- **Training programmes** -  Skillshare
+- **Community Support** - Patreon
 - **Communities** - Reddit-style discussions
 - **Token economy** - $CRAFT token + USDC payments
 - **Fully decentralized** - Content on IPFS/Arweave
