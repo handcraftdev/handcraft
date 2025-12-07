@@ -22,3 +22,4 @@ anchor-spl = { version = "0.32.1", features = ["token", "associated_token"] }
 spl-token = { version = "4.0", default-features = false, features = ["no-entrypoint"] }
 mpl-core = "0.11.1"
 solana-sha256-hasher = "2.1"
+switchboard-on-demand = "0.11.3"
