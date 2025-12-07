@@ -6,6 +6,7 @@ import {
   PublicKey,
   Keypair,
   TransactionInstruction,
+  Transaction,
 } from "@solana/web3.js";
 import {
   Randomness,
@@ -28,15 +29,69 @@ const SWITCHBOARD_PROGRAM_ID = IS_MAINNET
   ? ON_DEMAND_MAINNET_PID
   : ON_DEMAND_DEVNET_PID;
 
+// localStorage key for pending mints
+const PENDING_MINTS_KEY = "handcraft_pending_vrf_mints";
+
 export interface RandomnessResult {
   randomnessAccount: PublicKey;
   randomnessKeypair: Keypair;
   createInstruction: TransactionInstruction;
-  commitInstruction: TransactionInstruction;
+  // Note: commitInstruction must be fetched AFTER the create transaction is confirmed
+  // because it reads from the randomness account on-chain
 }
 
 export interface RevealResult {
   revealInstruction: TransactionInstruction;
+}
+
+// Pending mint stored in localStorage for recovery
+export interface PendingVrfMint {
+  id: string; // unique ID
+  randomnessAccount: string; // base58
+  nftAssetKeypair: number[]; // secret key as array
+  contentCid: string;
+  creator: string; // base58
+  collectionAsset: string; // base58
+  commitTxSignature: string;
+  timestamp: number;
+  status: "committed" | "revealing" | "failed";
+}
+
+// Helper to save pending mint to localStorage
+export function savePendingMint(mint: PendingVrfMint): void {
+  if (typeof window === "undefined") return;
+  const existing = getPendingMints();
+  existing.push(mint);
+  localStorage.setItem(PENDING_MINTS_KEY, JSON.stringify(existing));
+}
+
+// Helper to get all pending mints from localStorage
+export function getPendingMints(): PendingVrfMint[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const data = localStorage.getItem(PENDING_MINTS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Helper to remove a pending mint from localStorage
+export function removePendingMint(id: string): void {
+  if (typeof window === "undefined") return;
+  const existing = getPendingMints().filter(m => m.id !== id);
+  localStorage.setItem(PENDING_MINTS_KEY, JSON.stringify(existing));
+}
+
+// Helper to update a pending mint in localStorage
+export function updatePendingMint(id: string, updates: Partial<PendingVrfMint>): void {
+  if (typeof window === "undefined") return;
+  const existing = getPendingMints();
+  const index = existing.findIndex(m => m.id === id);
+  if (index >= 0) {
+    existing[index] = { ...existing[index], ...updates };
+    localStorage.setItem(PENDING_MINTS_KEY, JSON.stringify(existing));
+  }
 }
 
 export function useSwitchboardRandomness() {
@@ -49,8 +104,9 @@ export function useSwitchboardRandomness() {
   }, [publicKey]);
 
   /**
-   * Create a new randomness account and get instructions for commit flow
-   * Returns the randomness keypair (must be added as signer) and instructions
+   * Create a new randomness account and get the create instruction
+   * IMPORTANT: The create transaction must be confirmed BEFORE calling getCommitInstruction
+   * because commitIx reads the randomness account from chain
    */
   const createRandomnessAccount = useCallback(async (): Promise<RandomnessResult> => {
     if (!publicKey || !signTransaction || !signAllTransactions) {
@@ -70,31 +126,66 @@ export function useSwitchboardRandomness() {
       };
 
       // Load Switchboard program using their utility
-      // This handles IDL loading internally without fetching from chain
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sbProgram = await AnchorUtils.loadProgramFromConnection(
         connection,
-        walletAdapter,
+        walletAdapter as any,
         SWITCHBOARD_PROGRAM_ID
       );
 
       // Create randomness account using Switchboard SDK
-      const [randomness, createIx] = await Randomness.create(
+      // This only returns the CREATE instruction - commit must come after account exists
+      const [, createIx] = await Randomness.create(
         sbProgram,
         randomnessKeypair,
         SWITCHBOARD_QUEUE
       );
 
-      // Get commit instruction
-      const commitIx = await randomness.commitIx(SWITCHBOARD_QUEUE);
-
       return {
         randomnessAccount: randomnessKeypair.publicKey,
         randomnessKeypair,
         createInstruction: createIx,
-        commitInstruction: commitIx,
       };
     } catch (error) {
       console.error("Failed to create randomness account:", error);
+      throw error;
+    }
+  }, [publicKey, signTransaction, signAllTransactions, connection]);
+
+  /**
+   * Get the commit instruction for an existing randomness account
+   * MUST be called AFTER the randomness account create transaction is confirmed
+   */
+  const getCommitInstruction = useCallback(async (
+    randomnessAccount: PublicKey
+  ): Promise<TransactionInstruction> => {
+    if (!publicKey || !signTransaction || !signAllTransactions) {
+      throw new Error("Wallet not connected");
+    }
+
+    try {
+      const walletAdapter = {
+        publicKey,
+        signTransaction,
+        signAllTransactions,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sbProgram = await AnchorUtils.loadProgramFromConnection(
+        connection,
+        walletAdapter as any,
+        SWITCHBOARD_PROGRAM_ID
+      );
+
+      // Load the existing randomness account
+      const randomness = new Randomness(sbProgram, randomnessAccount);
+
+      // Get commit instruction
+      const commitIx = await randomness.commitIx(SWITCHBOARD_QUEUE);
+
+      return commitIx;
+    } catch (error) {
+      console.error("Failed to get commit instruction:", error);
       throw error;
     }
   }, [publicKey, signTransaction, signAllTransactions, connection]);
@@ -119,9 +210,10 @@ export function useSwitchboardRandomness() {
       };
 
       // Load Switchboard program
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sbProgram = await AnchorUtils.loadProgramFromConnection(
         connection,
-        walletAdapter,
+        walletAdapter as any,
         SWITCHBOARD_PROGRAM_ID
       );
 
@@ -139,6 +231,40 @@ export function useSwitchboardRandomness() {
       throw error;
     }
   }, [publicKey, signTransaction, signAllTransactions, connection]);
+
+  /**
+   * Get reveal instruction with retry logic for oracle availability
+   * Retries up to maxRetries times with exponential backoff
+   */
+  const getRevealInstructionWithRetry = useCallback(async (
+    randomnessAccount: PublicKey,
+    maxRetries: number = 5,
+    initialDelayMs: number = 2000
+  ): Promise<TransactionInstruction> => {
+    let delayMs = initialDelayMs;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempting to get reveal instruction (attempt ${attempt}/${maxRetries})...`);
+        const result = await getRevealInstruction(randomnessAccount);
+        console.log("Successfully obtained reveal instruction");
+        return result.revealInstruction;
+      } catch (error: any) {
+        console.log(`Reveal attempt ${attempt} failed:`, error.message);
+
+        if (attempt === maxRetries) {
+          console.error("All reveal attempts failed. The Switchboard gateway may be experiencing issues.");
+          throw error;
+        }
+
+        console.log(`Waiting ${delayMs}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        delayMs = Math.min(delayMs * 1.5, 10000);
+      }
+    }
+
+    throw new Error("Failed to get reveal instruction after all retries");
+  }, [getRevealInstruction]);
 
   /**
    * Wait for randomness to be available (poll until ready)
@@ -167,7 +293,9 @@ export function useSwitchboardRandomness() {
 
   return {
     createRandomnessAccount,
+    getCommitInstruction,
     getRevealInstruction,
+    getRevealInstructionWithRetry,
     waitForRandomness,
     switchboardQueue: SWITCHBOARD_QUEUE,
     switchboardProgramId: SWITCHBOARD_PROGRAM_ID,

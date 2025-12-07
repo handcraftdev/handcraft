@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { PublicKey, Transaction, Keypair } from "@solana/web3.js";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useContentRegistry,
   MintConfig,
   Rarity,
   getRarityName,
+  PendingMint,
 } from "@/hooks/useContentRegistry";
 import { useSwitchboardRandomness } from "@/hooks/useSwitchboardRandomness";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 import { simulatePartiallySignedTransaction } from "@/utils/transaction";
+import { RarityBadge, RarityProbabilities, RARITY_STYLES } from "@/components/rarity";
 
 // Default platform wallet - if not set, use ecosystem treasury
 // This can be configured per-deployment or made dynamic
@@ -39,15 +42,6 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 
 type MintStep = "idle" | "committing" | "determining" | "revealing" | "success";
 
-// Rarity colors for display
-const RARITY_COLORS: Record<Rarity, { bg: string; text: string; border: string }> = {
-  [Rarity.Common]: { bg: "bg-gray-500/20", text: "text-gray-300", border: "border-gray-500" },
-  [Rarity.Uncommon]: { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500" },
-  [Rarity.Rare]: { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500" },
-  [Rarity.Epic]: { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500" },
-  [Rarity.Legendary]: { bg: "bg-yellow-500/20", text: "text-yellow-400", border: "border-yellow-500" },
-};
-
 export function BuyNftModal({
   isOpen,
   onClose,
@@ -61,6 +55,7 @@ export function BuyNftModal({
 }: BuyNftModalProps) {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   const {
     mintNftSol,
     commitMint,
@@ -71,13 +66,39 @@ export function BuyNftModal({
     ecosystemConfig,
     client,
   } = useContentRegistry();
-  const { createRandomnessAccount, waitForRandomness } = useSwitchboardRandomness();
+  const { createRandomnessAccount, getCommitInstruction, getRevealInstructionWithRetry } = useSwitchboardRandomness();
 
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [mintingProgress, setMintingProgress] = useState(0);
   const [mintStep, setMintStep] = useState<MintStep>("idle");
   const [revealedRarity, setRevealedRarity] = useState<Rarity | null>(null);
+  const [pendingMintOnChain, setPendingMintOnChain] = useState<PendingMint | null>(null);
+  const [isCheckingPending, setIsCheckingPending] = useState(false);
+
+  // Check for pending mint on-chain when modal opens (for cross-device recovery)
+  const checkPendingMint = useCallback(async () => {
+    if (!publicKey || !client || !isOpen) return;
+
+    setIsCheckingPending(true);
+    try {
+      const pending = await client.fetchPendingMint(publicKey, contentCid);
+      setPendingMintOnChain(pending);
+      if (pending) {
+        console.log("Found pending mint on-chain:", pending);
+      }
+    } catch (err) {
+      console.error("Error checking pending mint:", err);
+    } finally {
+      setIsCheckingPending(false);
+    }
+  }, [publicKey, client, contentCid, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && ENABLE_VRF_RARITY) {
+      checkPendingMint();
+    }
+  }, [isOpen, checkPendingMint]);
 
   const price = mintConfig.priceSol;
   const isFree = price === BigInt(0);
@@ -114,7 +135,81 @@ export function BuyNftModal({
     onClose();
   };
 
-  // VRF-based mint with rarity (two-step flow)
+  // Complete a pending mint that was started but not finished (cross-device recovery)
+  const handleRecoverPendingMint = async () => {
+    if (!publicKey || !client || !pendingMintOnChain || !ecosystemConfig) return;
+
+    setError(null);
+    setMintStep("revealing");
+
+    // Use platform wallet or fall back to treasury
+    const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+
+    try {
+      // Fetch the content collection
+      const contentCollection = await client.fetchContentCollection(contentCid);
+      if (!contentCollection) {
+        throw new Error("Content collection not found");
+      }
+
+      // Wait for randomness with retry logic (oracle may need time)
+      console.log("Waiting for oracle to provide randomness...");
+      setMintStep("determining");
+
+      // Get reveal instruction from Switchboard with retry logic
+      const revealSbIx = await getRevealInstructionWithRetry(pendingMintOnChain.randomnessAccount);
+
+      setMintStep("revealing");
+
+      // Build reveal transaction with Switchboard reveal + our reveal_mint
+      const { instruction: revealProgramIx, nftAssetKeypair } = await client.revealMintInstruction(
+        publicKey,
+        contentCid,
+        creator,
+        contentCollection.collectionAsset,
+        pendingMintOnChain.randomnessAccount,
+        ecosystemConfig.treasury,
+        platformWallet
+      );
+
+      const revealTx = new Transaction()
+        .add(revealSbIx)
+        .add(revealProgramIx);
+
+      revealTx.feePayer = publicKey;
+      revealTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      revealTx.partialSign(nftAssetKeypair);
+
+      await simulatePartiallySignedTransaction(connection, revealTx);
+
+      const revealSig = await sendTransaction(revealTx, connection, {
+        signers: [nftAssetKeypair],
+      });
+      await connection.confirmTransaction(revealSig, "confirmed");
+      console.log("Recovery reveal confirmed:", revealSig);
+
+      setMintStep("success");
+      setPendingMintOnChain(null);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Invalidate NFT-related queries to show the new NFT immediately
+      queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+      queryClient.invalidateQueries({ queryKey: ["walletNftRarities"] });
+      queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
+      queryClient.invalidateQueries({ queryKey: ["profileNftRarities"] });
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+
+      onSuccess?.(revealedRarity ?? undefined);
+      handleClose();
+    } catch (err) {
+      console.error("Recovery error:", err);
+      setError(getTransactionErrorMessage(err));
+      setMintStep("idle");
+    }
+  };
+
+  // VRF-based mint with rarity (three-step flow matching test script)
   const handleVrfMint = async () => {
     if (!publicKey || !ecosystemConfig || !client) return;
 
@@ -125,7 +220,7 @@ export function BuyNftModal({
       setRevealedRarity(null);
 
       try {
-        // Step 1: Create randomness account and commit
+        // Step 1: Create randomness account FIRST (separate transaction)
         setMintStep("committing");
 
         // Create randomness account using Switchboard
@@ -133,24 +228,40 @@ export function BuyNftModal({
           randomnessAccount,
           randomnessKeypair,
           createInstruction,
-          commitInstruction
         } = await createRandomnessAccount();
 
+        // Send create transaction first
+        console.log("Sending create randomness account transaction...");
+        const createTx = new Transaction().add(createInstruction);
+        createTx.feePayer = publicKey;
+        createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        createTx.partialSign(randomnessKeypair);
+
+        await simulatePartiallySignedTransaction(connection, createTx);
+
+        const createSig = await sendTransaction(createTx, connection, {
+          signers: [randomnessKeypair],
+        });
+        await connection.confirmTransaction(createSig, "confirmed");
+        console.log("Create transaction confirmed:", createSig);
+
+        // Step 2: Now get commit instruction (account exists on-chain now)
+        console.log("Getting commit instruction...");
+        const commitInstruction = await getCommitInstruction(randomnessAccount);
+
         // Build commit transaction with:
-        // 1. Switchboard randomness account creation
-        // 2. Switchboard commit instruction
-        // 3. Our program's commit_mint instruction
+        // 1. Switchboard commit instruction
+        // 2. Our program's commit_mint instruction
         const commitProgramIx = await client.commitMintInstruction(
           publicKey,
           contentCid,
           creator,
           ecosystemConfig.treasury,
-          platformWallet,
-          randomnessAccount
+          randomnessAccount,
+          platformWallet
         );
 
         const commitTx = new Transaction()
-          .add(createInstruction)
           .add(commitInstruction)
           .add(commitProgramIx);
 
@@ -158,27 +269,19 @@ export function BuyNftModal({
         commitTx.feePayer = publicKey;
         commitTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-        // Sign with randomness keypair
-        commitTx.partialSign(randomnessKeypair);
-
         // Simulate before sending
         await simulatePartiallySignedTransaction(connection, commitTx);
 
         // Send commit transaction (requires wallet signature)
-        const commitSig = await sendTransaction(commitTx, connection, {
-          signers: [randomnessKeypair],
-        });
+        const commitSig = await sendTransaction(commitTx, connection);
         await connection.confirmTransaction(commitSig, "confirmed");
         console.log("Commit transaction confirmed:", commitSig);
 
-        // Step 2: Wait for randomness and reveal
+        // Step 2: Wait for randomness with retry
         setMintStep("determining");
 
-        // Wait for Switchboard randomness to be available (~0.4-0.8 seconds)
-        const isReady = await waitForRandomness(randomnessAccount, 5000);
-        if (!isReady) {
-          throw new Error("Randomness not available within timeout. Please try again.");
-        }
+        // Get reveal instruction from Switchboard with retry logic
+        const revealSbIx = await getRevealInstructionWithRetry(randomnessAccount);
 
         // Step 3: Reveal and create NFT with rarity
         setMintStep("revealing");
@@ -189,16 +292,23 @@ export function BuyNftModal({
           throw new Error("Content collection not found");
         }
 
-        // Build reveal transaction
+        // Build reveal transaction with Switchboard reveal + our reveal_mint
+        if (!ecosystemConfig) {
+          throw new Error("Ecosystem config not loaded");
+        }
         const { instruction: revealProgramIx, nftAssetKeypair } = await client.revealMintInstruction(
           publicKey,
           contentCid,
           creator,
           contentCollection.collectionAsset,
-          randomnessAccount
+          randomnessAccount,
+          ecosystemConfig.treasury,
+          platformWallet
         );
 
-        const revealTx = new Transaction().add(revealProgramIx);
+        const revealTx = new Transaction()
+          .add(revealSbIx)
+          .add(revealProgramIx);
 
         // Set up transaction for simulation
         revealTx.feePayer = publicKey;
@@ -217,8 +327,17 @@ export function BuyNftModal({
         await connection.confirmTransaction(revealSig, "confirmed");
         console.log("Reveal transaction confirmed:", revealSig);
 
-        // TODO: Fetch the revealed rarity from the NftRarity account
-        // For now, we'll show success without the specific rarity
+        // Fetch the revealed rarity from the NftRarity account
+        try {
+          const nftRarity = await client.fetchNftRarity(nftAssetKeypair.publicKey);
+          if (nftRarity) {
+            setRevealedRarity(nftRarity.rarity);
+            console.log("Revealed rarity:", getRarityName(nftRarity.rarity));
+          }
+        } catch (rarityErr) {
+          console.error("Could not fetch rarity:", rarityErr);
+        }
+
         setMintStep("success");
 
       } catch (err) {
@@ -227,8 +346,15 @@ export function BuyNftModal({
       }
     }
 
-    // Brief pause to show success state before closing
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Longer pause to show success state with rarity
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Invalidate NFT-related queries to show the new NFT immediately
+    queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+    queryClient.invalidateQueries({ queryKey: ["walletNftRarities"] });
+    queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
+    queryClient.invalidateQueries({ queryKey: ["profileNftRarities"] });
+    queryClient.invalidateQueries({ queryKey: ["globalContent"] });
 
     onSuccess?.(revealedRarity ?? undefined);
     handleClose();
@@ -323,8 +449,38 @@ export function BuyNftModal({
         )}
 
         <div className="space-y-4">
+          {/* Pending Mint Recovery Banner */}
+          {ENABLE_VRF_RARITY && pendingMintOnChain && mintStep === "idle" && (
+            <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="font-medium text-amber-300">Incomplete Mint Found</span>
+              </div>
+              <p className="text-gray-300 text-sm mb-3">
+                You have a pending mint that was started but not completed.
+                Your payment of <span className="font-medium text-white">{Number(pendingMintOnChain.amountPaid) / LAMPORTS_PER_SOL} SOL</span> is waiting.
+              </p>
+              <button
+                onClick={handleRecoverPendingMint}
+                className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
+              >
+                Complete Mint Now
+              </button>
+            </div>
+          )}
+
+          {/* Loading state for checking pending mints */}
+          {isCheckingPending && (
+            <div className="text-center py-2">
+              <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-gray-500 mt-1">Checking for pending mints...</p>
+            </div>
+          )}
+
           {/* Rarity Info Banner (VRF mode only) */}
-          {ENABLE_VRF_RARITY && mintStep === "idle" && (
+          {ENABLE_VRF_RARITY && mintStep === "idle" && !pendingMintOnChain && (
             <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/30 rounded-lg p-3 text-sm">
               <div className="flex items-center gap-2 mb-2">
                 <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -336,16 +492,7 @@ export function BuyNftModal({
                 Your NFT will be assigned a random rarity using verifiable randomness.
                 Higher rarity = more rewards from the holder pool!
               </p>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {Object.entries(RARITY_COLORS).map(([rarity, colors]) => (
-                  <span
-                    key={rarity}
-                    className={`text-xs px-2 py-0.5 rounded ${colors.bg} ${colors.text}`}
-                  >
-                    {getRarityName(Number(rarity) as Rarity)}
-                  </span>
-                ))}
-              </div>
+              <RarityProbabilities className="mt-2" />
             </div>
           )}
 
@@ -387,15 +534,42 @@ export function BuyNftModal({
           )}
 
           {/* Success State */}
-          {mintStep === "success" && revealedRarity !== null && (
-            <div className={`rounded-lg p-6 text-center border ${RARITY_COLORS[revealedRarity].border} ${RARITY_COLORS[revealedRarity].bg}`}>
-              <div className="text-4xl mb-3">🎉</div>
-              <p className={`text-xl font-bold ${RARITY_COLORS[revealedRarity].text}`}>
-                {getRarityName(revealedRarity)}!
-              </p>
-              <p className="text-sm text-gray-400 mt-1">
-                Your NFT has been minted successfully
-              </p>
+          {mintStep === "success" && (
+            <div className={`rounded-lg p-6 text-center border ${
+              revealedRarity !== null && RARITY_STYLES[revealedRarity]
+                ? `${RARITY_STYLES[revealedRarity].border} ${RARITY_STYLES[revealedRarity].bg}`
+                : "border-green-500 bg-green-500/20"
+            }`}>
+              <div className="text-5xl mb-3">
+                {revealedRarity === Rarity.Legendary && <span className="animate-pulse">⭐</span>}
+                {revealedRarity === Rarity.Epic && <span className="animate-bounce">💎</span>}
+                {revealedRarity === Rarity.Rare && "💠"}
+                {revealedRarity === Rarity.Uncommon && "🌿"}
+                {revealedRarity === Rarity.Common && "⚪"}
+                {(revealedRarity === null || !RARITY_STYLES[revealedRarity]) && "🎉"}
+              </div>
+              {revealedRarity !== null && RARITY_STYLES[revealedRarity] ? (
+                <>
+                  <p className={`text-xl font-bold ${RARITY_STYLES[revealedRarity].text}`}>
+                    {getRarityName(revealedRarity)}!
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Your NFT has been minted with {getRarityName(revealedRarity).toLowerCase()} rarity
+                  </p>
+                  {revealedRarity >= Rarity.Rare && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Higher rarity means more rewards from the holder pool!
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-green-400">Success!</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Your NFT has been minted successfully
+                  </p>
+                </>
+              )}
             </div>
           )}
 

@@ -30,6 +30,7 @@ import {
   RentConfig,
   RentEntry,
   ContentEntry,
+  PendingMint,
   calculatePrimarySplit,
   calculatePendingReward,
   MIN_CREATOR_ROYALTY_BPS,
@@ -57,7 +58,7 @@ export {
   RENT_PERIOD_7D,
   MIN_RENT_FEE_LAMPORTS,
 };
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -625,10 +626,14 @@ export function useContentRegistry() {
       contentCid,
       creator,
       randomnessAccount,
+      treasury,
+      platform,
     }: {
       contentCid: string;
       creator: PublicKey;
       randomnessAccount: PublicKey;
+      treasury: PublicKey;
+      platform?: PublicKey;
     }): Promise<{ signature: string; nftAsset: PublicKey; rarity?: Rarity }> => {
       if (!publicKey) throw new Error("Wallet not connected");
       if (!client) throw new Error("Client not initialized");
@@ -653,7 +658,9 @@ export function useContentRegistry() {
         contentCid,
         creator,
         contentCollection.collectionAsset,
-        randomnessAccount
+        randomnessAccount,
+        treasury,
+        platform
       );
 
       console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
@@ -691,6 +698,44 @@ export function useContentRegistry() {
       queryClient.invalidateQueries({ queryKey: ["walletContentState"] });
       queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
       queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+    },
+  });
+
+  // Cancel an expired pending mint and get refund
+  // Can only be called after 10 minutes if the oracle failed to provide randomness
+  const cancelExpiredMint = useMutation({
+    mutationFn: async ({
+      contentCid,
+    }: {
+      contentCid: string;
+    }): Promise<{ signature: string }> => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      console.log("Cancelling expired mint...", { contentCid, buyer: publicKey.toBase58() });
+
+      const instruction = await client.cancelExpiredMintInstruction(publicKey, contentCid);
+
+      const tx = new Transaction().add(instruction);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating cancel transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Cancel expired mint tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Cancel expired mint confirmed! Refund processed.");
+
+      return { signature };
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["mintableContent"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingMint", publicKey?.toBase58(), contentCid] });
     },
   });
 
@@ -1378,6 +1423,39 @@ export function useContentRegistry() {
   // Set of rental NFT asset addresses
   const rentalNftAssets = walletRentalNftsQuery.data || new Set<string>();
 
+  // Fetch rarities for all wallet NFTs (batch query)
+  // Uses the batch fetch function to get rarities in a single RPC call
+  const walletNftRaritiesQuery = useQuery({
+    queryKey: ["walletNftRarities", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey || !client) return new Map<string, Rarity>();
+      const nfts = walletNftsQuery.data || [];
+      if (nfts.length === 0) return new Map<string, Rarity>();
+
+      const nftAssets = nfts.map(nft => nft.nftAsset);
+      const rarities = await client.fetchNftRaritiesBatch(nftAssets);
+
+      // Convert to Map<nftAsset string, Rarity>
+      const result = new Map<string, Rarity>();
+      for (const [key, nftRarity] of rarities) {
+        result.set(key, nftRarity.rarity);
+      }
+      return result;
+    },
+    enabled: !!publicKey && !!client && walletNftsQuery.isSuccess && (walletNftsQuery.data?.length ?? 0) > 0,
+    staleTime: 300000, // Cache for 5 minutes
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Map of NFT asset address -> Rarity
+  const nftRarities = walletNftRaritiesQuery.data || new Map<string, Rarity>();
+
   // Per-NFT pending reward info
   interface NftPendingReward {
     nftAsset: { toBase58(): string };
@@ -1569,6 +1647,7 @@ export function useContentRegistry() {
     // VRF-based minting with rarity (two-step flow)
     commitMint: commitMint.mutateAsync,
     revealMint: revealMint.mutateAsync,
+    cancelExpiredMint: cancelExpiredMint.mutateAsync,  // Refund if oracle fails
     updateContent: updateContent.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
     claimContentRewards: claimContentRewards.mutateAsync,
@@ -1592,6 +1671,7 @@ export function useContentRegistry() {
     isMintingNft: mintNftSol.isPending || commitMint.isPending || revealMint.isPending,
     isCommittingMint: commitMint.isPending,
     isRevealingMint: revealMint.isPending,
+    isCancellingExpiredMint: cancelExpiredMint.isPending,
     isUpdatingContent: updateContent.isPending,
     isDeletingContent: deleteContent.isPending,
     isClaimingReward: claimContentRewards.isPending || claimRewardsVerified.isPending || claimAllRewards.isPending,
@@ -1612,6 +1692,8 @@ export function useContentRegistry() {
     getPendingRewardForContent,
     pendingRewardsQuery,
     walletNfts,
+    nftRarities,
+    walletNftRaritiesQuery,
 
     // Utilities
     client,
