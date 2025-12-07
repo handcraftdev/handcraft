@@ -660,7 +660,7 @@ export function useContentRegistry() {
         contentCollection.collectionAsset,
         randomnessAccount,
         treasury,
-        platform
+        platform ?? treasury  // Fall back to treasury if no platform specified
       );
 
       console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());

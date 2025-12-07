@@ -36,8 +36,8 @@ export interface RandomnessResult {
   randomnessAccount: PublicKey;
   randomnessKeypair: Keypair;
   createInstruction: TransactionInstruction;
-  // Note: commitInstruction must be fetched AFTER the create transaction is confirmed
-  // because it reads from the randomness account on-chain
+  commitInstruction: TransactionInstruction;
+  // Note: create + commit can now be bundled in the same transaction!
 }
 
 export interface RevealResult {
@@ -104,9 +104,8 @@ export function useSwitchboardRandomness() {
   }, [publicKey]);
 
   /**
-   * Create a new randomness account and get the create instruction
-   * IMPORTANT: The create transaction must be confirmed BEFORE calling getCommitInstruction
-   * because commitIx reads the randomness account from chain
+   * Create a new randomness account and get both create and commit instructions
+   * These can be bundled into a SINGLE transaction to reduce user signatures
    */
   const createRandomnessAccount = useCallback(async (): Promise<RandomnessResult> => {
     if (!publicKey || !signTransaction || !signAllTransactions) {
@@ -134,17 +133,23 @@ export function useSwitchboardRandomness() {
       );
 
       // Create randomness account using Switchboard SDK
-      // This only returns the CREATE instruction - commit must come after account exists
-      const [, createIx] = await Randomness.create(
+      // The returned Randomness instance can be used immediately for commitIx
+      // without waiting for the create transaction to confirm
+      const [randomness, createIx] = await Randomness.create(
         sbProgram,
         randomnessKeypair,
         SWITCHBOARD_QUEUE
       );
 
+      // Get commit instruction using the returned Randomness instance
+      // This works because the instance has all the data it needs in memory
+      const commitIx = await randomness.commitIx(SWITCHBOARD_QUEUE);
+
       return {
         randomnessAccount: randomnessKeypair.publicKey,
         randomnessKeypair,
         createInstruction: createIx,
+        commitInstruction: commitIx,
       };
     } catch (error) {
       console.error("Failed to create randomness account:", error);

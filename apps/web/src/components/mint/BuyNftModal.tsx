@@ -66,7 +66,7 @@ export function BuyNftModal({
     ecosystemConfig,
     client,
   } = useContentRegistry();
-  const { createRandomnessAccount, getCommitInstruction, getRevealInstructionWithRetry } = useSwitchboardRandomness();
+  const { createRandomnessAccount, getRevealInstructionWithRetry } = useSwitchboardRandomness();
 
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -209,7 +209,7 @@ export function BuyNftModal({
     }
   };
 
-  // VRF-based mint with rarity (three-step flow matching test script)
+  // VRF-based mint with rarity (two-step flow: commit + reveal)
   const handleVrfMint = async () => {
     if (!publicKey || !ecosystemConfig || !client) return;
 
@@ -220,38 +220,18 @@ export function BuyNftModal({
       setRevealedRarity(null);
 
       try {
-        // Step 1: Create randomness account FIRST (separate transaction)
+        // Step 1: Create randomness + Commit (combined in single transaction)
         setMintStep("committing");
 
-        // Create randomness account using Switchboard
+        // Create randomness account and get both create + commit instructions
         const {
           randomnessAccount,
           randomnessKeypair,
           createInstruction,
+          commitInstruction,
         } = await createRandomnessAccount();
 
-        // Send create transaction first
-        console.log("Sending create randomness account transaction...");
-        const createTx = new Transaction().add(createInstruction);
-        createTx.feePayer = publicKey;
-        createTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        createTx.partialSign(randomnessKeypair);
-
-        await simulatePartiallySignedTransaction(connection, createTx);
-
-        const createSig = await sendTransaction(createTx, connection, {
-          signers: [randomnessKeypair],
-        });
-        await connection.confirmTransaction(createSig, "confirmed");
-        console.log("Create transaction confirmed:", createSig);
-
-        // Step 2: Now get commit instruction (account exists on-chain now)
-        console.log("Getting commit instruction...");
-        const commitInstruction = await getCommitInstruction(randomnessAccount);
-
-        // Build commit transaction with:
-        // 1. Switchboard commit instruction
-        // 2. Our program's commit_mint instruction
+        // Build our program's commit_mint instruction
         const commitProgramIx = await client.commitMintInstruction(
           publicKey,
           contentCid,
@@ -261,19 +241,25 @@ export function BuyNftModal({
           platformWallet
         );
 
+        // Combine all instructions into ONE transaction:
+        // 1. Create randomness account
+        // 2. Switchboard commit instruction
+        // 3. Our program's commit_mint instruction
+        console.log("Sending combined create + commit transaction...");
         const commitTx = new Transaction()
+          .add(createInstruction)
           .add(commitInstruction)
           .add(commitProgramIx);
 
-        // Set up transaction for simulation
         commitTx.feePayer = publicKey;
         commitTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        commitTx.partialSign(randomnessKeypair);
 
-        // Simulate before sending
         await simulatePartiallySignedTransaction(connection, commitTx);
 
-        // Send commit transaction (requires wallet signature)
-        const commitSig = await sendTransaction(commitTx, connection);
+        const commitSig = await sendTransaction(commitTx, connection, {
+          signers: [randomnessKeypair],
+        });
         await connection.confirmTransaction(commitSig, "confirmed");
         console.log("Commit transaction confirmed:", commitSig);
 
