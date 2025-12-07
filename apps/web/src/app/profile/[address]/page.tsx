@@ -11,7 +11,8 @@ import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
 import { BurnNftModal } from "@/components/nft";
-import { getIpfsUrl, getContentCollectionPda, getContentPda } from "@handcraft/sdk";
+import { RarityBadge } from "@/components/rarity";
+import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, NftRarity } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -87,6 +88,23 @@ export default function ProfilePage() {
   const ownedNfts = useMemo(() => {
     return allNfts.filter(nft => !rentalNftAssets.has(nft.nftAsset.toBase58()));
   }, [allNfts, rentalNftAssets]);
+
+  // Fetch rarities for owned NFTs
+  const { data: nftRarities = new Map<string, Rarity>(), isLoading: isLoadingRarities } = useQuery({
+    queryKey: ["profileNftRarities", profileAddress?.toBase58(), ownedNfts.length],
+    queryFn: async () => {
+      if (!profileAddress || !client || ownedNfts.length === 0) return new Map<string, Rarity>();
+      const nftAssets = ownedNfts.map(nft => nft.nftAsset);
+      const rarities = await client.fetchNftRaritiesBatch(nftAssets);
+      const result = new Map<string, Rarity>();
+      for (const [key, nftRarity] of rarities) {
+        result.set(key, nftRarity.rarity);
+      }
+      return result;
+    },
+    enabled: !!profileAddress && !!client && ownedNfts.length > 0,
+    staleTime: 300000,
+  });
 
   // Filter to this user's content
   const userContent = useMemo(() => {
@@ -393,6 +411,7 @@ export default function ProfilePage() {
                       const previewUrl = contentData?.previewCid
                         ? getIpfsUrl(contentData.previewCid)
                         : null;
+                      const rarity = nftRarities.get(nft.nftAsset.toBase58());
 
                       return (
                         <div
@@ -400,7 +419,7 @@ export default function ProfilePage() {
                           className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden hover:border-gray-700 transition-colors"
                         >
                           {/* Image */}
-                          <div className="aspect-square bg-gray-800">
+                          <div className="aspect-square bg-gray-800 relative">
                             {previewUrl ? (
                               <img
                                 src={previewUrl}
@@ -414,6 +433,12 @@ export default function ProfilePage() {
                                 </svg>
                               </div>
                             )}
+                            {/* Rarity badge overlay */}
+                            {rarity !== undefined && (
+                              <div className="absolute top-2 left-2">
+                                <RarityBadge rarity={rarity} size="sm" showGlow />
+                              </div>
+                            )}
                           </div>
 
                           {/* Info */}
@@ -425,11 +450,11 @@ export default function ProfilePage() {
                                   {nft.nftAsset.toBase58().slice(0, 8)}...
                                 </p>
                               </div>
-                              {isOwnProfile && (
+                              {isOwnProfile && nft.contentCid && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    openBurnModal(nft.nftAsset, nft.contentCid, title, previewUrl);
+                                    openBurnModal(nft.nftAsset, nft.contentCid!, title, previewUrl);
                                   }}
                                   className="flex-shrink-0 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
                                   title="Burn NFT"

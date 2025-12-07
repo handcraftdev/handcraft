@@ -23,8 +23,15 @@ const queryClient = new QueryClient({
 });
 
 export function Providers({ children }: { children: ReactNode }) {
-  // Use devnet for development
-  const endpoint = useMemo(() => clusterApiUrl("devnet"), []);
+  // Use custom RPC URL if provided, otherwise fallback to public devnet
+  const endpoint = useMemo(() => {
+    const customRpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+    if (customRpc) {
+      return customRpc;
+    }
+    // Fallback to public devnet (rate limited)
+    return clusterApiUrl("devnet");
+  }, []);
 
   // Empty array = auto-detect all Wallet Standard wallets (Phantom, Solflare, Jupiter, Backpack, etc.)
   const wallets = useMemo(() => [], []);
