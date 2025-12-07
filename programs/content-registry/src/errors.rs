@@ -102,6 +102,20 @@ pub enum ContentRegistryError {
     BundleItemLimitReached,
     #[msg("Only the content creator can add to bundles")]
     NotContentCreator,
+
+    // Randomness/Rarity errors
+    #[msg("Randomness has already been revealed")]
+    RandomnessAlreadyRevealed,
+    #[msg("Randomness not yet resolved")]
+    RandomnessNotResolved,
+    #[msg("Invalid randomness account")]
+    InvalidRandomnessAccount,
+    #[msg("NFT rarity already revealed")]
+    RarityAlreadyRevealed,
+    #[msg("Pending mint request not found")]
+    PendingMintNotFound,
+    #[msg("Invalid NftRarity PDA")]
+    InvalidNftRarity,
 }
 
 // Alias for backward compatibility

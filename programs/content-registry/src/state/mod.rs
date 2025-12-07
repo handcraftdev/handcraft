@@ -6,6 +6,7 @@ pub mod reward_pool;
 pub mod collection;
 pub mod rent;
 pub mod bundle;
+pub mod rarity;
 
 pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
@@ -37,4 +38,8 @@ pub use rent::{
 pub use bundle::{
     Bundle, BundleItem, BundleType,
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
+};
+pub use rarity::{
+    Rarity, NftRarity, ContentWeightedPool,
+    NFT_RARITY_SEED, WEIGHT_PRECISION,
 };

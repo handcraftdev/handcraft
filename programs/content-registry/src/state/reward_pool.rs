@@ -7,19 +7,24 @@ pub const WALLET_CONTENT_STATE_SEED: &[u8] = b"wallet_content";
 /// This prevents precision loss when dividing small rewards by large holder counts
 pub const PRECISION: u128 = 1_000_000_000_000;
 
-/// Per-content reward pool
+/// Per-content reward pool with rarity-weighted distribution
 /// Each content piece has its own pool tracking holder rewards from that content's sales
+/// Rewards are distributed proportionally based on NFT weight (rarity)
 /// PDA seeds: ["content_reward_pool", content_pda]
 #[account]
 #[derive(InitSpace)]
 pub struct ContentRewardPool {
     /// The content this pool belongs to
     pub content: Pubkey,
-    /// Accumulated reward per share (scaled by PRECISION)
-    /// Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_nfts
+    /// Accumulated reward per weight unit (scaled by PRECISION)
+    /// Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_weight
+    /// Note: Named reward_per_share for backwards compatibility, but represents per-weight-unit
     pub reward_per_share: u128,
     /// Total NFTs minted for this content
     pub total_nfts: u64,
+    /// Total weight of all NFTs (sum of individual rarity weights)
+    /// Used for weighted reward distribution
+    pub total_weight: u64,
     /// Total rewards ever deposited to this pool (lamports)
     pub total_deposited: u64,
     /// Total rewards claimed from this pool (lamports)
@@ -29,19 +34,33 @@ pub struct ContentRewardPool {
 }
 
 impl ContentRewardPool {
-    /// Add rewards to the pool and update reward_per_share
-    /// Should be called BEFORE incrementing total_nfts for new mint
+    /// Add rewards to the pool and update reward_per_share (per weight unit)
+    /// Should be called BEFORE adding new NFT weight
     pub fn add_rewards(&mut self, amount: u64) {
-        if self.total_nfts == 0 || amount == 0 {
+        if self.total_weight == 0 || amount == 0 {
             return;
         }
-        self.reward_per_share += (amount as u128 * PRECISION) / self.total_nfts as u128;
+        self.reward_per_share += (amount as u128 * PRECISION) / self.total_weight as u128;
         self.total_deposited += amount;
     }
 
-    /// Increment total NFTs (call AFTER adding rewards)
-    pub fn increment_nfts(&mut self) {
+    /// Add an NFT with its weight (call AFTER adding rewards)
+    /// weight: The rarity weight of the NFT (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+    pub fn add_nft(&mut self, weight: u16) {
         self.total_nfts += 1;
+        self.total_weight += weight as u64;
+    }
+
+    /// Remove an NFT with its weight (on burn)
+    pub fn remove_nft(&mut self, weight: u16) {
+        self.total_nfts = self.total_nfts.saturating_sub(1);
+        self.total_weight = self.total_weight.saturating_sub(weight as u64);
+    }
+
+    /// Legacy: Increment total NFTs with default Common weight (100)
+    /// For backwards compatibility with existing mints before rarity system
+    pub fn increment_nfts(&mut self) {
+        self.add_nft(100); // Default Common weight
     }
 
     /// Sync secondary sale royalties that arrived from Metaplex Core Royalties plugin
@@ -63,16 +82,21 @@ impl ContentRewardPool {
         if current_lamports > expected_balance {
             let new_royalties = current_lamports - expected_balance;
 
-            // Only process if we have existing NFTs to distribute to
-            if self.total_nfts > 0 && new_royalties > 0 {
-                // Update reward_per_share with new royalties
-                self.reward_per_share += (new_royalties as u128 * PRECISION) / self.total_nfts as u128;
+            // Only process if we have existing weight to distribute to
+            if self.total_weight > 0 && new_royalties > 0 {
+                // Update reward_per_share (per weight unit) with new royalties
+                self.reward_per_share += (new_royalties as u128 * PRECISION) / self.total_weight as u128;
                 self.total_deposited += new_royalties;
                 return new_royalties;
             }
         }
 
         0
+    }
+
+    /// Check if pool has any NFTs (and thus any weight)
+    pub fn has_nfts(&self) -> bool {
+        self.total_nfts > 0
     }
 }
 
@@ -172,8 +196,27 @@ pub struct NftRewardState {
     /// The content this NFT belongs to (for verification)
     pub content: Pubkey,
     /// Reward debt for this specific NFT (scaled by PRECISION)
-    /// Represents the reward_per_share at the time of last claim or mint
+    /// Now weighted: reward_debt = weight * reward_per_share at mint/claim time
     pub reward_debt: u128,
+    /// Weight of this NFT based on rarity (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+    pub weight: u16,
     /// Timestamp when this state was created (at mint time)
     pub created_at: i64,
+}
+
+impl NftRewardState {
+    /// Calculate pending rewards for this NFT
+    /// pending = (weight * current_rps - reward_debt) / PRECISION
+    pub fn pending_reward(&self, current_reward_per_share: u128) -> u64 {
+        let entitled = self.weight as u128 * current_reward_per_share;
+        if entitled <= self.reward_debt {
+            return 0;
+        }
+        ((entitled - self.reward_debt) / PRECISION) as u64
+    }
+
+    /// Update reward debt after claiming
+    pub fn update_reward_debt(&mut self, current_reward_per_share: u128) {
+        self.reward_debt = self.weight as u128 * current_reward_per_share;
+    }
 }
