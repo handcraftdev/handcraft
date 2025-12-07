@@ -9,6 +9,8 @@ import { MintConfigModal, BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { ClaimRewardsModal } from "@/components/claim";
 import { ConfigureRentModal, RentContentModal } from "@/components/rent";
+import { RarityBadge } from "@/components/rarity";
+import { Rarity } from "@handcraft/sdk";
 import { type FeedTab, type EnrichedContent } from "./types";
 import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo } from "./helpers";
@@ -193,7 +195,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, getPendingRewardForContent, pendingRewardsQuery, walletNfts } = useContentRegistry();
+  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, getPendingRewardForContent, pendingRewardsQuery, walletNfts, nftRarities } = useContentRegistry();
 
   const { data: mintConfig, isLoading: isLoadingMintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: rentConfig, isLoading: isLoadingRentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
@@ -209,6 +211,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
 
   // User owns NFT if count > 0
   const ownsNft = ownedNftCount > 0;
+
+  // Get rarities for owned NFTs of this content
+  const ownedNftsForContent = walletNfts.filter(nft => nft.contentCid === content.contentCid);
+  const ownedRarities: Rarity[] = ownedNftsForContent
+    .map(nft => nftRarities.get(nft.nftAsset.toBase58()))
+    .filter((r): r is Rarity => r !== undefined);
 
   // Get total pending rewards for this content
   const totalPendingRewards = pendingReward?.pending || BigInt(0);
@@ -584,15 +592,40 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               </div>
             )}
 
-            {/* Owned NFT Count - show how many the user owns */}
-            {!isCreator && ownedNftCount > 0 && (
-              <div className="flex items-center gap-2 text-green-500">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm">
-                  {ownedNftCount}
-                </span>
+            {/* Owned NFTs by Rarity - show count in colored bubble */}
+            {!isCreator && ownedNftCount > 0 && ownedRarities.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {(() => {
+                  // Group rarities by count
+                  const rarityCounts = ownedRarities.reduce((acc, rarity) => {
+                    acc[rarity] = (acc[rarity] || 0) + 1;
+                    return acc;
+                  }, {} as Record<Rarity, number>);
+
+                  // Sort by rarity (highest first)
+                  const sortedRarities = Object.entries(rarityCounts)
+                    .map(([r, count]) => ({ rarity: Number(r) as Rarity, count }))
+                    .sort((a, b) => b.rarity - a.rarity);
+
+                  // Rarity colors for bubbles
+                  const rarityColors: Record<Rarity, string> = {
+                    [Rarity.Common]: "bg-gray-500/30 text-gray-300",
+                    [Rarity.Uncommon]: "bg-green-500/30 text-green-400",
+                    [Rarity.Rare]: "bg-blue-500/30 text-blue-400",
+                    [Rarity.Epic]: "bg-purple-500/30 text-purple-400",
+                    [Rarity.Legendary]: "bg-yellow-500/30 text-yellow-400",
+                  };
+
+                  return sortedRarities.map(({ rarity, count }) => (
+                    <span
+                      key={rarity}
+                      className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium ${rarityColors[rarity]}`}
+                      title={`${count} ${Rarity[rarity]}`}
+                    >
+                      {count}
+                    </span>
+                  ));
+                })()}
               </div>
             )}
 
