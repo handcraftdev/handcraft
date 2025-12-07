@@ -9,7 +9,8 @@ export interface ContentEntry {
   tipsReceived: bigint;
   createdAt: bigint;
   isLocked: boolean;
-  mintedCount: bigint;
+  mintedCount: bigint;    // Number of NFTs successfully minted (used for edition numbering)
+  pendingCount: bigint;   // Number of pending VRF mints (for max_supply checking)
   isEncrypted: boolean;
   previewCid: string;
   encryptionMetaCid: string;
@@ -263,6 +264,37 @@ export function getRarityFromWeight(weight: number): Rarity {
 }
 
 /**
+ * Parse rarity from Anchor's enum format
+ * Anchor returns enums as objects like { common: {} }, { uncommon: {} }, etc.
+ * This function converts them to the numeric Rarity enum
+ */
+export function parseAnchorRarity(anchorRarity: unknown): Rarity {
+  // If it's already a number, return it directly
+  if (typeof anchorRarity === "number") {
+    return anchorRarity as Rarity;
+  }
+
+  // Handle Anchor's object enum format
+  if (typeof anchorRarity === "object" && anchorRarity !== null) {
+    const keys = Object.keys(anchorRarity);
+    if (keys.length > 0) {
+      const key = keys[0].toLowerCase();
+      switch (key) {
+        case "common": return Rarity.Common;
+        case "uncommon": return Rarity.Uncommon;
+        case "rare": return Rarity.Rare;
+        case "epic": return Rarity.Epic;
+        case "legendary": return Rarity.Legendary;
+      }
+    }
+  }
+
+  // Default to Common if parsing fails
+  console.warn("Failed to parse rarity, defaulting to Common:", anchorRarity);
+  return Rarity.Common;
+}
+
+/**
  * On-chain NftRarity account
  * Stores the rarity information for each minted NFT
  */
@@ -278,15 +310,22 @@ export interface NftRarity {
 
 /**
  * Pending mint request - tracks state between commit and reveal
+ * Also acts as escrow vault - payment is held here until reveal
+ * NOTE: Edition number is assigned at reveal time (minted_count + 1) to avoid gaps
  */
 export interface PendingMint {
   buyer: PublicKey;
   content: PublicKey;
+  creator: PublicKey;  // Creator to receive payment on reveal
   randomnessAccount: PublicKey;
   commitSlot: bigint;
-  amountPaid: bigint;
+  amountPaid: bigint;  // Payment held in escrow
   createdAt: bigint;
+  hadExistingNfts: boolean;  // Whether there were existing NFTs at commit time
 }
+
+/** Minimum time (in seconds) before a pending mint can be cancelled */
+export const MIN_CANCEL_DELAY_SECONDS = 600;  // 10 minutes
 
 /**
  * NFT with rarity information (for UI display)

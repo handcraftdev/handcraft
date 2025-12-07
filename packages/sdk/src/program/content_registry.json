@@ -252,6 +252,78 @@
       "args": []
     },
     {
+      "name": "cancel_expired_mint",
+      "docs": [
+        "Cancel an expired pending mint and get refund",
+        "Can only be called after 10 minutes if the oracle failed to provide randomness",
+        "Refunds the escrowed payment and frees the reserved mint slot"
+      ],
+      "discriminator": [
+        19,
+        27,
+        187,
+        189,
+        50,
+        33,
+        208,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "pending_mint",
+          "docs": [
+            "Pending mint to cancel (must be expired)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "docs": [
+            "Buyer who gets the refund (anyone can call but refund goes to buyer)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "check_rent_expiry",
       "docs": [
         "Check if a rental has expired",
@@ -2510,7 +2582,17 @@
           "name": "randomness_account"
         },
         {
-          "name": "creator"
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "buyer",
@@ -3749,6 +3831,11 @@
       "code": 6049,
       "name": "InvalidNftRarity",
       "msg": "Invalid NftRarity PDA"
+    },
+    {
+      "code": 6050,
+      "name": "CancelTooEarly",
+      "msg": "Cannot cancel pending mint yet - must wait at least 10 minutes"
     }
   ],
   "types": [
@@ -4058,6 +4145,10 @@
           },
           {
             "name": "minted_count",
+            "type": "u64"
+          },
+          {
+            "name": "pending_count",
             "type": "u64"
           },
           {
@@ -4610,7 +4701,8 @@
     {
       "name": "PendingMint",
       "docs": [
-        "Pending mint request - stores state between commit and reveal"
+        "Pending mint request - stores state between commit and reveal",
+        "Also acts as escrow vault - payment is held here until reveal"
       ],
       "type": {
         "kind": "struct",
@@ -4626,6 +4718,13 @@
             "name": "content",
             "docs": [
               "Content being minted"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator to receive payment on reveal"
             ],
             "type": "pubkey"
           },
@@ -4646,7 +4745,7 @@
           {
             "name": "amount_paid",
             "docs": [
-              "Amount paid (to verify on reveal)"
+              "Amount paid (held in escrow in this account's lamports)"
             ],
             "type": "u64"
           },
@@ -4656,6 +4755,13 @@
               "Timestamp of request"
             ],
             "type": "i64"
+          },
+          {
+            "name": "had_existing_nfts",
+            "docs": [
+              "Whether there were existing NFTs at commit time (affects holder reward distribution)"
+            ],
+            "type": "bool"
           }
         ]
       }

@@ -116,6 +116,14 @@ pub enum ContentRegistryError {
     PendingMintNotFound,
     #[msg("Invalid NftRarity PDA")]
     InvalidNftRarity,
+    #[msg("Cannot cancel pending mint yet - must wait at least 10 minutes")]
+    CancelTooEarly,
+
+    // Migration errors
+    #[msg("Only the content creator can perform this action")]
+    NotCreator,
+    #[msg("Only the ecosystem admin can perform this action")]
+    NotAdmin,
 }
 
 // Alias for backward compatibility

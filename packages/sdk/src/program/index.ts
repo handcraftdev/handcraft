@@ -29,6 +29,10 @@ import {
   WalletNftMetadata,
   RentConfig,
   RentEntry,
+  PendingMint,
+  NftRarity,
+  Rarity,
+  parseAnchorRarity,
 } from "./types";
 
 import {
@@ -445,8 +449,8 @@ export async function commitMintInstruction(
   contentCid: string,
   creator: PublicKey,
   treasury: PublicKey,
-  platform: PublicKey,
-  randomnessAccount: PublicKey
+  randomnessAccount: PublicKey,
+  platform: PublicKey
 ): Promise<TransactionInstruction> {
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
@@ -483,7 +487,9 @@ export async function revealMintInstruction(
   contentCid: string,
   creator: PublicKey,
   collectionAsset: PublicKey,
-  randomnessAccount: PublicKey
+  randomnessAccount: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey
 ): Promise<MintNftResult> {
   const [contentPda] = getContentPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
@@ -512,6 +518,8 @@ export async function revealMintInstruction(
       nftRarity: nftRarityPda,
       randomnessAccount: randomnessAccount,
       creator: creator,
+      platform: platform,
+      treasury: treasury,
       buyer: buyer,
       nftAsset: nftAssetKeypair.publicKey,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -520,6 +528,30 @@ export async function revealMintInstruction(
     .instruction();
 
   return { instruction, nftAssetKeypair };
+}
+
+/**
+ * Cancel an expired pending mint and get refund
+ * Can only be called after 10 minutes if the oracle failed to provide randomness
+ * Refunds the escrowed payment and frees the reserved mint slot
+ */
+export async function cancelExpiredMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
+
+  return await program.methods
+    .cancelExpiredMint()
+    .accounts({
+      content: contentPda,
+      pendingMint: pendingMintPda,
+      buyer: buyer,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
 }
 
 export async function claimContentRewardsInstruction(
@@ -861,6 +893,7 @@ export async function fetchContent(
       createdAt: BigInt(decoded.createdAt.toString()),
       isLocked: decoded.isLocked ?? false,
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
       isEncrypted: decoded.isEncrypted ?? false,
       previewCid: decoded.previewCid ?? "",
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
@@ -891,6 +924,7 @@ export async function fetchContentByPda(
       createdAt: BigInt(decoded.createdAt.toString()),
       isLocked: decoded.isLocked ?? false,
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
       isEncrypted: decoded.isEncrypted ?? false,
       previewCid: decoded.previewCid ?? "",
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
@@ -1231,6 +1265,76 @@ export async function fetchNftRewardState(
   }
 }
 
+export async function fetchNftRarity(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<NftRarity | null> {
+  try {
+    const program = createProgram(connection);
+    const [nftRarityPda] = getNftRarityPda(nftAsset);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).nftRarity.fetch(nftRarityPda);
+
+    return {
+      nftAsset: decoded.nftAsset,
+      content: decoded.content,
+      rarity: parseAnchorRarity(decoded.rarity),
+      weight: decoded.weight,
+      randomnessAccount: decoded.randomnessAccount,
+      commitSlot: BigInt(decoded.commitSlot.toString()),
+      revealedAt: BigInt(decoded.revealedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchNftRaritiesBatch(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Map<string, NftRarity>> {
+  const results = new Map<string, NftRarity>();
+  if (nftAssets.length === 0) return results;
+
+  try {
+    const program = createProgram(connection);
+    const pdas = nftAssets.map((nft) => getNftRarityPda(nft)[0]);
+
+    // Batch fetch all NftRarity accounts
+    const accounts = await connection.getMultipleAccountsInfo(pdas);
+
+    for (let i = 0; i < nftAssets.length; i++) {
+      const accountInfo = accounts[i];
+      if (!accountInfo) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const decoded = (program.account as any).nftRarity.coder.accounts.decode(
+          "nftRarity",
+          accountInfo.data
+        );
+
+        results.set(nftAssets[i].toBase58(), {
+          nftAsset: decoded.nftAsset,
+          content: decoded.content,
+          rarity: parseAnchorRarity(decoded.rarity),
+          weight: decoded.weight,
+          randomnessAccount: decoded.randomnessAccount,
+          commitSlot: BigInt(decoded.commitSlot.toString()),
+          revealedAt: BigInt(decoded.revealedAt.toString()),
+        });
+      } catch {
+        // Skip invalid accounts
+      }
+    }
+  } catch (err) {
+    console.error("[fetchNftRaritiesBatch] Error:", err);
+  }
+
+  return results;
+}
+
 export async function fetchRentConfig(
   connection: Connection,
   contentCid: string
@@ -1287,6 +1391,93 @@ export async function fetchRentEntry(
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch a pending mint by buyer and content
+ * Returns null if no pending mint exists
+ */
+export async function fetchPendingMint(
+  connection: Connection,
+  buyer: PublicKey,
+  contentCid: string
+): Promise<PendingMint | null> {
+  try {
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).pendingMint.fetch(pendingMintPda);
+
+    return {
+      buyer: decoded.buyer,
+      content: decoded.content,
+      creator: decoded.creator,
+      randomnessAccount: decoded.randomnessAccount,
+      commitSlot: BigInt(decoded.commitSlot.toString()),
+      amountPaid: BigInt(decoded.amountPaid.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      hadExistingNfts: decoded.hadExistingNfts ?? false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch all pending mints for a wallet across all content
+ * This is useful for recovery - finding any mints that were started but not completed
+ */
+export async function fetchAllPendingMintsForWallet(
+  connection: Connection,
+  wallet: PublicKey
+): Promise<Array<{ pendingMint: PendingMint; contentCid: string }>> {
+  try {
+    const program = createProgram(connection);
+
+    // Fetch all pending mints
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allPendingMints = await (program.account as any).pendingMint.all([
+      { memcmp: { offset: 8, bytes: wallet.toBase58() } }
+    ]);
+
+    // Also fetch all content entries to map content PDA -> contentCid
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allContentEntries = await (program.account as any).contentEntry.all();
+
+    // Build content PDA -> contentCid map
+    const contentPdaToContentCid = new Map<string, string>();
+    for (const { publicKey, account } of allContentEntries) {
+      contentPdaToContentCid.set(publicKey.toBase58(), account.contentCid);
+    }
+
+    const results: Array<{ pendingMint: PendingMint; contentCid: string }> = [];
+
+    for (const { account } of allPendingMints) {
+      const contentCid = contentPdaToContentCid.get(account.content.toBase58());
+      if (contentCid) {
+        results.push({
+          pendingMint: {
+            buyer: account.buyer,
+            content: account.content,
+            creator: account.creator,
+            randomnessAccount: account.randomnessAccount,
+            commitSlot: BigInt(account.commitSlot.toString()),
+            amountPaid: BigInt(account.amountPaid.toString()),
+            createdAt: BigInt(account.createdAt.toString()),
+            hadExistingNfts: account.hadExistingNfts ?? false,
+          },
+          contentCid,
+        });
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.error("[fetchAllPendingMintsForWallet] Error:", err);
+    return [];
   }
 }
 
@@ -1476,14 +1667,38 @@ export async function fetchWalletNftMetadata(
   // Fetch collections and content entries once upfront
   const collections = await fetchAllContentCollections(connection);
   const program = createProgram(connection);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allContentEntries = await (program.account as any).contentEntry.all();
+
+  // Fetch content entries using getProgramAccounts with manual decoding
+  // This allows graceful handling of old-format accounts that fail to decode
+  const contentAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      // Filter by ContentEntry discriminator
+      { memcmp: { offset: 0, bytes: "2UDvbZBL6Si" } },
+    ],
+  });
+
+  const allContentEntries: Array<{ contentCid: string; creator: PublicKey }> = [];
+  for (const { account } of contentAccounts) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const decoded = (program.account as any).contentEntry.coder.accounts.decode(
+        "contentEntry",
+        account.data
+      );
+      allContentEntries.push({
+        contentCid: decoded.contentCid,
+        creator: decoded.creator,
+      });
+    } catch {
+      // Skip accounts that fail to decode (old format)
+    }
+  }
 
   // Build a map from collectionAsset -> contentCid for quick lookup
   const collectionToContentCid = new Map<string, string>();
   for (const collection of collections.values()) {
     // Find the content entry for this collection
-    for (const { account: entry } of allContentEntries) {
+    for (const entry of allContentEntries) {
       if (entry.creator && collection.content.equals(getContentPda(entry.contentCid)[0])) {
         collectionToContentCid.set(collection.collectionAsset.toBase58(), entry.contentCid);
         break;
@@ -1812,11 +2027,15 @@ export function createContentRegistryClient(connection: Connection) {
       mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
 
     // VRF-based minting with rarity (two-step flow)
-    commitMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, randomnessAccount: PublicKey): Promise<TransactionInstruction> =>
-      commitMintInstruction(program, buyer, contentCid, creator, treasury, platform, randomnessAccount),
+    commitMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, randomnessAccount: PublicKey, platform: PublicKey): Promise<TransactionInstruction> =>
+      commitMintInstruction(program, buyer, contentCid, creator, treasury, randomnessAccount, platform),
 
-    revealMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, collectionAsset: PublicKey, randomnessAccount: PublicKey): Promise<MintNftResult> =>
-      revealMintInstruction(program, buyer, contentCid, creator, collectionAsset, randomnessAccount),
+    revealMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, collectionAsset: PublicKey, randomnessAccount: PublicKey, treasury: PublicKey, platform: PublicKey): Promise<MintNftResult> =>
+      revealMintInstruction(program, buyer, contentCid, creator, collectionAsset, randomnessAccount, treasury, platform),
+
+    // Cancel expired pending mint (refund if oracle failed)
+    cancelExpiredMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
+      cancelExpiredMintInstruction(program, buyer, contentCid),
 
     // Claim rewards
     claimContentRewardsInstruction: (holder: PublicKey, contentCid: string) =>
@@ -1874,6 +2093,10 @@ export function createContentRegistryClient(connection: Connection) {
     fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),
     fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
+    // NFT Rarity fetching
+    fetchNftRarity: (nftAsset: PublicKey) => fetchNftRarity(connection, nftAsset),
+    fetchNftRaritiesBatch: (nftAssets: PublicKey[]) => fetchNftRaritiesBatch(connection, nftAssets),
+
     // Rent fetching
     fetchRentConfig: (contentCid: string) => fetchRentConfig(connection, contentCid),
     fetchRentEntry: (nftAsset: PublicKey) => fetchRentEntry(connection, nftAsset),
@@ -1881,6 +2104,10 @@ export function createContentRegistryClient(connection: Connection) {
     fetchActiveRentalForContent: (wallet: PublicKey, contentCid: string) => fetchActiveRentalForContent(connection, wallet, contentCid),
     fetchWalletRentalNfts: (wallet: PublicKey) => fetchWalletRentalNfts(connection, wallet),
     fetchRentalNftsFromMetadata: (nftMetadata: WalletNftMetadata[]) => fetchRentalNftsFromMetadata(connection, nftMetadata),
+
+    // Pending mint recovery (VRF mints)
+    fetchPendingMint: (buyer: PublicKey, contentCid: string) => fetchPendingMint(connection, buyer, contentCid),
+    fetchAllPendingMintsForWallet: (wallet: PublicKey) => fetchAllPendingMintsForWallet(connection, wallet),
 
     // Reward calculations
     getPendingRewardForContent: (wallet: PublicKey, contentCid: string) => getPendingRewardForContent(connection, wallet, contentCid),
@@ -1906,93 +2133,145 @@ export function createContentRegistryClient(connection: Connection) {
     // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {
       try {
-        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const allContentEntries = await (program.account as any).contentEntry.all();
+        // Use getProgramAccounts to get raw account data, then decode individually
+        // This allows graceful handling of old-format accounts that may be missing new fields
+        const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            // Filter by ContentEntry discriminator (first 8 bytes)
+            // Discriminator for "ContentEntry" account is sha256("account:ContentEntry")[0..8] = 08c8e3af03bebe1f
+            { memcmp: { offset: 0, bytes: "2UDvbZBL6Si" } }, // base58 of discriminator
+          ],
+        });
+
         const entries: ContentEntry[] = [];
 
-        for (const { account } of allContentEntries) {
-          // Anchor auto-converts to camelCase
-          entries.push({
-            creator: account.creator,
-            contentCid: account.contentCid,
-            metadataCid: account.metadataCid,
-            contentType: anchorToContentType(account.contentType),
-            tipsReceived: BigInt(account.tipsReceived.toString()),
-            createdAt: BigInt(account.createdAt.toString()),
-            isLocked: account.isLocked ?? false,
-            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
-            isEncrypted: account.isEncrypted ?? false,
-            previewCid: account.previewCid ?? "",
-            encryptionMetaCid: account.encryptionMetaCid ?? "",
-          });
+        for (const { account } of accounts) {
+          try {
+            // Decode using Anchor's coder with error handling per account
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const decoded = (program.account as any).contentEntry.coder.accounts.decode(
+              "contentEntry",
+              account.data
+            );
+
+            entries.push({
+              creator: decoded.creator,
+              contentCid: decoded.contentCid,
+              metadataCid: decoded.metadataCid,
+              contentType: anchorToContentType(decoded.contentType),
+              tipsReceived: BigInt(decoded.tipsReceived.toString()),
+              createdAt: BigInt(decoded.createdAt.toString()),
+              isLocked: decoded.isLocked ?? false,
+              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+              pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+              isEncrypted: decoded.isEncrypted ?? false,
+              previewCid: decoded.previewCid ?? "",
+              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+            });
+          } catch {
+            // Skip accounts that fail to decode (old format without pendingCount)
+            // This allows the feed to show new content while ignoring incompatible old accounts
+            console.warn("[fetchGlobalContent] Skipping account with incompatible format");
+          }
         }
 
         return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-      } catch {
+      } catch (err) {
+        console.error("[fetchGlobalContent] Error fetching content:", err);
         return [];
       }
     },
 
     async fetchContentByCreator(creator: PublicKey): Promise<ContentEntry[]> {
       try {
-        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const allContentEntries = await (program.account as any).contentEntry.all();
+        // Use getProgramAccounts with creator filter for efficiency
+        const accounts = await connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            // Filter by ContentEntry discriminator
+            { memcmp: { offset: 0, bytes: "2UDvbZBL6Si" } },
+            // Filter by creator pubkey (after 8-byte discriminator)
+            { memcmp: { offset: 8, bytes: creator.toBase58() } },
+          ],
+        });
+
         const entries: ContentEntry[] = [];
 
-        for (const { account } of allContentEntries) {
-          // Anchor auto-converts to camelCase
-          if (!account.creator.equals(creator)) continue;
+        for (const { account } of accounts) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const decoded = (program.account as any).contentEntry.coder.accounts.decode(
+              "contentEntry",
+              account.data
+            );
 
-          entries.push({
-            creator: account.creator,
-            contentCid: account.contentCid,
-            metadataCid: account.metadataCid,
-            contentType: anchorToContentType(account.contentType),
-            tipsReceived: BigInt(account.tipsReceived.toString()),
-            createdAt: BigInt(account.createdAt.toString()),
-            isLocked: account.isLocked ?? false,
-            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
-            isEncrypted: account.isEncrypted ?? false,
-            previewCid: account.previewCid ?? "",
-            encryptionMetaCid: account.encryptionMetaCid ?? "",
-          });
+            entries.push({
+              creator: decoded.creator,
+              contentCid: decoded.contentCid,
+              metadataCid: decoded.metadataCid,
+              contentType: anchorToContentType(decoded.contentType),
+              tipsReceived: BigInt(decoded.tipsReceived.toString()),
+              createdAt: BigInt(decoded.createdAt.toString()),
+              isLocked: decoded.isLocked ?? false,
+              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+              pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+              isEncrypted: decoded.isEncrypted ?? false,
+              previewCid: decoded.previewCid ?? "",
+              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+            });
+          } catch {
+            // Skip accounts that fail to decode
+            console.warn("[fetchContentByCreator] Skipping account with incompatible format");
+          }
         }
 
         return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
-      } catch {
+      } catch (err) {
+        console.error("[fetchContentByCreator] Error:", err);
         return [];
       }
     },
 
     async fetchMintableContent(): Promise<Array<{ content: ContentEntry; mintConfig: MintConfig }>> {
       try {
-        // Use program.account.<name>.all() - the proper Anchor 0.30+ approach
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const allContentEntries = await (program.account as any).contentEntry.all();
+        // Fetch content entries with per-account error handling
+        const contentAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [
+            { memcmp: { offset: 0, bytes: "2UDvbZBL6Si" } },
+          ],
+        });
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const allMintConfigs = await (program.account as any).mintConfig.all();
 
         const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
 
-        // Build content entries map
+        // Build content entries map with error handling per account
         const contentEntries: Map<string, ContentEntry> = new Map();
-        for (const { account } of allContentEntries) {
-          // Anchor auto-converts to camelCase
-          contentEntries.set(account.contentCid, {
-            creator: account.creator,
-            contentCid: account.contentCid,
-            metadataCid: account.metadataCid,
-            contentType: anchorToContentType(account.contentType),
-            tipsReceived: BigInt(account.tipsReceived.toString()),
-            createdAt: BigInt(account.createdAt.toString()),
-            isLocked: account.isLocked ?? false,
-            mintedCount: BigInt(account.mintedCount?.toString() || "0"),
-            isEncrypted: account.isEncrypted ?? false,
-            previewCid: account.previewCid ?? "",
-            encryptionMetaCid: account.encryptionMetaCid ?? "",
-          });
+        for (const { account } of contentAccounts) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const decoded = (program.account as any).contentEntry.coder.accounts.decode(
+              "contentEntry",
+              account.data
+            );
+
+            contentEntries.set(decoded.contentCid, {
+              creator: decoded.creator,
+              contentCid: decoded.contentCid,
+              metadataCid: decoded.metadataCid,
+              contentType: anchorToContentType(decoded.contentType),
+              tipsReceived: BigInt(decoded.tipsReceived.toString()),
+              createdAt: BigInt(decoded.createdAt.toString()),
+              isLocked: decoded.isLocked ?? false,
+              mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+              pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+              isEncrypted: decoded.isEncrypted ?? false,
+              previewCid: decoded.previewCid ?? "",
+              encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+            });
+          } catch {
+            // Skip accounts that fail to decode
+          }
         }
 
         // Match mint configs with content entries

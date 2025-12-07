@@ -1757,6 +1757,13 @@ pub mod content_registry {
         handle_reveal_mint(ctx)
     }
 
+    /// Cancel an expired pending mint and get refund
+    /// Can only be called after 10 minutes if the oracle failed to provide randomness
+    /// Refunds the escrowed payment and frees the reserved mint slot
+    pub fn cancel_expired_mint(ctx: Context<CancelExpiredMint>) -> Result<()> {
+        handle_cancel_expired_mint(ctx)
+    }
+
     // ============================================
     // NFT BURN (Testing lifecycle hooks)
     // ============================================

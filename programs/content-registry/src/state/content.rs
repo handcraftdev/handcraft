@@ -13,7 +13,8 @@ pub struct ContentEntry {
     pub created_at: i64,
     // NFT mint tracking
     pub is_locked: bool,       // Locked after first mint (no delete/edit metadata)
-    pub minted_count: u64,     // Number of NFTs minted for this content
+    pub minted_count: u64,     // Number of NFTs successfully minted (used for edition numbering)
+    pub pending_count: u64,    // Number of pending VRF mints (for max_supply checking)
     // Access control
     pub is_encrypted: bool,    // Whether content is encrypted (requires NFT to access)
     #[max_len(64)]
