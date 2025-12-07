@@ -175,6 +175,29 @@ export enum PaymentCurrency {
   Sol = 0,
 }
 
+// ========== RARITY CONSTANTS ==========
+
+// Rarity PDA seeds
+export const NFT_RARITY_SEED = "nft_rarity";
+export const PENDING_MINT_SEED = "pending_mint";
+
+// Rarity weights (matches program)
+export const RARITY_WEIGHT_COMMON = 100;
+export const RARITY_WEIGHT_UNCOMMON = 150;
+export const RARITY_WEIGHT_RARE = 200;
+export const RARITY_WEIGHT_EPIC = 300;
+export const RARITY_WEIGHT_LEGENDARY = 500;
+
+// Rarity probabilities (in basis points, out of 10000)
+export const RARITY_PROB_COMMON = 5500;      // 55%
+export const RARITY_PROB_UNCOMMON = 2700;    // 27%
+export const RARITY_PROB_RARE = 1300;        // 13%
+export const RARITY_PROB_EPIC = 400;         //  4%
+export const RARITY_PROB_LEGENDARY = 100;    //  1%
+
+// Re-export Rarity from types for convenience
+export { Rarity, getRarityWeight, getRarityName, getRarityFromWeight } from "./types";
+
 // ========== BUNDLE CONSTANTS ==========
 
 // Bundle seeds for PDA derivation

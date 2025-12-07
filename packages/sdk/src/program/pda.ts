@@ -10,6 +10,8 @@ import {
   NFT_REWARD_STATE_SEED,
   RENT_CONFIG_SEED,
   RENT_ENTRY_SEED,
+  NFT_RARITY_SEED,
+  PENDING_MINT_SEED,
   PRECISION,
   CREATOR_FEE_PRIMARY_BPS,
   PLATFORM_FEE_PRIMARY_BPS,
@@ -112,4 +114,30 @@ export function getRentEntryPda(nftAsset: PublicKey): [PublicKey, number] {
     [Buffer.from(RENT_ENTRY_SEED), nftAsset.toBuffer()],
     PROGRAM_ID
   );
+}
+
+export function getPendingMintPda(buyer: PublicKey, contentPda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(PENDING_MINT_SEED), buyer.toBuffer(), contentPda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+export function getNftRarityPda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(NFT_RARITY_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Calculate pending reward for an NFT using weighted formula
+ * @param weight NFT's rarity weight (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+ * @param rewardPerShare Current reward_per_share from pool
+ * @param nftRewardDebt The NFT's reward_debt
+ */
+export function calculateWeightedPendingReward(weight: number, rewardPerShare: bigint, nftRewardDebt: bigint): bigint {
+  const entitled = BigInt(weight) * rewardPerShare;
+  if (entitled <= nftRewardDebt) return BigInt(0);
+  return (entitled - nftRewardDebt) / PRECISION;
 }

@@ -46,6 +46,7 @@ export interface ContentRewardPool {
   content: PublicKey;
   rewardPerShare: bigint;
   totalNfts: bigint;
+  totalWeight: bigint;  // Sum of all NFT rarity weights
   totalDeposited: bigint;
   totalClaimed: bigint;
   createdAt: bigint;
@@ -70,6 +71,7 @@ export interface NftRewardState {
   nftAsset: PublicKey;
   content: PublicKey;
   rewardDebt: bigint;
+  weight: number;  // Rarity weight (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
   createdAt: bigint;
 }
 
@@ -206,4 +208,107 @@ export interface BundleWithItems {
     content: ContentEntry | null;
     contentMetadata: Record<string, unknown> | null;
   }>;
+}
+
+// ========== RARITY TYPES (NFT Rarity System) ==========
+
+/**
+ * NFT Rarity tiers with associated weights for reward distribution
+ */
+export enum Rarity {
+  Common = 0,      // 55% probability, weight 100
+  Uncommon = 1,    // 27% probability, weight 150
+  Rare = 2,        // 13% probability, weight 200
+  Epic = 3,        //  4% probability, weight 300
+  Legendary = 4,   //  1% probability, weight 500
+}
+
+/**
+ * Get the weight for a rarity tier
+ */
+export function getRarityWeight(rarity: Rarity): number {
+  switch (rarity) {
+    case Rarity.Common: return 100;
+    case Rarity.Uncommon: return 150;
+    case Rarity.Rare: return 200;
+    case Rarity.Epic: return 300;
+    case Rarity.Legendary: return 500;
+    default: return 100;
+  }
+}
+
+/**
+ * Get the display name for a rarity tier
+ */
+export function getRarityName(rarity: Rarity): string {
+  switch (rarity) {
+    case Rarity.Common: return "Common";
+    case Rarity.Uncommon: return "Uncommon";
+    case Rarity.Rare: return "Rare";
+    case Rarity.Epic: return "Epic";
+    case Rarity.Legendary: return "Legendary";
+    default: return "Unknown";
+  }
+}
+
+/**
+ * Get rarity from weight value
+ */
+export function getRarityFromWeight(weight: number): Rarity {
+  if (weight >= 500) return Rarity.Legendary;
+  if (weight >= 300) return Rarity.Epic;
+  if (weight >= 200) return Rarity.Rare;
+  if (weight >= 150) return Rarity.Uncommon;
+  return Rarity.Common;
+}
+
+/**
+ * On-chain NftRarity account
+ * Stores the rarity information for each minted NFT
+ */
+export interface NftRarity {
+  nftAsset: PublicKey;
+  content: PublicKey;
+  rarity: Rarity;
+  weight: number;
+  randomnessAccount: PublicKey;
+  commitSlot: bigint;
+  revealedAt: bigint;
+}
+
+/**
+ * Pending mint request - tracks state between commit and reveal
+ */
+export interface PendingMint {
+  buyer: PublicKey;
+  content: PublicKey;
+  randomnessAccount: PublicKey;
+  commitSlot: bigint;
+  amountPaid: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * NFT with rarity information (for UI display)
+ */
+export interface NftWithRarity {
+  nftAsset: PublicKey;
+  content: PublicKey;
+  rarity: Rarity;
+  rarityName: string;
+  weight: number;
+  rewardDebt: bigint;
+  pendingReward: bigint;
+}
+
+/**
+ * Rarity distribution statistics
+ */
+export interface RarityStats {
+  common: number;
+  uncommon: number;
+  rare: number;
+  epic: number;
+  legendary: number;
+  totalWeight: bigint;
 }
