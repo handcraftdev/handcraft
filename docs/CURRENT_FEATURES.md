@@ -37,14 +37,15 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 |---------|--------|-------------|
 | Mint Configuration | ✅ Done | Set price, supply (limited/unlimited), royalty |
 | SOL Payments | ✅ Done | Pay with SOL for minting |
-| VRF Rarity | ✅ Done | Switchboard VRF for fair rarity (Common→Legendary) |
-| Commit-Reveal Flow | ✅ Done | Two-step minting with randomness |
+| MagicBlock VRF | ✅ Done | Fast 2-transaction VRF minting with fallback |
+| VRF Rarity | ✅ Done | Fair rarity distribution (Common 55%, Uncommon 27%, Rare 13%, Epic 4%, Legendary 1%) |
+| Fallback Claim | ✅ Done | Slot-hash based randomness if VRF times out |
 | Pending Mint Recovery | ✅ Done | Cross-device recovery of interrupted mints |
-| Cancel Expired Mint | ✅ Done | Refund after 10min oracle timeout |
-| Escrow Pattern | ✅ Done | Payment held until reveal completes |
+| Cancel Expired Mint | ✅ Done | Refund after timeout if oracle fails |
+| Escrow Pattern | ✅ Done | Payment held until VRF callback completes |
 | Metaplex Core NFTs | ✅ Done | Modern NFT standard with plugins |
-| Edition Numbering | ✅ Done | Sequential edition numbers |
-| Rarity Weights | ✅ Done | 100/150/200/300/500 for C/U/R/E/L |
+| Edition Numbering | ✅ Done | Sequential edition numbers per content |
+| Rarity Weights | ✅ Done | 1/5/20/60/120 for Common/Uncommon/Rare/Epic/Legendary |
 
 ### 4. Fee Structure & Revenue Splits
 
@@ -60,13 +61,16 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Content Reward Pools | ✅ Done | Per-content accumulated rewards |
-| Per-NFT Tracking | ✅ Done | Individual reward debt per NFT |
+| Content Reward Pools | ✅ Done | Per-content accumulated rewards with reward_per_share |
+| Per-NFT Tracking | ✅ Done | Individual reward debt per NFT with weight |
+| Weighted Rewards | ✅ Done | Formula: `(weight * reward_per_share - debt) / PRECISION` |
 | Claim Rewards | ✅ Done | Claim pending rewards from content |
-| Batch Claims | ✅ Done | Claim from multiple contents at once |
-| Verified Claims | ✅ Done | On-chain NFT verification for claims |
+| Transaction Batching | ✅ Done | Up to 25 NFTs per claim transaction (64 account limit) |
+| Multi-Content Claims | ✅ Done | Claim from multiple contents across transactions |
+| Verified Claims | ✅ Done | On-chain NFT ownership verification for claims |
 | Transfer Sync | ✅ Done | Update reward positions on NFT transfer |
-| Rarity Multipliers | ✅ Done | Weighted reward distribution |
+| Rarity Multipliers | ✅ Done | Weighted reward distribution by rarity |
+| Mint Sequence Display | ✅ Done | NFTs sorted by createdAt in claim modal |
 
 ### 6. Rental System
 
@@ -221,12 +225,12 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 │   Content    │   Minting    │   Rewards    │   Rentals      │
 │  - Register  │  - VRF       │  - Pools     │  - Configure   │
 │  - Update    │  - Escrow    │  - Claims    │  - Execute     │
-│  - Delete    │  - Reveal    │  - Sync      │  - Extend      │
+│  - Delete    │  - Fallback  │  - Sync      │  - Extend      │
 └──────────────┴──────────────┴──────────────┴────────────────┘
         │              │              │
         ▼              ▼              ▼
 ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│ Metaplex Core │ │ Switchboard   │ │    IPFS       │
+│ Metaplex Core │ │ MagicBlock    │ │    IPFS       │
 │  - NFTs       │ │  - VRF        │ │  - Content    │
 │  - Royalties  │ │  - Randomness │ │  - Metadata   │
 └───────────────┘ └───────────────┘ └───────────────┘
@@ -242,7 +246,7 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | State | React Query (TanStack) |
 | Blockchain | Solana, Anchor 0.32.1 |
 | NFTs | Metaplex Core |
-| Randomness | Switchboard VRF |
+| Randomness | MagicBlock VRF (ephemeral-vrf-sdk) |
 | Storage | IPFS (Filebase S3) |
 | Encryption | TweetNaCl |
 | Wallet | Solana Wallet Adapter |
@@ -250,4 +254,4 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 11, 2025*

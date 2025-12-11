@@ -20,6 +20,8 @@ anchor-spl = { version = "0.32.1", features = ["token", "associated_token"] }
 spl-token = { version = "4.0", default-features = false, features = ["no-entrypoint"] }
 mpl-core = "0.11.1"
 solana-sha256-hasher = "2.1"
+switchboard-on-demand = "0.11.3"
+ephemeral-vrf-sdk = { version = "0.2", features = ["anchor"] }
 ```
 
 ## TypeScript Dependencies (packages/sdk/package.json)
@@ -63,4 +65,4 @@ channel = "stable"
 |--------|------------|----------------|------------|
 | 0.32.1 | 3.0.x | v1.51 | 1.84.1 |
 
-Last updated: 2025-12-06
+Last updated: 2025-12-11
