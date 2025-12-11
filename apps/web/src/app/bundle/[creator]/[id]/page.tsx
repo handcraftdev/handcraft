@@ -6,8 +6,8 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
-import { useContentRegistry, getBundleTypeLabel, Bundle, BundleWithItems } from "@/hooks/useContentRegistry";
-import { getIpfsUrl } from "@handcraft/sdk";
+import { useContentRegistry, getBundleTypeLabel, Bundle, BundleWithItems, ContentEntry } from "@/hooks/useContentRegistry";
+import { getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
 
 export default function BundlePage() {
   const params = useParams();
@@ -18,7 +18,7 @@ export default function BundlePage() {
   const { client } = useContentRegistry();
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [bundleWithItems, setBundleWithItems] = useState<BundleWithItems | null>(null);
-  const [metadata, setMetadata] = useState<Record<string, unknown> | null>(null);
+  const [metadata, setMetadata] = useState<BundleMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,11 +75,35 @@ export default function BundlePage() {
     fetchBundle();
   }, [client, creatorAddress, bundleId]);
 
-  // Sort items by position
-  const sortedItems = useMemo(() => {
+  // Get ordered items - use metadata order if available, otherwise fall back to on-chain position
+  const orderedItems = useMemo(() => {
     if (!bundleWithItems?.items) return [];
-    return [...bundleWithItems.items].sort((a, b) => a.item.position - b.item.position);
-  }, [bundleWithItems]);
+
+    const onChainItems = bundleWithItems.items;
+
+    // If metadata has items array, use that order
+    if (metadata?.items && metadata.items.length > 0) {
+      return metadata.items.map(metaItem => {
+        const onChainItem = onChainItems.find(
+          i => i.content?.contentCid === metaItem.contentCid
+        );
+        return {
+          metaItem,
+          content: onChainItem?.content || null,
+          onChainItem: onChainItem?.item || null,
+        };
+      }).filter(item => item.content !== null);
+    }
+
+    // Fall back to on-chain position order
+    return [...onChainItems]
+      .sort((a, b) => a.item.position - b.item.position)
+      .map(item => ({
+        metaItem: { contentCid: item.content?.contentCid || "" } as BundleMetadataItem,
+        content: item.content,
+        onChainItem: item.item,
+      }));
+  }, [bundleWithItems, metadata]);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -163,19 +187,19 @@ export default function BundlePage() {
                     <h2 className="text-xl font-semibold">Contents</h2>
                   </div>
 
-                  {sortedItems.length === 0 ? (
+                  {orderedItems.length === 0 ? (
                     <div className="p-8 text-center">
                       <p className="text-gray-400">This bundle is empty.</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-800">
-                      {sortedItems.map((itemData, index) => {
+                      {orderedItems.map((itemData, index) => {
                         const content = itemData.content;
                         if (!content) return null;
 
                         return (
                           <div
-                            key={itemData.item.content.toBase58()}
+                            key={itemData.metaItem.contentCid}
                             className="flex items-center gap-4 p-4 hover:bg-gray-800/50 transition-colors"
                           >
                             {/* Position Number */}
@@ -203,7 +227,7 @@ export default function BundlePage() {
                             {/* Content Info */}
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">
-                                {content.contentCid.slice(0, 16)}...
+                                {itemData.metaItem.title || `${content.contentCid.slice(0, 16)}...`}
                               </p>
                               <p className="text-sm text-gray-500">
                                 {content.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Content"}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { getBundleTypeLabel } from "@handcraft/sdk";
-import { useContentRegistry, BundleType, Bundle, ContentEntry } from "@/hooks/useContentRegistry";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { getBundleTypeLabel, getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
+import { useContentRegistry, Bundle, ContentEntry } from "@/hooks/useContentRegistry";
 
 interface ManageBundleModalProps {
   isOpen: boolean;
@@ -20,6 +20,11 @@ export function ManageBundleModal({
   const [activeTab, setActiveTab] = useState<"items" | "add" | "settings">("items");
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [metadata, setMetadata] = useState<BundleMetadata | null>(null);
+  const [orderedItems, setOrderedItems] = useState<BundleMetadataItem[]>([]);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [hasOrderChanges, setHasOrderChanges] = useState(false);
 
   const {
     useBundleWithItems,
@@ -34,35 +39,76 @@ export function ManageBundleModal({
 
   // Fetch bundle with items
   const bundleWithItemsQuery = useBundleWithItems(bundle.bundleId);
-  const items = bundleWithItemsQuery.data?.items ?? [];
+  const onChainItems = bundleWithItemsQuery.data?.items ?? [];
+
+  // Fetch metadata from IPFS
+  useEffect(() => {
+    async function fetchMetadata() {
+      if (!bundle.metadataCid) return;
+      try {
+        const url = getIpfsUrl(bundle.metadataCid);
+        const res = await fetch(url);
+        if (res.ok) {
+          const meta = await res.json() as BundleMetadata;
+          setMetadata(meta);
+
+          // Initialize ordered items from metadata or fall back to on-chain order
+          if (meta.items && meta.items.length > 0) {
+            setOrderedItems(meta.items);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch bundle metadata:", e);
+      }
+    }
+    fetchMetadata();
+  }, [bundle.metadataCid]);
+
+  // Sync ordered items when on-chain items change (but metadata doesn't have items yet)
+  useEffect(() => {
+    if (onChainItems.length > 0 && orderedItems.length === 0) {
+      // Initialize from on-chain if no metadata order exists
+      const items: BundleMetadataItem[] = onChainItems
+        .sort((a, b) => a.item.position - b.item.position)
+        .map(item => ({
+          contentCid: item.content?.contentCid || "",
+        }))
+        .filter(item => item.contentCid);
+      setOrderedItems(items);
+    }
+  }, [onChainItems, orderedItems.length]);
+
+  // Get content details for an item
+  const getContentForCid = useCallback((contentCid: string): ContentEntry | null => {
+    const item = onChainItems.find(i => i.content?.contentCid === contentCid);
+    return item?.content || null;
+  }, [onChainItems]);
 
   // Filter available content that's not already in the bundle
   const addableContent = useMemo(() => {
-    const bundleContentPdas = new Set(items.map(i => i.item.content.toBase58()));
-    return availableContent.filter(c => {
-      const [contentPda] = getContentPda(c.contentCid);
-      return !bundleContentPdas.has(contentPda.toBase58());
-    });
-  }, [items, availableContent, getContentPda]);
+    const bundleCids = new Set(orderedItems.map(i => i.contentCid));
+    return availableContent.filter(c => !bundleCids.has(c.contentCid));
+  }, [orderedItems, availableContent]);
 
-  // Sort items by position
-  const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => a.item.position - b.item.position);
-  }, [items]);
-
+  // Handle adding item - add to on-chain AND update local order
   const handleAddItem = async (contentCid: string) => {
     setError(null);
     try {
       await addBundleItem.mutateAsync({
         bundleId: bundle.bundleId,
         contentCid,
-        position: items.length,
+        position: orderedItems.length,
       });
+
+      // Add to local ordered items
+      setOrderedItems(prev => [...prev, { contentCid }]);
+      setHasOrderChanges(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add item");
     }
   };
 
+  // Handle removing item - remove from on-chain AND update local order
   const handleRemoveItem = async (contentCid: string) => {
     setError(null);
     try {
@@ -70,11 +116,109 @@ export function ManageBundleModal({
         bundleId: bundle.bundleId,
         contentCid,
       });
+
+      // Remove from local ordered items
+      setOrderedItems(prev => prev.filter(i => i.contentCid !== contentCid));
+      setHasOrderChanges(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove item");
     }
   };
 
+  // Handle drag start
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  // Handle drag over
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  // Handle drag leave
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  // Handle drop - reorder local items
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Reorder items
+    const newItems = [...orderedItems];
+    const [draggedItem] = newItems.splice(draggedIndex, 1);
+    newItems.splice(dropIndex, 0, draggedItem);
+
+    setOrderedItems(newItems);
+    setHasOrderChanges(true);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Handle drag end (cleanup)
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Save order to metadata (upload new metadata, update on-chain)
+  const handleSaveOrder = async () => {
+    if (!hasOrderChanges) return;
+
+    setIsSavingOrder(true);
+    setError(null);
+
+    try {
+      // Create updated metadata
+      const updatedMetadata: BundleMetadata = {
+        ...metadata,
+        name: metadata?.name || bundle.bundleId,
+        description: metadata?.description || "",
+        bundleType: metadata?.bundleType || getBundleTypeLabel(bundle.bundleType),
+        items: orderedItems,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Upload new metadata to IPFS
+      const metadataRes = await fetch("/api/upload/metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          metadata: updatedMetadata,
+          name: `bundle-${bundle.bundleId}-metadata`,
+        }),
+      });
+
+      if (!metadataRes.ok) {
+        throw new Error("Failed to upload metadata");
+      }
+
+      const { cid: newMetadataCid } = await metadataRes.json();
+
+      // Update on-chain metadata CID
+      await updateBundle.mutateAsync({
+        bundleId: bundle.bundleId,
+        metadataCid: newMetadataCid,
+      });
+
+      setMetadata(updatedMetadata);
+      setHasOrderChanges(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save order");
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
+
+  // Handle deactivate
   const handleDeactivate = async () => {
     setError(null);
     try {
@@ -88,22 +232,7 @@ export function ManageBundleModal({
     }
   };
 
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    // Note: Reordering would require batch updates or a reorder instruction
-    // For now, we just reset the drag state
-    setDraggedIndex(null);
-  };
-
-  const isLoading = isAddingBundleItem || isRemovingBundleItem || isUpdatingBundle;
+  const isLoading = isAddingBundleItem || isRemovingBundleItem || isUpdatingBundle || isSavingOrder;
 
   if (!isOpen) return null;
 
@@ -115,8 +244,8 @@ export function ManageBundleModal({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold">{bundle.bundleId}</h2>
-            <p className="text-sm text-gray-400">{getBundleTypeLabel(bundle.bundleType)} - {bundle.itemCount} items</p>
+            <h2 className="text-xl font-bold">{metadata?.name || bundle.bundleId}</h2>
+            <p className="text-sm text-gray-400">{getBundleTypeLabel(bundle.bundleType)} - {orderedItems.length} items</p>
           </div>
           <button
             onClick={onClose}
@@ -138,7 +267,7 @@ export function ManageBundleModal({
                 : "text-gray-400 hover:text-white"
             }`}
           >
-            Items ({items.length})
+            Items ({orderedItems.length})
           </button>
           <button
             onClick={() => setActiveTab("add")}
@@ -175,57 +304,78 @@ export function ManageBundleModal({
             <div className="space-y-2">
               {bundleWithItemsQuery.isLoading ? (
                 <div className="text-center py-8 text-gray-500">Loading items...</div>
-              ) : sortedItems.length === 0 ? (
+              ) : orderedItems.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>No items in this bundle yet.</p>
                   <p className="text-sm mt-1">Click "Add Content" to get started.</p>
                 </div>
               ) : (
-                sortedItems.map((itemData, index) => (
-                  <div
-                    key={itemData.item.content.toBase58()}
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, index)}
-                    className={`flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-move ${
-                      draggedIndex === index ? "opacity-50" : ""
-                    }`}
-                  >
-                    {/* Drag Handle */}
-                    <div className="text-gray-500">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                      </svg>
-                    </div>
+                <>
+                  {orderedItems.map((item, index) => {
+                    const content = getContentForCid(item.contentCid);
 
-                    {/* Position */}
-                    <div className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded text-sm font-medium">
-                      {index + 1}
-                    </div>
+                    return (
+                      <div
+                        key={item.contentCid}
+                        draggable
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, index)}
+                        onDragEnd={handleDragEnd}
+                        className={`flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-move transition-all ${
+                          draggedIndex === index ? "opacity-50 scale-95" : ""
+                        } ${dragOverIndex === index ? "ring-2 ring-primary-500" : ""}`}
+                      >
+                        {/* Drag Handle */}
+                        <div className="text-gray-500">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                          </svg>
+                        </div>
 
-                    {/* Content Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">
-                        {itemData.content?.contentCid.slice(0, 12)}...
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Added {new Date(Number(itemData.item.addedAt) * 1000).toLocaleDateString()}
-                      </p>
-                    </div>
+                        {/* Position */}
+                        <div className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded text-sm font-medium">
+                          {index + 1}
+                        </div>
 
-                    {/* Remove Button */}
-                    <button
-                      onClick={() => itemData.content && handleRemoveItem(itemData.content.contentCid)}
-                      disabled={isLoading}
-                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                ))
+                        {/* Content Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">
+                            {item.title || (content?.contentCid ? `${content.contentCid.slice(0, 12)}...` : "Unknown")}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {content?.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Content"}
+                          </p>
+                        </div>
+
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => handleRemoveItem(item.contentCid)}
+                          disabled={isLoading}
+                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* Save Order Button */}
+                  {hasOrderChanges && (
+                    <div className="pt-4 border-t border-gray-700 mt-4">
+                      <button
+                        onClick={handleSaveOrder}
+                        disabled={isSavingOrder}
+                        className="w-full py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
+                      >
+                        {isSavingOrder ? "Saving Order..." : "Save Order"}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -248,7 +398,7 @@ export function ManageBundleModal({
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{content.contentCid.slice(0, 12)}...</p>
                       <p className="text-xs text-gray-500">
-                        Created {new Date(Number(content.createdAt) * 1000).toLocaleDateString()}
+                        {content.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Content"}
                       </p>
                     </div>
 

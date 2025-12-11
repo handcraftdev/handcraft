@@ -171,6 +171,16 @@ export interface BundleItem {
 }
 
 /**
+ * Item in bundle metadata with optional per-item details
+ */
+export interface BundleMetadataItem {
+  contentCid: string;        // Reference to content
+  title?: string;            // Custom title override (e.g., track name)
+  description?: string;      // Per-item description
+  duration?: number;         // Duration in seconds (for audio/video)
+}
+
+/**
  * Off-chain Bundle metadata (stored on IPFS)
  */
 export interface BundleMetadata {
@@ -181,6 +191,9 @@ export interface BundleMetadata {
 
   // Bundle info
   bundleType: string;        // "album", "series", "course", etc.
+
+  // Item ordering (source of truth for display order)
+  items?: BundleMetadataItem[];  // Ordered list of items
 
   // Type-specific fields
   artist?: string;           // For albums
