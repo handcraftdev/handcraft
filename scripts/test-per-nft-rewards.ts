@@ -145,15 +145,19 @@ async function main() {
   console.log("\n--- Step 4: Expected pending rewards ---");
 
   const PRECISION = BigInt("1000000000000");
+  // Formula: pending = (weight * rewardPerShare - rewardDebt) / PRECISION
+  const nft1Weight = nft1RewardState?.weight ?? 1;
+  const nft2Weight = nft2RewardState?.weight ?? 1;
+
   const nft1Pending = nft1RewardState && rewardPool
-    ? (rewardPool.rewardPerShare - nft1RewardState.rewardDebt) / PRECISION
+    ? (BigInt(nft1Weight) * rewardPool.rewardPerShare - nft1RewardState.rewardDebt) / PRECISION
     : BigInt(0);
   const nft2Pending = nft2RewardState && rewardPool
-    ? (rewardPool.rewardPerShare - nft2RewardState.rewardDebt) / PRECISION
+    ? (BigInt(nft2Weight) * rewardPool.rewardPerShare - nft2RewardState.rewardDebt) / PRECISION
     : BigInt(0);
 
-  console.log("NFT #1 expected pending:", nft1Pending.toString(), "lamports");
-  console.log("NFT #2 expected pending:", nft2Pending.toString(), "lamports");
+  console.log("NFT #1 weight:", nft1Weight, "expected pending:", nft1Pending.toString(), "lamports");
+  console.log("NFT #2 weight:", nft2Weight, "expected pending:", nft2Pending.toString(), "lamports");
   console.log("Total expected:", (nft1Pending + nft2Pending).toString(), "lamports");
 
   // === Step 5: Claim rewards with verified claim ===

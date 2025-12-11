@@ -30,10 +30,9 @@ async function main() {
   // Create client
   const client = createContentRegistryClient(connection);
 
-  // Generate unique CIDs for testing
-  const timestamp = Date.now();
-  const contentCid = `QmTestContent${timestamp}`;
-  const metadataCid = `QmTestMetadata${timestamp}`;
+  // Use fixed CIDs for testing with ORAO mint
+  const contentCid = "QmHybridCallbackTest001";
+  const metadataCid = "QmHybridMetadata001";
 
   console.log("Content CID:", contentCid);
   console.log("Metadata CID:", metadataCid);
