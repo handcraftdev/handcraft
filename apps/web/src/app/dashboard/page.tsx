@@ -5,8 +5,9 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
-import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { useContentRegistry, getBundleTypeLabel } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
+import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -19,10 +20,13 @@ function formatSol(lamports: number | bigint): string {
 export default function Dashboard() {
   const { publicKey } = useWallet();
   const router = useRouter();
-  const { content, usePendingRewards, pendingRewardsQuery } = useContentRegistry();
+  const { content, usePendingRewards, pendingRewardsQuery, myBundlesQuery } = useContentRegistry();
   const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showCreateBundleModal, setShowCreateBundleModal] = useState(false);
+  const [selectedBundle, setSelectedBundle] = useState<any>(null);
 
   const { data: pendingRewards } = usePendingRewards();
+  const myBundles = myBundlesQuery.data ?? [];
 
   // Filter to only user's content
   const myContent = useMemo(() => {
@@ -220,6 +224,65 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            {/* My Bundles Section */}
+            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden mt-8">
+              <div className="p-5 border-b border-gray-800 flex items-center justify-between">
+                <h2 className="text-xl font-semibold">My Bundles</h2>
+                <button
+                  onClick={() => setShowCreateBundleModal(true)}
+                  className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Create Bundle
+                </button>
+              </div>
+
+              {myBundles.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">No bundles yet</h3>
+                  <p className="text-gray-400 mb-4">Create a bundle to group your content together</p>
+                  <button
+                    onClick={() => setShowCreateBundleModal(true)}
+                    className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Create Your First Bundle
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+                  {myBundles.map((bundle) => (
+                    <div
+                      key={bundle.bundleId}
+                      onClick={() => setSelectedBundle(bundle)}
+                      className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs px-2 py-1 bg-primary-500/20 text-primary-400 rounded">
+                          {getBundleTypeLabel(bundle.bundleType)}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          bundle.isActive
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-gray-600/20 text-gray-400"
+                        }`}>
+                          {bundle.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <h3 className="font-medium truncate">{bundle.bundleId}</h3>
+                      <p className="text-sm text-gray-400 mt-1">{bundle.itemCount} items</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Created {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </main>
       </div>
@@ -230,6 +293,23 @@ export default function Dashboard() {
           isOpen={showClaimModal}
           onClose={() => setShowClaimModal(false)}
           onSuccess={() => pendingRewardsQuery.refetch()}
+        />
+      )}
+
+      {/* Create Bundle Modal */}
+      <CreateBundleModal
+        isOpen={showCreateBundleModal}
+        onClose={() => setShowCreateBundleModal(false)}
+        onSuccess={() => myBundlesQuery.refetch()}
+      />
+
+      {/* Manage Bundle Modal */}
+      {selectedBundle && (
+        <ManageBundleModal
+          isOpen={!!selectedBundle}
+          onClose={() => setSelectedBundle(null)}
+          bundle={selectedBundle}
+          availableContent={myContent}
         />
       )}
     </div>

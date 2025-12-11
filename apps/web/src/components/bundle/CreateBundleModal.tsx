@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BundleType, getBundleTypeLabel, getSuggestedBundleTypes } from "@handcraft/sdk";
-import { ContentDomain, getContentDomain } from "@handcraft/sdk";
+import { BundleType, getBundleTypeLabel, getSuggestedBundleTypes, ContentDomain } from "@handcraft/sdk";
+import { useContentRegistry } from "@/hooks/useContentRegistry";
 
 interface CreateBundleModalProps {
   isOpen: boolean;
@@ -31,8 +31,9 @@ export function CreateBundleModal({
   const [description, setDescription] = useState("");
   const [bundleType, setBundleType] = useState<BundleType>(BundleType.Playlist);
   const [coverImage, setCoverImage] = useState<File | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { createBundle, isCreatingBundle } = useContentRegistry();
 
   // Get suggested bundle types based on creator's primary domain
   const suggestedTypes = creatorDomain
@@ -47,8 +48,6 @@ export function CreateBundleModal({
       setError("Title is required");
       return;
     }
-
-    setIsCreating(true);
 
     try {
       // Generate a bundle ID from title (slug-like)
@@ -66,11 +65,32 @@ export function CreateBundleModal({
         createdAt: new Date().toISOString(),
       };
 
+      // Upload cover image if provided
+      let coverImageCid: string | undefined;
+      if (coverImage) {
+        const formData = new FormData();
+        formData.append("file", coverImage);
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (uploadRes.ok) {
+          const { cid } = await uploadRes.json();
+          coverImageCid = cid;
+        }
+      }
+
       // Upload metadata to IPFS
       const metadataRes = await fetch("/api/upload/metadata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metadata, name: "bundle-metadata" }),
+        body: JSON.stringify({
+          metadata: {
+            ...metadata,
+            image: coverImageCid ? `https://ipfs.io/ipfs/${coverImageCid}` : undefined,
+          },
+          name: "bundle-metadata",
+        }),
       });
 
       if (!metadataRes.ok) {
@@ -79,15 +99,14 @@ export function CreateBundleModal({
 
       const { cid: metadataCid } = await metadataRes.json();
 
-      // TODO: Call on-chain createBundle instruction
-      // For now, just log and simulate success
-      console.log("Creating bundle:", {
+      // Create bundle on-chain
+      await createBundle.mutateAsync({
         bundleId,
         metadataCid,
         bundleType,
       });
 
-      // Simulate success
+      // Success
       onSuccess?.(bundleId);
       onClose();
 
@@ -99,8 +118,6 @@ export function CreateBundleModal({
     } catch (err) {
       console.error("Failed to create bundle:", err);
       setError(err instanceof Error ? err.message : "Failed to create bundle");
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -217,10 +234,10 @@ export function CreateBundleModal({
             </button>
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={isCreatingBundle}
               className="flex-1 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
             >
-              {isCreating ? "Creating..." : "Create Bundle"}
+              {isCreatingBundle ? "Creating..." : "Create Bundle"}
             </button>
           </div>
         </form>

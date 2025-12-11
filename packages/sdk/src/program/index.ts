@@ -36,6 +36,10 @@ import {
   NftRarity,
   Rarity,
   parseAnchorRarity,
+  Bundle,
+  BundleItem,
+  BundleType,
+  BundleWithItems,
 } from "./types";
 
 import {
@@ -54,6 +58,8 @@ import {
   getNftRarityPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
+  getBundlePda,
+  getBundleItemPda,
   calculatePendingRewardForNft,
   calculateWeightedPendingReward,
 } from "./pda";
@@ -2177,6 +2183,315 @@ export async function countTotalMintedNfts(
 }
 
 // ============================================
+// BUNDLE MANAGEMENT
+// ============================================
+
+/**
+ * Convert BundleType enum to Anchor format
+ */
+function bundleTypeToAnchor(type: BundleType): object {
+  switch (type) {
+    case BundleType.Album: return { album: {} };
+    case BundleType.Series: return { series: {} };
+    case BundleType.Playlist: return { playlist: {} };
+    case BundleType.Course: return { course: {} };
+    case BundleType.Newsletter: return { newsletter: {} };
+    case BundleType.Collection: return { collection: {} };
+    case BundleType.ProductPack: return { productPack: {} };
+    default: return { collection: {} };
+  }
+}
+
+/**
+ * Convert Anchor bundle type to BundleType enum
+ */
+function anchorToBundleType(anchorType: object): BundleType {
+  if ("album" in anchorType) return BundleType.Album;
+  if ("series" in anchorType) return BundleType.Series;
+  if ("playlist" in anchorType) return BundleType.Playlist;
+  if ("course" in anchorType) return BundleType.Course;
+  if ("newsletter" in anchorType) return BundleType.Newsletter;
+  if ("collection" in anchorType) return BundleType.Collection;
+  if ("productPack" in anchorType) return BundleType.ProductPack;
+  return BundleType.Collection;
+}
+
+/**
+ * Create a new bundle
+ */
+export async function createBundleInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  metadataCid: string,
+  bundleType: BundleType
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+
+  return await program.methods
+    .createBundle(bundleId, metadataCid, bundleTypeToAnchor(bundleType))
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Add content to a bundle
+ */
+export async function addBundleItemInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  contentCid: string,
+  position?: number
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [contentPda] = getContentPda(contentCid);
+  const [bundleItemPda] = getBundleItemPda(bundlePda, contentPda);
+
+  return await program.methods
+    .addBundleItem(position !== undefined ? position : null)
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      content: contentPda,
+      bundleItem: bundleItemPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Remove content from a bundle
+ */
+export async function removeBundleItemInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  contentCid: string
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [contentPda] = getContentPda(contentCid);
+  const [bundleItemPda] = getBundleItemPda(bundlePda, contentPda);
+
+  return await program.methods
+    .removeBundleItem()
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      bundleItem: bundleItemPda,
+    })
+    .instruction();
+}
+
+/**
+ * Update bundle metadata or status
+ */
+export async function updateBundleInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  metadataCid?: string,
+  isActive?: boolean
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+
+  return await program.methods
+    .updateBundle(metadataCid ?? null, isActive ?? null)
+    .accounts({
+      creator,
+      bundle: bundlePda,
+    })
+    .instruction();
+}
+
+/**
+ * Delete an empty bundle
+ */
+export async function deleteBundleInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+
+  return await program.methods
+    .deleteBundle()
+    .accounts({
+      creator,
+      bundle: bundlePda,
+    })
+    .instruction();
+}
+
+/**
+ * Fetch a bundle by creator and bundle ID
+ */
+export async function fetchBundle(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<Bundle | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundle.fetch(bundlePda);
+
+    return {
+      creator: decoded.creator,
+      bundleId: decoded.bundleId,
+      metadataCid: decoded.metadataCid,
+      bundleType: anchorToBundleType(decoded.bundleType),
+      itemCount: decoded.itemCount,
+      isActive: decoded.isActive,
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch a bundle by PDA
+ */
+export async function fetchBundleByPda(
+  connection: Connection,
+  bundlePda: PublicKey
+): Promise<Bundle | null> {
+  try {
+    const program = createProgram(connection);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundle.fetch(bundlePda);
+
+    return {
+      creator: decoded.creator,
+      bundleId: decoded.bundleId,
+      metadataCid: decoded.metadataCid,
+      bundleType: anchorToBundleType(decoded.bundleType),
+      itemCount: decoded.itemCount,
+      isActive: decoded.isActive,
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch all bundles created by a wallet
+ */
+export async function fetchBundlesByCreator(
+  connection: Connection,
+  creator: PublicKey
+): Promise<Bundle[]> {
+  try {
+    const program = createProgram(connection);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accounts = await (program.account as any).bundle.all([
+      {
+        memcmp: {
+          offset: 8, // After discriminator
+          bytes: creator.toBase58(),
+        },
+      },
+    ]);
+
+    return accounts.map((acc: { account: Record<string, unknown> }) => ({
+      creator: acc.account.creator as PublicKey,
+      bundleId: acc.account.bundleId as string,
+      metadataCid: acc.account.metadataCid as string,
+      bundleType: anchorToBundleType(acc.account.bundleType as object),
+      itemCount: acc.account.itemCount as number,
+      isActive: acc.account.isActive as boolean,
+      createdAt: BigInt((acc.account.createdAt as { toString(): string }).toString()),
+      updatedAt: BigInt((acc.account.updatedAt as { toString(): string }).toString()),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all items in a bundle
+ */
+export async function fetchBundleItems(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleItem[]> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accounts = await (program.account as any).bundleItem.all([
+      {
+        memcmp: {
+          offset: 8, // After discriminator
+          bytes: bundlePda.toBase58(),
+        },
+      },
+    ]);
+
+    return accounts
+      .map((acc: { account: Record<string, unknown> }) => ({
+        bundle: acc.account.bundle as PublicKey,
+        content: acc.account.content as PublicKey,
+        position: acc.account.position as number,
+        addedAt: BigInt((acc.account.addedAt as { toString(): string }).toString()),
+      }))
+      .sort((a: BundleItem, b: BundleItem) => a.position - b.position);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch bundle with all items and their content details
+ */
+export async function fetchBundleWithItems(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleWithItems | null> {
+  try {
+    const bundle = await fetchBundle(connection, creator, bundleId);
+    if (!bundle) return null;
+
+    const items = await fetchBundleItems(connection, creator, bundleId);
+
+    // Fetch content for each item
+    const itemsWithContent = await Promise.all(
+      items.map(async (item) => {
+        const content = await fetchContentByPda(connection, item.content);
+        return {
+          item,
+          content,
+          contentMetadata: null as Record<string, unknown> | null,
+        };
+      })
+    );
+
+    return {
+      bundle,
+      metadata: null, // Caller can fetch from IPFS separately
+      items: itemsWithContent,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
 // HIGH-LEVEL CLIENT
 // ============================================
 
@@ -2324,6 +2639,33 @@ export function createContentRegistryClient(connection: Connection) {
 
     updateEcosystemInstruction: (admin: PublicKey, newTreasury: PublicKey | null, newUsdcMint: PublicKey | null, isPaused: boolean | null) =>
       updateEcosystemInstruction(program, admin, newTreasury, newUsdcMint, isPaused),
+
+    // Bundle management
+    createBundleInstruction: (creator: PublicKey, bundleId: string, metadataCid: string, bundleType: BundleType) =>
+      createBundleInstruction(program, creator, bundleId, metadataCid, bundleType),
+
+    addBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string, position?: number) =>
+      addBundleItemInstruction(program, creator, bundleId, contentCid, position),
+
+    removeBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string) =>
+      removeBundleItemInstruction(program, creator, bundleId, contentCid),
+
+    updateBundleInstruction: (creator: PublicKey, bundleId: string, metadataCid?: string, isActive?: boolean) =>
+      updateBundleInstruction(program, creator, bundleId, metadataCid, isActive),
+
+    deleteBundleInstruction: (creator: PublicKey, bundleId: string) =>
+      deleteBundleInstruction(program, creator, bundleId),
+
+    // Bundle PDA helpers
+    getBundlePda,
+    getBundleItemPda,
+
+    // Bundle fetching
+    fetchBundle: (creator: PublicKey, bundleId: string) => fetchBundle(connection, creator, bundleId),
+    fetchBundleByPda: (bundlePda: PublicKey) => fetchBundleByPda(connection, bundlePda),
+    fetchBundlesByCreator: (creator: PublicKey) => fetchBundlesByCreator(connection, creator),
+    fetchBundleItems: (creator: PublicKey, bundleId: string) => fetchBundleItems(connection, creator, bundleId),
+    fetchBundleWithItems: (creator: PublicKey, bundleId: string) => fetchBundleWithItems(connection, creator, bundleId),
 
     // Fetching
     fetchContent: (contentCid: string) => fetchContent(connection, contentCid),

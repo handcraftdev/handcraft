@@ -1,81 +1,90 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { BundleType, getBundleTypeLabel, ContentEntry } from "@handcraft/sdk";
-import { PublicKey } from "@solana/web3.js";
-
-interface BundleItem {
-  content: ContentEntry;
-  position: number;
-  addedAt: bigint;
-}
+import { getBundleTypeLabel } from "@handcraft/sdk";
+import { useContentRegistry, BundleType, Bundle, ContentEntry } from "@/hooks/useContentRegistry";
 
 interface ManageBundleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bundleId: string;
-  bundleTitle: string;
-  bundleType: BundleType;
-  items: BundleItem[];
+  bundle: Bundle;
   availableContent: ContentEntry[];
-  onAddItem?: (contentCid: string, position?: number) => Promise<void>;
-  onRemoveItem?: (contentCid: string) => Promise<void>;
-  onReorderItems?: (contentCids: string[]) => Promise<void>;
-  onUpdateBundle?: (metadata: { title?: string; description?: string; isActive?: boolean }) => Promise<void>;
 }
 
 export function ManageBundleModal({
   isOpen,
   onClose,
-  bundleId,
-  bundleTitle,
-  bundleType,
-  items,
+  bundle,
   availableContent,
-  onAddItem,
-  onRemoveItem,
-  onReorderItems,
-  onUpdateBundle,
 }: ManageBundleModalProps) {
   const [activeTab, setActiveTab] = useState<"items" | "add" | "settings">("items");
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  const {
+    useBundleWithItems,
+    addBundleItem,
+    removeBundleItem,
+    updateBundle,
+    isAddingBundleItem,
+    isRemovingBundleItem,
+    isUpdatingBundle,
+    getContentPda,
+  } = useContentRegistry();
+
+  // Fetch bundle with items
+  const bundleWithItemsQuery = useBundleWithItems(bundle.bundleId);
+  const items = bundleWithItemsQuery.data?.items ?? [];
+
   // Filter available content that's not already in the bundle
   const addableContent = useMemo(() => {
-    const bundleContentCids = new Set(items.map(i => i.content.contentCid));
-    return availableContent.filter(c => !bundleContentCids.has(c.contentCid));
-  }, [items, availableContent]);
+    const bundleContentPdas = new Set(items.map(i => i.item.content.toBase58()));
+    return availableContent.filter(c => {
+      const [contentPda] = getContentPda(c.contentCid);
+      return !bundleContentPdas.has(contentPda.toBase58());
+    });
+  }, [items, availableContent, getContentPda]);
 
   // Sort items by position
   const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => a.position - b.position);
+    return [...items].sort((a, b) => a.item.position - b.item.position);
   }, [items]);
 
   const handleAddItem = async (contentCid: string) => {
-    if (!onAddItem) return;
-    setIsLoading(true);
     setError(null);
     try {
-      await onAddItem(contentCid, items.length);
+      await addBundleItem.mutateAsync({
+        bundleId: bundle.bundleId,
+        contentCid,
+        position: items.length,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add item");
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleRemoveItem = async (contentCid: string) => {
-    if (!onRemoveItem) return;
-    setIsLoading(true);
     setError(null);
     try {
-      await onRemoveItem(contentCid);
+      await removeBundleItem.mutateAsync({
+        bundleId: bundle.bundleId,
+        contentCid,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove item");
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    setError(null);
+    try {
+      await updateBundle.mutateAsync({
+        bundleId: bundle.bundleId,
+        isActive: false,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to deactivate bundle");
     }
   };
 
@@ -83,31 +92,18 @@ export function ManageBundleModal({
     setDraggedIndex(index);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
   };
 
   const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
-    if (draggedIndex === null || !onReorderItems) return;
-
-    const newOrder = [...sortedItems];
-    const [draggedItem] = newOrder.splice(draggedIndex, 1);
-    newOrder.splice(dropIndex, 0, draggedItem);
-
+    // Note: Reordering would require batch updates or a reorder instruction
+    // For now, we just reset the drag state
     setDraggedIndex(null);
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await onReorderItems(newOrder.map(i => i.content.contentCid));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reorder items");
-    } finally {
-      setIsLoading(false);
-    }
   };
+
+  const isLoading = isAddingBundleItem || isRemovingBundleItem || isUpdatingBundle;
 
   if (!isOpen) return null;
 
@@ -119,8 +115,8 @@ export function ManageBundleModal({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold">{bundleTitle}</h2>
-            <p className="text-sm text-gray-400">{getBundleTypeLabel(bundleType)} - {items.length} items</p>
+            <h2 className="text-xl font-bold">{bundle.bundleId}</h2>
+            <p className="text-sm text-gray-400">{getBundleTypeLabel(bundle.bundleType)} - {bundle.itemCount} items</p>
           </div>
           <button
             onClick={onClose}
@@ -177,31 +173,31 @@ export function ManageBundleModal({
           {/* Items Tab */}
           {activeTab === "items" && (
             <div className="space-y-2">
-              {sortedItems.length === 0 ? (
+              {bundleWithItemsQuery.isLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading items...</div>
+              ) : sortedItems.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>No items in this bundle yet.</p>
                   <p className="text-sm mt-1">Click "Add Content" to get started.</p>
                 </div>
               ) : (
-                sortedItems.map((item, index) => (
+                sortedItems.map((itemData, index) => (
                   <div
-                    key={item.content.contentCid}
-                    draggable={!!onReorderItems}
+                    key={itemData.item.content.toBase58()}
+                    draggable
                     onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, index)}
-                    className={`flex items-center gap-3 p-3 bg-gray-800 rounded-lg ${
-                      onReorderItems ? "cursor-move" : ""
-                    } ${draggedIndex === index ? "opacity-50" : ""}`}
+                    className={`flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-move ${
+                      draggedIndex === index ? "opacity-50" : ""
+                    }`}
                   >
                     {/* Drag Handle */}
-                    {onReorderItems && (
-                      <div className="text-gray-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                        </svg>
-                      </div>
-                    )}
+                    <div className="text-gray-500">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                      </svg>
+                    </div>
 
                     {/* Position */}
                     <div className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded text-sm font-medium">
@@ -210,24 +206,24 @@ export function ManageBundleModal({
 
                     {/* Content Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">Content #{item.content.contentCid.slice(0, 8)}...</p>
+                      <p className="font-medium truncate">
+                        {itemData.content?.contentCid.slice(0, 12)}...
+                      </p>
                       <p className="text-xs text-gray-500">
-                        Added {new Date(Number(item.addedAt) * 1000).toLocaleDateString()}
+                        Added {new Date(Number(itemData.item.addedAt) * 1000).toLocaleDateString()}
                       </p>
                     </div>
 
                     {/* Remove Button */}
-                    {onRemoveItem && (
-                      <button
-                        onClick={() => handleRemoveItem(item.content.contentCid)}
-                        disabled={isLoading}
-                        className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => itemData.content && handleRemoveItem(itemData.content.contentCid)}
+                      disabled={isLoading}
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 ))
               )}
@@ -250,22 +246,20 @@ export function ManageBundleModal({
                   >
                     {/* Content Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">Content #{content.contentCid.slice(0, 8)}...</p>
+                      <p className="font-medium truncate">{content.contentCid.slice(0, 12)}...</p>
                       <p className="text-xs text-gray-500">
                         Created {new Date(Number(content.createdAt) * 1000).toLocaleDateString()}
                       </p>
                     </div>
 
                     {/* Add Button */}
-                    {onAddItem && (
-                      <button
-                        onClick={() => handleAddItem(content.contentCid)}
-                        disabled={isLoading}
-                        className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded text-sm font-medium transition-colors"
-                      >
-                        Add
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleAddItem(content.contentCid)}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded text-sm font-medium transition-colors"
+                    >
+                      {isAddingBundleItem ? "Adding..." : "Add"}
+                    </button>
                   </div>
                 ))
               )}
@@ -277,28 +271,32 @@ export function ManageBundleModal({
             <div className="space-y-4">
               <div className="bg-gray-800/50 rounded-lg p-4">
                 <h3 className="font-medium mb-2">Bundle ID</h3>
-                <p className="text-sm text-gray-400 font-mono">{bundleId}</p>
+                <p className="text-sm text-gray-400 font-mono">{bundle.bundleId}</p>
               </div>
 
               <div className="bg-gray-800/50 rounded-lg p-4">
                 <h3 className="font-medium mb-2">Bundle Type</h3>
-                <p className="text-sm text-gray-400">{getBundleTypeLabel(bundleType)}</p>
+                <p className="text-sm text-gray-400">{getBundleTypeLabel(bundle.bundleType)}</p>
               </div>
 
-              {onUpdateBundle && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-                  <h3 className="font-medium text-red-400 mb-2">Danger Zone</h3>
-                  <p className="text-sm text-gray-400 mb-3">
-                    Deactivating a bundle will hide it from public view. You can reactivate it later.
-                  </p>
-                  <button
-                    onClick={() => onUpdateBundle({ isActive: false })}
-                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded text-red-400 text-sm font-medium transition-colors"
-                  >
-                    Deactivate Bundle
-                  </button>
-                </div>
-              )}
+              <div className="bg-gray-800/50 rounded-lg p-4">
+                <h3 className="font-medium mb-2">Status</h3>
+                <p className="text-sm text-gray-400">{bundle.isActive ? "Active" : "Inactive"}</p>
+              </div>
+
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                <h3 className="font-medium text-red-400 mb-2">Danger Zone</h3>
+                <p className="text-sm text-gray-400 mb-3">
+                  Deactivating a bundle will hide it from public view. You can reactivate it later.
+                </p>
+                <button
+                  onClick={handleDeactivate}
+                  disabled={isUpdatingBundle || !bundle.isActive}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {isUpdatingBundle ? "Deactivating..." : "Deactivate Bundle"}
+                </button>
+              </div>
             </div>
           )}
         </div>

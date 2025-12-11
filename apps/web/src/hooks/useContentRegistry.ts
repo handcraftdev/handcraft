@@ -24,6 +24,8 @@ import {
   getNftRarityPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
+  getBundlePda,
+  getBundleItemPda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   ContentRewardPool,
@@ -35,6 +37,11 @@ import {
   RentEntry,
   ContentEntry,
   PendingMint,
+  Bundle,
+  BundleItem,
+  BundleType,
+  BundleWithItems,
+  getBundleTypeLabel,
   calculatePrimarySplit,
   calculatePendingReward,
   MIN_CREATOR_ROYALTY_BPS,
@@ -52,11 +59,15 @@ export {
   PaymentCurrency,
   RentTier,
   Rarity,
+  BundleType,
   getRarityName,
   getRarityWeight,
+  getBundleTypeLabel,
   getContentPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
+  getBundlePda,
+  getBundleItemPda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   MIN_CREATOR_ROYALTY_BPS,
@@ -68,7 +79,7 @@ export {
   MIN_RENT_FEE_LAMPORTS,
 };
 export type { MbMintRequest } from "@handcraft/sdk";
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -1386,6 +1397,216 @@ export function useContentRegistry() {
     },
   });
 
+  // ============================================
+  // BUNDLE QUERIES
+  // ============================================
+
+  // Fetch all bundles for the connected wallet
+  const myBundlesQuery = useQuery({
+    queryKey: ["bundles", "creator", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey || !client) return [];
+      return client.fetchBundlesByCreator(publicKey);
+    },
+    enabled: !!publicKey && !!client,
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Hook to fetch a specific bundle
+  const useBundle = (bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundle", publicKey?.toBase58(), bundleId],
+      queryFn: async () => {
+        if (!publicKey || !bundleId || !client) return null;
+        return client.fetchBundle(publicKey, bundleId);
+      },
+      enabled: !!publicKey && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+    });
+  };
+
+  // Hook to fetch bundle with all items
+  const useBundleWithItems = (bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleWithItems", publicKey?.toBase58(), bundleId],
+      queryFn: async () => {
+        if (!publicKey || !bundleId || !client) return null;
+        return client.fetchBundleWithItems(publicKey, bundleId);
+      },
+      enabled: !!publicKey && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+    });
+  };
+
+  // ============================================
+  // BUNDLE MUTATIONS
+  // ============================================
+
+  // Create a new bundle
+  const createBundle = useMutation({
+    mutationFn: async ({
+      bundleId,
+      metadataCid,
+      bundleType,
+    }: {
+      bundleId: string;
+      metadataCid: string;
+      bundleType: BundleType;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.createBundleInstruction(
+        publicKey,
+        bundleId,
+        metadataCid,
+        bundleType
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig, bundleId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
+  // Add content to a bundle
+  const addBundleItem = useMutation({
+    mutationFn: async ({
+      bundleId,
+      contentCid,
+      position,
+    }: {
+      bundleId: string;
+      contentCid: string;
+      position?: number;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.addBundleItemInstruction(
+        publicKey,
+        bundleId,
+        contentCid,
+        position
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["bundle", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundleWithItems", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
+  // Remove content from a bundle
+  const removeBundleItem = useMutation({
+    mutationFn: async ({
+      bundleId,
+      contentCid,
+    }: {
+      bundleId: string;
+      contentCid: string;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.removeBundleItemInstruction(
+        publicKey,
+        bundleId,
+        contentCid
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["bundle", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundleWithItems", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
+  // Update bundle metadata or status
+  const updateBundle = useMutation({
+    mutationFn: async ({
+      bundleId,
+      metadataCid,
+      isActive,
+    }: {
+      bundleId: string;
+      metadataCid?: string;
+      isActive?: boolean;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.updateBundleInstruction(
+        publicKey,
+        bundleId,
+        metadataCid,
+        isActive
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["bundle", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundleWithItems", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
+  // Delete an empty bundle
+  const deleteBundle = useMutation({
+    mutationFn: async ({ bundleId }: { bundleId: string }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.deleteBundleInstruction(publicKey, bundleId);
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
   // Fetch mint config for a specific content - uses batch data if available
   const useMintConfig = (contentCid: string | null) => {
     return useQuery({
@@ -1804,6 +2025,21 @@ export function useContentRegistry() {
     nftRarities,
     walletNftRaritiesQuery,
 
+    // Bundle management
+    myBundlesQuery,
+    useBundle,
+    useBundleWithItems,
+    createBundle,
+    addBundleItem,
+    removeBundleItem,
+    updateBundle,
+    deleteBundle,
+    isCreatingBundle: createBundle.isPending,
+    isAddingBundleItem: addBundleItem.isPending,
+    isRemovingBundleItem: removeBundleItem.isPending,
+    isUpdatingBundle: updateBundle.isPending,
+    isDeletingBundle: deleteBundle.isPending,
+
     // Utilities
     client,
     getContentPda,
@@ -1816,6 +2052,8 @@ export function useContentRegistry() {
     getRentConfigPda,
     getPendingMintPda,
     getNftRarityPda,
+    getBundlePda,
+    getBundleItemPda,
     calculatePrimarySplit,
     calculatePendingReward,
   };

@@ -14,6 +14,8 @@ import {
   PENDING_MINT_SEED,
   MB_MINT_REQUEST_SEED,
   MB_NFT_SEED,
+  BUNDLE_SEED,
+  BUNDLE_ITEM_SEED,
   PRECISION,
   CREATOR_FEE_PRIMARY_BPS,
   PLATFORM_FEE_PRIMARY_BPS,
@@ -175,6 +177,32 @@ export function getMbMintRequestPda(buyer: PublicKey, contentPda: PublicKey, edi
 export function getMbNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MB_NFT_SEED), mintRequestPda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+// ========== Bundle PDAs ==========
+
+/**
+ * Get the Bundle PDA for a creator and bundle ID
+ * @param creator - The bundle creator's public key
+ * @param bundleId - The unique bundle identifier (slug or ID string)
+ */
+export function getBundlePda(creator: PublicKey, bundleId: string): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_SEED), creator.toBuffer(), Buffer.from(bundleId)],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleItem PDA for a bundle and content
+ * @param bundlePda - The bundle's PDA
+ * @param contentPda - The content's PDA
+ */
+export function getBundleItemPda(bundlePda: PublicKey, contentPda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_ITEM_SEED), bundlePda.toBuffer(), contentPda.toBuffer()],
     PROGRAM_ID
   );
 }
