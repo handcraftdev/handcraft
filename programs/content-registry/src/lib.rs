@@ -257,7 +257,7 @@ use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
 
-declare_id!("3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn");
+declare_id!("5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7");
 
 #[program]
 pub mod content_registry {
@@ -813,13 +813,16 @@ pub mod content_registry {
         // Initialize per-NFT reward state - this is the source of truth for rewards
         // Account is created by Anchor's #[account(init)] constraint
         let nft_reward_state = &mut ctx.accounts.nft_reward_state;
+        let weight = 1u16; // Default Common weight (no rarity system)
         nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
         nft_reward_state.content = content.key();
-        nft_reward_state.reward_debt = content_reward_pool.reward_per_share;
-        nft_reward_state.weight = Rarity::Common.weight(); // Default to Common (100) for non-VRF mints
+        // IMPORTANT: reward_debt = weight * reward_per_share (weighted system)
+        nft_reward_state.reward_debt = weight as u128 * content_reward_pool.reward_per_share;
+        nft_reward_state.weight = weight;
         nft_reward_state.created_at = timestamp;
 
         // Increment content's NFT count in the pool AFTER updating buyer state
+        // This adds weight (1) to total_weight
         content_reward_pool.increment_nfts();
 
         // Increment content mint count
@@ -1773,6 +1776,83 @@ pub mod content_registry {
     /// lifecycle hooks fire during burn so we can handle cleanup there
     pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
         handle_burn_nft(ctx)
+    }
+
+    // ============================================
+    // SRS-BASED MINTING (SINGLE TRANSACTION!)
+    // ============================================
+    // Uses Switchboard Randomness Service for oracle-delivered randomness
+    // User signs ONCE, oracle callback mints NFT automatically:
+    // 1. srs_request_mint - user pays, oracle callback creates NFT
+
+    /// Request mint with SRS randomness - SINGLE USER TRANSACTION!
+    /// User signs once. Oracle callback automatically:
+    /// - Generates randomness
+    /// - Determines rarity
+    /// - Creates NFT
+    /// - Distributes payment
+    pub fn srs_request_mint(ctx: Context<SrsRequestMint>) -> Result<()> {
+        handle_srs_request_mint(ctx)
+    }
+
+    /// Oracle callback: Fulfill mint with randomness and create NFT
+    /// Called BY THE ORACLE, not by user - creates NFT automatically
+    pub fn srs_fulfill_mint(ctx: Context<SrsFulfillMint>, randomness: [u8; 32]) -> Result<()> {
+        handle_srs_fulfill_mint(ctx, randomness)
+    }
+
+    /// Cancel unfulfilled SRS mint request and get refund
+    /// Can only be called after 10 minutes if oracle fails
+    pub fn srs_cancel_mint(ctx: Context<SrsCancelMint>) -> Result<()> {
+        handle_srs_cancel_mint(ctx)
+    }
+
+    /// Cleanup orphaned SRS mint accounts when mint_request was already closed
+    /// Use when a cancel left orphaned nft_reward_state and nft_rarity accounts
+    pub fn srs_cleanup_orphaned(ctx: Context<SrsCleanupOrphaned>) -> Result<()> {
+        handle_srs_cleanup_orphaned(ctx)
+    }
+
+    // =========================================================================
+    // MagicBlock VRF Minting - Fast, single-transaction VRF minting
+    // =========================================================================
+
+    /// Request a mint using MagicBlock VRF
+    /// User pays mint price, VRF is requested, callback mints NFT with random rarity
+    /// edition: The edition number for this mint (should be minted_count + pending_count + 1)
+    pub fn magicblock_request_mint(ctx: Context<MagicBlockRequestMint>, edition: u64) -> Result<()> {
+        MagicBlockRequestMint::handler(ctx, edition)
+    }
+
+    /// MagicBlock VRF callback - oracle calls this with randomness to mint NFT
+    /// No user signature required - called automatically by VRF oracle
+    pub fn magicblock_fulfill_mint(ctx: Context<MagicBlockFulfillMint>, randomness: [u8; 32]) -> Result<()> {
+        MagicBlockFulfillMint::handler(ctx, randomness)
+    }
+
+    /// Cancel pending MagicBlock mint request
+    /// Returns escrowed funds to buyer
+    pub fn magicblock_cancel_mint(ctx: Context<MagicBlockCancelMint>, edition: u64) -> Result<()> {
+        MagicBlockCancelMint::handler(ctx, edition)
+    }
+
+    /// Claim NFT with common rarity if VRF oracle doesn't respond
+    /// User can call this after 60 second timeout to get their NFT
+    /// NFT will be minted with Common rarity (no VRF randomness)
+    pub fn magicblock_claim_fallback(ctx: Context<MagicBlockClaimFallback>) -> Result<()> {
+        MagicBlockClaimFallback::handler(ctx)
+    }
+
+    /// Close a fulfilled MagicBlock mint request
+    /// This reclaims rent and allows a new mint request for the same wallet+content
+    pub fn magicblock_close_fulfilled(ctx: Context<MagicBlockCloseFulfilled>) -> Result<()> {
+        MagicBlockCloseFulfilled::handler(ctx)
+    }
+
+    /// Direct mint NFT with slot hash randomness
+    /// Single transaction - no VRF dependency, immediate mint
+    pub fn direct_mint(ctx: Context<DirectMint>) -> Result<()> {
+        DirectMint::handler(ctx)
     }
 }
 

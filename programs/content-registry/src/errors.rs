@@ -118,12 +118,28 @@ pub enum ContentRegistryError {
     InvalidNftRarity,
     #[msg("Cannot cancel pending mint yet - must wait at least 10 minutes")]
     CancelTooEarly,
+    #[msg("Randomness already fulfilled for this request")]
+    AlreadyFulfilled,
+    #[msg("Randomness not yet available - wait for oracle callback")]
+    RandomnessNotAvailable,
+    #[msg("VRF request failed")]
+    VrfRequestFailed,
+    #[msg("Invalid ORAO client account")]
+    InvalidOraoClient,
+    #[msg("Fallback claim too early - must wait for timeout")]
+    FallbackTooEarly,
+    #[msg("Mint request not yet fulfilled")]
+    NotFulfilled,
 
     // Migration errors
     #[msg("Only the content creator can perform this action")]
     NotCreator,
     #[msg("Only the ecosystem admin can perform this action")]
     NotAdmin,
+
+    // Cleanup errors
+    #[msg("Invalid state - account should not exist or has wrong data")]
+    InvalidState,
 }
 
 // Alias for backward compatibility
