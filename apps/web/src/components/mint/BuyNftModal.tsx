@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { PublicKey, Transaction, Keypair } from "@solana/web3.js";
+import { useState, useEffect, useCallback } from "react";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,11 +9,13 @@ import {
   MintConfig,
   Rarity,
   getRarityName,
-  PendingMint,
+  getMbMintRequestPda,
+  getMbNftAssetPda,
+  getContentPda,
+  MAGICBLOCK_DEFAULT_QUEUE,
+  MB_FALLBACK_TIMEOUT_SECONDS,
 } from "@/hooks/useContentRegistry";
-import { useSwitchboardRandomness } from "@/hooks/useSwitchboardRandomness";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
-import { simulatePartiallySignedTransaction } from "@/utils/transaction";
 import { RarityBadge, RarityProbabilities, RARITY_STYLES } from "@/components/rarity";
 
 // Default platform wallet - if not set, use ecosystem treasury
@@ -22,9 +24,15 @@ const DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
   ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
   : null;
 
-// Feature flag to enable/disable VRF-based rarity minting
-// Set to false to use legacy minting without rarity
-const ENABLE_VRF_RARITY = process.env.NEXT_PUBLIC_ENABLE_VRF_RARITY === "true";
+// Fallback timeout for MagicBlock VRF (60 seconds)
+const FALLBACK_TIMEOUT_SECONDS = MB_FALLBACK_TIMEOUT_SECONDS || 60;
+
+interface MbMintRequestState {
+  amountPaid: bigint;
+  createdAt: bigint;
+  isFulfilled: boolean;
+  edition: bigint;
+}
 
 interface BuyNftModalProps {
   isOpen: boolean;
@@ -56,49 +64,112 @@ export function BuyNftModal({
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const queryClient = useQueryClient();
-  const {
-    mintNftSol,
-    commitMint,
-    revealMint,
-    isMintingNft,
-    isCommittingMint,
-    isRevealingMint,
-    ecosystemConfig,
-    client,
-  } = useContentRegistry();
-  const { createRandomnessAccount, getRevealInstructionWithRetry } = useSwitchboardRandomness();
+  const { ecosystemConfig, client } = useContentRegistry();
 
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [mintingProgress, setMintingProgress] = useState(0);
   const [mintStep, setMintStep] = useState<MintStep>("idle");
   const [revealedRarity, setRevealedRarity] = useState<Rarity | null>(null);
-  const [pendingMintOnChain, setPendingMintOnChain] = useState<PendingMint | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<MbMintRequestState | null>(null);
   const [isCheckingPending, setIsCheckingPending] = useState(false);
+  const [isClaimingFallback, setIsClaimingFallback] = useState(false);
+  const [fallbackCountdown, setFallbackCountdown] = useState<number | null>(null);
 
-  // Check for pending mint on-chain when modal opens (for cross-device recovery)
-  const checkPendingMint = useCallback(async () => {
+  // Check for pending MagicBlock mint request when modal opens
+  // Note: With edition-based PDAs, we need to scan for pending requests
+  // TODO: Implement account scanning for unfulfilled requests
+  const checkPendingRequest = useCallback(async () => {
     if (!publicKey || !client || !isOpen) return;
 
     setIsCheckingPending(true);
     try {
-      const pending = await client.fetchPendingMint(publicKey, contentCid);
-      setPendingMintOnChain(pending);
-      if (pending) {
-        console.log("Found pending mint on-chain:", pending);
-      }
+      // Pending request recovery disabled for now - edition-based PDAs require scanning
+      // Will be re-enabled with account scanning functionality
+      setPendingRequest(null);
     } catch (err) {
-      console.error("Error checking pending mint:", err);
+      console.error("Error checking pending request:", err);
+      setPendingRequest(null);
     } finally {
       setIsCheckingPending(false);
     }
   }, [publicKey, client, contentCid, isOpen]);
 
   useEffect(() => {
-    if (isOpen && ENABLE_VRF_RARITY) {
-      checkPendingMint();
+    if (isOpen) {
+      checkPendingRequest();
     }
-  }, [isOpen, checkPendingMint]);
+  }, [isOpen, checkPendingRequest]);
+
+  // Countdown timer for fallback availability
+  useEffect(() => {
+    if (!pendingRequest) {
+      setFallbackCountdown(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const elapsed = Date.now() / 1000 - Number(pendingRequest.createdAt);
+      const remaining = FALLBACK_TIMEOUT_SECONDS - elapsed;
+      if (remaining <= 0) {
+        setFallbackCountdown(0);
+      } else {
+        setFallbackCountdown(Math.ceil(remaining));
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [pendingRequest]);
+
+  // Claim fallback (mint with slot hash randomness after timeout)
+  const handleClaimFallback = async () => {
+    if (!publicKey || !client || !pendingRequest) return;
+
+    setIsClaimingFallback(true);
+    setError(null);
+    try {
+      // Get content and mint request PDAs for fetching rarity after claim
+      const [contentPda] = getContentPda(contentCid);
+      const [mintRequestPda] = getMbMintRequestPda(publicKey, contentPda, pendingRequest.edition);
+      const [nftAssetPda] = getMbNftAssetPda(mintRequestPda);
+
+      const fallbackIx = await client.mbClaimFallbackInstruction(publicKey, contentCid, pendingRequest.edition);
+      const tx = new Transaction().add(fallbackIx);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      // Fetch the actual rarity assigned by slot hash randomness
+      try {
+        const nftRarity = await client.fetchNftRarity(nftAssetPda);
+        if (nftRarity) {
+          setRevealedRarity(nftRarity.rarity);
+        }
+      } catch {
+        // If we can't fetch, just show success
+      }
+      setMintStep("success");
+      setPendingRequest(null);
+
+      // Invalidate queries after short delay
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
+        queryClient.invalidateQueries({ queryKey: ["walletNftRarities"] });
+        queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
+        queryClient.invalidateQueries({ queryKey: ["profileNftRarities"] });
+        queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      }, 1000);
+    } catch (err) {
+      console.error("Fallback claim error:", err);
+      setError(getTransactionErrorMessage(err));
+    } finally {
+      setIsClaimingFallback(false);
+    }
+  };
 
   const price = mintConfig.priceSol;
   const isFree = price === BigInt(0);
@@ -109,233 +180,151 @@ export function BuyNftModal({
   // Calculate max quantity user can buy
   const maxQuantity = remaining !== null ? Math.min(Number(remaining), 10) : 10;
 
+  // Check if fallback claim is available (60 seconds after request)
+  const canClaimFallback = fallbackCountdown !== null && fallbackCountdown <= 0;
+
   const formatPrice = (qty: number = 1) => {
     if (isFree) return "Free";
     const totalPrice = Number(price) * qty;
     return `${totalPrice / LAMPORTS_PER_SOL} SOL`;
   };
 
-  // Legacy mint without VRF rarity
-  const handleLegacyMint = async () => {
-    if (!publicKey || !ecosystemConfig) return;
-
-    const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
-
-    for (let i = 0; i < quantity; i++) {
-      setMintingProgress(i + 1);
-      await mintNftSol({
-        contentCid,
-        creator,
-        treasury: ecosystemConfig.treasury,
-        platform: platformWallet,
-      });
-    }
-
-    onSuccess?.();
-    onClose();
-  };
-
-  // Complete a pending mint that was started but not finished (cross-device recovery)
-  const handleRecoverPendingMint = async () => {
-    if (!publicKey || !client || !pendingMintOnChain || !ecosystemConfig) return;
-
-    setError(null);
-    setMintStep("revealing");
-
-    // Use platform wallet or fall back to treasury
-    const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
-
-    try {
-      // Fetch the content collection
-      const contentCollection = await client.fetchContentCollection(contentCid);
-      if (!contentCollection) {
-        throw new Error("Content collection not found");
-      }
-
-      // Wait for randomness with retry logic (oracle may need time)
-      console.log("Waiting for oracle to provide randomness...");
-      setMintStep("determining");
-
-      // Get reveal instruction from Switchboard with retry logic
-      const revealSbIx = await getRevealInstructionWithRetry(pendingMintOnChain.randomnessAccount);
-
-      setMintStep("revealing");
-
-      // Build reveal transaction with Switchboard reveal + our reveal_mint
-      const { instruction: revealProgramIx, nftAssetKeypair } = await client.revealMintInstruction(
-        publicKey,
-        contentCid,
-        creator,
-        contentCollection.collectionAsset,
-        pendingMintOnChain.randomnessAccount,
-        ecosystemConfig.treasury,
-        platformWallet
-      );
-
-      const revealTx = new Transaction()
-        .add(revealSbIx)
-        .add(revealProgramIx);
-
-      revealTx.feePayer = publicKey;
-      revealTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      revealTx.partialSign(nftAssetKeypair);
-
-      await simulatePartiallySignedTransaction(connection, revealTx);
-
-      const revealSig = await sendTransaction(revealTx, connection, {
-        signers: [nftAssetKeypair],
-      });
-      await connection.confirmTransaction(revealSig, "confirmed");
-      console.log("Recovery reveal confirmed:", revealSig);
-
-      setMintStep("success");
-      setPendingMintOnChain(null);
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Invalidate NFT-related queries to show the new NFT immediately
-      queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
-      queryClient.invalidateQueries({ queryKey: ["walletNftRarities"] });
-      queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
-      queryClient.invalidateQueries({ queryKey: ["profileNftRarities"] });
-      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
-
-      onSuccess?.(revealedRarity ?? undefined);
-      handleClose();
-    } catch (err) {
-      console.error("Recovery error:", err);
-      setError(getTransactionErrorMessage(err));
-      setMintStep("idle");
-    }
-  };
-
-  // VRF-based mint with rarity (two-step flow: commit + reveal)
-  const handleVrfMint = async () => {
+  // MagicBlock VRF mint with fallback
+  const handleMagicBlockMint = async () => {
     if (!publicKey || !ecosystemConfig || !client) return;
 
-    const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+    // Check balance before starting
+    const balance = await connection.getBalance(publicKey);
+    const totalCost = Number(price) * quantity;
+    const minRequired = totalCost + 10_000_000; // Add 0.01 SOL buffer for fees
+    if (balance < minRequired) {
+      const needed = (minRequired - balance) / LAMPORTS_PER_SOL;
+      throw new Error(`Insufficient balance. You need at least ${needed.toFixed(3)} more SOL.`);
+    }
+
+    const platformWallet = DEFAULT_PLATFORM_WALLET;
 
     for (let i = 0; i < quantity; i++) {
       setMintingProgress(i + 1);
       setRevealedRarity(null);
 
       try {
-        // Step 1: Create randomness + Commit (combined in single transaction)
-        setMintStep("committing");
-
-        // Create randomness account and get both create + commit instructions
-        const {
-          randomnessAccount,
-          randomnessKeypair,
-          createInstruction,
-          commitInstruction,
-        } = await createRandomnessAccount();
-
-        // Build our program's commit_mint instruction
-        const commitProgramIx = await client.commitMintInstruction(
-          publicKey,
-          contentCid,
-          creator,
-          ecosystemConfig.treasury,
-          randomnessAccount,
-          platformWallet
-        );
-
-        // Combine all instructions into ONE transaction:
-        // 1. Create randomness account
-        // 2. Switchboard commit instruction
-        // 3. Our program's commit_mint instruction
-        console.log("Sending combined create + commit transaction...");
-        const commitTx = new Transaction()
-          .add(createInstruction)
-          .add(commitInstruction)
-          .add(commitProgramIx);
-
-        commitTx.feePayer = publicKey;
-        commitTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-        commitTx.partialSign(randomnessKeypair);
-
-        await simulatePartiallySignedTransaction(connection, commitTx);
-
-        const commitSig = await sendTransaction(commitTx, connection, {
-          signers: [randomnessKeypair],
-        });
-        await connection.confirmTransaction(commitSig, "confirmed");
-        console.log("Commit transaction confirmed:", commitSig);
-
-        // Step 2: Wait for randomness with retry
-        setMintStep("determining");
-
-        // Get reveal instruction from Switchboard with retry logic
-        const revealSbIx = await getRevealInstructionWithRetry(randomnessAccount);
-
-        // Step 3: Reveal and create NFT with rarity
-        setMintStep("revealing");
-
-        // Fetch the content collection
-        const contentCollection = await client.fetchContentCollection(contentCid);
+        // Fetch the content collection and content data
+        const [contentCollection, content] = await Promise.all([
+          client.fetchContentCollection(contentCid),
+          client.fetchContent(contentCid),
+        ]);
         if (!contentCollection) {
           throw new Error("Content collection not found");
         }
-
-        // Build reveal transaction with Switchboard reveal + our reveal_mint
-        if (!ecosystemConfig) {
-          throw new Error("Ecosystem config not loaded");
+        if (!content) {
+          throw new Error("Content not found");
         }
-        const { instruction: revealProgramIx, nftAssetKeypair } = await client.revealMintInstruction(
+
+        // Calculate edition number for unique PDA (minted + pending + 1)
+        const edition = content.mintedCount + content.pendingCount + BigInt(1);
+
+        // Step 1: Send transaction to request mint
+        setMintStep("committing");
+
+        // Get the MagicBlock request mint instruction
+        const {
+          instruction: mbRequestIx,
+          mintRequestPda,
+          nftAssetPda,
+        } = await client.mbRequestMintInstruction(
           publicKey,
           contentCid,
           creator,
-          contentCollection.collectionAsset,
-          randomnessAccount,
           ecosystemConfig.treasury,
-          platformWallet
+          platformWallet,
+          contentCollection.collectionAsset,
+          MAGICBLOCK_DEFAULT_QUEUE,
+          edition
         );
 
-        const revealTx = new Transaction()
-          .add(revealSbIx)
-          .add(revealProgramIx);
+        // Build transaction
+        const tx = new Transaction().add(mbRequestIx);
+        tx.feePayer = publicKey;
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-        // Set up transaction for simulation
-        revealTx.feePayer = publicKey;
-        revealTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        const sig = await sendTransaction(tx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
+        console.log("MagicBlock mint request confirmed:", sig);
 
-        // Sign with NFT asset keypair
-        revealTx.partialSign(nftAssetKeypair);
+        // Step 2: Wait for oracle to create the NFT
+        setMintStep("determining");
 
-        // Simulate before sending
-        await simulatePartiallySignedTransaction(connection, revealTx);
+        // Poll for NFT to appear (oracle creates it via callback)
+        const maxWaitTime = 7000; // 7 seconds max (5 second timeout + 2 second buffer)
+        const pollInterval = 1000; // Check every 1 second
+        const startTime = Date.now();
+        let nftCreated = false;
 
-        // Send reveal transaction (requires wallet signature)
-        const revealSig = await sendTransaction(revealTx, connection, {
-          signers: [nftAssetKeypair],
-        });
-        await connection.confirmTransaction(revealSig, "confirmed");
-        console.log("Reveal transaction confirmed:", revealSig);
-
-        // Fetch the revealed rarity from the NftRarity account
-        try {
-          const nftRarity = await client.fetchNftRarity(nftAssetKeypair.publicKey);
-          if (nftRarity) {
-            setRevealedRarity(nftRarity.rarity);
-            console.log("Revealed rarity:", getRarityName(nftRarity.rarity));
+        while (Date.now() - startTime < maxWaitTime && !nftCreated) {
+          try {
+            // Check if NFT rarity has been revealed
+            const nftRarity = await client.fetchNftRarity(nftAssetPda);
+            if (nftRarity && nftRarity.revealedAt > BigInt(0)) {
+              nftCreated = true;
+              setRevealedRarity(nftRarity.rarity);
+              console.log("NFT created with rarity:", getRarityName(nftRarity.rarity));
+            }
+          } catch {
+            // NFT rarity not found or error, keep polling
           }
-        } catch (rarityErr) {
-          console.error("Could not fetch rarity:", rarityErr);
+
+          if (!nftCreated) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+          }
         }
 
-        setMintStep("success");
+        if (!nftCreated) {
+          // Oracle hasn't responded within timeout - use slot hash randomness fallback
+          console.log("Oracle timeout reached. Using slot hash randomness fallback...");
+
+          try {
+            const fallbackIx = await client.mbClaimFallbackInstruction(publicKey, contentCid, edition);
+            const fallbackTx = new Transaction().add(fallbackIx);
+            fallbackTx.feePayer = publicKey;
+            fallbackTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+            const fallbackSig = await sendTransaction(fallbackTx, connection);
+            await connection.confirmTransaction(fallbackSig, "confirmed");
+
+            console.log("Fallback claim confirmed:", fallbackSig);
+
+            // Fetch the actual rarity that was assigned (slot hash randomness, not always Common)
+            try {
+              const nftRarity = await client.fetchNftRarity(nftAssetPda);
+              if (nftRarity) {
+                setRevealedRarity(nftRarity.rarity);
+                console.log("Fallback rarity:", getRarityName(nftRarity.rarity));
+              }
+            } catch {
+              // If we can't fetch rarity, just show success without specific rarity
+            }
+            setMintStep("success");
+          } catch (fallbackErr) {
+            // If auto-claim fails, show pending state so user can retry manually
+            console.error("Auto fallback claim failed:", fallbackErr);
+            await checkPendingRequest();
+            throw new Error("Failed to complete mint. Please try claiming manually.");
+          }
+        } else {
+          setMintStep("success");
+        }
 
       } catch (err) {
-        console.error("VRF mint error:", err);
+        console.error("MagicBlock mint error:", err);
         throw err;
       }
     }
 
-    // Longer pause to show success state with rarity
+    // Pause to show success state
     await new Promise(resolve => setTimeout(resolve, 2500));
 
-    // Invalidate NFT-related queries to show the new NFT immediately
+    // Invalidate NFT-related queries
     queryClient.invalidateQueries({ queryKey: ["walletNfts"] });
     queryClient.invalidateQueries({ queryKey: ["walletNftRarities"] });
     queryClient.invalidateQueries({ queryKey: ["profileNfts"] });
@@ -367,11 +356,7 @@ export function BuyNftModal({
     }
 
     try {
-      if (ENABLE_VRF_RARITY) {
-        await handleVrfMint();
-      } else {
-        await handleLegacyMint();
-      }
+      await handleMagicBlockMint();
     } catch (err) {
       console.error("Failed to mint NFT:", err);
       setError(getTransactionErrorMessage(err));
@@ -414,9 +399,7 @@ export function BuyNftModal({
 
       <div className="relative bg-gray-900 rounded-xl w-full max-w-md p-6 m-4">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">
-            {ENABLE_VRF_RARITY ? "Mint NFT with Rarity" : "Buy NFT"}
-          </h2>
+          <h2 className="text-xl font-bold">Mint NFT</h2>
           <button
             onClick={handleClose}
             disabled={isProcessing}
@@ -435,38 +418,54 @@ export function BuyNftModal({
         )}
 
         <div className="space-y-4">
-          {/* Pending Mint Recovery Banner */}
-          {ENABLE_VRF_RARITY && pendingMintOnChain && mintStep === "idle" && (
+          {/* Pending Request Banner */}
+          {pendingRequest && mintStep === "idle" && (
             <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-medium text-amber-300">Incomplete Mint Found</span>
+                <span className="font-medium text-amber-300">Pending Mint</span>
               </div>
               <p className="text-gray-300 text-sm mb-3">
-                You have a pending mint that was started but not completed.
-                Your payment of <span className="font-medium text-white">{Number(pendingMintOnChain.amountPaid) / LAMPORTS_PER_SOL} SOL</span> is waiting.
+                Waiting for VRF oracle to determine rarity.
+                <br />
+                <span className="text-white font-medium">{Number(pendingRequest.amountPaid) / LAMPORTS_PER_SOL} SOL</span> is held in escrow.
               </p>
-              <button
-                onClick={handleRecoverPendingMint}
-                className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-              >
-                Complete Mint Now
-              </button>
+              {canClaimFallback ? (
+                <button
+                  onClick={handleClaimFallback}
+                  disabled={isClaimingFallback}
+                  className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-500/50 text-black font-medium rounded-lg transition-colors"
+                >
+                  {isClaimingFallback ? "Claiming..." : "Claim Now"}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-400">
+                    Oracle should respond soon. Fallback available in {fallbackCountdown}s
+                  </p>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5">
+                    <div
+                      className="bg-amber-400 h-1.5 rounded-full transition-all"
+                      style={{ width: `${Math.max(0, 100 - (fallbackCountdown || 0) / FALLBACK_TIMEOUT_SECONDS * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Loading state for checking pending mints */}
+          {/* Loading state for checking pending */}
           {isCheckingPending && (
             <div className="text-center py-2">
               <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs text-gray-500 mt-1">Checking for pending mints...</p>
+              <p className="text-xs text-gray-500 mt-1">Checking status...</p>
             </div>
           )}
 
-          {/* Rarity Info Banner (VRF mode only) */}
-          {ENABLE_VRF_RARITY && mintStep === "idle" && !pendingMintOnChain && (
+          {/* Rarity Info Banner */}
+          {mintStep === "idle" && !pendingRequest && (
             <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/30 rounded-lg p-3 text-sm">
               <div className="flex items-center gap-2 mb-2">
                 <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -679,10 +678,10 @@ export function BuyNftModal({
             </div>
           )}
 
-          {mintStep === "idle" && (
+          {mintStep === "idle" && !pendingRequest && (
             <button
               onClick={handleBuy}
-              disabled={isMintingNft || isSoldOut || !publicKey}
+              disabled={isSoldOut || !publicKey}
               className={`w-full py-3 rounded-lg font-medium transition-colors ${
                 isSoldOut
                   ? "bg-gray-700 text-gray-400 cursor-not-allowed"
@@ -691,15 +690,13 @@ export function BuyNftModal({
             >
               {isSoldOut
                 ? "Sold Out"
-                : isMintingNft
-                ? `Minting ${mintingProgress}/${quantity}...`
                 : !publicKey
                 ? "Connect Wallet"
                 : isFree
                 ? quantity > 1 ? `Mint ${quantity} for Free` : "Mint for Free"
                 : quantity > 1
-                ? `Buy ${quantity} for ${formatPrice(quantity)}`
-                : `Buy for ${formatPrice()}`}
+                ? `Mint ${quantity} for ${formatPrice(quantity)}`
+                : `Mint for ${formatPrice()}`}
             </button>
           )}
         </div>

@@ -53,6 +53,24 @@ export async function simulatePartiallySignedTransaction(
 
   if (simulation.value.err) {
     const logs = simulation.value.logs || [];
+
+    // Check for specific error patterns
+    const insufficientLamportsLog = logs.find(log => log.includes("insufficient lamports"));
+    if (insufficientLamportsLog) {
+      // Parse "Transfer: insufficient lamports X, need Y" pattern
+      const match = insufficientLamportsLog.match(/insufficient lamports (\d+), need (\d+)/);
+      if (match) {
+        const has = parseInt(match[1]) / 1e9;
+        const need = parseInt(match[2]) / 1e9;
+        throw new Error(`Insufficient balance. You have ${has.toFixed(3)} SOL but need ${need.toFixed(3)} SOL.`);
+      }
+      throw new Error("Insufficient balance for this transaction");
+    }
+
+    if (logs.some(log => log.includes("already in use"))) {
+      throw new Error("Account already exists - please try again");
+    }
+
     const errorLog = logs.find(log =>
       log.includes("Error") || log.includes("error") || log.includes("failed")
     );
