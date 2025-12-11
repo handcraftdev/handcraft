@@ -22,6 +22,12 @@ import {
   getRentConfigPda,
   getPendingMintPda,
   getNftRarityPda,
+  getSrsMintRequestPda,
+  getSrsNftAssetPda,
+  getMbMintRequestPda,
+  getMbNftAssetPda,
+  MAGICBLOCK_DEFAULT_QUEUE,
+  MB_FALLBACK_TIMEOUT_SECONDS,
   ContentRewardPool,
   WalletContentState,
   MintConfig,
@@ -50,6 +56,13 @@ export {
   Rarity,
   getRarityName,
   getRarityWeight,
+  getContentPda,
+  getSrsMintRequestPda,
+  getSrsNftAssetPda,
+  getMbMintRequestPda,
+  getMbNftAssetPda,
+  MAGICBLOCK_DEFAULT_QUEUE,
+  MB_FALLBACK_TIMEOUT_SECONDS,
   MIN_CREATOR_ROYALTY_BPS,
   MAX_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
@@ -58,6 +71,7 @@ export {
   RENT_PERIOD_7D,
   MIN_RENT_FEE_LAMPORTS,
 };
+export type { SrsMintRequest, MbMintRequest } from "@handcraft/sdk";
 export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint };
 
 export function useContentRegistry() {
@@ -859,6 +873,7 @@ export function useContentRegistry() {
 
   // Claim rewards with on-chain NFT verification (recommended)
   // This verifies actual NFT ownership at claim time, preventing gaming the system
+  // Automatically batches claims if there are too many NFTs to fit in one transaction
   const claimRewardsVerified = useMutation({
     mutationFn: async ({
       contentCid,
@@ -886,24 +901,63 @@ export function useContentRegistry() {
 
       console.log("Found NFT assets:", nftAssets.length);
 
-      const ix = await client.claimRewardsVerifiedInstruction(
-        publicKey,
-        contentCid,
-        nftAssets
-      );
+      // Limit NFTs per transaction to avoid exceeding account limit
+      // Each NFT adds 2 accounts (NFT asset + reward state PDA)
+      // Fixed accounts: contentRewardPool, walletContentState, contentCollection, holder, systemProgram = 5
+      // Max accounts per tx = 64, so max NFTs = (64 - 5) / 2 = 29
+      const MAX_NFTS_PER_TX = 25; // Conservative limit to leave room for compute budget etc
 
-      const tx = new Transaction().add(ix);
+      if (nftAssets.length <= MAX_NFTS_PER_TX) {
+        // Single transaction for small batches
+        const ix = await client.claimRewardsVerifiedInstruction(
+          publicKey,
+          contentCid,
+          nftAssets
+        );
 
-      // Simulate transaction before prompting wallet
-      console.log("Simulating verified claim transaction...");
-      await simulateTransaction(connection, tx, publicKey);
-      console.log("Simulation successful, sending to wallet...");
+        const tx = new Transaction().add(ix);
 
-      const signature = await sendTransaction(tx, connection);
-      console.log("Verified claim tx sent:", signature);
-      await connection.confirmTransaction(signature, "confirmed");
-      console.log("Verified claim confirmed!");
-      return signature;
+        console.log("Simulating verified claim transaction...");
+        await simulateTransaction(connection, tx, publicKey);
+        console.log("Simulation successful, sending to wallet...");
+
+        const signature = await sendTransaction(tx, connection);
+        console.log("Verified claim tx sent:", signature);
+        await connection.confirmTransaction(signature, "confirmed");
+        console.log("Verified claim confirmed!");
+        return signature;
+      } else {
+        // Multiple transactions for large batches
+        console.log(`Splitting ${nftAssets.length} NFTs into batches of ${MAX_NFTS_PER_TX}`);
+        const batches: PublicKey[][] = [];
+        for (let i = 0; i < nftAssets.length; i += MAX_NFTS_PER_TX) {
+          batches.push(nftAssets.slice(i, i + MAX_NFTS_PER_TX));
+        }
+
+        let lastSignature = "";
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          console.log(`Processing batch ${i + 1}/${batches.length} with ${batch.length} NFTs`);
+
+          const ix = await client.claimRewardsVerifiedInstruction(
+            publicKey,
+            contentCid,
+            batch
+          );
+
+          const tx = new Transaction().add(ix);
+
+          console.log(`Simulating batch ${i + 1}...`);
+          await simulateTransaction(connection, tx, publicKey);
+
+          lastSignature = await sendTransaction(tx, connection);
+          console.log(`Batch ${i + 1} tx sent:`, lastSignature);
+          await connection.confirmTransaction(lastSignature, "confirmed");
+          console.log(`Batch ${i + 1} confirmed!`);
+        }
+
+        return lastSignature;
+      }
     },
     onSuccess: (_, { contentCid }) => {
       queryClient.invalidateQueries({ queryKey: ["contentRewardPool", contentCid] });
@@ -912,8 +966,9 @@ export function useContentRegistry() {
     },
   });
 
-  // Batch claim rewards mutation (claims from multiple content positions in one transaction)
+  // Batch claim rewards mutation (claims from multiple content positions)
   // Uses verified claims with per-NFT tracking
+  // Automatically splits into multiple transactions if needed
   const claimAllRewards = useMutation({
     mutationFn: async ({
       contentCids,
@@ -929,9 +984,17 @@ export function useContentRegistry() {
         count: contentCids.length,
       });
 
-      const tx = new Transaction();
+      // Limit NFTs per transaction to avoid exceeding account limit
+      // Each NFT adds 2 accounts (NFT asset + reward state PDA)
+      // Fixed accounts: contentRewardPool, walletContentState, contentCollection, holder, systemProgram = 5
+      // Max accounts per tx = 64, so max NFTs = (64 - 5) / 2 = 29
+      const MAX_NFTS_PER_TX = 25; // Conservative limit to leave room for compute budget etc
 
-      // Build verified claim instructions for each content
+      // Collect all claim batches: { contentCid, nftAssets[] }
+      type ClaimBatch = { contentCid: string; nftAssets: PublicKey[] };
+      const allBatches: ClaimBatch[] = [];
+
+      // Build batched claims for each content
       for (const contentCid of contentCids) {
         const contentCollection = await client.fetchContentCollection(contentCid);
         if (!contentCollection) {
@@ -949,29 +1012,77 @@ export function useContentRegistry() {
           continue;
         }
 
-        console.log(`Adding claim for ${contentCid} with ${nftAssets.length} NFTs`);
-        const ix = await client.claimRewardsVerifiedInstruction(
-          publicKey,
-          contentCid,
-          nftAssets
-        );
-        tx.add(ix);
+        // Split NFTs into batches if needed
+        for (let i = 0; i < nftAssets.length; i += MAX_NFTS_PER_TX) {
+          allBatches.push({
+            contentCid,
+            nftAssets: nftAssets.slice(i, i + MAX_NFTS_PER_TX),
+          });
+        }
       }
 
-      if (tx.instructions.length === 0) {
+      if (allBatches.length === 0) {
         throw new Error("No valid claims to process");
       }
 
-      // Simulate transaction before prompting wallet
-      console.log(`Simulating batch claim transaction (${tx.instructions.length} instructions)...`);
-      await simulateTransaction(connection, tx, publicKey);
-      console.log("Simulation successful, sending to wallet...");
+      console.log(`Processing ${allBatches.length} claim batch(es)`);
 
-      const signature = await sendTransaction(tx, connection);
-      console.log("Batch claim tx sent:", signature);
-      await connection.confirmTransaction(signature, "confirmed");
-      console.log("Batch claim confirmed!");
-      return signature;
+      // Try to fit multiple batches into one transaction if they're small enough
+      // But if that fails, process one batch at a time
+      let lastSignature = "";
+
+      // Group batches into transactions (max ~12 NFTs per tx total)
+      let currentTx = new Transaction();
+      let currentNftCount = 0;
+      let txIndex = 0;
+
+      for (let i = 0; i < allBatches.length; i++) {
+        const batch = allBatches[i];
+        const batchNftCount = batch.nftAssets.length;
+
+        // If adding this batch would exceed limit, send current tx first
+        if (currentNftCount + batchNftCount > MAX_NFTS_PER_TX && currentTx.instructions.length > 0) {
+          txIndex++;
+          console.log(`Sending transaction ${txIndex} with ${currentNftCount} NFTs...`);
+
+          try {
+            await simulateTransaction(connection, currentTx, publicKey);
+            lastSignature = await sendTransaction(currentTx, connection);
+            await connection.confirmTransaction(lastSignature, "confirmed");
+            console.log(`Transaction ${txIndex} confirmed:`, lastSignature);
+          } catch (err) {
+            console.error(`Transaction ${txIndex} failed:`, err);
+            throw err;
+          }
+
+          currentTx = new Transaction();
+          currentNftCount = 0;
+        }
+
+        // Add batch to current transaction
+        console.log(`Adding claim for ${batch.contentCid} with ${batchNftCount} NFTs`);
+        const ix = await client.claimRewardsVerifiedInstruction(
+          publicKey,
+          batch.contentCid,
+          batch.nftAssets
+        );
+        currentTx.add(ix);
+        currentNftCount += batchNftCount;
+      }
+
+      // Send remaining transaction
+      if (currentTx.instructions.length > 0) {
+        txIndex++;
+        console.log(`Sending final transaction ${txIndex} with ${currentNftCount} NFTs...`);
+
+        await simulateTransaction(connection, currentTx, publicKey);
+        lastSignature = await sendTransaction(currentTx, connection);
+        await connection.confirmTransaction(lastSignature, "confirmed");
+        console.log(`Transaction ${txIndex} confirmed:`, lastSignature);
+      }
+
+      console.log(`All claims completed! Total transactions: ${txIndex}`);
+      return lastSignature;
     },
     onSuccess: () => {
       // Invalidate all content reward pools and wallet states
@@ -1461,6 +1572,8 @@ export function useContentRegistry() {
     nftAsset: { toBase58(): string };
     pending: bigint;
     rewardDebt: bigint;
+    weight: number;
+    createdAt: bigint;  // Timestamp for sorting by mint sequence
   }
 
   // Per-content pending reward info with NFT details
