@@ -1778,41 +1778,6 @@ pub mod content_registry {
         handle_burn_nft(ctx)
     }
 
-    // ============================================
-    // SRS-BASED MINTING (SINGLE TRANSACTION!)
-    // ============================================
-    // Uses Switchboard Randomness Service for oracle-delivered randomness
-    // User signs ONCE, oracle callback mints NFT automatically:
-    // 1. srs_request_mint - user pays, oracle callback creates NFT
-
-    /// Request mint with SRS randomness - SINGLE USER TRANSACTION!
-    /// User signs once. Oracle callback automatically:
-    /// - Generates randomness
-    /// - Determines rarity
-    /// - Creates NFT
-    /// - Distributes payment
-    pub fn srs_request_mint(ctx: Context<SrsRequestMint>) -> Result<()> {
-        handle_srs_request_mint(ctx)
-    }
-
-    /// Oracle callback: Fulfill mint with randomness and create NFT
-    /// Called BY THE ORACLE, not by user - creates NFT automatically
-    pub fn srs_fulfill_mint(ctx: Context<SrsFulfillMint>, randomness: [u8; 32]) -> Result<()> {
-        handle_srs_fulfill_mint(ctx, randomness)
-    }
-
-    /// Cancel unfulfilled SRS mint request and get refund
-    /// Can only be called after 10 minutes if oracle fails
-    pub fn srs_cancel_mint(ctx: Context<SrsCancelMint>) -> Result<()> {
-        handle_srs_cancel_mint(ctx)
-    }
-
-    /// Cleanup orphaned SRS mint accounts when mint_request was already closed
-    /// Use when a cancel left orphaned nft_reward_state and nft_rarity accounts
-    pub fn srs_cleanup_orphaned(ctx: Context<SrsCleanupOrphaned>) -> Result<()> {
-        handle_srs_cleanup_orphaned(ctx)
-    }
-
     // =========================================================================
     // MagicBlock VRF Minting - Fast, single-transaction VRF minting
     // =========================================================================

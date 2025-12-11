@@ -204,16 +204,6 @@ export { Rarity, getRarityWeight, getRarityName, getRarityFromWeight } from "./t
 export const BUNDLE_SEED = "bundle";
 export const BUNDLE_ITEM_SEED = "bundle_item";
 
-// ========== SRS (Switchboard Randomness Service) CONSTANTS ==========
-
-// SRS Program ID
-export const SRS_PROGRAM_ID_STRING = "RANDMo5gFnqnXJW5Z52KNmd24sAo95KAd5VbiCtq5Rh";
-export const SRS_PROGRAM_ID = new PublicKey(SRS_PROGRAM_ID_STRING);
-
-// SRS seeds for PDA derivation
-export const SRS_MINT_REQUEST_SEED = "srs_mint_request";
-export const SRS_NFT_SEED = "srs_nft";
-
 // ========== MAGICBLOCK VRF CONSTANTS ==========
 
 // MagicBlock VRF Program ID

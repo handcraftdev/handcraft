@@ -23,5 +23,4 @@ spl-token = { version = "4.0", default-features = false, features = ["no-entrypo
 mpl-core = "0.11.1"
 solana-sha256-hasher = "2.1"
 switchboard-on-demand = "0.11.3"
-solana-randomness-service-lite = "1.0.1"
 ephemeral-vrf-sdk = { version = "0.2", features = ["anchor"] }

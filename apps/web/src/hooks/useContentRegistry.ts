@@ -22,8 +22,6 @@ import {
   getRentConfigPda,
   getPendingMintPda,
   getNftRarityPda,
-  getSrsMintRequestPda,
-  getSrsNftAssetPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
   MAGICBLOCK_DEFAULT_QUEUE,
@@ -57,8 +55,6 @@ export {
   getRarityName,
   getRarityWeight,
   getContentPda,
-  getSrsMintRequestPda,
-  getSrsNftAssetPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
   MAGICBLOCK_DEFAULT_QUEUE,
@@ -71,7 +67,7 @@ export {
   RENT_PERIOD_7D,
   MIN_RENT_FEE_LAMPORTS,
 };
-export type { SrsMintRequest, MbMintRequest } from "@handcraft/sdk";
+export type { MbMintRequest } from "@handcraft/sdk";
 export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint };
 
 export function useContentRegistry() {

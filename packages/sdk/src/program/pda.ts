@@ -12,8 +12,6 @@ import {
   RENT_ENTRY_SEED,
   NFT_RARITY_SEED,
   PENDING_MINT_SEED,
-  SRS_MINT_REQUEST_SEED,
-  SRS_NFT_SEED,
   MB_MINT_REQUEST_SEED,
   MB_NFT_SEED,
   PRECISION,
@@ -144,41 +142,6 @@ export function calculateWeightedPendingReward(weight: number, rewardPerShare: b
   const entitled = BigInt(weight) * rewardPerShare;
   if (entitled <= nftRewardDebt) return BigInt(0);
   return (entitled - nftRewardDebt) / PRECISION;
-}
-
-// ========== SRS (Switchboard Randomness Service) PDAs ==========
-
-/**
- * Get the SRS mint request PDA for a buyer and content
- * This is used for single-transaction VRF minting
- */
-export function getSrsMintRequestPda(buyer: PublicKey, contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(SRS_MINT_REQUEST_SEED), buyer.toBuffer(), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-/**
- * Get the SRS NFT asset PDA derived from the mint request
- * This allows the oracle to create the NFT without user signature
- */
-export function getSrsNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(SRS_NFT_SEED), mintRequestPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-/**
- * Get the SRS state PDA from the SRS program
- */
-export function getSrsStatePda(): [PublicKey, number] {
-  const SRS_PROGRAM_ID = new PublicKey("RANDMo5gFnqnXJW5Z52KNmd24sAo95KAd5VbiCtq5Rh");
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("STATE")],
-    SRS_PROGRAM_ID
-  );
 }
 
 // ========== MagicBlock VRF PDAs ==========

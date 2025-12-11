@@ -8,7 +8,6 @@ pub mod rent;
 pub mod bundle;
 pub mod rarity_mint;
 pub mod burn;
-pub mod srs_mint;
 pub mod magicblock_mint;
 
 pub use ecosystem::*;
@@ -21,5 +20,4 @@ pub use rent::*;
 pub use bundle::*;
 pub use rarity_mint::*;
 pub use burn::*;
-pub use srs_mint::*;
 pub use magicblock_mint::*;

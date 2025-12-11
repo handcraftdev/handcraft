@@ -326,22 +326,6 @@ export interface PendingMint {
   hadExistingNfts: boolean;  // Whether there were existing NFTs at commit time
 }
 
-/** SRS (Switchboard Randomness Service) mint request - single transaction flow */
-export interface SrsMintRequest {
-  buyer: PublicKey;
-  content: PublicKey;
-  creator: PublicKey;
-  amountPaid: bigint;
-  createdAt: bigint;
-  hadExistingNfts: boolean;
-  bump: number;
-  nftBump: number;
-  isFulfilled: boolean;
-  platform: PublicKey;
-  collectionAsset: PublicKey;
-  treasury: PublicKey;
-}
-
 /** MagicBlock VRF mint request - 2-step flow with fallback */
 export interface MbMintRequest {
   buyer: PublicKey;

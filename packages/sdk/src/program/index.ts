@@ -13,7 +13,6 @@ import {
   PROGRAM_ID,
   PROGRAM_ID_STRING,
   MPL_CORE_PROGRAM_ID,
-  SRS_PROGRAM_ID,
   MAGICBLOCK_VRF_PROGRAM_ID,
   ContentType,
   PaymentCurrency,
@@ -33,7 +32,6 @@ import {
   RentConfig,
   RentEntry,
   PendingMint,
-  SrsMintRequest,
   MbMintRequest,
   NftRarity,
   Rarity,
@@ -54,9 +52,6 @@ import {
   getRentEntryPda,
   getPendingMintPda,
   getNftRarityPda,
-  getSrsMintRequestPda,
-  getSrsNftAssetPda,
-  getSrsStatePda,
   getMbMintRequestPda,
   getMbNftAssetPda,
   calculatePendingRewardForNft,
@@ -878,133 +873,6 @@ export async function burnNftInstruction(
 }
 
 // ============================================
-// SRS-BASED MINT (Single Transaction VRF!)
-// ============================================
-
-export interface SrsRequestMintResult {
-  instruction: TransactionInstruction;
-  randomnessRequestKeypair: Keypair;
-  mintRequestPda: PublicKey;
-  nftAssetPda: PublicKey;
-}
-
-/**
- * Request a mint with SRS randomness - SINGLE USER TRANSACTION!
- * The oracle will automatically:
- * 1. Generate randomness
- * 2. Determine rarity
- * 3. Create the NFT
- * 4. Distribute payment
- *
- * User just signs once and waits for the NFT to appear in their wallet.
- *
- * @param program Anchor program instance
- * @param buyer The buyer's public key
- * @param contentCid The content CID
- * @param creator The content creator's public key
- * @param treasury Ecosystem treasury
- * @param platform Platform wallet for commission
- * @param collectionAsset The Metaplex Core collection asset
- */
-export async function srsRequestMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  creator: PublicKey,
-  treasury: PublicKey,
-  platform: PublicKey,
-  collectionAsset: PublicKey
-): Promise<SrsRequestMintResult> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
-  const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
-  const [nftAssetPda] = getSrsNftAssetPda(mintRequestPda);
-  const [srsStatePda] = getSrsStatePda();
-
-  // Pre-create accounts for callback (user pays upfront)
-  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
-
-  // Generate keypair for the randomness request account
-  const randomnessRequestKeypair = Keypair.generate();
-
-  // Derive the escrow ATA for SRS fees
-  const randomnessEscrow = PublicKey.findProgramAddressSync(
-    [
-      randomnessRequestKeypair.publicKey.toBuffer(),
-      TOKEN_PROGRAM_ID.toBuffer(),
-      NATIVE_MINT.toBuffer(),
-    ],
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  )[0];
-
-  const instruction = await program.methods
-    .srsRequestMint()
-    .accounts({
-      ecosystemConfig: ecosystemConfigPda,
-      content: contentPda,
-      mintConfig: mintConfigPda,
-      mintRequest: mintRequestPda,
-      contentRewardPool: contentRewardPoolPda,
-      contentCollection: contentCollectionPda,
-      collectionAsset: collectionAsset,
-      creator: creator,
-      treasury: treasury,
-      platform: platform,
-      // Pre-created accounts for callback
-      buyerWalletState: buyerWalletStatePda,
-      nftAsset: nftAssetPda,
-      nftRewardState: nftRewardStatePda,
-      nftRarity: nftRarityPda,
-      // SRS accounts
-      srsProgram: SRS_PROGRAM_ID,
-      randomnessRequest: randomnessRequestKeypair.publicKey,
-      randomnessEscrow: randomnessEscrow,
-      srsState: srsStatePda,
-      nativeMint: NATIVE_MINT,
-      payer: buyer,
-      systemProgram: SystemProgram.programId,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-    })
-    .instruction();
-
-  return {
-    instruction,
-    randomnessRequestKeypair,
-    mintRequestPda,
-    nftAssetPda,
-  };
-}
-
-/**
- * Cancel an unfulfilled SRS mint request and get a refund
- * Can only be called after 10 minutes if the oracle fails to respond
- */
-export async function srsCancelMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string
-): Promise<TransactionInstruction> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
-
-  return await program.methods
-    .srsCancelMint()
-    .accounts({
-      content: contentPda,
-      mintRequest: mintRequestPda,
-      buyer: buyer,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-}
-
-// ============================================
 // MAGICBLOCK VRF MINT (2-step with fallback)
 // ============================================
 
@@ -1720,38 +1588,6 @@ export async function fetchPendingMint(
   }
 }
 
-export async function fetchSrsMintRequest(
-  connection: Connection,
-  buyer: PublicKey,
-  contentCid: string
-): Promise<SrsMintRequest | null> {
-  try {
-    const program = createProgram(connection);
-    const [contentPda] = getContentPda(contentCid);
-    const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).srsMintRequest.fetch(mintRequestPda);
-
-    return {
-      buyer: decoded.buyer,
-      content: decoded.content,
-      creator: decoded.creator,
-      amountPaid: BigInt(decoded.amountPaid.toString()),
-      createdAt: BigInt(decoded.createdAt.toString()),
-      hadExistingNfts: decoded.hadExistingNfts ?? false,
-      bump: decoded.bump,
-      nftBump: decoded.nftBump,
-      isFulfilled: decoded.isFulfilled ?? false,
-      platform: decoded.platform,
-      collectionAsset: decoded.collectionAsset,
-      treasury: decoded.treasury,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function fetchMbMintRequest(
   connection: Connection,
   buyer: PublicKey,
@@ -2425,25 +2261,6 @@ export function createContentRegistryClient(connection: Connection) {
     cancelExpiredMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
       cancelExpiredMintInstruction(program, buyer, contentCid),
 
-    // SRS (Switchboard Randomness Service) - single transaction VRF minting
-    srsRequestMintInstruction: (
-      buyer: PublicKey,
-      contentCid: string,
-      creator: PublicKey,
-      treasury: PublicKey,
-      platform: PublicKey,
-      collectionAsset: PublicKey
-    ): Promise<SrsRequestMintResult> =>
-      srsRequestMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
-
-    srsCancelMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
-      srsCancelMintInstruction(program, buyer, contentCid),
-
-    // SRS PDA helpers
-    getSrsMintRequestPda,
-    getSrsNftAssetPda,
-    getSrsStatePda,
-
     // MagicBlock VRF mint (2-step with fallback)
     mbRequestMintInstruction: (
       buyer: PublicKey,
@@ -2538,9 +2355,6 @@ export function createContentRegistryClient(connection: Connection) {
     // Pending mint recovery (VRF mints)
     fetchPendingMint: (buyer: PublicKey, contentCid: string) => fetchPendingMint(connection, buyer, contentCid),
     fetchAllPendingMintsForWallet: (wallet: PublicKey) => fetchAllPendingMintsForWallet(connection, wallet),
-
-    // SRS mint request (single-tx VRF mints)
-    fetchSrsMintRequest: (buyer: PublicKey, contentCid: string) => fetchSrsMintRequest(connection, buyer, contentCid),
 
     // MagicBlock mint request (2-step VRF with fallback)
     fetchMbMintRequest: (buyer: PublicKey, contentCid: string, edition: bigint) => fetchMbMintRequest(connection, buyer, contentCid, edition),
