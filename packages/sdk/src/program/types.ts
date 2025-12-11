@@ -72,7 +72,7 @@ export interface NftRewardState {
   nftAsset: PublicKey;
   content: PublicKey;
   rewardDebt: bigint;
-  weight: number;  // Rarity weight (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+  weight: number;  // Rarity weight (1=Common, 5=Uncommon, 20=Rare, 60=Epic, 120=Legendary)
   createdAt: bigint;
 }
 
@@ -87,6 +87,8 @@ export interface NftPendingReward {
   nftAsset: PublicKey;
   pending: bigint;
   rewardDebt: bigint;
+  weight: number;
+  createdAt: bigint;  // Timestamp when NFT was minted (for sorting)
 }
 
 export interface ContentPendingRewardDetails {
@@ -322,6 +324,42 @@ export interface PendingMint {
   amountPaid: bigint;  // Payment held in escrow
   createdAt: bigint;
   hadExistingNfts: boolean;  // Whether there were existing NFTs at commit time
+}
+
+/** SRS (Switchboard Randomness Service) mint request - single transaction flow */
+export interface SrsMintRequest {
+  buyer: PublicKey;
+  content: PublicKey;
+  creator: PublicKey;
+  amountPaid: bigint;
+  createdAt: bigint;
+  hadExistingNfts: boolean;
+  bump: number;
+  nftBump: number;
+  isFulfilled: boolean;
+  platform: PublicKey;
+  collectionAsset: PublicKey;
+  treasury: PublicKey;
+}
+
+/** MagicBlock VRF mint request - 2-step flow with fallback */
+export interface MbMintRequest {
+  buyer: PublicKey;
+  content: PublicKey;
+  creator: PublicKey;
+  amountPaid: bigint;
+  createdAt: bigint;
+  hadExistingNfts: boolean;
+  bump: number;
+  nftBump: number;
+  isFulfilled: boolean;
+  collectionAsset: PublicKey;
+  treasury: PublicKey;
+  platform: PublicKey;
+  contentCollectionBump: number;
+  metadataCid: string;
+  mintedCount: bigint;
+  edition: bigint;
 }
 
 /** Minimum time (in seconds) before a pending mint can be cancelled */

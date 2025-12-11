@@ -5,13 +5,16 @@ export * from "./pda";
 
 // Main program code
 import { Program, Idl, BN } from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, TransactionInstruction, Keypair } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, TransactionInstruction, Keypair, SYSVAR_RENT_PUBKEY, SYSVAR_SLOT_HASHES_PUBKEY } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, NATIVE_MINT } from "@solana/spl-token";
 import idlJson from "./content_registry.json";
 
 import {
   PROGRAM_ID,
   PROGRAM_ID_STRING,
   MPL_CORE_PROGRAM_ID,
+  SRS_PROGRAM_ID,
+  MAGICBLOCK_VRF_PROGRAM_ID,
   ContentType,
   PaymentCurrency,
   RentTier,
@@ -30,6 +33,8 @@ import {
   RentConfig,
   RentEntry,
   PendingMint,
+  SrsMintRequest,
+  MbMintRequest,
   NftRarity,
   Rarity,
   parseAnchorRarity,
@@ -49,6 +54,11 @@ import {
   getRentEntryPda,
   getPendingMintPda,
   getNftRarityPda,
+  getSrsMintRequestPda,
+  getSrsNftAssetPda,
+  getSrsStatePda,
+  getMbMintRequestPda,
+  getMbNftAssetPda,
   calculatePendingRewardForNft,
   calculateWeightedPendingReward,
 } from "./pda";
@@ -868,6 +878,290 @@ export async function burnNftInstruction(
 }
 
 // ============================================
+// SRS-BASED MINT (Single Transaction VRF!)
+// ============================================
+
+export interface SrsRequestMintResult {
+  instruction: TransactionInstruction;
+  randomnessRequestKeypair: Keypair;
+  mintRequestPda: PublicKey;
+  nftAssetPda: PublicKey;
+}
+
+/**
+ * Request a mint with SRS randomness - SINGLE USER TRANSACTION!
+ * The oracle will automatically:
+ * 1. Generate randomness
+ * 2. Determine rarity
+ * 3. Create the NFT
+ * 4. Distribute payment
+ *
+ * User just signs once and waits for the NFT to appear in their wallet.
+ *
+ * @param program Anchor program instance
+ * @param buyer The buyer's public key
+ * @param contentCid The content CID
+ * @param creator The content creator's public key
+ * @param treasury Ecosystem treasury
+ * @param platform Platform wallet for commission
+ * @param collectionAsset The Metaplex Core collection asset
+ */
+export async function srsRequestMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey,
+  collectionAsset: PublicKey
+): Promise<SrsRequestMintResult> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
+  const [nftAssetPda] = getSrsNftAssetPda(mintRequestPda);
+  const [srsStatePda] = getSrsStatePda();
+
+  // Pre-create accounts for callback (user pays upfront)
+  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
+
+  // Generate keypair for the randomness request account
+  const randomnessRequestKeypair = Keypair.generate();
+
+  // Derive the escrow ATA for SRS fees
+  const randomnessEscrow = PublicKey.findProgramAddressSync(
+    [
+      randomnessRequestKeypair.publicKey.toBuffer(),
+      TOKEN_PROGRAM_ID.toBuffer(),
+      NATIVE_MINT.toBuffer(),
+    ],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  )[0];
+
+  const instruction = await program.methods
+    .srsRequestMint()
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      content: contentPda,
+      mintConfig: mintConfigPda,
+      mintRequest: mintRequestPda,
+      contentRewardPool: contentRewardPoolPda,
+      contentCollection: contentCollectionPda,
+      collectionAsset: collectionAsset,
+      creator: creator,
+      treasury: treasury,
+      platform: platform,
+      // Pre-created accounts for callback
+      buyerWalletState: buyerWalletStatePda,
+      nftAsset: nftAssetPda,
+      nftRewardState: nftRewardStatePda,
+      nftRarity: nftRarityPda,
+      // SRS accounts
+      srsProgram: SRS_PROGRAM_ID,
+      randomnessRequest: randomnessRequestKeypair.publicKey,
+      randomnessEscrow: randomnessEscrow,
+      srsState: srsStatePda,
+      nativeMint: NATIVE_MINT,
+      payer: buyer,
+      systemProgram: SystemProgram.programId,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    randomnessRequestKeypair,
+    mintRequestPda,
+    nftAssetPda,
+  };
+}
+
+/**
+ * Cancel an unfulfilled SRS mint request and get a refund
+ * Can only be called after 10 minutes if the oracle fails to respond
+ */
+export async function srsCancelMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
+
+  return await program.methods
+    .srsCancelMint()
+    .accounts({
+      content: contentPda,
+      mintRequest: mintRequestPda,
+      buyer: buyer,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+// ============================================
+// MAGICBLOCK VRF MINT (2-step with fallback)
+// ============================================
+
+export interface MbRequestMintResult {
+  instruction: TransactionInstruction;
+  mintRequestPda: PublicKey;
+  nftAssetPda: PublicKey;
+  programIdentityPda: PublicKey;
+}
+
+/**
+ * Request a mint with MagicBlock VRF
+ * This is a 2-step process:
+ * 1. User calls this to start the mint request
+ * 2. MagicBlock oracle fulfills the request (or user claims fallback after timeout)
+ *
+ * @param program Anchor program instance
+ * @param buyer The buyer's public key
+ * @param contentCid The content CID
+ * @param creator The content creator's public key
+ * @param treasury Ecosystem treasury
+ * @param platform Platform wallet for commission (optional)
+ * @param collectionAsset The Metaplex Core collection asset
+ * @param oracleQueue The MagicBlock oracle queue (use MAGICBLOCK_DEFAULT_QUEUE)
+ * @param edition The edition number for this mint (minted_count + pending_count + 1)
+ */
+export async function mbRequestMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey | null,
+  collectionAsset: PublicKey,
+  oracleQueue: PublicKey,
+  edition: bigint
+): Promise<MbRequestMintResult> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
+  const [nftAssetPda] = getMbNftAssetPda(mintRequestPda);
+  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
+
+  // Program identity PDA (required by #[vrf] macro)
+  const [programIdentityPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("identity")],
+    PROGRAM_ID
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const instruction = await (program.methods as any)
+    .magicblockRequestMint(new BN(edition.toString()))
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      content: contentPda,
+      mintConfig: mintConfigPda,
+      mintRequest: mintRequestPda,
+      contentRewardPool: contentRewardPoolPda,
+      contentCollection: contentCollectionPda,
+      collectionAsset: collectionAsset,
+      creator: creator,
+      treasury: treasury,
+      platform: platform, // Optional account, can be null
+      buyerWalletState: buyerWalletStatePda,
+      nftAsset: nftAssetPda,
+      nftRewardState: nftRewardStatePda,
+      nftRarity: nftRarityPda,
+      payer: buyer,
+      oracleQueue: oracleQueue,
+      programIdentity: programIdentityPda,
+      vrfProgram: MAGICBLOCK_VRF_PROGRAM_ID,
+      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    mintRequestPda,
+    nftAssetPda,
+    programIdentityPda,
+  };
+}
+
+/**
+ * Claim fallback mint after VRF timeout (5 seconds)
+ * This mints the NFT using slot hash randomness when the oracle doesn't respond
+ */
+export async function mbClaimFallbackInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  edition: bigint
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
+  const [nftAssetPda] = getMbNftAssetPda(mintRequestPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+
+  // Fetch mint request to get stored values
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mintRequestData = await (program.account as any).magicBlockMintRequest.fetch(mintRequestPda);
+  const { creator, treasury, platform, collectionAsset } = mintRequestData;
+
+  return await program.methods
+    .magicblockClaimFallback()
+    .accounts({
+      mintRequest: mintRequestPda,
+      content: contentPda,
+      contentCollection: contentCollectionPda,
+      collectionAsset: collectionAsset,
+      nftAsset: nftAssetPda,
+      nftRarity: nftRarityPda,
+      nftRewardState: nftRewardStatePda,
+      buyer: buyer,
+      creator: creator,
+      treasury: treasury,
+      platform: platform,
+      contentRewardPool: contentRewardPoolPda,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Close a fulfilled MagicBlock mint request
+ * This reclaims rent and allows a new mint request for the same wallet+content
+ */
+export async function mbCloseFulfilledInstruction(
+  program: Program,
+  buyer: PublicKey,
+  contentCid: string,
+  edition: bigint
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
+
+  return await program.methods
+    .magicblockCloseFulfilled()
+    .accounts({
+      mintRequest: mintRequestPda,
+      buyer: buyer,
+    })
+    .instruction();
+}
+
+// ============================================
 // FETCH FUNCTIONS
 // ============================================
 
@@ -1426,6 +1720,75 @@ export async function fetchPendingMint(
   }
 }
 
+export async function fetchSrsMintRequest(
+  connection: Connection,
+  buyer: PublicKey,
+  contentCid: string
+): Promise<SrsMintRequest | null> {
+  try {
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [mintRequestPda] = getSrsMintRequestPda(buyer, contentPda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).srsMintRequest.fetch(mintRequestPda);
+
+    return {
+      buyer: decoded.buyer,
+      content: decoded.content,
+      creator: decoded.creator,
+      amountPaid: BigInt(decoded.amountPaid.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      hadExistingNfts: decoded.hadExistingNfts ?? false,
+      bump: decoded.bump,
+      nftBump: decoded.nftBump,
+      isFulfilled: decoded.isFulfilled ?? false,
+      platform: decoded.platform,
+      collectionAsset: decoded.collectionAsset,
+      treasury: decoded.treasury,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchMbMintRequest(
+  connection: Connection,
+  buyer: PublicKey,
+  contentCid: string,
+  edition: bigint
+): Promise<MbMintRequest | null> {
+  try {
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+    const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).magicBlockMintRequest.fetch(mintRequestPda);
+
+    return {
+      buyer: decoded.buyer,
+      content: decoded.content,
+      creator: decoded.creator,
+      amountPaid: BigInt(decoded.amountPaid.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      hadExistingNfts: decoded.hadExistingNfts ?? false,
+      bump: decoded.bump,
+      nftBump: decoded.nftBump,
+      isFulfilled: decoded.isFulfilled ?? false,
+      collectionAsset: decoded.collectionAsset,
+      treasury: decoded.treasury,
+      platform: decoded.platform,
+      contentCollectionBump: decoded.contentCollectionBump,
+      metadataCid: decoded.metadataCid,
+      mintedCount: BigInt(decoded.mintedCount.toString()),
+      edition: BigInt(decoded.edition?.toString() ?? "0"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch all pending mints for a wallet across all content
  * This is useful for recovery - finding any mints that were started but not completed
@@ -1517,10 +1880,12 @@ export async function getPendingRewardForContent(
   for (const nftAsset of nftAssets) {
     const nftRewardState = await fetchNftRewardState(connection, nftAsset);
     if (nftRewardState) {
-      // pending = (rewardPerShare - nftRewardDebt) / PRECISION
-      const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
-        ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
-        : BigInt(0);
+      // pending = (weight * rewardPerShare - nftRewardDebt) / PRECISION
+      const pending = calculateWeightedPendingReward(
+        nftRewardState.weight,
+        rewardPool.rewardPerShare,
+        nftRewardState.rewardDebt
+      );
       totalPending += pending;
     }
   }
@@ -1541,8 +1906,8 @@ export async function getPendingRewardsForWalletDetailed(
   connection: Connection,
   wallet: PublicKey,
   contentCids: string[]
-): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }>> {
-  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }> = [];
+): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }>> {
+  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }> = [];
 
   for (const contentCid of contentCids) {
     // Get reward pool and collection info
@@ -1565,19 +1930,30 @@ export async function getPendingRewardsForWalletDetailed(
 
     // Calculate pending rewards for each NFT using per-NFT tracking
     let totalPending = BigInt(0);
-    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> = [];
+    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> = [];
 
     for (const nftAsset of nftAssets) {
       const nftRewardState = await fetchNftRewardState(connection, nftAsset);
       if (nftRewardState) {
-        // pending = (rewardPerShare - nftRewardDebt) / PRECISION
-        const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
-          ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
-          : BigInt(0);
+        // pending = (weight * rewardPerShare - nftRewardDebt) / PRECISION
+        const pending = calculateWeightedPendingReward(
+          nftRewardState.weight,
+          rewardPool.rewardPerShare,
+          nftRewardState.rewardDebt
+        );
         totalPending += pending;
-        nftRewards.push({ nftAsset, pending, rewardDebt: nftRewardState.rewardDebt });
+        nftRewards.push({
+          nftAsset,
+          pending,
+          rewardDebt: nftRewardState.rewardDebt,
+          weight: nftRewardState.weight,
+          createdAt: nftRewardState.createdAt
+        });
       }
     }
+
+    // Sort by createdAt (mint sequence)
+    nftRewards.sort((a, b) => Number(a.createdAt - b.createdAt));
 
     results.push({ contentCid, pending: totalPending, nftCount, nftRewards });
   }
@@ -1600,8 +1976,8 @@ export async function getPendingRewardsOptimized(
   walletNfts: WalletNftMetadata[],
   rewardPools: Map<string, ContentRewardPool>,
   contentCollections: Map<string, ContentCollection>
-): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }>> {
-  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> }> = [];
+): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }>> {
+  const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }> = [];
 
   // Group NFTs by contentCid
   const nftsByContent = new Map<string, WalletNftMetadata[]>();
@@ -1636,18 +2012,30 @@ export async function getPendingRewardsOptimized(
     }
 
     let totalPending = BigInt(0);
-    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint }> = [];
+    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> = [];
 
     for (const nft of nfts) {
       const nftRewardState = nftRewardStates.get(nft.nftAsset.toBase58());
       if (nftRewardState) {
-        const pending = rewardPool.rewardPerShare > nftRewardState.rewardDebt
-          ? (rewardPool.rewardPerShare - nftRewardState.rewardDebt) / BigInt("1000000000000")
-          : BigInt(0);
+        // pending = (weight * rewardPerShare - nftRewardDebt) / PRECISION
+        const pending = calculateWeightedPendingReward(
+          nftRewardState.weight,
+          rewardPool.rewardPerShare,
+          nftRewardState.rewardDebt
+        );
         totalPending += pending;
-        nftRewards.push({ nftAsset: nft.nftAsset, pending, rewardDebt: nftRewardState.rewardDebt });
+        nftRewards.push({
+          nftAsset: nft.nftAsset,
+          pending,
+          rewardDebt: nftRewardState.rewardDebt,
+          weight: nftRewardState.weight,
+          createdAt: nftRewardState.createdAt
+        });
       }
     }
+
+    // Sort by createdAt (mint sequence)
+    nftRewards.sort((a, b) => Number(a.createdAt - b.createdAt));
 
     results.push({
       contentCid,
@@ -2037,6 +2425,48 @@ export function createContentRegistryClient(connection: Connection) {
     cancelExpiredMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
       cancelExpiredMintInstruction(program, buyer, contentCid),
 
+    // SRS (Switchboard Randomness Service) - single transaction VRF minting
+    srsRequestMintInstruction: (
+      buyer: PublicKey,
+      contentCid: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey,
+      collectionAsset: PublicKey
+    ): Promise<SrsRequestMintResult> =>
+      srsRequestMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
+
+    srsCancelMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
+      srsCancelMintInstruction(program, buyer, contentCid),
+
+    // SRS PDA helpers
+    getSrsMintRequestPda,
+    getSrsNftAssetPda,
+    getSrsStatePda,
+
+    // MagicBlock VRF mint (2-step with fallback)
+    mbRequestMintInstruction: (
+      buyer: PublicKey,
+      contentCid: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey | null,
+      collectionAsset: PublicKey,
+      oracleQueue: PublicKey,
+      edition: bigint
+    ): Promise<MbRequestMintResult> =>
+      mbRequestMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset, oracleQueue, edition),
+
+    mbClaimFallbackInstruction: (buyer: PublicKey, contentCid: string, edition: bigint): Promise<TransactionInstruction> =>
+      mbClaimFallbackInstruction(program, buyer, contentCid, edition),
+
+    mbCloseFulfilledInstruction: (buyer: PublicKey, contentCid: string, edition: bigint): Promise<TransactionInstruction> =>
+      mbCloseFulfilledInstruction(program, buyer, contentCid, edition),
+
+    // MagicBlock PDA helpers
+    getMbMintRequestPda,
+    getMbNftAssetPda,
+
     // Claim rewards
     claimContentRewardsInstruction: (holder: PublicKey, contentCid: string) =>
       claimContentRewardsInstruction(program, holder, contentCid),
@@ -2108,6 +2538,12 @@ export function createContentRegistryClient(connection: Connection) {
     // Pending mint recovery (VRF mints)
     fetchPendingMint: (buyer: PublicKey, contentCid: string) => fetchPendingMint(connection, buyer, contentCid),
     fetchAllPendingMintsForWallet: (wallet: PublicKey) => fetchAllPendingMintsForWallet(connection, wallet),
+
+    // SRS mint request (single-tx VRF mints)
+    fetchSrsMintRequest: (buyer: PublicKey, contentCid: string) => fetchSrsMintRequest(connection, buyer, contentCid),
+
+    // MagicBlock mint request (2-step VRF with fallback)
+    fetchMbMintRequest: (buyer: PublicKey, contentCid: string, edition: bigint) => fetchMbMintRequest(connection, buyer, contentCid, edition),
 
     // Reward calculations
     getPendingRewardForContent: (wallet: PublicKey, contentCid: string) => getPendingRewardForContent(connection, wallet, contentCid),
