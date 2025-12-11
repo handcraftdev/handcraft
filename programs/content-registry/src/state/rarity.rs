@@ -8,11 +8,11 @@ pub const NFT_RARITY_SEED: &[u8] = b"nft_rarity";
 /// Probability is in basis points (out of 10000)
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
 pub enum Rarity {
-    Common,      // 55% probability, 100 weight
-    Uncommon,    // 27% probability, 150 weight
-    Rare,        // 13% probability, 200 weight
-    Epic,        // 4% probability, 300 weight
-    Legendary,   // 1% probability, 500 weight
+    Common,      // 55% probability, weight 1
+    Uncommon,    // 27% probability, weight 5
+    Rare,        // 13% probability, weight 20
+    Epic,        // 4% probability, weight 60
+    Legendary,   // 1% probability, weight 120
 }
 
 impl Rarity {
@@ -20,11 +20,11 @@ impl Rarity {
     /// Used to calculate share of reward pool
     pub fn weight(&self) -> u16 {
         match self {
-            Rarity::Common => 100,
-            Rarity::Uncommon => 150,
-            Rarity::Rare => 200,
-            Rarity::Epic => 300,
-            Rarity::Legendary => 500,
+            Rarity::Common => 1,
+            Rarity::Uncommon => 5,
+            Rarity::Rare => 20,
+            Rarity::Epic => 60,
+            Rarity::Legendary => 120,
         }
     }
 
@@ -204,10 +204,10 @@ mod tests {
 
     #[test]
     fn test_weights() {
-        assert_eq!(Rarity::Common.weight(), 100);
-        assert_eq!(Rarity::Uncommon.weight(), 150);
-        assert_eq!(Rarity::Rare.weight(), 200);
-        assert_eq!(Rarity::Epic.weight(), 300);
-        assert_eq!(Rarity::Legendary.weight(), 500);
+        assert_eq!(Rarity::Common.weight(), 1);
+        assert_eq!(Rarity::Uncommon.weight(), 5);
+        assert_eq!(Rarity::Rare.weight(), 20);
+        assert_eq!(Rarity::Epic.weight(), 60);
+        assert_eq!(Rarity::Legendary.weight(), 120);
     }
 }

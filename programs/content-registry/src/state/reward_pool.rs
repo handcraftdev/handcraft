@@ -45,7 +45,7 @@ impl ContentRewardPool {
     }
 
     /// Add an NFT with its weight (call AFTER adding rewards)
-    /// weight: The rarity weight of the NFT (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+    /// weight: The rarity weight of the NFT (1=Common, 5=Uncommon, 20=Rare, 60=Epic, 120=Legendary)
     pub fn add_nft(&mut self, weight: u16) {
         self.total_nfts += 1;
         self.total_weight += weight as u64;
@@ -57,10 +57,10 @@ impl ContentRewardPool {
         self.total_weight = self.total_weight.saturating_sub(weight as u64);
     }
 
-    /// Legacy: Increment total NFTs with default Common weight (100)
+    /// Legacy: Increment total NFTs with default Common weight (1)
     /// For backwards compatibility with existing mints before rarity system
     pub fn increment_nfts(&mut self) {
-        self.add_nft(100); // Default Common weight
+        self.add_nft(1); // Default Common weight
     }
 
     /// Sync secondary sale royalties that arrived from Metaplex Core Royalties plugin
@@ -198,7 +198,7 @@ pub struct NftRewardState {
     /// Reward debt for this specific NFT (scaled by PRECISION)
     /// Now weighted: reward_debt = weight * reward_per_share at mint/claim time
     pub reward_debt: u128,
-    /// Weight of this NFT based on rarity (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)
+    /// Weight of this NFT based on rarity (1=Common, 5=Uncommon, 20=Rare, 60=Epic, 120=Legendary)
     pub weight: u16,
     /// Timestamp when this state was created (at mint time)
     pub created_at: i64,
