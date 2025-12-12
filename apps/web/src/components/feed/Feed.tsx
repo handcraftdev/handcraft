@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useContentRegistry, ContentType } from "@/hooks/useContentRegistry";
+import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
 import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType } from "@handcraft/sdk";
 import { BuyNftModal, SellNftModal } from "@/components/mint";
@@ -10,7 +10,7 @@ import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
 import { RarityBadge } from "@/components/rarity";
 import { Rarity } from "@handcraft/sdk";
-import { type FeedTab, type EnrichedContent } from "./types";
+import { type EnrichedContent } from "./types";
 import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
@@ -45,21 +45,13 @@ const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
 ];
 
 export function Feed() {
-  const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
   const [typeFilter, setTypeFilter] = useState<ContentTypeFilter>("all");
-  const { publicKey, connected } = useWallet();
-  const { content: userContent, globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
-  const { isValid: hasValidSession } = useSession();
+  const { globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
 
   // Global feed state - enrich from cached query data
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);
   const [isEnrichingGlobal, setIsEnrichingGlobal] = useState(false);
 
-  // User content state
-  const [enrichedUserContent, setEnrichedUserContent] = useState<EnrichedContent[]>([]);
-  const [isLoadingUser, setIsLoadingUser] = useState(false);
-
-  const lastUserFetchRef = useRef<string>("");
   const lastGlobalFetchRef = useRef<string>("");
 
   // Enrich global content when query data changes (uses cached data, no RPC call)
@@ -104,53 +96,10 @@ export function Feed() {
     enrichGlobalFeed();
   }, [rawGlobalContent]);
 
-  // Fetch user's content metadata
-  useEffect(() => {
-    const contentKey = userContent.map(c => c.contentCid).join(",");
-    if (contentKey === lastUserFetchRef.current) return;
-    lastUserFetchRef.current = contentKey;
-
-    async function fetchUserMetadata() {
-      if (!userContent.length) {
-        setEnrichedUserContent([]);
-        return;
-      }
-
-      setIsLoadingUser(true);
-      const creatorAddress = publicKey?.toBase58() || "Unknown";
-      const enriched = await Promise.all(
-        userContent.map(async (item) => {
-          try {
-            const metadataUrl = getIpfsUrl(item.metadataCid);
-            const res = await fetch(metadataUrl);
-            const metadata = await res.json();
-            return {
-              ...item,
-              metadata,
-              creatorAddress,
-            };
-          } catch {
-            return {
-              ...item,
-              creatorAddress,
-            };
-          }
-        })
-      );
-      setEnrichedUserContent(enriched.reverse());
-      setIsLoadingUser(false);
-    }
-
-    fetchUserMetadata();
-  }, [userContent, publicKey]);
-
   // Include !client check to ensure consistent SSR/client hydration
   // On server, client is null, so we show loading state to match client initial render
-  const isLoading = activeTab === "foryou"
-    ? (!client || isLoadingGlobalContent || isEnrichingGlobal)
-    : isLoadingUser;
-
-  const baseContent = activeTab === "foryou" ? globalContent : enrichedUserContent;
+  const isLoading = !client || isLoadingGlobalContent || isEnrichingGlobal;
+  const baseContent = globalContent;
 
   // Apply content type filter
   const displayContent = typeFilter === "all"
@@ -159,35 +108,9 @@ export function Feed() {
 
   return (
     <div className="pb-20">
-      {/* Tab Navigation */}
+      {/* Content Type Filter */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex gap-1 px-4 py-2">
-          <button
-            onClick={() => setActiveTab("foryou")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeTab === "foryou"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:bg-gray-900 hover:text-white"
-            }`}
-          >
-            Discover
-          </button>
-          {publicKey && (
-            <button
-              onClick={() => setActiveTab("your-content")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === "your-content"
-                  ? "bg-white text-black"
-                  : "text-gray-400 hover:bg-gray-900 hover:text-white"
-              }`}
-            >
-              Your Content
-            </button>
-          )}
-        </div>
-
-        {/* Content Type Filter */}
-        <div className="flex items-center gap-1.5 px-4 pb-2 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-1.5 px-4 py-3 overflow-x-auto scrollbar-hide">
           {CONTENT_TYPE_FILTERS.map((filter) => (
             <button
               key={String(filter.value)}
@@ -227,7 +150,7 @@ export function Feed() {
           ))
         ) : (
           <EmptyState
-            showExplore={activeTab === "foryou"}
+            showExplore={true}
             hasFilter={typeFilter !== "all"}
             onClearFilter={() => setTypeFilter("all")}
           />

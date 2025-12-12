@@ -8,7 +8,6 @@ import { useContentRegistry, Bundle, Rarity } from "@/hooks/useContentRegistry";
 import { getIpfsUrl, getBundleTypeLabel, BundleType } from "@handcraft/sdk";
 import { BuyBundleModal, RentBundleModal } from "@/components/bundle";
 
-type BundleFeedTab = "discover" | "your-bundles";
 type BundleTypeFilter = "all" | BundleType;
 
 const BUNDLE_TYPE_FILTERS: { value: BundleTypeFilter; label: string }[] = [
@@ -36,24 +35,18 @@ interface EnrichedBundle extends Bundle {
 }
 
 export function BundleFeed() {
-  const [activeTab, setActiveTab] = useState<BundleFeedTab>("discover");
   const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>("all");
-  const { publicKey } = useWallet();
   const {
     globalBundles,
     isLoadingGlobalBundles,
-    myBundlesQuery,
     client,
   } = useContentRegistry();
 
   // Enriched bundles state
   const [enrichedGlobalBundles, setEnrichedGlobalBundles] = useState<EnrichedBundle[]>([]);
-  const [enrichedMyBundles, setEnrichedMyBundles] = useState<EnrichedBundle[]>([]);
   const [isEnrichingGlobal, setIsEnrichingGlobal] = useState(false);
-  const [isEnrichingMy, setIsEnrichingMy] = useState(false);
 
   const lastGlobalFetchRef = useRef<string>("");
-  const lastMyFetchRef = useRef<string>("");
 
   // Enrich global bundles with metadata
   useEffect(() => {
@@ -95,59 +88,8 @@ export function BundleFeed() {
     enrichBundles();
   }, [globalBundles]);
 
-  // Enrich user's bundles with metadata
-  useEffect(() => {
-    const myBundles = myBundlesQuery.data ?? [];
-    const bundleKey = myBundles.map(b => b.bundleId).join(",");
-    if (bundleKey === lastMyFetchRef.current) return;
-    lastMyFetchRef.current = bundleKey;
-
-    if (!myBundles.length) {
-      setEnrichedMyBundles([]);
-      return;
-    }
-
-    async function enrichBundles() {
-      setIsEnrichingMy(true);
-      const creatorAddress = publicKey?.toBase58() || "";
-      try {
-        const enriched = await Promise.all(
-          myBundles.map(async (bundle) => {
-            try {
-              const metadataUrl = getIpfsUrl(bundle.metadataCid);
-              const res = await fetch(metadataUrl);
-              const metadata = await res.json();
-              return {
-                ...bundle,
-                metadata,
-                creatorAddress,
-              };
-            } catch {
-              return {
-                ...bundle,
-                creatorAddress,
-              };
-            }
-          })
-        );
-        setEnrichedMyBundles(enriched.reverse());
-      } catch (err) {
-        console.error("Error enriching my bundles:", err);
-      } finally {
-        setIsEnrichingMy(false);
-      }
-    }
-
-    enrichBundles();
-  }, [myBundlesQuery.data, publicKey]);
-
-  const isLoading = activeTab === "discover"
-    ? (!client || isLoadingGlobalBundles || isEnrichingGlobal)
-    : (myBundlesQuery.isLoading || isEnrichingMy);
-
-  const baseBundles = activeTab === "discover"
-    ? enrichedGlobalBundles
-    : enrichedMyBundles;
+  const isLoading = !client || isLoadingGlobalBundles || isEnrichingGlobal;
+  const baseBundles = enrichedGlobalBundles;
 
   // Apply type filter
   const displayBundles = typeFilter === "all"
@@ -156,50 +98,22 @@ export function BundleFeed() {
 
   return (
     <div className="pb-20">
-      {/* Tab Navigation */}
+      {/* Type Filter */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex items-center justify-between px-4 py-2">
-          <div className="flex gap-1">
+        <div className="flex items-center gap-1.5 px-4 py-3 overflow-x-auto scrollbar-hide">
+          {BUNDLE_TYPE_FILTERS.map((filter) => (
             <button
-              onClick={() => setActiveTab("discover")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === "discover"
-                  ? "bg-white text-black"
-                  : "text-gray-400 hover:bg-gray-900 hover:text-white"
+              key={String(filter.value)}
+              onClick={() => setTypeFilter(filter.value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                typeFilter === filter.value
+                  ? "bg-secondary-500 text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
               }`}
             >
-              Discover
+              {filter.label}
             </button>
-            {publicKey && (
-              <button
-                onClick={() => setActiveTab("your-bundles")}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  activeTab === "your-bundles"
-                    ? "bg-white text-black"
-                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
-                }`}
-              >
-                Your Bundles
-              </button>
-            )}
-          </div>
-
-          {/* Type Filter */}
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
-            {BUNDLE_TYPE_FILTERS.map((filter) => (
-              <button
-                key={String(filter.value)}
-                onClick={() => setTypeFilter(filter.value)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                  typeFilter === filter.value
-                    ? "bg-secondary-500 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
 
@@ -226,7 +140,6 @@ export function BundleFeed() {
           ))
         ) : (
           <EmptyBundleState
-            isMyBundles={activeTab === "your-bundles"}
             hasFilter={typeFilter !== "all"}
             onClearFilter={() => setTypeFilter("all")}
           />
@@ -489,11 +402,9 @@ function BundleCard({ bundle }: { bundle: EnrichedBundle }) {
 }
 
 function EmptyBundleState({
-  isMyBundles,
   hasFilter,
   onClearFilter,
 }: {
-  isMyBundles: boolean;
   hasFilter: boolean;
   onClearFilter: () => void;
 }) {
@@ -513,11 +424,7 @@ function EmptyBundleState({
         />
       </svg>
       <h3 className="text-lg font-medium text-gray-400 mb-2">
-        {hasFilter
-          ? "No bundles match this filter"
-          : isMyBundles
-          ? "No bundles yet"
-          : "No bundles to discover"}
+        {hasFilter ? "No bundles match this filter" : "No bundles yet"}
       </h3>
       <p className="text-gray-500 text-sm">
         {hasFilter ? (
@@ -527,8 +434,6 @@ function EmptyBundleState({
           >
             Clear filter to see all bundles
           </button>
-        ) : isMyBundles ? (
-          "Create your first bundle to organize and monetize your content."
         ) : (
           "Be the first to create a bundle!"
         )}
