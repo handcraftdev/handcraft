@@ -326,11 +326,13 @@ pub mod content_registry {
         is_encrypted: bool,
         preview_cid: String,
         encryption_meta_cid: String,
+        visibility_level: u8,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(preview_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(encryption_meta_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(visibility_level <= 3, ContentRegistryError::InvalidVisibilityLevel);
 
         // Verify the hash matches the CID
         let computed_hash = hash_cid(&content_cid);
@@ -352,6 +354,7 @@ pub mod content_registry {
         content.is_encrypted = is_encrypted;
         content.preview_cid = preview_cid;
         content.encryption_meta_cid = encryption_meta_cid;
+        content.visibility_level = visibility_level;
 
         // Initialize CID registry (ensures uniqueness)
         cid_registry.owner = ctx.accounts.authority.key();
@@ -374,11 +377,13 @@ pub mod content_registry {
         is_encrypted: bool,
         preview_cid: String,
         encryption_meta_cid: String,
+        visibility_level: u8,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(preview_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(encryption_meta_cid.len() <= 64, ContentRegistryError::CidTooLong);
+        require!(visibility_level <= 3, ContentRegistryError::InvalidVisibilityLevel);
 
         // Verify the hash matches the CID
         let computed_hash = hash_cid(&content_cid);
@@ -411,6 +416,7 @@ pub mod content_registry {
         content.is_encrypted = is_encrypted;
         content.preview_cid = preview_cid;
         content.encryption_meta_cid = encryption_meta_cid;
+        content.visibility_level = visibility_level;
 
         // Initialize CID registry (ensures uniqueness)
         cid_registry.owner = ctx.accounts.authority.key();

@@ -6,7 +6,8 @@ pub const MINT_CONFIG_SEED: &[u8] = b"mint_config";
 /// Per subscription design: fixed 4% creator royalty on secondary sales
 pub const FIXED_CREATOR_ROYALTY_BPS: u16 = 400;
 
-/// Minimum price in lamports (0.001 SOL) - only if not free
+/// Minimum price in lamports (0.001 SOL)
+/// Free minting is not allowed - all content must have a price
 pub const MIN_PRICE_LAMPORTS: u64 = 1_000_000;
 /// Minimum price in USDC (0.01 USDC with 6 decimals)
 pub const MIN_PRICE_USDC: u64 = 10_000;
@@ -27,7 +28,7 @@ pub struct MintConfig {
     pub content: Pubkey,
     /// Creator who owns this config
     pub creator: Pubkey,
-    /// Price per NFT (0 = free mint)
+    /// Price per NFT in lamports (minimum 0.001 SOL, free mint not allowed)
     pub price: u64,
     /// Payment currency (SOL or USDC)
     pub currency: PaymentCurrency,
@@ -56,9 +57,11 @@ impl MintConfig {
     }
 
     /// Validate price based on currency
+    /// Free minting is not allowed - price must be at least the minimum
     pub fn validate_price(price: u64, currency: PaymentCurrency) -> bool {
+        // Free minting is not allowed
         if price == 0 {
-            return true; // Free mint allowed
+            return false;
         }
         match currency {
             PaymentCurrency::Sol => price >= MIN_PRICE_LAMPORTS,

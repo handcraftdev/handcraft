@@ -147,7 +147,7 @@ pub struct BundleMintConfig {
     pub bundle: Pubkey,
     /// Creator who owns this config
     pub creator: Pubkey,
-    /// Price per NFT in lamports (0 = free mint)
+    /// Price per NFT in lamports (minimum 0.001 SOL, free mint not allowed)
     pub price: u64,
     /// Maximum supply (None = unlimited)
     pub max_supply: Option<u64>,
@@ -174,8 +174,10 @@ impl BundleMintConfig {
     }
 
     /// Validate price (SOL only)
+    /// Free minting is not allowed - price must be at least the minimum
     pub fn validate_price(price: u64) -> bool {
-        price == 0 || price >= MIN_PRICE_LAMPORTS
+        // Free minting is not allowed
+        price > 0 && price >= MIN_PRICE_LAMPORTS
     }
 
     /// Validate royalty is the fixed 4% rate

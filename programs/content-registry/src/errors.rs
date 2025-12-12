@@ -26,6 +26,8 @@ pub enum ContentRegistryError {
     MaxSupplyReached,
     #[msg("Price below minimum allowed")]
     PriceTooLow,
+    #[msg("Free minting is not allowed - price must be greater than 0")]
+    FreeMintNotAllowed,
     #[msg("Royalty must be fixed at 4% (400 bps)")]
     InvalidRoyalty,
     #[msg("Insufficient payment amount")]
@@ -178,4 +180,6 @@ pub enum ContentRegistryError {
     NftOrRentalRequired,
     #[msg("Invalid input value")]
     InvalidInput,
+    #[msg("Invalid visibility level - must be 0-3")]
+    InvalidVisibilityLevel,
 }
