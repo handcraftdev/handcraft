@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Link from "next/link";
@@ -36,28 +36,31 @@ interface EnrichedBundle extends Bundle {
 
 const FILTER_STORAGE_KEY = "handcraft-bundle-filter";
 
+function usePersistedFilter<T>(key: string, defaultValue: T): [T, (value: T) => void, boolean] {
+  const [value, setValue] = useState<T>(defaultValue);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(key);
+    if (saved !== null) setValue(saved as T);
+    setIsReady(true);
+  }, [key]);
+
+  const setAndPersist = useCallback((newValue: T) => {
+    setValue(newValue);
+    localStorage.setItem(key, String(newValue));
+  }, [key]);
+
+  return [value, setAndPersist, isReady];
+}
+
 export function BundleFeed() {
-  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>("all");
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [typeFilter, setTypeFilter, isFilterReady] = usePersistedFilter<BundleTypeFilter>(FILTER_STORAGE_KEY, "all");
   const {
     globalBundles,
     isLoadingGlobalBundles,
     client,
   } = useContentRegistry();
-
-  // Load filter from localStorage after hydration
-  useEffect(() => {
-    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
-    if (saved) setTypeFilter(saved as BundleTypeFilter);
-    setIsHydrated(true);
-  }, []);
-
-  // Persist filter to localStorage (only after initial hydration)
-  useEffect(() => {
-    if (isHydrated) {
-      localStorage.setItem(FILTER_STORAGE_KEY, String(typeFilter));
-    }
-  }, [typeFilter, isHydrated]);
 
   // Enriched bundles state
   const [enrichedGlobalBundles, setEnrichedGlobalBundles] = useState<EnrichedBundle[]>([]);
@@ -117,7 +120,7 @@ export function BundleFeed() {
     <div className="pb-20">
       {/* Type Filter */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex flex-wrap justify-center gap-1.5 px-4 py-3">
+        <div className={`flex flex-wrap justify-center gap-1.5 px-4 py-3 transition-opacity duration-150 ${isFilterReady ? "opacity-100" : "opacity-0"}`}>
           {BUNDLE_TYPE_FILTERS.map((filter) => (
             <button
               key={String(filter.value)}
