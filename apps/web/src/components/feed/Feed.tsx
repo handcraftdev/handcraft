@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
@@ -12,10 +13,20 @@ import { RarityBadge } from "@/components/rarity";
 import { Rarity } from "@handcraft/sdk";
 import { type EnrichedContent } from "./types";
 import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
-import { getContentTypeLabel, getTimeAgo } from "./helpers";
+import { getContentTypeLabel, getTimeAgo, formatDuration } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
 type ContentTypeFilter = "all" | SDKContentType;
+type SortOption = "newest" | "oldest" | "most_minted" | "random";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "most_minted", label: "Most Minted" },
+  { value: "random", label: "Random" },
+];
+
+const ITEMS_PER_PAGE = 10;
 
 const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -44,33 +55,80 @@ const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: SDKContentType.Post, label: "Post" },
 ];
 
-const FILTER_STORAGE_KEY = "handcraft-content-filter";
+// Generate consistent hash for an item based on seed + item ID
+function getItemHash(seed: number, itemId: string): number {
+  let hash = seed;
+  for (let i = 0; i < itemId.length; i++) {
+    hash = ((hash << 5) - hash + itemId.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
 
-function usePersistedFilter<T>(key: string, defaultValue: T): [T, (value: T) => void, boolean] {
-  const [value, setValue] = useState<T>(defaultValue);
-  const [isReady, setIsReady] = useState(false);
+// Parse filter from URL param
+function parseFilter(param: string | null): ContentTypeFilter {
+  if (!param || param === "all") return "all";
+  const num = Number(param);
+  if (!isNaN(num) && Object.values(SDKContentType).includes(num)) {
+    return num as SDKContentType;
+  }
+  return "all";
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem(key);
-    if (saved !== null) {
-      // Handle "all" string or numeric enum values
-      const parsed = saved === "all" ? "all" : (!isNaN(Number(saved)) ? Number(saved) : saved);
-      setValue(parsed as T);
-    }
-    setIsReady(true);
-  }, [key]);
-
-  const setAndPersist = useCallback((newValue: T) => {
-    setValue(newValue);
-    localStorage.setItem(key, String(newValue));
-  }, [key]);
-
-  return [value, setAndPersist, isReady];
+// Parse sort from URL param
+function parseSort(param: string | null): SortOption {
+  if (param && ["newest", "oldest", "most_minted", "random"].includes(param)) {
+    return param as SortOption;
+  }
+  return "newest";
 }
 
 export function Feed() {
-  const [typeFilter, setTypeFilter, isFilterReady] = usePersistedFilter<ContentTypeFilter>(FILTER_STORAGE_KEY, "all");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Read from URL params
+  const typeFilter = parseFilter(searchParams.get("filter"));
+  const sortOption = parseSort(searchParams.get("sort"));
+
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [randomSeed] = useState(() => Date.now()); // Consistent seed for session
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE); // For infinite scroll
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const { globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
+
+  // Update URL params
+  const updateParams = useCallback((updates: { filter?: string; sort?: string }) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (updates.filter !== undefined) {
+      if (updates.filter === "all") {
+        params.delete("filter");
+      } else {
+        params.set("filter", updates.filter);
+      }
+    }
+
+    if (updates.sort !== undefined) {
+      if (updates.sort === "newest") {
+        params.delete("sort");
+      } else {
+        params.set("sort", updates.sort);
+      }
+    }
+
+    const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+    router.push(newUrl, { scroll: false });
+  }, [searchParams, router]);
+
+  const setTypeFilter = useCallback((filter: ContentTypeFilter) => {
+    setVisibleCount(ITEMS_PER_PAGE); // Reset on filter change
+    updateParams({ filter: String(filter) });
+  }, [updateParams]);
+
+  const setSortOption = useCallback((sort: SortOption) => {
+    setVisibleCount(ITEMS_PER_PAGE); // Reset on sort change
+    updateParams({ sort });
+  }, [updateParams]);
 
   // Global feed state - enrich from cached query data
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);
@@ -125,16 +183,105 @@ export function Feed() {
   const isLoading = !client || isLoadingGlobalContent || isEnrichingGlobal;
   const baseContent = globalContent;
 
-  // Apply content type filter
-  const displayContent = typeFilter === "all"
-    ? baseContent
-    : baseContent.filter(item => item.contentType === typeFilter);
+  // Apply content type filter, sort, and infinite scroll slicing
+  const { displayContent, totalItems, hasMore } = useMemo(() => {
+    // Filter
+    const filtered = typeFilter === "all"
+      ? baseContent
+      : baseContent.filter(item => item.contentType === typeFilter);
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortOption) {
+        case "oldest":
+          return Number(a.createdAt) - Number(b.createdAt);
+        case "most_minted":
+          return Number(b.mintedCount ?? 0) - Number(a.mintedCount ?? 0);
+        case "random": {
+          // Use consistent hash per item for stable random order
+          return getItemHash(randomSeed, a.contentCid) - getItemHash(randomSeed, b.contentCid);
+        }
+        case "newest":
+        default:
+          return Number(b.createdAt) - Number(a.createdAt);
+      }
+    });
+
+    // Infinite scroll - show items up to visibleCount
+    const totalItems = sorted.length;
+    const displayed = sorted.slice(0, visibleCount);
+    const hasMore = visibleCount < totalItems;
+
+    return { displayContent: displayed, totalItems, hasMore };
+  }, [baseContent, typeFilter, sortOption, visibleCount, randomSeed]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          setVisibleCount(prev => prev + ITEMS_PER_PAGE);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading]);
 
   return (
     <div className="pb-20">
-      {/* Content Type Filter */}
+      {/* Content Type Filter & Sort */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className={`flex flex-wrap justify-center gap-1.5 px-4 py-3 transition-opacity duration-150 ${isFilterReady ? "opacity-100" : "opacity-0"}`}>
+        <div className="flex flex-wrap justify-center items-center gap-1.5 px-4 py-3">
+          {/* Sort Dropdown */}
+          <div className="relative mr-2">
+            <button
+              onClick={() => setShowSortDropdown(!showSortDropdown)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+              {SORT_OPTIONS.find(s => s.value === sortOption)?.label}
+              <svg className={`w-3 h-3 transition-transform ${showSortDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showSortDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowSortDropdown(false)}
+                />
+                <div className="absolute top-full left-0 mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[120px] overflow-hidden">
+                  {SORT_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setSortOption(option.value);
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs transition-colors ${
+                        sortOption === option.value
+                          ? "bg-primary-500/20 text-primary-400"
+                          : "text-gray-300 hover:bg-gray-800"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          {/* Divider */}
+          <div className="w-px h-4 bg-gray-700 mr-2" />
+          {/* Type Filters */}
           {CONTENT_TYPE_FILTERS.map((filter) => (
             <button
               key={String(filter.value)}
@@ -169,9 +316,24 @@ export function Feed() {
             ))}
           </div>
         ) : displayContent.length > 0 ? (
-          displayContent.map((item) => (
-            <ContentCard key={item.contentCid} content={item} />
-          ))
+          <>
+            {displayContent.map((item) => (
+              <ContentCard key={item.contentCid} content={item} />
+            ))}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
+              {hasMore && (
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Loading more...
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <EmptyState
             showExplore={true}
@@ -193,6 +355,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
+  const [showCopied, setShowCopied] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
   const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts } = useContentRegistry();
@@ -232,6 +395,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const showName = contextData.showName;
   const season = contextData.season;
   const episode = contextData.episode;
+  const duration = contextData.duration;
   const bundleInfo = content.metadata?.bundle;
 
   // Get on-chain bundle memberships for this content
@@ -462,6 +626,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               preload="metadata"
             />
           )}
+          {/* Duration Badge */}
+          {duration && duration > 0 && (
+            <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 text-white text-xs font-medium rounded">
+              {formatDuration(duration)}
+            </div>
+          )}
           {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
@@ -479,6 +649,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               <audio src={contentUrl} controls className="w-full max-w-xs" />
             )}
           </div>
+          {/* Duration Badge */}
+          {duration && duration > 0 && (
+            <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 text-white text-xs font-medium rounded">
+              {formatDuration(duration)}
+            </div>
+          )}
           {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
@@ -685,6 +861,29 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               Sell
             </button>
           )}
+
+          {/* Share/Copy Link Button */}
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/content/${content.contentCid}`;
+              navigator.clipboard.writeText(url).then(() => {
+                setShowCopied(true);
+                setTimeout(() => setShowCopied(false), 2000);
+              });
+            }}
+            className="flex items-center gap-1.5 p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-800 rounded-full transition-colors"
+            title="Copy share link"
+          >
+            {showCopied ? (
+              <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            )}
+          </button>
 
           </div>
           </>
