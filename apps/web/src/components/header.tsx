@@ -14,7 +14,7 @@ import { useSession } from "@/hooks/useSession";
 export function Header() {
   const { publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
-  const { content, usePendingRewards } = useContentRegistry();
+  const { content, usePendingRewards, bundlePendingRewardsQuery } = useContentRegistry();
   const { clearSession } = useSession();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isClaimOpen, setIsClaimOpen] = useState(false);
@@ -23,12 +23,14 @@ export function Header() {
   const [mounted, setMounted] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Get pending rewards
+  // Get pending rewards (content + bundle)
   const { data: pendingRewards } = usePendingRewards();
+  const { data: bundlePendingRewards } = bundlePendingRewardsQuery;
   const totalPending = useMemo(() => {
-    if (!pendingRewards) return BigInt(0);
-    return pendingRewards.reduce((acc, r) => acc + r.pending, BigInt(0));
-  }, [pendingRewards]);
+    const contentTotal = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
+    const bundleTotal = bundlePendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
+    return contentTotal + bundleTotal;
+  }, [pendingRewards, bundlePendingRewards]);
   const hasPendingRewards = totalPending > BigInt(0);
 
   // Prevent hydration mismatch by waiting for client mount

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Transaction, PublicKey } from "@solana/web3.js";
+import { Transaction, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createContentRegistryClient,
@@ -26,6 +26,10 @@ import {
   getMbNftAssetPda,
   getBundlePda,
   getBundleItemPda,
+  getBundleMintConfigPda,
+  getBundleRentConfigPda,
+  getBundleCollectionPda,
+  getBundleRewardPoolPda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   ContentRewardPool,
@@ -41,6 +45,10 @@ import {
   BundleItem,
   BundleType,
   BundleWithItems,
+  BundleMintConfig,
+  BundleRentConfig,
+  BundleCollection,
+  BundleRewardPool,
   getBundleTypeLabel,
   calculatePrimarySplit,
   calculatePendingReward,
@@ -68,6 +76,10 @@ export {
   getMbNftAssetPda,
   getBundlePda,
   getBundleItemPda,
+  getBundleMintConfigPda,
+  getBundleRentConfigPda,
+  getBundleCollectionPda,
+  getBundleRewardPoolPda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   MIN_CREATOR_ROYALTY_BPS,
@@ -79,7 +91,7 @@ export {
   MIN_RENT_FEE_LAMPORTS,
 };
 export type { MbMintRequest } from "@handcraft/sdk";
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -1401,6 +1413,42 @@ export function useContentRegistry() {
   // BUNDLE QUERIES
   // ============================================
 
+  // Fetch all bundles globally (for feed)
+  const globalBundlesQuery = useQuery({
+    queryKey: ["bundles", "global"],
+    queryFn: async () => {
+      if (!client) return [];
+      return client.fetchAllBundles();
+    },
+    enabled: !!client,
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch content-to-bundle mapping (which bundles contain which content)
+  const contentToBundlesQuery = useQuery({
+    queryKey: ["contentToBundles"],
+    queryFn: async () => {
+      if (!client) return new Map<string, Array<{ bundleId: string; creator: { toBase58(): string } }>>();
+      // Get all content CIDs from global content
+      const contentCids = globalContentQuery.data?.map(c => c.contentCid) || [];
+      if (contentCids.length === 0) return new Map();
+      return client.findBundlesForContentBatch(contentCids);
+    },
+    enabled: !!client && globalContentQuery.isSuccess && (globalContentQuery.data?.length ?? 0) > 0,
+    staleTime: 120000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Helper to get bundles for a specific content
+  const getBundlesForContent = (contentCid: string): Array<{ bundleId: string; creator: { toBase58(): string } }> => {
+    return contentToBundlesQuery.data?.get(contentCid) || [];
+  };
+
   // Fetch all bundles for the connected wallet
   const myBundlesQuery = useQuery({
     queryKey: ["bundles", "creator", publicKey?.toBase58()],
@@ -1447,7 +1495,7 @@ export function useContentRegistry() {
   // BUNDLE MUTATIONS
   // ============================================
 
-  // Create a new bundle
+  // Create a new bundle (basic - starts as draft)
   const createBundle = useMutation({
     mutationFn: async ({
       bundleId,
@@ -1471,6 +1519,10 @@ export function useContentRegistry() {
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
+      console.log("Simulating create bundle transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
 
@@ -1478,6 +1530,70 @@ export function useContentRegistry() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
+  // Create a bundle with mint and rent configuration (all-in-one, single signature)
+  const createBundleWithMintAndRent = useMutation({
+    mutationFn: async ({
+      bundleId,
+      metadataCid,
+      bundleType,
+      mintPrice,
+      mintMaxSupply,
+      creatorRoyaltyBps,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+      platform,
+    }: {
+      bundleId: string;
+      metadataCid: string;
+      bundleType: BundleType;
+      mintPrice: bigint;
+      mintMaxSupply: bigint | null;
+      creatorRoyaltyBps: number;
+      rentFee6h: bigint;
+      rentFee1d: bigint;
+      rentFee7d: bigint;
+      platform: PublicKey;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const { instruction, collectionAssetKeypair } = await client.createBundleWithMintAndRentInstruction(
+        publicKey,
+        bundleId,
+        metadataCid,
+        bundleType,
+        mintPrice,
+        mintMaxSupply,
+        creatorRoyaltyBps,
+        rentFee6h,
+        rentFee1d,
+        rentFee7d,
+        platform
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Partially sign with the collection asset keypair
+      tx.partialSign(collectionAssetKeypair);
+
+      console.log("Simulating create bundle with mint/rent transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig, bundleId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+      queryClient.invalidateQueries({ queryKey: ["bundleMintConfig"] });
+      queryClient.invalidateQueries({ queryKey: ["bundleRentConfig"] });
     },
   });
 
@@ -1504,6 +1620,10 @@ export function useContentRegistry() {
       const tx = new Transaction().add(instruction);
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating add bundle item transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
 
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
@@ -1537,6 +1657,10 @@ export function useContentRegistry() {
       const tx = new Transaction().add(instruction);
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating remove bundle item transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
 
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
@@ -1574,6 +1698,10 @@ export function useContentRegistry() {
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
+      console.log("Simulating update bundle transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
 
@@ -1597,6 +1725,10 @@ export function useContentRegistry() {
       tx.feePayer = publicKey;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
+      console.log("Simulating delete bundle transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
 
@@ -1606,6 +1738,596 @@ export function useContentRegistry() {
       queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
     },
   });
+
+  // ============= Bundle Mint/Rent Mutations =============
+
+  // Configure bundle minting
+  const configureBundleMint = useMutation({
+    mutationFn: async ({
+      bundleId,
+      price,
+      maxSupply,
+      creatorRoyaltyBps,
+      platform,
+    }: {
+      bundleId: string;
+      price: bigint;
+      maxSupply: bigint | null;
+      creatorRoyaltyBps: number;
+      platform: PublicKey;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const { instruction, collectionAssetKeypair } = await client.configureBundleMintInstruction(
+        publicKey,
+        bundleId,
+        price,
+        maxSupply,
+        creatorRoyaltyBps,
+        platform
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Partially sign with the collection asset keypair
+      tx.partialSign(collectionAssetKeypair);
+
+      console.log("Simulating configure bundle mint transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+      queryClient.invalidateQueries({ queryKey: ["bundleMintConfig"] });
+    },
+  });
+
+  // Update bundle mint settings
+  const updateBundleMintSettings = useMutation({
+    mutationFn: async ({
+      bundleId,
+      price,
+      maxSupply,
+      creatorRoyaltyBps,
+      isActive,
+    }: {
+      bundleId: string;
+      price: bigint | null;
+      maxSupply: bigint | null | undefined;
+      creatorRoyaltyBps: number | null;
+      isActive: boolean | null;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.updateBundleMintSettingsInstruction(
+        publicKey,
+        bundleId,
+        price,
+        maxSupply,
+        creatorRoyaltyBps,
+        isActive
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating update bundle mint settings transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleMintConfig"] });
+    },
+  });
+
+  // Direct mint bundle NFT
+  const directMintBundle = useMutation({
+    mutationFn: async ({
+      bundleId,
+      creator,
+      treasury,
+      platform,
+      collectionAsset,
+    }: {
+      bundleId: string;
+      creator: PublicKey;
+      treasury: PublicKey;
+      platform: PublicKey;
+      collectionAsset: PublicKey;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const result = await client.directMintBundleInstruction(
+        publicKey,
+        bundleId,
+        creator,
+        treasury,
+        platform,
+        collectionAsset
+      );
+
+      const tx = new Transaction().add(result.instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating direct mint bundle transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return {
+        signature: sig,
+        nftAsset: result.nftAsset,
+        edition: result.edition,
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundles"] });
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+    },
+  });
+
+  // Configure bundle rental
+  const configureBundleRent = useMutation({
+    mutationFn: async ({
+      bundleId,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+    }: {
+      bundleId: string;
+      rentFee6h: bigint;
+      rentFee1d: bigint;
+      rentFee7d: bigint;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.configureBundleRentInstruction(
+        publicKey,
+        bundleId,
+        rentFee6h,
+        rentFee1d,
+        rentFee7d
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating configure bundle rent transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleRentConfig"] });
+    },
+  });
+
+  // Update bundle rent config
+  const updateBundleRentConfig = useMutation({
+    mutationFn: async ({
+      bundleId,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+      isActive,
+    }: {
+      bundleId: string;
+      rentFee6h: bigint | null;
+      rentFee1d: bigint | null;
+      rentFee7d: bigint | null;
+      isActive: boolean | null;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const instruction = await client.updateBundleRentConfigInstruction(
+        publicKey,
+        bundleId,
+        rentFee6h,
+        rentFee1d,
+        rentFee7d,
+        isActive
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating update bundle rent config transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleRentConfig"] });
+    },
+  });
+
+  // Rent bundle with SOL
+  const rentBundleSol = useMutation({
+    mutationFn: async ({
+      bundleId,
+      creator,
+      treasury,
+      platform,
+      collectionAsset,
+      tier,
+    }: {
+      bundleId: string;
+      creator: PublicKey;
+      treasury: PublicKey;
+      platform: PublicKey;
+      collectionAsset: PublicKey;
+      tier: RentTier;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const result = await client.rentBundleSolInstruction(
+        publicKey,
+        bundleId,
+        creator,
+        treasury,
+        platform,
+        collectionAsset,
+        tier
+      );
+
+      const tx = new Transaction().add(result.instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      // Sign with the NFT asset keypair (partial sign before wallet signs)
+      tx.partialSign(result.nftAssetKeypair);
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating bundle rent transaction...");
+      await simulatePartiallySignedTransaction(connection, tx);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection, {
+        signers: [result.nftAssetKeypair],
+      });
+      console.log("Bundle rent tx sent:", sig);
+      await connection.confirmTransaction(sig, "confirmed");
+      console.log("Bundle rent confirmed!");
+
+      return {
+        signature: sig,
+        nftAsset: result.nftAsset,
+        rentEntryPda: result.rentEntryPda,
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleRentConfig"] });
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+    },
+  });
+
+  // Claim bundle rewards
+  const claimBundleRewards = useMutation({
+    mutationFn: async ({
+      bundleId,
+      creator,
+      nftAsset,
+    }: {
+      bundleId: string;
+      creator: PublicKey;
+      nftAsset: PublicKey;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      console.log("Claiming bundle rewards...", {
+        bundleId,
+        creator: creator.toBase58(),
+        nftAsset: nftAsset.toBase58(),
+        claimer: publicKey.toBase58(),
+      });
+
+      const instruction = await client.claimBundleRewardsInstruction(
+        publicKey,
+        bundleId,
+        creator,
+        nftAsset
+      );
+
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log("Simulating claim bundle rewards transaction...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+      console.log("Claim bundle rewards confirmed!");
+
+      return { signature: sig };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["bundlePendingRewards"] });
+    },
+  });
+
+  // Batch claim all bundle rewards - claims all bundle NFTs in efficient batched transactions
+  const claimAllBundleRewards = useMutation({
+    mutationFn: async ({
+      bundleRewards,
+    }: {
+      bundleRewards: Array<{
+        bundleId: string;
+        creator: PublicKey;
+        nftAssets: PublicKey[];
+      }>;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+      if (bundleRewards.length === 0) throw new Error("No bundle rewards to claim");
+
+      console.log("Claiming all bundle rewards...", {
+        bundleCount: bundleRewards.length,
+        totalNfts: bundleRewards.reduce((acc, r) => acc + r.nftAssets.length, 0),
+      });
+
+      // Build all bundle claim instructions
+      const instructions: TransactionInstruction[] = [];
+
+      for (const reward of bundleRewards) {
+        for (const nftAsset of reward.nftAssets) {
+          const ix = await client.claimBundleRewardsInstruction(
+            publicKey,
+            reward.bundleId,
+            reward.creator,
+            nftAsset
+          );
+          instructions.push(ix);
+        }
+      }
+
+      if (instructions.length === 0) {
+        throw new Error("No valid bundle claims to process");
+      }
+
+      // Group instructions into transactions (max ~5 claims per tx to stay within limits)
+      const MAX_CLAIMS_PER_TX = 5;
+      const txBatches: TransactionInstruction[][] = [];
+      for (let i = 0; i < instructions.length; i += MAX_CLAIMS_PER_TX) {
+        txBatches.push(instructions.slice(i, i + MAX_CLAIMS_PER_TX));
+      }
+
+      console.log(`Processing ${instructions.length} bundle claims in ${txBatches.length} transaction(s)`);
+
+      let lastSignature = "";
+      for (let i = 0; i < txBatches.length; i++) {
+        const batch = txBatches[i];
+        const tx = new Transaction();
+        for (const ix of batch) {
+          tx.add(ix);
+        }
+
+        console.log(`Simulating bundle claim batch ${i + 1}/${txBatches.length}...`);
+        await simulateTransaction(connection, tx, publicKey);
+        console.log("Simulation successful, sending to wallet...");
+
+        lastSignature = await sendTransaction(tx, connection);
+        console.log(`Bundle claim batch ${i + 1} tx sent:`, lastSignature);
+        await connection.confirmTransaction(lastSignature, "confirmed");
+        console.log(`Bundle claim batch ${i + 1} confirmed!`);
+      }
+
+      return { signature: lastSignature, claimedCount: instructions.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["bundlePendingRewards"] });
+    },
+  });
+
+  // Unified claim all rewards - combines content and bundle claims into same transactions
+  const claimAllRewardsUnified = useMutation({
+    mutationFn: async ({
+      contentCids,
+      bundleRewards,
+    }: {
+      contentCids: string[];
+      bundleRewards: Array<{
+        bundleId: string;
+        creator: PublicKey;
+        nftAssets: PublicKey[];
+      }>;
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      // Collect ALL instructions first (both content and bundle)
+      const allInstructions: TransactionInstruction[] = [];
+
+      // Build content claim instructions
+      if (contentCids.length > 0) {
+        console.log("Building content claim instructions...", { count: contentCids.length });
+
+        for (const contentCid of contentCids) {
+          const contentCollection = await client.fetchContentCollection(contentCid);
+          if (!contentCollection) continue;
+
+          const nftAssets = await client.fetchWalletNftsForCollection(
+            publicKey,
+            contentCollection.collectionAsset
+          );
+          if (nftAssets.length === 0) continue;
+
+          // Content claims can include multiple NFTs per instruction
+          const MAX_NFTS_PER_CONTENT_IX = 10; // Conservative to leave room for bundle claims
+          for (let i = 0; i < nftAssets.length; i += MAX_NFTS_PER_CONTENT_IX) {
+            const batch = nftAssets.slice(i, i + MAX_NFTS_PER_CONTENT_IX);
+            const ix = await client.claimRewardsVerifiedInstruction(
+              publicKey,
+              contentCid,
+              batch
+            );
+            allInstructions.push(ix);
+          }
+        }
+      }
+
+      // Build bundle claim instructions (batch per bundle - all NFTs from same bundle in one instruction)
+      if (bundleRewards.length > 0) {
+        const totalBundleNfts = bundleRewards.reduce((acc, r) => acc + r.nftAssets.length, 0);
+        if (totalBundleNfts > 0) {
+          console.log("Building bundle claim instructions...", {
+            bundleCount: bundleRewards.length,
+            totalNfts: totalBundleNfts
+          });
+
+          // One instruction per bundle (batches all NFTs from that bundle)
+          for (const reward of bundleRewards) {
+            if (reward.nftAssets.length > 0) {
+              const ix = await client.batchClaimBundleRewardsInstruction(
+                publicKey,
+                reward.bundleId,
+                reward.creator,
+                reward.nftAssets
+              );
+              allInstructions.push(ix);
+            }
+          }
+        }
+      }
+
+      if (allInstructions.length === 0) {
+        console.log("No claims to process");
+        return { signatures: [] };
+      }
+
+      console.log(`Total instructions to process: ${allInstructions.length}`);
+
+      // Batch all instructions into transactions (max ~4 instructions per tx to stay within limits)
+      // Content claims use more accounts, bundle claims use fewer, so we use a conservative limit
+      const MAX_INSTRUCTIONS_PER_TX = 4;
+      const signatures: string[] = [];
+
+      for (let i = 0; i < allInstructions.length; i += MAX_INSTRUCTIONS_PER_TX) {
+        const batch = allInstructions.slice(i, i + MAX_INSTRUCTIONS_PER_TX);
+        const tx = new Transaction();
+        for (const ix of batch) {
+          tx.add(ix);
+        }
+
+        const txNum = Math.floor(i / MAX_INSTRUCTIONS_PER_TX) + 1;
+        const totalTxs = Math.ceil(allInstructions.length / MAX_INSTRUCTIONS_PER_TX);
+        console.log(`Sending claim tx ${txNum}/${totalTxs} (${batch.length} instructions)...`);
+
+        await simulateTransaction(connection, tx, publicKey);
+        const sig = await sendTransaction(tx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
+        signatures.push(sig);
+        console.log(`Tx ${txNum} confirmed:`, sig);
+      }
+
+      return { signatures };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["bundlePendingRewards"] });
+    },
+  });
+
+  // Fetch bundle mint config
+  const useBundleMintConfig = (creator: PublicKey | null, bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleMintConfig", creator?.toBase58(), bundleId],
+      queryFn: () =>
+        creator && bundleId && client ? client.fetchBundleMintConfig(creator, bundleId) : null,
+      enabled: !!creator && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    });
+  };
+
+  // Fetch bundle rent config
+  const useBundleRentConfig = (creator: PublicKey | null, bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleRentConfig", creator?.toBase58(), bundleId],
+      queryFn: () =>
+        creator && bundleId && client ? client.fetchBundleRentConfig(creator, bundleId) : null,
+      enabled: !!creator && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    });
+  };
+
+  // Fetch bundle collection
+  const useBundleCollection = (creator: PublicKey | null, bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleCollection", creator?.toBase58(), bundleId],
+      queryFn: () =>
+        creator && bundleId && client ? client.fetchBundleCollection(creator, bundleId) : null,
+      enabled: !!creator && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    });
+  };
+
+  // Fetch bundle reward pool
+  const useBundleRewardPool = (creator: PublicKey | null, bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleRewardPool", creator?.toBase58(), bundleId],
+      queryFn: () =>
+        creator && bundleId && client ? client.fetchBundleRewardPool(creator, bundleId) : null,
+      enabled: !!creator && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    });
+  };
+
+  // Fetch bundle NFT ownership for current wallet
+  const useBundleNftOwnership = (creator: PublicKey | null, bundleId: string | null) => {
+    return useQuery({
+      queryKey: ["bundleNftOwnership", publicKey?.toBase58(), creator?.toBase58(), bundleId],
+      queryFn: () =>
+        publicKey && creator && bundleId && client
+          ? client.fetchBundleWalletState(publicKey, creator, bundleId)
+          : null,
+      enabled: !!publicKey && !!creator && !!bundleId && !!client,
+      staleTime: 60000,
+      gcTime: 120000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+    });
+  };
 
   // Fetch mint config for a specific content - uses batch data if available
   const useMintConfig = (contentCid: string | null) => {
@@ -1617,10 +2339,15 @@ export function useContentRegistry() {
         const allConfigs = allMintConfigsQuery.data;
         if (allConfigs && allConfigs.size > 0) {
           const [contentPda] = getContentPda(contentCid);
-          return allConfigs.get(contentPda.toBase58()) || null;
+          const config = allConfigs.get(contentPda.toBase58());
+          if (config) return config;
+          // If not in batch, try individual fetch (might be newly created)
+          console.log("[useMintConfig] Content not in batch, fetching individually:", contentCid);
         }
-        // Fallback to individual fetch if batch not loaded
-        return client.fetchMintConfig(contentCid);
+        // Fallback to individual fetch if batch not loaded or content not found
+        const config = await client.fetchMintConfig(contentCid);
+        console.log("[useMintConfig] Individual fetch result:", contentCid, config);
+        return config;
       },
       enabled: !!contentCid && !!client,
       staleTime: 60000, // Cache for 60 seconds
@@ -1783,6 +2510,145 @@ export function useContentRegistry() {
 
   // Map of NFT asset address -> Rarity
   const nftRarities = walletNftRaritiesQuery.data || new Map<string, Rarity>();
+
+  // ========== BUNDLE NFT OWNERSHIP AND RARITY TRACKING ==========
+
+  // Fetch ALL bundle NFTs owned by wallet ONCE (batch query)
+  const walletBundleNftsQuery = useQuery({
+    queryKey: ["walletBundleNfts", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey || !client) return [];
+      return client.fetchWalletBundleNftMetadata(publicKey);
+    },
+    enabled: !!publicKey && !!client,
+    staleTime: 300000, // Cache for 5 minutes
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Fetch rarities for all wallet bundle NFTs (batch query)
+  const walletBundleNftRaritiesQuery = useQuery({
+    queryKey: ["walletBundleNftRarities", publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey || !client) return new Map<string, Rarity>();
+      const nfts = walletBundleNftsQuery.data || [];
+      if (nfts.length === 0) return new Map<string, Rarity>();
+
+      const nftAssets = nfts.map(nft => nft.nftAsset);
+      const rarities = await client.fetchBundleNftRarities(nftAssets);
+
+      // Convert to Map<nftAsset string, Rarity>
+      const result = new Map<string, Rarity>();
+      for (const [key, nftRarity] of rarities) {
+        result.set(key, nftRarity.rarity);
+      }
+      return result;
+    },
+    enabled: !!publicKey && !!client && walletBundleNftsQuery.isSuccess && (walletBundleNftsQuery.data?.length ?? 0) > 0,
+    staleTime: 300000,
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Get wallet bundle NFTs data
+  const walletBundleNfts = walletBundleNftsQuery.data || [];
+
+  // Map of bundle NFT asset address -> Rarity
+  const bundleNftRarities = walletBundleNftRaritiesQuery.data || new Map<string, Rarity>();
+
+  // Batch fetch all bundle reward pools
+  const allBundleRewardPoolsQuery = useQuery({
+    queryKey: ["allBundleRewardPools"],
+    queryFn: async () => {
+      if (!client) return new Map();
+      return client.fetchAllBundleRewardPools();
+    },
+    enabled: !!client,
+    staleTime: 120000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Batch fetch all bundle collections (needed for pending rewards calculation)
+  const allBundleCollectionsQuery = useQuery({
+    queryKey: ["allBundleCollections"],
+    queryFn: async () => {
+      if (!client) return new Map();
+      return client.fetchAllBundleCollections();
+    },
+    enabled: !!client,
+    staleTime: 120000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Per-bundle pending reward info
+  interface BundlePendingReward {
+    bundleId: string;
+    creator: { toBase58(): string };
+    pending: bigint;
+    nftCount: bigint;
+    nftRewards: Array<{
+      nftAsset: { toBase58(): string };
+      pending: bigint;
+      rewardDebt: bigint;
+      weight: number;
+      createdAt: bigint;
+    }>;
+  }
+
+  // Fetch pending rewards for ALL user's bundle positions
+  const bundlePendingRewardsQuery = useQuery({
+    queryKey: ["bundlePendingRewards", publicKey?.toBase58()],
+    queryFn: async (): Promise<BundlePendingReward[]> => {
+      if (!publicKey || !client) return [];
+
+      const nfts = walletBundleNfts;
+      if (nfts.length === 0) return [];
+
+      const rewardPools = allBundleRewardPoolsQuery.data || new Map();
+      const collections = allBundleCollectionsQuery.data || new Map();
+
+      return client.getBundlePendingRewardsOptimized(publicKey, nfts, rewardPools, collections);
+    },
+    enabled: walletBundleNftsQuery.isSuccess &&
+             walletBundleNfts.length > 0 &&
+             !!publicKey &&
+             !!client &&
+             allBundleRewardPoolsQuery.isSuccess &&
+             allBundleCollectionsQuery.isSuccess,
+    staleTime: 120000,
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
+  // Helper to get pending reward for a specific bundle
+  const getPendingRewardForBundle = (bundleId: string | null, creatorAddress: string | null): BundlePendingReward | null => {
+    if (!bundleId || !creatorAddress || !bundlePendingRewardsQuery.data) return null;
+    return bundlePendingRewardsQuery.data.find(
+      r => r.bundleId === bundleId && r.creator.toBase58() === creatorAddress
+    ) || null;
+  };
+
+  // ========== END BUNDLE NFT TRACKING ==========
 
   // Per-NFT pending reward info
   interface NftPendingReward {
@@ -2025,20 +2891,59 @@ export function useContentRegistry() {
     nftRarities,
     walletNftRaritiesQuery,
 
+    // Bundle NFT ownership and rarity
+    walletBundleNfts,
+    bundleNftRarities,
+    walletBundleNftRaritiesQuery,
+
+    // Bundle pending rewards
+    bundlePendingRewardsQuery,
+    getPendingRewardForBundle,
+
     // Bundle management
+    globalBundlesQuery,
+    globalBundles: globalBundlesQuery.data ?? [],
+    isLoadingGlobalBundles: globalBundlesQuery.isLoading,
+    contentToBundlesQuery,
+    getBundlesForContent,
     myBundlesQuery,
     useBundle,
     useBundleWithItems,
     createBundle,
+    createBundleWithMintAndRent,
     addBundleItem,
     removeBundleItem,
     updateBundle,
     deleteBundle,
     isCreatingBundle: createBundle.isPending,
+    isCreatingBundleWithMintAndRent: createBundleWithMintAndRent.isPending,
     isAddingBundleItem: addBundleItem.isPending,
     isRemovingBundleItem: removeBundleItem.isPending,
     isUpdatingBundle: updateBundle.isPending,
     isDeletingBundle: deleteBundle.isPending,
+
+    // Bundle mint/rent
+    configureBundleMint,
+    updateBundleMintSettings,
+    directMintBundle,
+    configureBundleRent,
+    updateBundleRentConfig,
+    rentBundleSol,
+    claimBundleRewards,
+    claimAllBundleRewards: claimAllBundleRewards.mutateAsync,
+    claimAllRewardsUnified: claimAllRewardsUnified.mutateAsync,
+    useBundleMintConfig,
+    useBundleRentConfig,
+    useBundleCollection,
+    useBundleRewardPool,
+    useBundleNftOwnership,
+    isConfiguringBundleMint: configureBundleMint.isPending,
+    isUpdatingBundleMintSettings: updateBundleMintSettings.isPending,
+    isDirectMintingBundle: directMintBundle.isPending,
+    isConfiguringBundleRent: configureBundleRent.isPending,
+    isUpdatingBundleRentConfig: updateBundleRentConfig.isPending,
+    isRentingBundle: rentBundleSol.isPending,
+    isClaimingBundleRewards: claimBundleRewards.isPending || claimAllBundleRewards.isPending || claimAllRewardsUnified.isPending,
 
     // Utilities
     client,
