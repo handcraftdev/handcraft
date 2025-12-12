@@ -19,19 +19,28 @@ type ContentTypeFilter = "all" | SDKContentType;
 
 const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  // Video
+  // Video domain
   { value: SDKContentType.Video, label: "Video" },
   { value: SDKContentType.Movie, label: "Movie" },
+  { value: SDKContentType.Television, label: "TV" },
+  { value: SDKContentType.MusicVideo, label: "MV" },
   { value: SDKContentType.Short, label: "Short" },
-  // Audio
+  // Audio domain
   { value: SDKContentType.Music, label: "Music" },
   { value: SDKContentType.Podcast, label: "Podcast" },
-  // Image
+  { value: SDKContentType.Audiobook, label: "Audiobook" },
+  // Image domain
   { value: SDKContentType.Photo, label: "Photo" },
   { value: SDKContentType.Artwork, label: "Art" },
-  // Other
+  // Document domain
+  { value: SDKContentType.Book, label: "Book" },
+  { value: SDKContentType.Comic, label: "Comic" },
+  // File domain
+  { value: SDKContentType.Asset, label: "Asset" },
   { value: SDKContentType.Game, label: "Game" },
   { value: SDKContentType.Software, label: "Software" },
+  { value: SDKContentType.Dataset, label: "Dataset" },
+  // Text domain
   { value: SDKContentType.Post, label: "Post" },
 ];
 
