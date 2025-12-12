@@ -56,7 +56,7 @@ These features use only on-chain data + IPFS metadata + client-side storage.
 | Basic Search | Medium | ✅ Done |
 | Search Results Page | Low | ✅ Done |
 | Search History | Low | Pending |
-| Advanced Filters | Low | Partial (content type only) |
+| Advanced Filters | Low | ✅ Done |
 
 **Implementation:**
 - Query IPFS metadata (already cached in React Query)
