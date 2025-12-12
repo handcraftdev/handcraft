@@ -99,7 +99,15 @@ export function NeedsSessionOverlay({
   );
 }
 
-export function EmptyState({ showExplore = false }: { showExplore?: boolean }) {
+export function EmptyState({
+  showExplore = false,
+  hasFilter = false,
+  onClearFilter,
+}: {
+  showExplore?: boolean;
+  hasFilter?: boolean;
+  onClearFilter?: () => void;
+}) {
   return (
     <div className="text-center py-12">
       <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
@@ -107,11 +115,22 @@ export function EmptyState({ showExplore = false }: { showExplore?: boolean }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
         </svg>
       </div>
-      <h3 className="text-lg font-medium mb-2">No content yet</h3>
+      <h3 className="text-lg font-medium mb-2">
+        {hasFilter ? "No content matches this filter" : "No content yet"}
+      </h3>
       <p className="text-gray-500 mb-4">
-        {showExplore
-          ? "Be the first to upload content to the decentralized feed!"
-          : "Upload your first content to see it here."}
+        {hasFilter && onClearFilter ? (
+          <button
+            onClick={onClearFilter}
+            className="text-primary-400 hover:text-primary-300 underline"
+          >
+            Clear filter to see all content
+          </button>
+        ) : showExplore ? (
+          "Be the first to upload content to the decentralized feed!"
+        ) : (
+          "Upload your first content to see it here."
+        )}
       </p>
     </div>
   );

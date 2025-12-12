@@ -5,10 +5,22 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Link from "next/link";
 import { useContentRegistry, Bundle, Rarity } from "@/hooks/useContentRegistry";
-import { getIpfsUrl, getBundleTypeLabel } from "@handcraft/sdk";
+import { getIpfsUrl, getBundleTypeLabel, BundleType } from "@handcraft/sdk";
 import { BuyBundleModal, RentBundleModal } from "@/components/bundle";
 
 type BundleFeedTab = "discover" | "your-bundles";
+type BundleTypeFilter = "all" | BundleType;
+
+const BUNDLE_TYPE_FILTERS: { value: BundleTypeFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: BundleType.Album, label: "Albums" },
+  { value: BundleType.Series, label: "Series" },
+  { value: BundleType.Playlist, label: "Playlists" },
+  { value: BundleType.Course, label: "Courses" },
+  { value: BundleType.Newsletter, label: "Newsletters" },
+  { value: BundleType.Collection, label: "Collections" },
+  { value: BundleType.ProductPack, label: "Products" },
+];
 
 interface BundleMetadata {
   name?: string;
@@ -25,6 +37,7 @@ interface EnrichedBundle extends Bundle {
 
 export function BundleFeed() {
   const [activeTab, setActiveTab] = useState<BundleFeedTab>("discover");
+  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>("all");
   const { publicKey } = useWallet();
   const {
     globalBundles,
@@ -132,37 +145,61 @@ export function BundleFeed() {
     ? (!client || isLoadingGlobalBundles || isEnrichingGlobal)
     : (myBundlesQuery.isLoading || isEnrichingMy);
 
-  const displayBundles = activeTab === "discover"
+  const baseBundles = activeTab === "discover"
     ? enrichedGlobalBundles
     : enrichedMyBundles;
+
+  // Apply type filter
+  const displayBundles = typeFilter === "all"
+    ? baseBundles
+    : baseBundles.filter(bundle => bundle.bundleType === typeFilter);
 
   return (
     <div className="pb-20">
       {/* Tab Navigation */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex gap-1 px-4 py-2">
-          <button
-            onClick={() => setActiveTab("discover")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeTab === "discover"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:bg-gray-900 hover:text-white"
-            }`}
-          >
-            Discover
-          </button>
-          {publicKey && (
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="flex gap-1">
             <button
-              onClick={() => setActiveTab("your-bundles")}
+              onClick={() => setActiveTab("discover")}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === "your-bundles"
+                activeTab === "discover"
                   ? "bg-white text-black"
                   : "text-gray-400 hover:bg-gray-900 hover:text-white"
               }`}
             >
-              Your Bundles
+              Discover
             </button>
-          )}
+            {publicKey && (
+              <button
+                onClick={() => setActiveTab("your-bundles")}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  activeTab === "your-bundles"
+                    ? "bg-white text-black"
+                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
+                }`}
+              >
+                Your Bundles
+              </button>
+            )}
+          </div>
+
+          {/* Type Filter */}
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+            {BUNDLE_TYPE_FILTERS.map((filter) => (
+              <button
+                key={String(filter.value)}
+                onClick={() => setTypeFilter(filter.value)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                  typeFilter === filter.value
+                    ? "bg-secondary-500 text-white"
+                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -188,7 +225,11 @@ export function BundleFeed() {
             <BundleCard key={`${bundle.creatorAddress}-${bundle.bundleId}`} bundle={bundle} />
           ))
         ) : (
-          <EmptyBundleState isMyBundles={activeTab === "your-bundles"} />
+          <EmptyBundleState
+            isMyBundles={activeTab === "your-bundles"}
+            hasFilter={typeFilter !== "all"}
+            onClearFilter={() => setTypeFilter("all")}
+          />
         )}
       </div>
     </div>
@@ -447,7 +488,15 @@ function BundleCard({ bundle }: { bundle: EnrichedBundle }) {
   );
 }
 
-function EmptyBundleState({ isMyBundles }: { isMyBundles: boolean }) {
+function EmptyBundleState({
+  isMyBundles,
+  hasFilter,
+  onClearFilter,
+}: {
+  isMyBundles: boolean;
+  hasFilter: boolean;
+  onClearFilter: () => void;
+}) {
   return (
     <div className="text-center py-16">
       <svg
@@ -464,12 +513,25 @@ function EmptyBundleState({ isMyBundles }: { isMyBundles: boolean }) {
         />
       </svg>
       <h3 className="text-lg font-medium text-gray-400 mb-2">
-        {isMyBundles ? "No bundles yet" : "No bundles to discover"}
+        {hasFilter
+          ? "No bundles match this filter"
+          : isMyBundles
+          ? "No bundles yet"
+          : "No bundles to discover"}
       </h3>
       <p className="text-gray-500 text-sm">
-        {isMyBundles
-          ? "Create your first bundle to organize and monetize your content."
-          : "Be the first to create a bundle!"}
+        {hasFilter ? (
+          <button
+            onClick={onClearFilter}
+            className="text-secondary-400 hover:text-secondary-300 underline"
+          >
+            Clear filter to see all bundles
+          </button>
+        ) : isMyBundles ? (
+          "Create your first bundle to organize and monetize your content."
+        ) : (
+          "Be the first to create a bundle!"
+        )}
       </p>
     </div>
   );

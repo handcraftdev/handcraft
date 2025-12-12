@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry, ContentType } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentDomain } from "@handcraft/sdk";
 import { BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
@@ -15,8 +15,21 @@ import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
+type DomainFilter = "all" | ContentDomain;
+
+const DOMAIN_FILTERS: { value: DomainFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "video", label: "Video" },
+  { value: "audio", label: "Audio" },
+  { value: "image", label: "Image" },
+  { value: "document", label: "Docs" },
+  { value: "file", label: "Files" },
+  { value: "text", label: "Text" },
+];
+
 export function Feed() {
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
+  const [domainFilter, setDomainFilter] = useState<DomainFilter>("all");
   const { publicKey, connected } = useWallet();
   const { content: userContent, globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
   const { isValid: hasValidSession } = useSession();
@@ -119,35 +132,60 @@ export function Feed() {
   const isLoading = activeTab === "foryou"
     ? (!client || isLoadingGlobalContent || isEnrichingGlobal)
     : isLoadingUser;
-  const displayContent = activeTab === "foryou" ? globalContent : enrichedUserContent;
+
+  const baseContent = activeTab === "foryou" ? globalContent : enrichedUserContent;
+
+  // Apply domain filter
+  const displayContent = domainFilter === "all"
+    ? baseContent
+    : baseContent.filter(item => getContentDomain(item.contentType) === domainFilter);
 
   return (
     <div className="pb-20">
       {/* Tab Navigation */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex gap-1 px-4 py-2">
-          <button
-            onClick={() => setActiveTab("foryou")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeTab === "foryou"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:bg-gray-900 hover:text-white"
-            }`}
-          >
-            Discover
-          </button>
-          {publicKey && (
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="flex gap-1">
             <button
-              onClick={() => setActiveTab("your-content")}
+              onClick={() => setActiveTab("foryou")}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === "your-content"
+                activeTab === "foryou"
                   ? "bg-white text-black"
                   : "text-gray-400 hover:bg-gray-900 hover:text-white"
               }`}
             >
-              Your Content
+              Discover
             </button>
-          )}
+            {publicKey && (
+              <button
+                onClick={() => setActiveTab("your-content")}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  activeTab === "your-content"
+                    ? "bg-white text-black"
+                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
+                }`}
+              >
+                Your Content
+              </button>
+            )}
+          </div>
+
+          {/* Domain Filter */}
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+            {DOMAIN_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setDomainFilter(filter.value)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                  domainFilter === filter.value
+                    ? "bg-primary-500 text-white"
+                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -173,7 +211,11 @@ export function Feed() {
             <ContentCard key={item.contentCid} content={item} />
           ))
         ) : (
-          <EmptyState showExplore={activeTab === "foryou"} />
+          <EmptyState
+            showExplore={activeTab === "foryou"}
+            hasFilter={domainFilter !== "all"}
+            onClearFilter={() => setDomainFilter("all")}
+          />
         )}
       </div>
     </div>
