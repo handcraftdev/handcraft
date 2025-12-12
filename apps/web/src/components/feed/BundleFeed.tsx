@@ -37,21 +37,27 @@ interface EnrichedBundle extends Bundle {
 const FILTER_STORAGE_KEY = "handcraft-bundle-filter";
 
 export function BundleFeed() {
-  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>(() => {
-    if (typeof window === "undefined") return "all";
-    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
-    return (saved as BundleTypeFilter) || "all";
-  });
+  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>("all");
+  const [isHydrated, setIsHydrated] = useState(false);
   const {
     globalBundles,
     isLoadingGlobalBundles,
     client,
   } = useContentRegistry();
 
-  // Persist filter to localStorage
+  // Load filter from localStorage after hydration
   useEffect(() => {
-    localStorage.setItem(FILTER_STORAGE_KEY, String(typeFilter));
-  }, [typeFilter]);
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (saved) setTypeFilter(saved as BundleTypeFilter);
+    setIsHydrated(true);
+  }, []);
+
+  // Persist filter to localStorage (only after initial hydration)
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(FILTER_STORAGE_KEY, String(typeFilter));
+    }
+  }, [typeFilter, isHydrated]);
 
   // Enriched bundles state
   const [enrichedGlobalBundles, setEnrichedGlobalBundles] = useState<EnrichedBundle[]>([]);
