@@ -161,48 +161,46 @@ export function Feed() {
     <div className="pb-20">
       {/* Tab Navigation */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex items-center justify-between px-4 py-2">
-          <div className="flex gap-1">
+        <div className="flex gap-1 px-4 py-2">
+          <button
+            onClick={() => setActiveTab("foryou")}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              activeTab === "foryou"
+                ? "bg-white text-black"
+                : "text-gray-400 hover:bg-gray-900 hover:text-white"
+            }`}
+          >
+            Discover
+          </button>
+          {publicKey && (
             <button
-              onClick={() => setActiveTab("foryou")}
+              onClick={() => setActiveTab("your-content")}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                activeTab === "foryou"
+                activeTab === "your-content"
                   ? "bg-white text-black"
                   : "text-gray-400 hover:bg-gray-900 hover:text-white"
               }`}
             >
-              Discover
+              Your Content
             </button>
-            {publicKey && (
-              <button
-                onClick={() => setActiveTab("your-content")}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  activeTab === "your-content"
-                    ? "bg-white text-black"
-                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
-                }`}
-              >
-                Your Content
-              </button>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* Content Type Filter */}
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
-            {CONTENT_TYPE_FILTERS.map((filter) => (
-              <button
-                key={String(filter.value)}
-                onClick={() => setTypeFilter(filter.value)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                  typeFilter === filter.value
-                    ? "bg-primary-500 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+        {/* Content Type Filter */}
+        <div className="flex items-center gap-1.5 px-4 pb-2 overflow-x-auto scrollbar-hide">
+          {CONTENT_TYPE_FILTERS.map((filter) => (
+            <button
+              key={String(filter.value)}
+              onClick={() => setTypeFilter(filter.value)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+                typeFilter === filter.value
+                  ? "bg-primary-500 text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
       </div>
 
