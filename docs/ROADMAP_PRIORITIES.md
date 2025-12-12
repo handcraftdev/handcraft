@@ -27,13 +27,19 @@ Features are prioritized based on:
 ### ✅ Sorting Options
 - Sort by date (newest/oldest)
 - Sort by mints (most minted)
+- Sort by price (highest/lowest)
 - Sort by random (consistent within session, new on refresh)
+- Separate sort type and direction controls
+- Bundle sorting includes item count
 
 ### ✅ UI/UX Improvements
 - Copy share link button on content/bundle cards
 - Content duration badges for video/audio
 - Infinite scroll replacing pagination
 - URL params for shareable filter/sort state
+- Landing page with Creator/Fan value propositions
+- Feed moved to /explore route
+- Sidebar navigation (Home, Explore, Trending, Communities)
 
 ---
 
@@ -62,11 +68,13 @@ These features use only on-chain data + IPFS metadata + client-side storage.
 | Feature | Complexity | Status |
 |---------|------------|--------|
 | Sort by Date | Low | ✅ Done |
-| Sort by Price | Low | Pending |
+| Sort by Price | Low | ✅ Done |
 | Sort by Mints | Low | ✅ Done |
 | Sort by Random | Low | ✅ Done |
+| Sort Type/Direction Split | Low | ✅ Done |
+| Bundle Sort by Items | Low | ✅ Done |
 
-## A3. UI/UX Improvements (Partial)
+## A3. UI/UX Improvements ✅ DONE
 
 | Feature | Complexity | Status |
 |---------|------------|--------|
@@ -74,6 +82,9 @@ These features use only on-chain data + IPFS metadata + client-side storage.
 | Content Duration | Low | ✅ Done |
 | Infinite Scroll | Low | ✅ Done |
 | Better Loading States | Low | ✅ Done (skeleton loaders) |
+| Landing Page | Low | ✅ Done |
+| Creator/Fan Sections | Low | ✅ Done |
+| /explore Route | Low | ✅ Done |
 | Keyboard Shortcuts | Low | Pending |
 
 ## A4. Creator Dashboard Enhancements
@@ -323,9 +334,10 @@ Long-term features for scale.
 - ~~Copy Share Link button~~ ✅
 - ~~Content Duration display~~ ✅
 - ~~Search with client-side filtering~~ ✅
-- ~~Sort by date/mints~~ ✅
-- Sort by price
+- ~~Sort by date/mints/price~~ ✅
 - ~~Better loading states~~ ✅
+- ~~Landing page~~ ✅
+- ~~/explore route~~ ✅
 - Search history (localStorage)
 
 **Part B - Needs Indexer:**

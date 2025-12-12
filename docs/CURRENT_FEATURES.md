@@ -110,12 +110,13 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Home Feed | ✅ Done | Content and Bundles tabs with infinite scroll |
+| Landing Page | ✅ Done | Hero, features, Creator/Fan value propositions |
+| Explore Feed | ✅ Done | Content and Bundles tabs at /explore |
 | Bundle Feed | ✅ Done | Dedicated tab for browsing bundles |
 | Content Cards | ✅ Done | Preview, metadata, actions, rarity badges, duration |
 | Bundle Cards | ✅ Done | Bundle preview with item count and pricing |
 | Search Page | ✅ Done | Client-side search by title, description, creator |
-| Sorting Options | ✅ Done | Newest, oldest, most minted, random |
+| Sorting Options | ✅ Done | Date, minted, price, random with asc/desc toggle |
 | Infinite Scroll | ✅ Done | Auto-load more content on scroll |
 | URL Params | ✅ Done | Shareable links with filter/sort/tab state |
 | Copy Share Link | ✅ Done | Share content/bundle URLs |
@@ -161,10 +162,8 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Trending | 🔶 Placeholder | Route exists, no algorithm |
+| Trending | 🔶 Placeholder | Sidebar link only, no algorithm |
 | Communities | 🔶 Placeholder | Sidebar link only |
-| Audio Page | 🔶 Placeholder | Route exists, no content filtering |
-| Videos Page | 🔶 Placeholder | Route exists, no content filtering |
 | Library (Watch Later, Liked, Playlists) | 🔶 Placeholder | Sidebar links only |
 | USDC Payments | 🔶 Partial | Token mint defined, not integrated |
 | $CRAFT Token | 🔶 Placeholder | Constants defined, not integrated |
@@ -234,10 +233,11 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 │                      Web App (Next.js 15)                        │
 ├──────────────┬──────────────┬──────────────┬────────────────────┤
 │    Pages     │  Components  │    Hooks     │    API Routes      │
-│  - Feed      │  - Header    │  - Registry  │  - /session        │
-│  - Bundle    │  - Sidebar   │  - Session   │  - /content        │
-│  - Profile   │  - Modals    │  - Upload    │  - /upload         │
-│  - Dashboard │  - Cards     │              │                    │
+│  - Home      │  - Header    │  - Registry  │  - /session        │
+│  - Explore   │  - Sidebar   │  - Session   │  - /content        │
+│  - Bundle    │  - Modals    │  - Upload    │  - /upload         │
+│  - Profile   │  - Cards     │              │                    │
+│  - Dashboard │              │              │                    │
 └──────┬───────┴──────┬───────┴──────┬───────┴────────────────────┘
        │              │              │
        ▼              ▼              ▼
