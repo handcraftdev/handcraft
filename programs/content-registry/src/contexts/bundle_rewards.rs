@@ -29,15 +29,15 @@ pub struct ClaimBundleRewards<'info> {
     #[account()]
     pub nft_asset: AccountInfo<'info>,
 
-    /// NFT reward state for the specific NFT
-    /// This PDA proves the NFT is valid for this bundle (created only during minting)
+    /// Unified NFT reward state - tracks all pool debts including bundle rewards
     #[account(
         mut,
-        seeds = [BUNDLE_NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+        seeds = [UNIFIED_NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
         bump,
-        constraint = nft_reward_state.bundle == bundle.key() @ ContentRegistryError::BundleMismatch
+        constraint = nft_reward_state.content_or_bundle == bundle.key() @ ContentRegistryError::BundleMismatch,
+        constraint = nft_reward_state.is_bundle @ ContentRegistryError::BundleMismatch
     )]
-    pub nft_reward_state: Account<'info, BundleNftRewardState>,
+    pub nft_reward_state: Account<'info, UnifiedNftRewardState>,
 
     pub system_program: Program<'info, System>,
 }
@@ -76,7 +76,7 @@ pub fn handle_claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<(
 
     // Calculate pending reward for this NFT
     let reward_per_share = ctx.accounts.bundle_reward_pool.reward_per_share;
-    let pending = ctx.accounts.nft_reward_state.pending_reward(reward_per_share);
+    let pending = ctx.accounts.nft_reward_state.pending_content_or_bundle_reward(reward_per_share);
 
     if pending == 0 {
         msg!("No rewards available to claim");
@@ -84,7 +84,8 @@ pub fn handle_claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<(
     }
 
     // Update reward debt before transfer
-    ctx.accounts.nft_reward_state.update_reward_debt(reward_per_share);
+    let weight = ctx.accounts.nft_reward_state.weight;
+    ctx.accounts.nft_reward_state.content_or_bundle_debt = (weight as u128) * reward_per_share;
 
     // Track total claimed in pool
     ctx.accounts.bundle_reward_pool.total_claimed += pending;
@@ -167,9 +168,9 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
         }
         drop(nft_data);
 
-        // Verify NftRewardState PDA (this proves the NFT belongs to this bundle)
+        // Verify UnifiedNftRewardState PDA
         let (expected_pda, _) = Pubkey::find_program_address(
-            &[BUNDLE_NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+            &[UNIFIED_NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
             ctx.program_id,
         );
         if nft_reward_state_info.key() != expected_pda {
@@ -178,23 +179,38 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
 
         // Load and update reward state
         let mut data = nft_reward_state_info.try_borrow_mut_data()?;
-        if data.len() < 8 + BundleNftRewardState::INIT_SPACE {
+        if data.len() < 8 + UnifiedNftRewardState::INIT_SPACE {
             continue;
         }
 
-        // Read bundle from state (offset 40 after discriminator 8 + nft_asset 32)
-        let state_bundle = Pubkey::try_from_slice(&data[40..72])?;
+        // UnifiedNftRewardState layout:
+        // - discriminator: 8 bytes (0-7)
+        // - nft_asset: 32 bytes (8-39)
+        // - creator: 32 bytes (40-71)
+        // - rarity: 1 byte (72)
+        // - weight: 2 bytes (73-74)
+        // - is_bundle: 1 byte (75)
+        // - content_or_bundle: 32 bytes (76-107)
+        // - content_or_bundle_debt: 16 bytes (108-123)
+
+        // Check is_bundle flag (offset 75)
+        if data[75] == 0 {
+            continue; // Not a bundle NFT
+        }
+
+        // Read content_or_bundle from state (offset 76-107)
+        let state_bundle = Pubkey::try_from_slice(&data[76..108])?;
         if state_bundle != bundle_key {
             continue; // Wrong bundle
         }
 
-        // Read weight (u16 at offset 88)
-        let weight = u16::from_le_bytes([data[88], data[89]]);
+        // Read weight (u16 at offset 73)
+        let weight = u16::from_le_bytes([data[73], data[74]]);
 
-        // Read reward_debt (u128 at offset 72)
-        let mut reward_debt_bytes = [0u8; 16];
-        reward_debt_bytes.copy_from_slice(&data[72..88]);
-        let reward_debt = u128::from_le_bytes(reward_debt_bytes);
+        // Read content_or_bundle_debt (u128 at offset 108)
+        let mut debt_bytes = [0u8; 16];
+        debt_bytes.copy_from_slice(&data[108..124]);
+        let reward_debt = u128::from_le_bytes(debt_bytes);
 
         // Calculate pending
         let entitled = (weight as u128) * reward_per_share;
@@ -205,9 +221,9 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
         };
 
         if pending > 0 {
-            // Update reward_debt
+            // Update content_or_bundle_debt
             let new_debt = (weight as u128) * reward_per_share;
-            data[72..88].copy_from_slice(&new_debt.to_le_bytes());
+            data[108..124].copy_from_slice(&new_debt.to_le_bytes());
 
             total_claimed += pending;
         }

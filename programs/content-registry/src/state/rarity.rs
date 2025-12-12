@@ -1,8 +1,6 @@
 use anchor_lang::prelude::*;
 
-/// Seed for NftRarity PDA
-/// PDA seeds: ["nft_rarity", nft_asset_pubkey]
-pub const NFT_RARITY_SEED: &[u8] = b"nft_rarity";
+// NOTE: NFT_RARITY_SEED removed - rarity is now stored in UnifiedNftRewardState
 
 /// Rarity tiers with their probabilities and weights
 /// Probability is in basis points (out of 10000)
@@ -97,86 +95,8 @@ impl Rarity {
     }
 }
 
-/// Per-NFT rarity state
-/// Stores the rarity for each minted NFT
-/// PDA seeds: ["nft_rarity", nft_asset_pubkey]
-#[account]
-#[derive(InitSpace)]
-pub struct NftRarity {
-    /// The NFT asset this rarity belongs to
-    pub nft_asset: Pubkey,
-    /// The content this NFT belongs to
-    pub content: Pubkey,
-    /// The rarity tier
-    pub rarity: Rarity,
-    /// Weight for reward calculation (cached for efficiency)
-    pub weight: u16,
-    /// The randomness account used to determine rarity
-    pub randomness_account: Pubkey,
-    /// Slot at which randomness was committed
-    pub commit_slot: u64,
-    /// Timestamp when rarity was revealed
-    pub revealed_at: i64,
-}
-
-/// Extended content reward pool with weighted tracking
-/// Tracks total_weight instead of just total_nfts for rarity-weighted rewards
-#[account]
-#[derive(InitSpace)]
-pub struct ContentWeightedPool {
-    /// The content this pool belongs to
-    pub content: Pubkey,
-    /// Accumulated reward per weight unit (scaled by PRECISION)
-    /// Increases with each sale: reward_per_weight += (holder_reward * PRECISION) / total_weight
-    pub reward_per_weight: u128,
-    /// Total weight of all NFTs minted for this content
-    /// Sum of all individual NFT weights based on rarity
-    pub total_weight: u64,
-    /// Total NFTs minted for this content
-    pub total_nfts: u64,
-    /// Total rewards ever deposited to this pool (lamports)
-    pub total_deposited: u64,
-    /// Total rewards claimed from this pool (lamports)
-    pub total_claimed: u64,
-    /// Timestamp when pool was created
-    pub created_at: i64,
-}
-
-/// Precision factor for reward_per_weight calculations (1e12)
-pub const WEIGHT_PRECISION: u128 = 1_000_000_000_000;
-
-impl ContentWeightedPool {
-    /// Add rewards to the pool and update reward_per_weight
-    /// Should be called BEFORE adding new NFT weight
-    pub fn add_rewards(&mut self, amount: u64) {
-        if self.total_weight == 0 || amount == 0 {
-            return;
-        }
-        self.reward_per_weight += (amount as u128 * WEIGHT_PRECISION) / self.total_weight as u128;
-        self.total_deposited += amount;
-    }
-
-    /// Add an NFT's weight to the pool (call AFTER adding rewards)
-    pub fn add_nft_weight(&mut self, weight: u16) {
-        self.total_weight += weight as u64;
-        self.total_nfts += 1;
-    }
-
-    /// Remove an NFT's weight from the pool (on burn)
-    pub fn remove_nft_weight(&mut self, weight: u16) {
-        self.total_weight = self.total_weight.saturating_sub(weight as u64);
-        self.total_nfts = self.total_nfts.saturating_sub(1);
-    }
-
-    /// Calculate pending rewards for a given NFT weight and reward_debt
-    pub fn pending_reward(&self, nft_weight: u16, reward_debt: u128) -> u64 {
-        let entitled = nft_weight as u128 * self.reward_per_weight;
-        if entitled <= reward_debt {
-            return 0;
-        }
-        ((entitled - reward_debt) / WEIGHT_PRECISION) as u64
-    }
-}
+// NOTE: NftRarity struct removed - rarity is now stored in UnifiedNftRewardState
+// NOTE: ContentWeightedPool removed - use ContentRewardPool from reward_pool.rs instead
 
 #[cfg(test)]
 mod tests {

@@ -1,0 +1,42 @@
+[
+  {
+    "role": "creator1",
+    "pubkey": "36EnxH5NpHmYR4Jf3jy8WVHfjbB2QNTHwb3WuJBqjcvK",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/creator1.json"
+  },
+  {
+    "role": "creator2",
+    "pubkey": "61TDABUWN1mf1HXsNUKskb9MEFCtkzTX7UCDbfTWrdib",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/creator2.json"
+  },
+  {
+    "role": "subscriber1",
+    "pubkey": "342Cz3adQKSM94iY48ywHjo6vi8J5JmnEdqz7mvouEJa",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/subscriber1.json"
+  },
+  {
+    "role": "subscriber2",
+    "pubkey": "8mcKsQP2uagf379VcQJo3hZEvPfAAVEaxyWawfwK5nJ8",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/subscriber2.json"
+  },
+  {
+    "role": "subscriber3",
+    "pubkey": "EhJnDWzLn31fd9o4Tb2wVm8BRarBRKCERSURRM3nuVC4",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/subscriber3.json"
+  },
+  {
+    "role": "minter1",
+    "pubkey": "5vHpa36kk3nPnFBEdEkekJA7JAxsSHNsoceQJhEqdPSf",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/minter1.json"
+  },
+  {
+    "role": "minter2",
+    "pubkey": "HRqwTBYj6Ycn69ptjvyKxxckBmXZsbC6Ve38N77bQZFT",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/minter2.json"
+  },
+  {
+    "role": "claimer1",
+    "pubkey": "BVQ2np8m3AWSrFw9X5f3iCjXYqxYX8aTicVkjgcZUPMj",
+    "path": "/Users/onlyabrak/dev/handcraft/scripts/test-wallets/claimer1.json"
+  }
+]

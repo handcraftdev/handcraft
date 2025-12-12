@@ -13,8 +13,8 @@ pub const BUNDLE_MINT_CONFIG_SEED: &[u8] = b"bundle_mint_config";
 pub const BUNDLE_RENT_CONFIG_SEED: &[u8] = b"bundle_rent_config";
 pub const BUNDLE_COLLECTION_SEED: &[u8] = b"bundle_collection";
 pub const BUNDLE_REWARD_POOL_SEED: &[u8] = b"bundle_reward_pool";
-pub const BUNDLE_NFT_REWARD_STATE_SEED: &[u8] = b"bundle_nft_reward";
-pub const BUNDLE_NFT_RARITY_SEED: &[u8] = b"bundle_nft_rarity";
+// NOTE: BUNDLE_NFT_REWARD_STATE_SEED and BUNDLE_NFT_RARITY_SEED removed
+// Bundle NFT state is now stored in UnifiedNftRewardState
 pub const BUNDLE_RENT_ENTRY_SEED: &[u8] = b"bundle_rent_entry";
 pub const BUNDLE_WALLET_STATE_SEED: &[u8] = b"bundle_wallet";
 
@@ -78,6 +78,12 @@ pub struct Bundle {
 
     /// Whether bundle is locked (becomes true after first mint)
     pub is_locked: bool,
+
+    /// Visibility level for subscription access (default: 1)
+    /// Level 0: Public (no access requirement)
+    /// Level 1: Basic access (ecosystem subscription or NFT ownership)
+    /// Level 2: Creator subscription required (patron subscription or NFT ownership)
+    pub visibility_level: u8,
 }
 
 /// BundleItem account - links content to a bundle with ordering
@@ -112,7 +118,8 @@ impl Bundle {
         8 + // updated_at
         8 + // minted_count
         8 + // pending_count
-        1   // is_locked
+        1 + // is_locked
+        1   // visibility_level
     }
 }
 
@@ -360,57 +367,8 @@ impl BundleWalletState {
     }
 }
 
-/// Bundle NFT reward state (mirrors NftRewardState)
-/// Per-NFT reward tracking for bundle NFTs
-/// PDA seeds: ["bundle_nft_reward", nft_asset]
-#[account]
-#[derive(InitSpace)]
-pub struct BundleNftRewardState {
-    /// The NFT asset this state belongs to
-    pub nft_asset: Pubkey,
-    /// The bundle this NFT belongs to
-    pub bundle: Pubkey,
-    /// Reward debt for this specific NFT (scaled by PRECISION)
-    pub reward_debt: u128,
-    /// Weight of this NFT based on rarity
-    pub weight: u16,
-    /// Timestamp when this state was created
-    pub created_at: i64,
-}
-
-impl BundleNftRewardState {
-    /// Calculate pending rewards for this NFT
-    pub fn pending_reward(&self, current_reward_per_share: u128) -> u64 {
-        let entitled = self.weight as u128 * current_reward_per_share;
-        if entitled <= self.reward_debt {
-            return 0;
-        }
-        ((entitled - self.reward_debt) / PRECISION) as u64
-    }
-
-    /// Update reward debt after claiming
-    pub fn update_reward_debt(&mut self, current_reward_per_share: u128) {
-        self.reward_debt = self.weight as u128 * current_reward_per_share;
-    }
-}
-
-/// Bundle NFT rarity (mirrors NftRarity)
-/// Stores rarity information for bundle NFTs
-/// PDA seeds: ["bundle_nft_rarity", nft_asset]
-#[account]
-#[derive(InitSpace)]
-pub struct BundleNftRarity {
-    /// The NFT asset
-    pub nft_asset: Pubkey,
-    /// The bundle this NFT belongs to
-    pub bundle: Pubkey,
-    /// Rarity tier
-    pub rarity: Rarity,
-    /// Weight based on rarity
-    pub weight: u16,
-    /// Timestamp when rarity was revealed (0 = not revealed yet)
-    pub revealed_at: i64,
-}
+// NOTE: BundleNftRewardState and BundleNftRarity removed
+// Use UnifiedNftRewardState from subscription.rs instead
 
 /// Bundle rent entry (mirrors RentEntry)
 /// Active rental tracking for bundle rentals

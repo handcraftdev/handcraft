@@ -18,9 +18,9 @@ export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
 export const WALLET_CONTENT_STATE_SEED = "wallet_content";
 export const CONTENT_COLLECTION_SEED = "content_collection";
 
-// Legacy seeds (for migration)
-export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";
-export const NFT_REWARD_STATE_SEED = "nft_reward";
+// Legacy seeds - kept for reading old accounts only (no longer created)
+// export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";  // REMOVED
+// export const NFT_REWARD_STATE_SEED = "nft_reward";  // REMOVED - use UNIFIED_NFT_REWARD_STATE_SEED
 
 // Rent seeds
 export const RENT_CONFIG_SEED = "rent_config";
@@ -178,7 +178,7 @@ export enum PaymentCurrency {
 // ========== RARITY CONSTANTS ==========
 
 // Rarity PDA seeds
-export const NFT_RARITY_SEED = "nft_rarity";
+// export const NFT_RARITY_SEED = "nft_rarity";  // REMOVED - rarity is now in UnifiedNftRewardState
 export const PENDING_MINT_SEED = "pending_mint";
 
 // Rarity weights (matches program)
@@ -210,8 +210,8 @@ export const BUNDLE_RENT_CONFIG_SEED = "bundle_rent_config";
 export const BUNDLE_COLLECTION_SEED = "bundle_collection";
 export const BUNDLE_REWARD_POOL_SEED = "bundle_reward_pool";
 export const BUNDLE_WALLET_STATE_SEED = "bundle_wallet";
-export const BUNDLE_NFT_REWARD_STATE_SEED = "bundle_nft_reward";
-export const BUNDLE_NFT_RARITY_SEED = "bundle_nft_rarity";
+// export const BUNDLE_NFT_REWARD_STATE_SEED = "bundle_nft_reward";  // REMOVED - use UnifiedNftRewardState
+// export const BUNDLE_NFT_RARITY_SEED = "bundle_nft_rarity";  // REMOVED - rarity is now in UnifiedNftRewardState
 export const BUNDLE_RENT_ENTRY_SEED = "bundle_rent_entry";
 export const BUNDLE_DIRECT_NFT_SEED = "bundle_direct_nft";
 export const BUNDLE_RENTAL_NFT_SEED = "bundle_rental_nft";
@@ -233,6 +233,9 @@ export const MB_NFT_SEED = "mb_nft";
 // MagicBlock bundle mint seeds
 export const MB_BUNDLE_MINT_REQUEST_SEED = "mb_bundle_mint_req";
 export const MB_BUNDLE_NFT_SEED = "mb_bundle_nft";
+
+// Simple mint seeds (unified mint with subscription pools)
+export const SIMPLE_NFT_SEED = "simple_nft";
 
 // MagicBlock fallback timeout (5 seconds - uses slot hash randomness)
 export const MB_FALLBACK_TIMEOUT_SECONDS = 5;
@@ -293,3 +296,60 @@ export function getSuggestedBundleTypes(domain: ContentDomain): import("./types"
       return [BundleType.Collection, BundleType.Playlist];
   }
 }
+
+// ========== SUBSCRIPTION SYSTEM CONSTANTS (Phase 1) ==========
+
+// Unified NFT reward state seed (replaces per-pool NftRewardState)
+export const UNIFIED_NFT_REWARD_STATE_SEED = "unified_nft_reward";
+
+// Creator patron pool seeds
+export const CREATOR_PATRON_POOL_SEED = "creator_patron_pool";
+export const CREATOR_PATRON_TREASURY_SEED = "creator_patron_treasury";
+export const CREATOR_PATRON_CONFIG_SEED = "creator_patron_config";
+export const CREATOR_PATRON_SUB_SEED = "creator_patron_sub";
+
+// Global pools (singletons)
+export const GLOBAL_HOLDER_POOL_SEED = "global_holder_pool";
+export const CREATOR_DIST_POOL_SEED = "creator_dist_pool";
+export const ECOSYSTEM_EPOCH_STATE_SEED = "ecosystem_epoch_state";
+
+// Creator weight tracking
+export const CREATOR_WEIGHT_SEED = "creator_weight";
+
+// Ecosystem subscription seeds
+export const ECOSYSTEM_STREAMING_TREASURY_SEED = "ecosystem_streaming_treasury";
+export const ECOSYSTEM_SUB_CONFIG_SEED = "ecosystem_sub_config";
+export const ECOSYSTEM_SUB_SEED = "ecosystem_sub";
+
+// Default epoch duration: 30 days in seconds
+export const DEFAULT_EPOCH_DURATION = 30 * 24 * 60 * 60; // 2,592,000 seconds
+
+// Patron tier enum (matches program)
+export enum PatronTier {
+  Membership = 0,   // Support only, no content access
+  Subscription = 1, // Support + Level 2 content access
+}
+
+// Visibility levels (matches program)
+export enum VisibilityLevel {
+  Public = 0,           // No access requirement
+  Basic = 1,            // Ecosystem subscription or NFT ownership
+  CreatorSubscription = 2, // Patron subscription or NFT ownership
+}
+
+// Helper to get visibility level label
+export function getVisibilityLevelLabel(level: VisibilityLevel): string {
+  switch (level) {
+    case VisibilityLevel.Public: return "Public";
+    case VisibilityLevel.Basic: return "Basic (Ecosystem or NFT)";
+    case VisibilityLevel.CreatorSubscription: return "Creator Subscription";
+  }
+}
+
+// Re-export new rarity weights for subscription system
+// These are the actual weights used (not multiplied by WEIGHT_PRECISION)
+export const SUBSCRIPTION_RARITY_WEIGHT_COMMON = 1;
+export const SUBSCRIPTION_RARITY_WEIGHT_UNCOMMON = 5;
+export const SUBSCRIPTION_RARITY_WEIGHT_RARE = 20;
+export const SUBSCRIPTION_RARITY_WEIGHT_EPIC = 60;
+export const SUBSCRIPTION_RARITY_WEIGHT_LEGENDARY = 120;

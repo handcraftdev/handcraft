@@ -21,6 +21,11 @@ pub struct ContentEntry {
     pub preview_cid: String,   // Preview CID for non-owners (empty if not gated)
     #[max_len(64)]
     pub encryption_meta_cid: String, // Encryption metadata CID (empty if not encrypted)
+    /// Visibility level for subscription access (default: 1)
+    /// Level 0: Public (no access requirement)
+    /// Level 1: Basic access (ecosystem subscription or NFT ownership)
+    /// Level 2: Creator subscription required (patron subscription or NFT ownership)
+    pub visibility_level: u8,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]

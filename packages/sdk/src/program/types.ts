@@ -549,3 +549,173 @@ export interface WalletBundleNftMetadata {
   collectionAsset: PublicKey | null;
   name: string;
 }
+
+// ========== SUBSCRIPTION SYSTEM TYPES (Phase 1-3) ==========
+
+// Note: PatronTier and VisibilityLevel enums are defined in constants.ts
+import { PatronTier, VisibilityLevel } from "./constants";
+export { PatronTier, VisibilityLevel };
+
+/**
+ * Parse PatronTier from Anchor's enum format
+ */
+export function parsePatronTier(anchorTier: unknown): PatronTier {
+  if (typeof anchorTier === "number") {
+    return anchorTier as PatronTier;
+  }
+  if (typeof anchorTier === "object" && anchorTier !== null) {
+    const keys = Object.keys(anchorTier);
+    if (keys.length > 0) {
+      const key = keys[0].toLowerCase();
+      switch (key) {
+        case "membership": return PatronTier.Membership;
+        case "subscription": return PatronTier.Subscription;
+      }
+    }
+  }
+  return PatronTier.Membership;
+}
+
+/**
+ * Unified NFT reward state - single account per NFT tracking all pool debts
+ */
+export interface UnifiedNftRewardState {
+  nftAsset: PublicKey;
+  creator: PublicKey;
+  weight: number;
+  isBundle: boolean;
+  contentOrBundle: PublicKey;
+  contentOrBundleDebt: bigint;
+  patronDebt: bigint;
+  globalDebt: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Creator patron pool - holds SOL for NFT holder claims (12% of patron subscriptions)
+ */
+export interface CreatorPatronPool {
+  creator: PublicKey;
+  rewardPerShare: bigint;
+  totalWeight: bigint;
+  totalDeposited: bigint;
+  totalClaimed: bigint;
+  lastDistributionAt: bigint;
+  epochDuration: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Global holder pool - holds SOL for NFT holder claims (12% of ecosystem subscriptions)
+ */
+export interface GlobalHolderPool {
+  rewardPerShare: bigint;
+  totalWeight: bigint;
+  totalDeposited: bigint;
+  totalClaimed: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Creator distribution pool - holds SOL for creator claims (80% of ecosystem subscriptions)
+ */
+export interface CreatorDistPool {
+  rewardPerShare: bigint;
+  totalWeight: bigint;
+  totalDeposited: bigint;
+  totalClaimed: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Ecosystem epoch state - shared epoch tracking for lazy distribution
+ */
+export interface EcosystemEpochState {
+  lastDistributionAt: bigint;
+  epochDuration: bigint;
+}
+
+/**
+ * Creator weight - tracks total weight of creator's NFTs for ecosystem payouts
+ */
+export interface CreatorWeight {
+  creator: PublicKey;
+  totalWeight: bigint;
+  rewardDebt: bigint;
+  totalClaimed: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Creator patron config - creator's subscription/membership tier configuration
+ */
+export interface CreatorPatronConfig {
+  creator: PublicKey;
+  membershipPrice: bigint;
+  subscriptionPrice: bigint;
+  isActive: boolean;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+/**
+ * Creator patron subscription - user's subscription to a specific creator
+ */
+export interface CreatorPatronSubscription {
+  subscriber: PublicKey;
+  creator: PublicKey;
+  tier: PatronTier;
+  streamId: PublicKey;
+  startedAt: bigint;
+  isActive: boolean;
+}
+
+/**
+ * Ecosystem subscription config - platform-wide subscription configuration
+ */
+export interface EcosystemSubConfig {
+  price: bigint;
+  isActive: boolean;
+  authority: PublicKey;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+/**
+ * Ecosystem subscription - user's platform subscription
+ */
+export interface EcosystemSubscription {
+  subscriber: PublicKey;
+  streamId: PublicKey;
+  startedAt: bigint;
+  isActive: boolean;
+}
+
+/**
+ * Check if a subscription is valid (within 30 days of start)
+ * @param startedAt - Subscription start timestamp in seconds
+ * @param now - Current timestamp in seconds (defaults to Date.now() / 1000)
+ */
+export function isSubscriptionValid(startedAt: bigint, now?: number): boolean {
+  const currentTime = now ?? Math.floor(Date.now() / 1000);
+  const epochDuration = 30 * 24 * 60 * 60; // 30 days in seconds
+  return currentTime < Number(startedAt) + epochDuration;
+}
+
+/**
+ * Calculate pending reward from a subscription pool using saturating subtraction
+ * @param weight - NFT's rarity weight
+ * @param rewardPerShare - Current pool reward_per_share
+ * @param debt - NFT's debt for this pool
+ * @param precision - Precision constant (default: 10^12)
+ */
+export function calculateSubscriptionPendingReward(
+  weight: number,
+  rewardPerShare: bigint,
+  debt: bigint,
+  precision: bigint = BigInt(1_000_000_000_000)
+): bigint {
+  const weightedRps = BigInt(weight) * rewardPerShare;
+  if (weightedRps <= debt) return BigInt(0);
+  return (weightedRps - debt) / precision;
+}

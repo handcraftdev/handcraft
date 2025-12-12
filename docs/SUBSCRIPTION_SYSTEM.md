@@ -12,6 +12,7 @@ All systems use:
 - **Epoch-based lazy distribution** for subscriptions (on first claim after epoch)
 - **Pull-based claims** for NFT holders
 - **Rarity-weighted calculations** for all distributions
+- **Slot hash randomness** for rarity determination (no VRF dependency)
 
 ### Why NFT Weight (Not Views/Streams)?
 
@@ -42,25 +43,47 @@ NFT weight-based distribution:
 
 ---
 
+## Terminology
+
+**Important distinctions:**
+
+| Term | Meaning | Example |
+|------|---------|---------|
+| **Pool Account** | PDA that holds SOL for reward claims | ContentRewardPool, BundleRewardPool, CreatorPatronPool |
+| **Treasury Account** | Permanent platform-owned account | Platform Treasury, Ecosystem Treasury |
+| **Streaming Treasury** | Temporary PDA that receives subscription streams | Creator Patron Treasury, Ecosystem Subscription Treasury |
+
+- **Pool accounts** hold actual SOL that NFT holders claim from
+- **Treasury accounts** are permanent platform wallets (5% platform, 3% ecosystem fees)
+- **Streaming treasuries** accumulate subscription payments before epoch distribution
+
+---
+
 ## Fee Structure (All Sources)
 
 **Primary (Mint / Rental / Membership / Subscription):**
 ```
-Creator:     80%  → creator wallet
-Platform:     5%  → platform treasury
-Ecosystem:    3%  → ecosystem treasury
-Holders:     12%  → Reward pools (weighted by rarity)
+Creator:     80%  → creator wallet (or CreatorDistPool for ecosystem subscription)
+Platform:     5%  → platform treasury (permanent)
+Ecosystem:    3%  → ecosystem treasury (permanent)
+Holders:     12%  → Pool accounts (holds SOL for claims)
 ─────────────────
 Total:      100%
 ```
 
+**Note:** For Ecosystem Subscription specifically:
+- 80% → CreatorDistPool (creators claim based on their NFT weight share)
+- 12% → GlobalHolderPool (all NFT holders claim by weight)
+
 **Secondary Sale (Resale):**
 ```
-Seller:      ~88% → seller wallet (remaining after fees)
-Creator:     2-10% → creator wallet (configurable royalty)
-Platform:     1%  → treasury
+Seller:      90%  → seller wallet (remaining after fees)
+Creator:      4%  → creator wallet (fixed royalty)
+Platform:     1%  → platform treasury
 Ecosystem:    1%  → ecosystem treasury
-Holders:      8%  → Reward pools (weighted by rarity)
+Holders:      4%  → Pool accounts (split 50/50 for bundles)
+─────────────────
+Total:      100%
 ```
 
 ---
@@ -273,11 +296,11 @@ Same as content mint. **Renters do NOT earn rewards** - access only.
 
 | Recipient | Share | Destination |
 |-----------|-------|-------------|
-| Seller | ~88% | Seller wallet |
-| Creator | 2-10% | Creator wallet |
+| Seller | 90% | Seller wallet |
+| Creator | 4% | Creator wallet (fixed royalty) |
 | Platform | 1% | Platform treasury |
 | Ecosystem | 1% | Ecosystem treasury |
-| **Holders** | **8%** | **ContentRewardPool** (content NFT holders only) |
+| **Holders** | **4%** | **ContentRewardPool** (content NFT holders only) |
 
 ### Bundle NFT Mint/Sale
 
@@ -302,8 +325,8 @@ Same as bundle mint - 50/50 split. Renters do NOT earn rewards.
 
 | Recipient | Share | Destination |
 |-----------|-------|-------------|
-| Seller | 94% | Seller wallet |
-| Creator | 4% | Creator wallet |
+| Seller | 90% | Seller wallet |
+| Creator | 4% | Creator wallet (fixed royalty) |
 | Platform | 1% | Platform treasury |
 | Ecosystem | 1% | Ecosystem treasury |
 | **Holders** | **4%** | **Split:** 2% BundleRewardPool + 2% ContentRewardPools |
@@ -517,62 +540,137 @@ Both use same fee structure (80/5/3/12).
 
 ### CreatorPatronPool
 
-One pool per creator (not per content):
+One pool per creator. **This pool account holds actual SOL for claims.**
 
 ```rust
 /// PDA: ["creator_patron_pool", creator]
+/// Holds SOL for NFT holder claims (12% of patron subscriptions)
 pub struct CreatorPatronPool {
     pub creator: Pubkey,
     pub reward_per_share: u128,
     pub total_weight: u64,              // Sum of ALL creator NFT weights
-    pub total_deposited: u64,
-    pub total_claimed: u64,
+    pub total_deposited: u64,           // Total SOL deposited into this pool
+    pub total_claimed: u64,             // Total SOL claimed from this pool
     pub last_distribution_at: i64,      // Epoch tracking
     pub epoch_duration: i64,            // 30 days in seconds
 }
 ```
 
-- Tracks total weight of ALL creator's NFTs (content + bundle)
-- Any holder of creator's NFTs can claim from this pool
+### CreatorPatronStreamingTreasury
+
+```rust
+/// PDA: ["creator_patron_treasury", creator]
+/// Receives Streamflow payments from subscribers, distributed at epoch end
+pub struct CreatorPatronStreamingTreasury {
+    // Just a PDA that accumulates SOL from subscription streams
+    // No state needed - we read lamports() directly
+}
+```
+
+- **CreatorPatronStreamingTreasury**: Accumulates subscription payments via Streamflow
+- **CreatorPatronPool**: Receives 12% at epoch distribution, holds SOL for claims
+- Any holder of creator's NFTs can claim from CreatorPatronPool
+
+### CreatorPatronConfig
+
+```rust
+/// PDA: ["creator_patron_config", creator]
+/// Creator's subscription/membership tier configuration
+pub struct CreatorPatronConfig {
+    pub creator: Pubkey,
+    pub membership_price: u64,        // SOL per month for support-only tier (0 = disabled)
+    pub subscription_price: u64,      // SOL per month for support + access tier (0 = disabled)
+    pub is_active: bool,
+}
+```
+
+### CreatorPatronSubscription
+
+```rust
+/// PDA: ["creator_patron_sub", subscriber, creator]
+/// Tracks a user's subscription to a specific creator
+pub struct CreatorPatronSubscription {
+    pub subscriber: Pubkey,
+    pub creator: Pubkey,
+    pub tier: PatronTier,             // Membership or Subscription
+    pub stream_id: Pubkey,            // Streamflow stream account
+    pub started_at: i64,
+    pub is_active: bool,
+}
+
+pub enum PatronTier {
+    Membership,   // Support only, no access
+    Subscription, // Support + Level 2 access
+}
+```
 
 ### Claim with Lazy Distribution
 
 ```rust
 pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>, nft: Pubkey) {
-    let creator = ctx.accounts.nft_state.creator;
     let pool = &mut ctx.accounts.creator_patron_pool;
-    let treasury = &ctx.accounts.creator_treasury;
+    let streaming_treasury = &ctx.accounts.creator_patron_streaming_treasury;
     let now = Clock::get()?.unix_timestamp;
 
-    // If epoch ended and treasury has funds, distribute first
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: If epoch ended, distribute streaming treasury
+    // ═══════════════════════════════════════════════════════════════════
+
+    maybe_distribute_patron_pool(pool, streaming_treasury, now, &ctx.accounts);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 2: Claim from pool (with saturating subtraction)
+    // ═══════════════════════════════════════════════════════════════════
+
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
+
+    // Saturating subtraction prevents underflow if debt > weighted_rps
+    // (can happen if claiming before distribution when virtual RPS was used at mint)
+    let pending = weighted_rps.saturating_sub(nft_state.patron_debt) / PRECISION;
+
+    if pending > 0 {
+        // Transfer SOL from pool account to holder
+        **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+        **ctx.accounts.holder.try_borrow_mut_lamports()? += pending as u64;
+
+        pool.total_claimed += pending as u64;
+
+        // ONLY update debt if we actually claimed (preserves virtual RPS protection)
+        nft_state.patron_debt = weighted_rps;
+    }
+    // If pending = 0, debt stays unchanged
+}
+
+/// Shared distribution logic - called by BOTH mint and claim
+fn maybe_distribute_patron_pool(
+    pool: &mut CreatorPatronPool,
+    streaming_treasury: &AccountInfo,
+    now: i64,
+    accounts: &...,
+) {
     if now >= pool.last_distribution_at + pool.epoch_duration
-       && treasury.lamports() > 0
+       && streaming_treasury.lamports() > 0
     {
-        // Distribute treasury to pool
-        let treasury_balance = treasury.lamports();
-        let creator_share = treasury_balance * 80 / 100;
-        let platform_share = treasury_balance * 5 / 100;
-        let ecosystem_share = treasury_balance * 3 / 100;
-        let holder_share = treasury_balance * 12 / 100;
+        let balance = streaming_treasury.lamports();
+        let creator_share = balance * 80 / 100;
+        let platform_share = balance * 5 / 100;
+        let ecosystem_share = balance * 3 / 100;
+        let holder_share = balance * 12 / 100;
 
-        // Transfer 80/5/3
-        transfer(treasury → creator_wallet, creator_share);
-        transfer(treasury → platform_treasury, platform_share);
-        transfer(treasury → ecosystem_treasury, ecosystem_share);
+        // Transfer to permanent accounts (80/5/3)
+        transfer(streaming_treasury → creator_wallet, creator_share);
+        transfer(streaming_treasury → platform_treasury, platform_share);
+        transfer(streaming_treasury → ecosystem_treasury, ecosystem_share);
 
-        // Update pool reward_per_share
-        pool.reward_per_share += (holder_share * PRECISION) / pool.total_weight;
+        // Transfer 12% to pool account (holds SOL for claims)
+        transfer(streaming_treasury → pool, holder_share);
+
+        // Update pool accounting
+        pool.reward_per_share += (holder_share as u128 * PRECISION) / pool.total_weight as u128;
         pool.total_deposited += holder_share;
         pool.last_distribution_at = now;
     }
-
-    // Now claim from pool
-    let nft_state = &mut ctx.accounts.nft_state;
-    let pending = (nft_state.weight as u128 * pool.reward_per_share
-                   - nft_state.patron_debt) / PRECISION;
-
-    transfer(pool → holder, pending);
-    nft_state.patron_debt = nft_state.weight as u128 * pool.reward_per_share;
 }
 ```
 
@@ -582,15 +680,17 @@ pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>, nft: Pubkey) {
 
 | Account | Field | Update |
 |---------|-------|--------|
-| Creator Treasury PDA | `balance` | Drain to 0 |
-| Creator Wallet | `balance` | `+= 80%` |
-| Platform Treasury | `balance` | `+= 5%` |
-| Ecosystem Treasury | `balance` | `+= 3%` |
+| CreatorPatronStreamingTreasury | `lamports` | Drain to 0 |
+| Creator Wallet | `lamports` | `+= 80%` |
+| Platform Treasury | `lamports` | `+= 5%` |
+| Ecosystem Treasury | `lamports` | `+= 3%` |
+| CreatorPatronPool | `lamports` | `+= 12%` (SOL transferred in) |
 | CreatorPatronPool | `reward_per_share` | `+= (12% * PRECISION) / total_weight` |
+| CreatorPatronPool | `total_deposited` | `+= 12%` |
 | CreatorPatronPool | `last_distribution_at` | `= now` |
 | UnifiedNftRewardState | `patron_debt` | Update after claim |
 
-**Total: 6 accounts + claim transfer = ~35,000 CU**
+**Total: 6 accounts + claim transfer = ~40,000 CU**
 
 ### Patron Flow Diagram
 
@@ -599,33 +699,33 @@ pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>, nft: Pubkey) {
 │                      CREATOR PATRONAGE FLOW                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  SUBSCRIBE (one-time):                                                  │
-│  ┌──────────┐   Streamflow    ┌──────────────┐                          │
-│  │   User   │ ──────────────► │   Creator    │  (accumulates over time) │
-│  │  Wallet  │    streaming    │ Treasury PDA │                          │
-│  └──────────┘                 └──────────────┘                          │
+│  SUBSCRIBE (one-time setup):                                            │
+│  ┌──────────┐   Streamflow    ┌─────────────────────────┐               │
+│  │   User   │ ──────────────► │  CreatorPatronStreaming │ (accumulates) │
+│  │  Wallet  │    streaming    │       Treasury          │               │
+│  └──────────┘                 └─────────────────────────┘               │
 │                                                                          │
 │  CLAIM (when epoch ends):                                               │
-│  ┌──────────┐                 ┌──────────────┐                          │
-│  │   NFT    │ ── claim() ──►  │ If treasury  │                          │
-│  │  Holder  │                 │ has funds &  │                          │
-│  └──────────┘                 │ epoch ended: │                          │
-│       │                       │ DISTRIBUTE   │                          │
-│       │                       └──────┬───────┘                          │
-│       │                              │                                   │
-│       │                              ▼                                   │
+│  ┌──────────┐                 ┌─────────────────────────┐               │
+│  │   NFT    │ ── claim() ──►  │ If streaming treasury   │               │
+│  │  Holder  │                 │ has funds & epoch ended │               │
+│  └──────────┘                 │ → DISTRIBUTE            │               │
+│       │                       └──────────┬──────────────┘               │
+│       │                                  │                               │
+│       │                                  ▼                               │
 │       │         ┌────────────────────────────────────────────┐          │
-│       │         │  80% → Creator Wallet                      │          │
-│       │         │   5% → Platform Treasury                   │          │
-│       │         │   3% → Ecosystem Treasury                  │          │
-│       │         │  12% → CreatorPatronPool.reward_per_share  │          │
+│       │         │  80% → Creator Wallet (permanent)          │          │
+│       │         │   5% → Platform Treasury (permanent)       │          │
+│       │         │   3% → Ecosystem Treasury (permanent)      │          │
+│       │         │  12% → CreatorPatronPool (SOL transferred) │          │
 │       │         └────────────────────────────────────────────┘          │
-│       │                              │                                   │
-│       │                              ▼                                   │
-│       │                   ┌──────────────────┐                          │
-│       └─────────────────► │ Calculate & pay  │                          │
-│                           │ holder's share   │                          │
-│                           └──────────────────┘                          │
+│       │                                  │                               │
+│       │                                  ▼                               │
+│       │                   ┌──────────────────────────┐                  │
+│       └─────────────────► │ Transfer SOL from        │                  │
+│                           │ CreatorPatronPool        │                  │
+│                           │ to holder's wallet       │                  │
+│                           └──────────────────────────┘                  │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -637,107 +737,239 @@ pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>, nft: Pubkey) {
 ### Concept
 
 Users pay platform for access to ALL Level 1 content. Revenue distributed:
-- 80% to creators (by their NFT weight share)
-- 12% to all NFT holders (by weight)
-- 5% + 3% to platform/ecosystem
+- 80% to creators (by their NFT weight share) → CreatorDistPool
+- 12% to all NFT holders (by weight) → GlobalHolderPool
+- 5% to Platform Treasury (permanent)
+- 3% to Ecosystem Treasury (permanent)
+
+### EcosystemStreamingTreasury
+
+```rust
+/// PDA: ["ecosystem_streaming_treasury"]
+/// Receives Streamflow payments from ecosystem subscribers
+pub struct EcosystemStreamingTreasury {
+    // Just a PDA that accumulates SOL from subscription streams
+    // No state needed - we read lamports() directly
+}
+```
+
+### EcosystemSubConfig
+
+```rust
+/// PDA: ["ecosystem_sub_config"]
+/// Platform-wide ecosystem subscription configuration (singleton)
+pub struct EcosystemSubConfig {
+    pub price: u64,                   // SOL per month for ecosystem access
+    pub is_active: bool,
+    pub authority: Pubkey,            // Admin who can update config
+}
+```
+
+### EcosystemSubscription
+
+```rust
+/// PDA: ["ecosystem_sub", subscriber]
+/// Tracks a user's ecosystem subscription
+pub struct EcosystemSubscription {
+    pub subscriber: Pubkey,
+    pub stream_id: Pubkey,            // Streamflow stream account
+    pub started_at: i64,
+    pub is_active: bool,
+}
+```
 
 ### GlobalHolderPool
 
-For ecosystem subscription holder rewards (12%):
+For ecosystem subscription holder rewards (12%). **This pool account holds actual SOL.**
 
 ```rust
 /// PDA: ["global_holder_pool"]
+/// Holds SOL for NFT holder claims (12% of ecosystem subscriptions)
 pub struct GlobalHolderPool {
     pub reward_per_share: u128,
     pub total_weight: u64,              // Sum of ALL NFT weights globally
-    pub total_deposited: u64,
-    pub total_claimed: u64,
-    pub last_distribution_at: i64,      // Epoch tracking
-    pub epoch_duration: i64,            // 30 days
+    pub total_deposited: u64,           // Total SOL deposited into this pool
+    pub total_claimed: u64,             // Total SOL claimed from this pool
 }
 ```
 
 ### CreatorDistPool
 
-For ecosystem subscription creator payouts (80%):
+For ecosystem subscription creator payouts (80%). **This pool account holds actual SOL.**
 
 ```rust
 /// PDA: ["creator_dist_pool"]
+/// Holds SOL for creator claims (80% of ecosystem subscriptions)
 pub struct CreatorDistPool {
     pub reward_per_share: u128,
     pub total_weight: u64,              // Sum of ALL NFT weights globally
-    pub total_deposited: u64,
-    pub total_claimed: u64,
-    pub last_distribution_at: i64,
-    pub epoch_duration: i64,
+    pub total_deposited: u64,           // Total SOL deposited into this pool
+    pub total_claimed: u64,             // Total SOL claimed from this pool
 }
+```
 
+### EcosystemEpochState
+
+**Shared epoch state for GlobalHolderPool and CreatorDistPool** (both distribute from same streaming treasury):
+
+```rust
+/// PDA: ["ecosystem_epoch_state"]
+/// Shared epoch tracking for ecosystem subscription distribution
+pub struct EcosystemEpochState {
+    pub last_distribution_at: i64,      // When last epoch distribution happened
+    pub epoch_duration: i64,            // 30 days in seconds
+}
+```
+
+### CreatorWeight
+
+```rust
 /// PDA: ["creator_weight", creator]
 pub struct CreatorWeight {
     pub creator: Pubkey,
     pub total_weight: u64,              // Sum of creator's NFT weights
-    pub reward_debt: u128,
+    pub reward_debt: u128,              // For CreatorDistPool claims
     pub total_claimed: u64,
 }
 ```
 
-**Why CreatorDistPool?**
-- Ecosystem subscription is platform-wide (not per-creator)
-- 80% needs to go to ALL creators proportionally
-- Can't distribute directly to each creator in one instruction
-- Pool accumulates funds, creators pull-claim by their weight share
+**Why separate pools with shared epoch?**
+- GlobalHolderPool and CreatorDistPool both source from EcosystemStreamingTreasury
+- They must distribute at the same time (same epoch boundary)
+- But they hold SOL separately for clear accounting
+- Shared EcosystemEpochState ensures synchronized distribution
 
 ### Ecosystem Claim with Lazy Distribution
 
+**Single instruction handles both holder claim AND triggers distribution for both pools:**
+
 ```rust
-pub fn claim_global_holder_reward(ctx: Context<...>, nft: Pubkey) {
-    let pool = &mut ctx.accounts.global_holder_pool;
-    let treasury = &ctx.accounts.ecosystem_treasury;
+pub fn claim_ecosystem_rewards(ctx: Context<ClaimEcosystemRewards>, nft: Pubkey) {
     let now = Clock::get()?.unix_timestamp;
 
-    // If epoch ended, distribute treasury
-    if now >= pool.last_distribution_at + pool.epoch_duration
-       && treasury.lamports() > 0
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: If epoch ended, distribute streaming treasury to BOTH pools
+    // ═══════════════════════════════════════════════════════════════════
+
+    maybe_distribute_ecosystem_pools(&mut ctx.accounts, now);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 2: Claim holder's share from GlobalHolderPool (saturating subtraction)
+    // ═══════════════════════════════════════════════════════════════════
+
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    let pool = &mut ctx.accounts.global_holder_pool;
+
+    let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
+    let pending = weighted_rps.saturating_sub(nft_state.global_debt) / PRECISION;
+
+    if pending > 0 {
+        // Transfer SOL from pool account to holder
+        **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+        **ctx.accounts.holder.try_borrow_mut_lamports()? += pending as u64;
+
+        pool.total_claimed += pending as u64;
+
+        // ONLY update debt if we actually claimed
+        nft_state.global_debt = weighted_rps;
+    }
+}
+
+/// Shared distribution logic - called by BOTH mint and claim
+fn maybe_distribute_ecosystem_pools(accounts: &mut ..., now: i64) {
+    let epoch_state = &mut accounts.ecosystem_epoch_state;
+    let streaming_treasury = &accounts.ecosystem_streaming_treasury;
+
+    if now >= epoch_state.last_distribution_at + epoch_state.epoch_duration
+       && streaming_treasury.lamports() > 0
     {
-        let balance = treasury.lamports();
+        let balance = streaming_treasury.lamports();
         let platform_share = balance * 5 / 100;
         let ecosystem_share = balance * 3 / 100;
         let holder_share = balance * 12 / 100;
         let creator_share = balance * 80 / 100;
 
-        // Transfers
-        transfer(treasury → platform, platform_share);
-        transfer(treasury → ecosystem, ecosystem_share);
+        // Transfer to permanent treasuries (5% + 3%)
+        transfer(streaming_treasury → platform_treasury, platform_share);
+        transfer(streaming_treasury → ecosystem_treasury, ecosystem_share);
 
-        // Update pools
-        global_holder_pool.reward_per_share +=
-            (holder_share * PRECISION) / global_holder_pool.total_weight;
-        creator_dist_pool.reward_per_share +=
-            (creator_share * PRECISION) / creator_dist_pool.total_weight;
+        // Transfer SOL to pool accounts (12% + 80%)
+        transfer(streaming_treasury → global_holder_pool, holder_share);
+        transfer(streaming_treasury → creator_dist_pool, creator_share);
 
-        pool.last_distribution_at = now;
+        // Update pool accounting
+        accounts.global_holder_pool.reward_per_share +=
+            (holder_share as u128 * PRECISION) / accounts.global_holder_pool.total_weight as u128;
+        accounts.global_holder_pool.total_deposited += holder_share;
+
+        accounts.creator_dist_pool.reward_per_share +=
+            (creator_share as u128 * PRECISION) / accounts.creator_dist_pool.total_weight as u128;
+        accounts.creator_dist_pool.total_deposited += creator_share;
+
+        // Update shared epoch state
+        epoch_state.last_distribution_at = now;
     }
-
-    // Claim holder's share
-    let pending = calculate_pending(nft, pool);
-    transfer(pool → holder, pending);
 }
 ```
 
+### Creator Ecosystem Payout
+
+**Separate instruction for creators to claim their 80% share:**
+
+```rust
+pub fn claim_creator_ecosystem_payout(ctx: Context<ClaimCreatorPayout>) {
+    let now = Clock::get()?.unix_timestamp;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: Trigger distribution if epoch ended (same logic as holder claim)
+    // ═══════════════════════════════════════════════════════════════════
+
+    maybe_distribute_ecosystem_pools(&mut ctx.accounts, now);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 2: Claim creator's share from CreatorDistPool (saturating subtraction)
+    // ═══════════════════════════════════════════════════════════════════
+
+    let creator_weight = &mut ctx.accounts.creator_weight;
+    let pool = &mut ctx.accounts.creator_dist_pool;
+
+    let weighted_rps = creator_weight.total_weight as u128 * pool.reward_per_share;
+    let pending = weighted_rps.saturating_sub(creator_weight.reward_debt) / PRECISION;
+
+    if pending > 0 {
+        // Transfer SOL from pool account to creator
+        **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+        **ctx.accounts.creator.try_borrow_mut_lamports()? += pending as u64;
+
+        pool.total_claimed += pending as u64;
+        creator_weight.total_claimed += pending as u64;
+
+        // ONLY update debt if we actually claimed
+        creator_weight.reward_debt = weighted_rps;
+    }
+}
+```
+
+**Note:** Either `claim_ecosystem_rewards` or `claim_creator_ecosystem_payout` can trigger the epoch distribution. Whichever is called first after epoch ends will distribute to BOTH pools (GlobalHolderPool and CreatorDistPool) using the shared EcosystemEpochState.
+
 ### Ecosystem Distribution Simulation
 
-**When claim_global_holder_reward() triggers distribution:**
+**When `claim_ecosystem_rewards()` or `claim_creator_ecosystem_payout()` triggers distribution:**
 
 | Account | Field | Update |
 |---------|-------|--------|
-| Ecosystem Treasury PDA | `balance` | Drain to 0 |
-| Platform Treasury | `balance` | `+= 5%` |
-| Ecosystem Treasury | `balance` | `+= 3%` |
+| EcosystemStreamingTreasury | `lamports` | Drain to 0 |
+| Platform Treasury | `lamports` | `+= 5%` |
+| Ecosystem Treasury | `lamports` | `+= 3%` |
+| GlobalHolderPool | `lamports` | `+= 12%` (SOL transferred in) |
 | GlobalHolderPool | `reward_per_share` | `+= (12% * PRECISION) / total_weight` |
+| GlobalHolderPool | `total_deposited` | `+= 12%` |
+| CreatorDistPool | `lamports` | `+= 80%` (SOL transferred in) |
 | CreatorDistPool | `reward_per_share` | `+= (80% * PRECISION) / total_weight` |
-| GlobalHolderPool | `last_distribution_at` | `= now` |
+| CreatorDistPool | `total_deposited` | `+= 80%` |
+| EcosystemEpochState | `last_distribution_at` | `= now` |
 
-**Total: 6 accounts = ~35,000 CU**
+**Total: 6 accounts = ~40,000 CU**
 
 ### Ecosystem Flow Diagram
 
@@ -747,36 +979,37 @@ pub fn claim_global_holder_reward(ctx: Context<...>, nft: Pubkey) {
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  SUBSCRIBE:                                                             │
-│  ┌──────────┐     Stream      ┌──────────────┐                          │
-│  │  User A  │ ──────────────► │              │                          │
-│  └──────────┘                 │  Ecosystem   │  (accumulates)           │
-│  ┌──────────┐     Stream      │ Treasury PDA │                          │
-│  │  User B  │ ──────────────► │              │                          │
-│  └──────────┘                 └──────────────┘                          │
+│  ┌──────────┐     Stream      ┌──────────────────────┐                  │
+│  │  User A  │ ──────────────► │                      │                  │
+│  └──────────┘                 │  EcosystemStreaming  │  (accumulates)   │
+│  ┌──────────┐     Stream      │     Treasury         │                  │
+│  │  User B  │ ──────────────► │                      │                  │
+│  └──────────┘                 └──────────────────────┘                  │
 │                                                                          │
 │  CLAIM (when epoch ends):                                               │
-│  First claimer triggers distribution:                                   │
+│  First claimer triggers distribution to BOTH pools:                     │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │   5% → Platform Treasury                                         │   │
-│  │   3% → Ecosystem Treasury                                        │   │
-│  │  12% → GlobalHolderPool.reward_per_share                         │   │
-│  │  80% → CreatorDistPool.reward_per_share                          │   │
+│  │   5% → Platform Treasury (permanent)                             │   │
+│  │   3% → Ecosystem Treasury (permanent)                            │   │
+│  │  12% → GlobalHolderPool (SOL transferred, holds for claims)      │   │
+│  │  80% → CreatorDistPool (SOL transferred, holds for claims)       │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
-│  HOLDER CLAIMS:                                                         │
+│  HOLDER CLAIMS (from GlobalHolderPool):                                 │
 │  ┌─────────────────┐                                                    │
-│  │ Holder (w=20)   │ → pending = (20 * rps - debt) / PRECISION         │
+│  │ Holder (w=20)   │ → SOL transferred from pool to holder wallet      │
+│  │                 │   pending = (20 * rps - debt) / PRECISION         │
 │  └─────────────────┘                                                    │
 │                                                                          │
-│  CREATOR CLAIMS:                                                        │
+│  CREATOR CLAIMS (from CreatorDistPool):                                 │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │ Creator Alice: weight 1000 (50% of 2000 total)                  │   │
 │  │ Creator Bob:   weight 600  (30% of 2000 total)                  │   │
 │  │                                                                  │   │
 │  │ If 8 SOL in CreatorDistPool:                                    │   │
-│  │   Alice claims: 8 * (1000/2000) = 4 SOL                         │   │
-│  │   Bob claims:   8 * (600/2000)  = 2.4 SOL                       │   │
+│  │   Alice claims: 8 * (1000/2000) = 4 SOL from pool               │   │
+│  │   Bob claims:   8 * (600/2000)  = 2.4 SOL from pool             │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -793,36 +1026,36 @@ pub fn claim_global_holder_reward(ctx: Context<...>, nft: Pubkey) {
 │                                                                              │
 │  PER-CONTENT:                                                                │
 │  ┌─────────────────────┐                                                     │
-│  │ ContentRewardPool   │  Receives: Content mint/rent/secondary (12%/8%)    │
-│  │ (per content)       │  + Bundle mint/rent content share (6%)             │
-│  │                     │  Distribution: IMMEDIATE on transaction            │
+│  │ ContentRewardPool   │  Receives: Content mint/rent (12%) + secondary (4%)│
+│  │ (per content)       │  + Bundle mint/rent/secondary content share         │
+│  │ ** Holds SOL **     │  Distribution: IMMEDIATE on transaction            │
 │  │                     │  Claims: Content NFT holders                        │
 │  └─────────────────────┘                                                     │
 │                                                                              │
 │  PER-BUNDLE:                                                                 │
 │  ┌─────────────────────┐                                                     │
-│  │ BundleRewardPool    │  Receives: Bundle mint/rent (6%) + secondary (8%)  │
+│  │ BundleRewardPool    │  Receives: Bundle mint/rent (6%) + secondary (2%)  │
 │  │ (per bundle)        │  Distribution: IMMEDIATE on transaction            │
-│  │                     │  Claims: Bundle NFT holders                         │
+│  │ ** Holds SOL **     │  Claims: Bundle NFT holders                         │
 │  └─────────────────────┘                                                     │
 │                                                                              │
 │  PER-CREATOR:                                                                │
 │  ┌─────────────────────┐                                                     │
 │  │ CreatorPatronPool   │  Receives: Membership + Subscription (12%)         │
 │  │ (per creator)       │  Distribution: LAZY on first claim after epoch     │
-│  │                     │  Tracks: ALL creator NFT weights                    │
-│  │                     │  Claims: Any holder of creator's NFTs               │
+│  │ ** Holds SOL **     │  Claims: Any holder of creator's NFTs               │
 │  └─────────────────────┘                                                     │
 │                                                                              │
 │  GLOBAL (SINGLETONS):                                                        │
 │  ┌─────────────────────┐  ┌─────────────────────┐                           │
 │  │ GlobalHolderPool    │  │ CreatorDistPool     │                           │
+│  │ ** Holds SOL **     │  │ ** Holds SOL **     │                           │
 │  │                     │  │                     │                           │
 │  │ Receives: Ecosystem │  │ Receives: Ecosystem │                           │
 │  │   subscription 12%  │  │   subscription 80%  │                           │
 │  │                     │  │                     │                           │
 │  │ Distribution: LAZY  │  │ Distribution: LAZY  │                           │
-│  │   on first claim    │  │   on first claim    │                           │
+│  │ (shared epoch)      │  │ (shared epoch)      │                           │
 │  │                     │  │                     │                           │
 │  │ Claims: Any NFT     │  │ Claims: Creators    │                           │
 │  │   holder by weight  │  │   by their weight   │                           │
@@ -869,9 +1102,23 @@ pub struct UnifiedNftRewardState {
 ```rust
 pub fn mint_content_nft(ctx: Context<MintContentNft>, rarity: Rarity) -> Result<()> {
     let weight = get_rarity_weight(rarity);
+    let now = Clock::get()?.unix_timestamp;
 
     // ═══════════════════════════════════════════════════════════════════
-    // STEP 1: Add weight to ALL pools FIRST (before calculating virtual RPS)
+    // STEP 0: Trigger epoch distribution if needed (Option B: distribute on mint AND claim)
+    // This ensures RPS reflects all past epochs before we add new weight
+    // ═══════════════════════════════════════════════════════════════════
+
+    maybe_distribute_patron_pool(
+        &mut ctx.accounts.creator_patron_pool,
+        &ctx.accounts.creator_patron_streaming_treasury,
+        now,
+        &ctx.accounts,
+    );
+    maybe_distribute_ecosystem_pools(&mut ctx.accounts, now);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: Add weight to ALL pools (after any distribution)
     // ═══════════════════════════════════════════════════════════════════
 
     ctx.accounts.content_reward_pool.total_weight += weight;
@@ -881,33 +1128,33 @@ pub fn mint_content_nft(ctx: Context<MintContentNft>, rarity: Rarity) -> Result<
     ctx.accounts.creator_dist_pool.total_weight += weight;
 
     // ═══════════════════════════════════════════════════════════════════
-    // STEP 2: Calculate Virtual RPS for lazy pools (include undistributed treasury)
+    // STEP 2: Calculate Virtual RPS for lazy pools (include undistributed streaming treasury)
     // ═══════════════════════════════════════════════════════════════════
 
-    // Patron pool: 12% of creator treasury goes to holders
-    let patron_treasury = ctx.accounts.creator_treasury.lamports();
+    // Patron pool: 12% of creator's streaming treasury goes to holders
+    let streaming_balance = ctx.accounts.creator_patron_streaming_treasury.lamports();
     let virtual_patron_rps = if ctx.accounts.creator_patron_pool.total_weight > 0 {
         ctx.accounts.creator_patron_pool.reward_per_share
-            + (patron_treasury as u128 * 12 * PRECISION / 100)
+            + (streaming_balance as u128 * 12 * PRECISION / 100)
               / ctx.accounts.creator_patron_pool.total_weight as u128
     } else {
         0
     };
 
-    // Global pool: 12% of ecosystem treasury goes to all holders
-    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    // Global pool: 12% of ecosystem streaming treasury goes to all holders
+    let eco_streaming_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
     let virtual_global_rps = if ctx.accounts.global_holder_pool.total_weight > 0 {
         ctx.accounts.global_holder_pool.reward_per_share
-            + (ecosystem_treasury as u128 * 12 * PRECISION / 100)
+            + (eco_streaming_balance as u128 * 12 * PRECISION / 100)
               / ctx.accounts.global_holder_pool.total_weight as u128
     } else {
         0
     };
 
-    // Creator dist pool: 80% of ecosystem treasury goes to creators
+    // Creator dist pool: 80% of ecosystem streaming treasury goes to creators
     let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
         ctx.accounts.creator_dist_pool.reward_per_share
-            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+            + (eco_streaming_balance as u128 * 80 * PRECISION / 100)
               / ctx.accounts.creator_dist_pool.total_weight as u128
     } else {
         0
@@ -949,9 +1196,23 @@ pub fn mint_content_nft(ctx: Context<MintContentNft>, rarity: Rarity) -> Result<
 ```rust
 pub fn mint_bundle_nft(ctx: Context<MintBundleNft>, rarity: Rarity) -> Result<()> {
     let weight = get_rarity_weight(rarity);
+    let now = Clock::get()?.unix_timestamp;
 
     // ═══════════════════════════════════════════════════════════════════
-    // STEP 1: Add weight to ALL pools FIRST
+    // STEP 0: Trigger epoch distribution if needed (Option B: distribute on mint AND claim)
+    // This ensures RPS reflects all past epochs before we add new weight
+    // ═══════════════════════════════════════════════════════════════════
+
+    maybe_distribute_patron_pool(
+        &mut ctx.accounts.creator_patron_pool,
+        &ctx.accounts.creator_patron_streaming_treasury,
+        now,
+        &ctx.accounts,
+    );
+    maybe_distribute_ecosystem_pools(&mut ctx.accounts, now);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: Add weight to ALL pools (after any distribution)
     // ═══════════════════════════════════════════════════════════════════
 
     ctx.accounts.bundle_reward_pool.total_weight += weight;
@@ -961,22 +1222,22 @@ pub fn mint_bundle_nft(ctx: Context<MintBundleNft>, rarity: Rarity) -> Result<()
     ctx.accounts.creator_dist_pool.total_weight += weight;
 
     // ═══════════════════════════════════════════════════════════════════
-    // STEP 2: Calculate Virtual RPS for lazy pools
+    // STEP 2: Calculate Virtual RPS for lazy pools (include undistributed streaming treasury)
     // ═══════════════════════════════════════════════════════════════════
 
-    let patron_treasury = ctx.accounts.creator_treasury.lamports();
+    let streaming_balance = ctx.accounts.creator_patron_streaming_treasury.lamports();
     let virtual_patron_rps = if ctx.accounts.creator_patron_pool.total_weight > 0 {
         ctx.accounts.creator_patron_pool.reward_per_share
-            + (patron_treasury as u128 * 12 * PRECISION / 100)
+            + (streaming_balance as u128 * 12 * PRECISION / 100)
               / ctx.accounts.creator_patron_pool.total_weight as u128
     } else {
         0
     };
 
-    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    let eco_streaming_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
     let virtual_global_rps = if ctx.accounts.global_holder_pool.total_weight > 0 {
         ctx.accounts.global_holder_pool.reward_per_share
-            + (ecosystem_treasury as u128 * 12 * PRECISION / 100)
+            + (eco_streaming_balance as u128 * 12 * PRECISION / 100)
               / ctx.accounts.global_holder_pool.total_weight as u128
     } else {
         0
@@ -984,7 +1245,7 @@ pub fn mint_bundle_nft(ctx: Context<MintBundleNft>, rarity: Rarity) -> Result<()
 
     let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
         ctx.accounts.creator_dist_pool.reward_per_share
-            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+            + (eco_streaming_balance as u128 * 80 * PRECISION / 100)
               / ctx.accounts.creator_dist_pool.total_weight as u128
     } else {
         0
@@ -1060,10 +1321,10 @@ pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
     // ═══════════════════════════════════════════════════════════════════
 
     // Calculate what this NFT's debt contribution was at current virtual RPS
-    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    let eco_streaming_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
     let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
         ctx.accounts.creator_dist_pool.reward_per_share
-            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+            + (eco_streaming_balance as u128 * 80 * PRECISION / 100)
               / ctx.accounts.creator_dist_pool.total_weight as u128
     } else {
         0
@@ -1136,6 +1397,65 @@ Each NFT can claim from **3 pools**:
 
 ---
 
+## Immediate Pool Claims (Content & Bundle)
+
+These claims are simpler than lazy pool claims - no epoch distribution needed.
+
+### claim_content_rewards
+
+```rust
+pub fn claim_content_rewards(ctx: Context<ClaimContentRewards>, nft: Pubkey) {
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    let pool = &mut ctx.accounts.content_reward_pool;
+
+    // Verify this is a content NFT (not bundle)
+    require!(!nft_state.is_bundle, ErrorCode::InvalidNftType);
+
+    let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
+    let pending = weighted_rps.saturating_sub(nft_state.content_or_bundle_debt) / PRECISION;
+
+    if pending > 0 {
+        // Transfer SOL from pool account to holder
+        **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+        **ctx.accounts.holder.try_borrow_mut_lamports()? += pending as u64;
+
+        pool.total_claimed += pending as u64;
+        nft_state.content_or_bundle_debt = weighted_rps;
+    }
+}
+```
+
+### claim_bundle_rewards
+
+```rust
+pub fn claim_bundle_rewards(ctx: Context<ClaimBundleRewards>, nft: Pubkey) {
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    let pool = &mut ctx.accounts.bundle_reward_pool;
+
+    // Verify this is a bundle NFT
+    require!(nft_state.is_bundle, ErrorCode::InvalidNftType);
+
+    let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
+    let pending = weighted_rps.saturating_sub(nft_state.content_or_bundle_debt) / PRECISION;
+
+    if pending > 0 {
+        // Transfer SOL from pool account to holder
+        **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+        **ctx.accounts.holder.try_borrow_mut_lamports()? += pending as u64;
+
+        pool.total_claimed += pending as u64;
+        nft_state.content_or_bundle_debt = weighted_rps;
+    }
+}
+```
+
+**Note:** These immediate pool claims are simpler because:
+- No epoch distribution needed (rewards added immediately on each mint/sale)
+- Uses `saturating_sub` for safety (though shouldn't be needed for immediate pools)
+- Just read current pool RPS and calculate pending
+
+---
+
 ## Access Check Logic
 
 ```rust
@@ -1193,10 +1513,10 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 |--------|----------|---------|--------------|
 | Content Mint | 12% | ContentRewardPool | Immediate |
 | Content Rental | 12% | ContentRewardPool | Immediate |
-| Content Secondary | 8% | ContentRewardPool | Immediate |
+| Content Secondary | 4% | ContentRewardPool | Immediate |
 | Bundle Mint | 12% | 50% Bundle + 50% Content pools | Immediate |
 | Bundle Rental | 12% | 50% Bundle + 50% Content pools | Immediate |
-| Bundle Secondary | 8% | BundleRewardPool only | Immediate |
+| Bundle Secondary | 4% | 50% Bundle + 50% Content pools | Immediate |
 | Creator Membership | 12% | CreatorPatronPool | Lazy (epoch) |
 | Creator Subscription | 12% | CreatorPatronPool | Lazy (epoch) |
 | Ecosystem Subscription | 12% | GlobalHolderPool | Lazy (epoch) |
@@ -1219,8 +1539,10 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 | `claim_content_rewards(nft)` | Content NFT owner | ContentRewardPool | No (immediate) |
 | `claim_bundle_rewards(nft)` | Bundle NFT owner | BundleRewardPool | No (immediate) |
 | `claim_patron_rewards(nft)` | Any creator's NFT owner | CreatorPatronPool | Yes (if epoch ended) |
-| `claim_global_holder_reward(nft)` | Any NFT owner | GlobalHolderPool | Yes (if epoch ended) |
-| `claim_creator_ecosystem_payout()` | Any creator | CreatorDistPool | Yes (if epoch ended) |
+| `claim_ecosystem_rewards(nft)` | Any NFT owner | GlobalHolderPool + CreatorDistPool | Yes (if epoch ended, both pools) |
+| `claim_creator_ecosystem_payout()` | Any creator | CreatorDistPool | Yes (if epoch ended, both pools) |
+
+**Note:** `claim_ecosystem_rewards` and `claim_creator_ecosystem_payout` share EcosystemEpochState. Whichever is called first triggers distribution to BOTH GlobalHolderPool and CreatorDistPool.
 
 ### Cost Summary
 
@@ -1236,50 +1558,328 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ---
 
-## Implementation Phases
+## Account Initialization
 
-### Phase 1: Foundation & Bundle Fix
-- [ ] Add `visibility_level` to Content/Bundle accounts (default: 1)
-- [ ] Fix bundle mint to distribute 50/50 to bundle + content pools
-- [ ] Create UnifiedNftRewardState account + PDA
-- [ ] Create CreatorPatronPool account + PDA (with epoch fields)
-- [ ] Create GlobalHolderPool account + PDA (with epoch fields)
-- [ ] Create CreatorDistPool account + PDA (with epoch fields)
-- [ ] Create CreatorWeight account + PDA
-- [ ] Update all mint instructions to track weights in new pools (eager)
-- [ ] Implement burn reconciliation for all pools
+### Singleton Accounts (One-Time Setup)
 
-### Phase 2: Creator Patronage
-- [ ] CreatorPatronConfig account (membership/subscription tiers)
-- [ ] Creator Treasury PDA for streaming
-- [ ] Streamflow integration for patron streams
-- [ ] `init_patron_config` instruction
-- [ ] `subscribe_patron` instruction
-- [ ] `claim_patron_rewards` instruction (with lazy distribution)
-- [ ] SDK instruction builders
-- [ ] Web: Patron setup modal (creator)
-- [ ] Web: Patron subscribe modal (user)
+These accounts are created once by admin:
 
-### Phase 3: Ecosystem Subscription
-- [ ] EcosystemSubConfig account
-- [ ] Ecosystem Treasury PDA for streaming
-- [ ] Streamflow integration for ecosystem streams
-- [ ] `subscribe_ecosystem` instruction
-- [ ] `claim_global_holder_reward` instruction (with lazy distribution)
-- [ ] `claim_creator_ecosystem_payout` instruction
-- [ ] SDK instruction builders
-- [ ] Web: Ecosystem subscribe modal
-- [ ] Web: Global rewards in claim modal
+```rust
+pub fn initialize_ecosystem_pools(ctx: Context<InitEcosystemPools>) -> Result<()> {
+    // GlobalHolderPool - PDA: ["global_holder_pool"]
+    let holder_pool = &mut ctx.accounts.global_holder_pool;
+    holder_pool.reward_per_share = 0;
+    holder_pool.total_weight = 0;
+    holder_pool.total_deposited = 0;
+    holder_pool.total_claimed = 0;
 
-### Phase 4: Testing & Polish
-- [ ] E2E testing all flows
-- [ ] Edge cases (burn during claim, epoch boundaries, etc.)
-- [ ] UI for epoch status and estimated rewards
-- [ ] Documentation updates
+    // CreatorDistPool - PDA: ["creator_dist_pool"]
+    let dist_pool = &mut ctx.accounts.creator_dist_pool;
+    dist_pool.reward_per_share = 0;
+    dist_pool.total_weight = 0;
+    dist_pool.total_deposited = 0;
+    dist_pool.total_claimed = 0;
+
+    // EcosystemEpochState - PDA: ["ecosystem_epoch_state"]
+    let epoch_state = &mut ctx.accounts.ecosystem_epoch_state;
+    epoch_state.last_distribution_at = Clock::get()?.unix_timestamp;
+    epoch_state.epoch_duration = 30 * 24 * 60 * 60; // 30 days
+
+    Ok(())
+}
+```
+
+### Per-Creator Accounts (Lazy Initialization)
+
+Created on first NFT mint for a creator:
+
+```rust
+// In mint_content_nft or mint_bundle_nft:
+// If CreatorPatronPool doesn't exist, create it
+if ctx.accounts.creator_patron_pool.total_weight == 0 {
+    // First NFT for this creator - initialize pool
+    ctx.accounts.creator_patron_pool.creator = ctx.accounts.creator.key();
+    ctx.accounts.creator_patron_pool.epoch_duration = 30 * 24 * 60 * 60;
+    ctx.accounts.creator_patron_pool.last_distribution_at = Clock::get()?.unix_timestamp;
+}
+
+// If CreatorWeight doesn't exist, create it
+if ctx.accounts.creator_weight.total_weight == 0 {
+    ctx.accounts.creator_weight.creator = ctx.accounts.creator.key();
+}
+```
+
+### Per-NFT Accounts
+
+Created on each NFT mint (UnifiedNftRewardState).
 
 ---
 
-*Last updated: December 12, 2025*
+## Implementation Phases
+
+### Phase 1: Foundation & Pool Accounts ✅ (Complete)
+- [x] Add `visibility_level` to Content/Bundle accounts (default: 0)
+- [x] **Fix bundle mint to distribute 50/50 to bundle + content pools**
+- [x] Create UnifiedNftRewardState account + PDA
+- [x] Create CreatorPatronPool account + PDA (holds SOL, has epoch fields)
+- [x] Create GlobalHolderPool account + PDA (holds SOL, singleton)
+- [x] Create CreatorDistPool account + PDA (holds SOL, singleton)
+- [x] Create EcosystemEpochState account + PDA (shared epoch tracking)
+- [x] Create CreatorWeight account + PDA (per creator)
+- [x] Create CreatorPatronStreamingTreasury PDA (receives subscription payments)
+- [x] Create EcosystemStreamingTreasury PDA (receives ecosystem subscription payments)
+- [x] Implement `initialize_ecosystem_pools` instruction (admin, one-time)
+- [x] Implement `initialize_ecosystem_sub_config` instruction
+- [x] Implement `register_nft_in_subscription_pools` instruction (creates UnifiedNftRewardState)
+- [x] Implement `register_bundle_nft_in_subscription_pools` instruction
+- [x] **Simplified mint system** (replaced VRF with slot hash randomness):
+  - [x] `simple_mint` - Content NFT with slot hash randomness + full subscription pool tracking
+  - [x] `simple_mint_bundle` - Bundle NFT with slot hash randomness + full subscription pool tracking
+  - [x] Removed all VRF-based mint instructions (commit_mint, reveal_mint, magicblock_*, direct_mint)
+  - [x] Lazy-init CreatorPatronPool and CreatorWeight on first mint
+  - [x] Track weights in all pools (eager)
+  - [x] **Call `maybe_distribute_*` at start of mint (Option B - full implementation)**
+  - [x] **Calculate virtual RPS using streaming treasury balances**
+  - [x] Set debts with virtual RPS for lazy pools
+  - [x] **SDK: `simpleMintInstruction` with streaming treasury accounts**
+  - [x] **SDK: `simpleMintBundleInstruction` with streaming treasury accounts**
+- [x] Implement `claim_unified_content_rewards` and `claim_unified_bundle_rewards` instructions
+- [x] Implement `claim_patron_rewards` instruction
+- [x] Implement `claim_global_holder_rewards` instruction
+- [x] Implement `claim_creator_ecosystem_payout` instruction
+- [x] Implement burn reconciliation for all pools (`burn_nft_with_subscription`, `burn_bundle_nft_with_subscription`)
+
+### Phase 2: Creator Patronage ✅ (Complete)
+- [x] CreatorPatronConfig account (membership/subscription tiers)
+- [x] CreatorPatronStreamingTreasury PDA (receives subscription payments for lazy distribution)
+- [x] `init_patron_config` instruction
+- [x] `update_patron_config` instruction
+- [x] `subscribe_patron` instruction (payment to streaming treasury)
+- [x] `cancel_patron_subscription` instruction
+- [x] `renew_patron_subscription` instruction (payment to streaming treasury)
+- [x] SDK types: `CreatorPatronConfig`, `CreatorPatronSubscription`, `PatronTier`
+- [x] SDK PDAs: `getCreatorPatronConfigPda`, `getCreatorPatronSubscriptionPda`, `getCreatorPatronTreasuryPda`
+- [ ] Web: Patron setup modal (creator)
+- [ ] Web: Patron subscribe modal (user)
+
+### Phase 3: Ecosystem Subscription ✅ (Complete)
+- [x] EcosystemSubConfig account
+- [x] EcosystemStreamingTreasury PDA (receives subscription payments for lazy distribution)
+- [x] `subscribe_ecosystem` instruction (payment to streaming treasury)
+- [x] `cancel_ecosystem_subscription` instruction
+- [x] `renew_ecosystem_subscription` instruction (payment to streaming treasury)
+- [x] `check_subscription_access` instruction (verifies access for visibility level)
+- [x] SDK types: `EcosystemSubConfig`, `EcosystemSubscription`, `VisibilityLevel`
+- [x] SDK PDAs: `getEcosystemSubConfigPda`, `getEcosystemSubscriptionPda`, `getEcosystemStreamingTreasuryPda`
+- [x] SDK helpers: `isSubscriptionValid`, `calculateSubscriptionPendingReward`
+- [x] SDK cleanup: Deprecated legacy PDA functions (getNftRewardStatePda, getNftRarityPda, etc.)
+- [ ] Web: Ecosystem subscribe modal
+- [ ] Web: Global rewards in claim modal
+
+### Phase 4: Streamflow Integration (Future - Optional)
+- [ ] Integrate Streamflow SDK for continuous streaming payments
+- [ ] Update subscribe instructions to create streams instead of lump-sum payments
+- [ ] Add stream cancellation handling with pro-rata refunds
+- [ ] Automatic renewal via stream continuation
+
+### Phase 5: Testing & Polish ✅ (Core Tests Complete)
+- [x] E2E testing: `simple_mint` with subscription pool tracking
+- [x] E2E testing: Patron subscription (payment to streaming treasury)
+- [x] E2E testing: Ecosystem subscription (payment to streaming treasury)
+- [x] E2E testing: Content reward claims
+- [x] E2E testing: Virtual RPS calculations protect late minters
+- [ ] E2E testing: `simple_mint_bundle` with 50/50 distribution
+- [ ] E2E testing: Subscription renew/cancel flows
+- [ ] E2E testing: Patron/global holder claims (after epoch distribution)
+- [x] E2E testing: Burn reconciliation updates all pools (verified with common & uncommon NFTs)
+- [ ] Edge cases (burn during claim, epoch boundaries)
+- [ ] UI for epoch status and estimated rewards
+
+**Test Results (December 13, 2025):**
+| Test | Status | Details |
+|------|--------|---------|
+| Register Content | ✅ | Content + MintConfig + Collection created |
+| Simple Mint #1 | ✅ | NFT with rarity, weight tracked in 3 pools |
+| Init Patron Config | ✅ | Creator sets membership/subscription prices |
+| Subscribe Patron | ✅ | 0.05 SOL → streaming treasury |
+| Subscribe Ecosystem | ✅ | 0.1 SOL → streaming treasury |
+| Simple Mint #2 | ✅ | Generates 12% holder rewards (0.006 SOL) |
+| Claim Content Rewards | ✅ | NFT #1 claimed 0.006 SOL successfully |
+| Rarity Distribution | ✅ | Chi-square 4.87 < 9.49 threshold (statistically valid) |
+| Pool Weight Tracking (Mint) | ✅ | All 5 pools correctly increment on mint |
+| Burn Common NFT | ✅ | All 5 pools correctly decrement by weight=1 |
+| Burn Uncommon NFT | ✅ | All 5 pools correctly decrement by weight=5 |
+
+---
+
+## Current Implementation Notes
+
+### Simplified Mint System (Current)
+The mint system uses **slot hash randomness** instead of external VRF:
+- Single transaction mint (no commit/reveal or callback required)
+- Rarity determined by `solana_sha256_hasher::hashv()` using slot hashes sysvar
+- **Full subscription integration:**
+  - Includes streaming treasury accounts for epoch-based lazy distribution
+  - Calls `maybe_distribute_patron_pool` and `maybe_distribute_ecosystem_pools` at start (Option B)
+  - Calculates virtual RPS using streaming treasury balances
+  - Sets debts using virtual RPS to protect early minters
+- **Available instructions:**
+  - `simple_mint` - Content NFT with full subscription pool tracking
+  - `simple_mint_bundle` - Bundle NFT with full subscription pool tracking
+- **Removed instructions:**
+  - `mint_nft_sol` - Legacy mint without rarity
+  - `commit_mint`, `reveal_mint`, `cancel_expired_mint` - VRF commit/reveal flow
+  - `magicblock_*` - All MagicBlock VRF instructions (content and bundle)
+  - `direct_mint`, `direct_mint_bundle` - Slot hash mint without subscription pools
+
+### Streaming Treasury Accounts in Mint
+The `simple_mint` and `simple_mint_bundle` instructions include:
+```rust
+// Streaming treasury accounts (for lazy distribution)
+pub creator_patron_treasury: AccountInfo<'info>,      // PDA: ["creator_patron_treasury", creator]
+pub ecosystem_streaming_treasury: AccountInfo<'info>, // PDA: ["ecosystem_streaming_treasury"]
+pub ecosystem_epoch_state: Account<'info, EcosystemEpochState>, // PDA: ["ecosystem_epoch_state"]
+pub platform_treasury: AccountInfo<'info>,            // For distribution transfers
+pub ecosystem_treasury: AccountInfo<'info>,           // For distribution transfers
+```
+
+### Rarity Determination
+```rust
+let slot_hashes_data = ctx.accounts.slot_hashes.try_borrow_data()?;
+let randomness_seed = solana_sha256_hasher::hashv(&[
+    &slot_hashes_data[..64],
+    nft_asset_key.as_ref(),
+    payer_key.as_ref(),
+    &timestamp.to_le_bytes(),
+    &clock.slot.to_le_bytes(),
+]);
+let (rarity, weight) = determine_rarity_from_bytes(randomness_seed.to_bytes());
+```
+
+### Distribution at Mint Time (Option B)
+```rust
+// STEP 2.5: Trigger epoch distribution if needed (Option B - call first)
+// Patron pool distribution (drains creator_patron_treasury at epoch end)
+maybe_distribute_patron_pool(
+    &mut ctx.accounts.creator_patron_pool,
+    &ctx.accounts.creator_patron_treasury,
+    &ctx.accounts.creator,
+    &ctx.accounts.platform_treasury,
+    &ctx.accounts.ecosystem_treasury,
+    timestamp,
+)?;
+
+// Ecosystem pools distribution (drains ecosystem_streaming_treasury at epoch end)
+maybe_distribute_ecosystem_pools(
+    &mut ctx.accounts.global_holder_pool,
+    &mut ctx.accounts.creator_dist_pool,
+    &mut ctx.accounts.ecosystem_epoch_state,
+    &ctx.accounts.ecosystem_streaming_treasury,
+    &ctx.accounts.platform_treasury,
+    &ctx.accounts.ecosystem_treasury,
+    timestamp,
+)?;
+```
+
+### Virtual RPS Calculation
+```rust
+// Get streaming treasury balances for virtual RPS calculation
+let patron_treasury_balance = ctx.accounts.creator_patron_treasury.lamports();
+let eco_treasury_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
+
+// Patron pool virtual RPS (12% of streaming treasury goes to holder pool)
+let virtual_patron_rps = calculate_virtual_rps(
+    ctx.accounts.creator_patron_pool.reward_per_share,
+    patron_treasury_balance,
+    12, // holder share percentage
+    ctx.accounts.creator_patron_pool.total_weight + weight as u64,
+);
+
+// Global holder pool virtual RPS (12% of ecosystem treasury)
+let virtual_global_rps = calculate_virtual_rps(
+    ctx.accounts.global_holder_pool.reward_per_share,
+    eco_treasury_balance,
+    12, // holder share percentage
+    ctx.accounts.global_holder_pool.total_weight + weight as u64,
+);
+
+// Creator dist pool virtual RPS (80% of ecosystem treasury)
+let virtual_creator_dist_rps = calculate_virtual_rps(
+    ctx.accounts.creator_dist_pool.reward_per_share,
+    eco_treasury_balance,
+    80, // creator share percentage
+    ctx.accounts.creator_dist_pool.total_weight + weight as u64,
+);
+```
+
+### Bundle 50/50 Distribution
+When minting a bundle NFT, the 12% holder reward amount is split equally:
+- **50% (6%) → BundleRewardPool** - Rewards bundle NFT holders
+- **50% (6%) → ContentRewardPools** - Distributed equally among all content items in the bundle
+
+```rust
+// 50/50 HOLDER REWARD DISTRIBUTION
+if had_existing_nfts && holder_reward_amount > 0 {
+    let bundle_share = holder_reward_amount / 2;  // 6% of mint price
+    let content_share = holder_reward_amount - bundle_share;  // 6% of mint price
+
+    // Send 50% to BundleRewardPool
+    ctx.accounts.bundle_reward_pool.add_rewards(bundle_share);
+
+    // Distribute 50% to ContentRewardPools (via remaining_accounts)
+    for pool_info in ctx.remaining_accounts.iter() {
+        // Transfer SOL and update reward_per_share
+    }
+}
+```
+
+**SDK Usage:**
+```typescript
+// Pass content CIDs to enable 50/50 distribution
+const contentCids = ['QmContent1...', 'QmContent2...', 'QmContent3...'];
+const { instruction, nftAsset, edition } = await simpleMintBundleInstruction(
+  program,
+  buyer,
+  bundleId,
+  creator,
+  treasury,
+  platform,
+  collectionAsset,
+  contentCids  // Pass content CIDs for ContentRewardPool distribution
+);
+```
+
+### Simplified Subscription Model (Current)
+The current implementation uses **direct SOL payments** instead of Streamflow streaming:
+- User pays full 30-day subscription amount upfront
+- Subscription valid for 30 days from `started_at` timestamp
+- User must manually renew before expiration
+- Fee distribution happens immediately on subscribe/renew
+
+### Fee Distribution on Subscribe
+| Pool | Patron Sub | Ecosystem Sub |
+|------|-----------|---------------|
+| Creator wallet | 80% | - |
+| Creator Dist Pool | - | 80% |
+| Patron Pool (per creator) | 12% | - |
+| Global Holder Pool | - | 12% |
+| Platform Treasury | 5% | 5% |
+| Ecosystem Treasury | 3% | 3% |
+
+### Subscription Validity Check
+```typescript
+function isSubscriptionValid(startedAt: bigint, now?: number): boolean {
+  const currentTime = now ?? Math.floor(Date.now() / 1000);
+  const epochDuration = 30 * 24 * 60 * 60; // 30 days
+  return currentTime < Number(startedAt) + epochDuration;
+}
+```
+
+### On-Chain Access Check
+The `check_subscription_access` instruction verifies:
+1. Content visibility level (0=Public, 1=Basic, 2=CreatorSubscription)
+2. For level 1: Valid ecosystem subscription
+3. For level 2: Valid creator subscription (Subscription tier, not Membership)
 
 ---
 
@@ -1324,16 +1924,123 @@ Correct order (weight first):
 
 ```
 mint_content_nft():
+├── 0. Trigger epoch distribution if needed (Option B)
+│   ├── maybe_distribute_patron_pool() - if epoch ended
+│   └── maybe_distribute_ecosystem_pools() - if epoch ended
 ├── 1. Add weight to ContentRewardPool
 ├── 2. Add weight to CreatorPatronPool
 ├── 3. Add weight to GlobalHolderPool
 ├── 4. Add weight to CreatorWeight
 ├── 5. Add weight to CreatorDistPool
-├── 6. Calculate virtual_patron_rps (using updated weights)
-├── 7. Calculate virtual_global_rps (using updated weights)
-├── 8. Calculate virtual_creator_dist_rps (using updated weights)
+├── 6. Calculate virtual_patron_rps (using updated weights + streaming treasury)
+├── 7. Calculate virtual_global_rps (using updated weights + streaming treasury)
+├── 8. Calculate virtual_creator_dist_rps (using updated weights + streaming treasury)
 ├── 9. SET nft_state.content_or_bundle_debt = weight × actual_rps
 ├── 10. SET nft_state.patron_debt = weight × virtual_patron_rps
 ├── 11. SET nft_state.global_debt = weight × virtual_global_rps
 └── 12. ADD creator_weight.reward_debt += weight × virtual_creator_dist_rps
 ```
+
+---
+
+*Last updated: December 13, 2025 - E2E tests passed (rarity, pool weights, burn reconciliation), subscription system deployed to devnet*
+
+---
+
+## Next Steps (Priority Order)
+
+### Immediate (Before Production)
+
+1. **E2E Testing** (Phase 5) - ✅ CORE TESTS COMPLETE
+   - [x] Test `simple_mint` content NFT with full subscription pool tracking
+   - [x] Test subscription flows: subscribe (patron & ecosystem)
+   - [x] Test claim flows: content rewards
+   - [x] Test virtual RPS calculations protect late minters
+   - [x] Test rarity distribution (chi-square validation passed)
+   - [x] Test pool weight tracking on mint (all 5 pools)
+   - [x] Test burn reconciliation decrements weight from all 5 pools (common & uncommon NFTs)
+   - [ ] Test `simple_mint_bundle` with 50/50 holder reward distribution
+   - [ ] Test subscription renew/cancel flows
+   - [ ] Test claim flows: patron, global holder, creator payout
+   - [ ] Test epoch distribution triggers on first claim after 30 days
+
+2. **Init Ecosystem Script** - ✅ COMPLETE
+   - [x] Update `scripts/init-ecosystem.ts` to initialize all subscription pools
+   - [x] Initialize GlobalHolderPool, CreatorDistPool, EcosystemEpochState singletons
+   - [x] Initialize EcosystemSubConfig with default price (0.1 SOL)
+
+3. **SDK Subscription Helpers** - ✅ COMPLETE
+   - [x] Add `initPatronConfigInstruction` for creator setup
+   - [x] Add `subscribePatronInstruction` and `cancelPatronSubscriptionInstruction`
+   - [x] Add `subscribeEcosystemInstruction` and `cancelEcosystemSubscriptionInstruction`
+   - [x] Add `claimUnifiedContentRewardsInstruction` (uses UnifiedNftRewardState)
+   - [x] Add `claimPatronRewardsInstruction` for patron pool claims
+   - [x] Add `claimGlobalHolderRewardsInstruction` for ecosystem holder claims
+   - [x] Export all subscription PDA helpers in client
+
+### Short-term (For User Testing)
+
+4. **Web UI - Patron System**
+   - [ ] Creator: Patron setup modal (set membership/subscription prices)
+   - [ ] User: Patron subscribe modal (choose tier, pay SOL)
+   - [ ] Display patron subscription status on creator profile
+
+5. **Web UI - Ecosystem Subscription**
+   - [ ] Ecosystem subscribe modal with price display
+   - [ ] Global rewards display in claim modal
+   - [ ] Subscription status indicator in navigation
+
+6. **Web UI - Claims Enhancement**
+   - [ ] Show all claimable pools for an NFT (content/bundle + patron + global)
+   - [ ] Batch claim across multiple pools
+   - [ ] Estimated rewards before claim
+
+### Future (Phase 4 - Streamflow - Optional)
+
+7. **Streamflow Integration**
+   - Replace lump-sum payments with continuous streams
+   - Automatic renewal via stream continuation
+   - Pro-rata refunds on cancellation
+
+---
+
+## Technical Debt
+
+| Issue | Severity | Description | Status |
+|-------|----------|-------------|--------|
+| Streamflow | Low | Using simplified direct payments instead of streams | Planned |
+| Bundle secondary | Low | Secondary sales don't yet distribute 50/50 (only primary mints) | Planned |
+| ~~Missing PermanentBurnDelegate~~ | ~~High~~ | ~~`simple_mint` and `simple_mint_bundle` don't add `PermanentBurnDelegate` plugin when creating NFTs, preventing burns~~ | **Fixed & Verified Dec 13, 2025** |
+
+### Bug Fix: PermanentBurnDelegate Plugin (Dec 13, 2025)
+
+**Problem:** NFTs minted with `simple_mint` and `simple_mint_bundle` could not be burned because they were missing the `PermanentBurnDelegate` plugin.
+
+**Root cause:** The `CreateV2CpiBuilder` calls in `simple_mint.rs` didn't include the `.plugins()` call that adds the burn delegate, unlike the helper function `create_core_nft()` in `lib.rs`.
+
+**Fix:** Added `PermanentBurnDelegate` plugin to both `simple_mint` and `simple_mint_bundle` instructions:
+
+```rust
+use mpl_core::types::{Plugin, PluginAuthority, PluginAuthorityPair, PermanentBurnDelegate};
+
+// Create PermanentBurnDelegate plugin with content_collection PDA as authority
+let burn_delegate_plugin = PluginAuthorityPair {
+    plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
+    authority: Some(PluginAuthority::Address {
+        address: ctx.accounts.content_collection.key()
+    }),
+};
+
+CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
+    .asset(&ctx.accounts.nft_asset)
+    // ... other fields ...
+    .plugins(vec![burn_delegate_plugin])  // <-- Added this
+    .invoke_signed(&[content_collection_seeds, nft_seeds])?;
+```
+
+**Impact:** NFTs minted before this fix cannot be burned via `burn_nft_with_subscription`. Only newly minted NFTs (after fix) will have the burn delegate plugin.
+
+**Verification:** Burn functionality tested and verified working:
+- Common NFT (weight: 1) - All 5 pools decremented correctly
+- Uncommon NFT (weight: 5) - All 5 pools decremented correctly
+- UnifiedNftRewardState account closed and rent refunded to user

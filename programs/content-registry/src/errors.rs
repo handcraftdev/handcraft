@@ -158,6 +158,24 @@ pub enum ContentRegistryError {
     // Cleanup errors
     #[msg("Invalid state - account should not exist or has wrong data")]
     InvalidState,
+
+    // Subscription system errors
+    #[msg("Invalid NFT type - expected content NFT but got bundle NFT or vice versa")]
+    InvalidNftType,
+    #[msg("Invalid patron config - at least one tier must be enabled")]
+    InvalidPatronConfig,
+    #[msg("Patron config is not active")]
+    PatronConfigInactive,
+    #[msg("Selected tier is not available")]
+    TierNotAvailable,
+    #[msg("Ecosystem subscription is not active")]
+    EcosystemSubInactive,
+    #[msg("Invalid ecosystem subscription price")]
+    InvalidEcosystemSubPrice,
+    #[msg("Subscription required for this content")]
+    SubscriptionRequired,
+    #[msg("Invalid input value")]
+    InvalidInput,
 }
 
 // Alias for backward compatibility

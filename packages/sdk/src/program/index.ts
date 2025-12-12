@@ -49,6 +49,22 @@ import {
   BundleNftRarity,
   BundleNftRewardState,
   WalletBundleNftMetadata,
+  // Subscription system types
+  PatronTier,
+  VisibilityLevel,
+  parsePatronTier,
+  UnifiedNftRewardState,
+  CreatorPatronPool,
+  GlobalHolderPool,
+  CreatorDistPool,
+  EcosystemEpochState,
+  CreatorWeight,
+  CreatorPatronConfig,
+  CreatorPatronSubscription,
+  EcosystemSubConfig,
+  EcosystemSubscription,
+  isSubscriptionValid,
+  calculateSubscriptionPendingReward,
 } from "./types";
 
 import {
@@ -82,6 +98,21 @@ import {
   getBundleDirectNftPda,
   calculatePendingRewardForNft,
   calculateWeightedPendingReward,
+  // Subscription system PDAs
+  getUnifiedNftRewardStatePda,
+  getCreatorPatronPoolPda,
+  getCreatorPatronTreasuryPda,
+  getCreatorPatronConfigPda,
+  getCreatorPatronSubscriptionPda,
+  getGlobalHolderPoolPda,
+  getCreatorDistPoolPda,
+  getEcosystemEpochStatePda,
+  getCreatorWeightPda,
+  getEcosystemStreamingTreasuryPda,
+  getEcosystemSubConfigPda,
+  getEcosystemSubscriptionPda,
+  getSimpleNftPda,
+  getSimpleBundleNftPda,
 } from "./pda";
 
 // Convert ContentType enum to Anchor format
@@ -465,125 +496,7 @@ export async function mintNftSolInstruction(
   return { instruction, nftAssetKeypair };
 }
 
-// ============================================
-// VRF-BASED MINT WITH RARITY (Two-step flow)
-// ============================================
-
-/**
- * Step 1: Commit to mint with VRF randomness
- * Takes payment and commits to a future slot for randomness determination
- * User must call revealMintInstruction after randomness is available (~1-2 slots / 0.4-0.8 seconds)
- */
-export async function commitMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  creator: PublicKey,
-  treasury: PublicKey,
-  randomnessAccount: PublicKey,
-  platform: PublicKey
-): Promise<TransactionInstruction> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
-
-  return await program.methods
-    .commitMint()
-    .accounts({
-      ecosystemConfig: ecosystemConfigPda,
-      content: contentPda,
-      mintConfig: mintConfigPda,
-      pendingMint: pendingMintPda,
-      contentRewardPool: contentRewardPoolPda,
-      randomnessAccount: randomnessAccount,
-      creator: creator,
-      platform: platform,
-      treasury: treasury,
-      buyer: buyer,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-}
-
-/**
- * Step 2: Reveal randomness and complete mint with rarity
- * Called after the committed slot has passed and VRF randomness is available
- * Returns { instruction, nftAssetKeypair } - the keypair MUST be added as signer
- */
-export async function revealMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  creator: PublicKey,
-  collectionAsset: PublicKey,
-  randomnessAccount: PublicKey,
-  treasury: PublicKey,
-  platform: PublicKey
-): Promise<MintNftResult> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
-  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
-
-  const nftAssetKeypair = Keypair.generate();
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
-  const [nftRarityPda] = getNftRarityPda(nftAssetKeypair.publicKey);
-
-  const instruction = await program.methods
-    .revealMint()
-    .accounts({
-      ecosystemConfig: ecosystemConfigPda,
-      content: contentPda,
-      mintConfig: mintConfigPda,
-      pendingMint: pendingMintPda,
-      contentCollection: contentCollectionPda,
-      collectionAsset: collectionAsset,
-      contentRewardPool: contentRewardPoolPda,
-      buyerWalletState: buyerWalletStatePda,
-      nftRewardState: nftRewardStatePda,
-      nftRarity: nftRarityPda,
-      randomnessAccount: randomnessAccount,
-      creator: creator,
-      platform: platform,
-      treasury: treasury,
-      buyer: buyer,
-      nftAsset: nftAssetKeypair.publicKey,
-      mplCoreProgram: MPL_CORE_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  return { instruction, nftAssetKeypair };
-}
-
-/**
- * Cancel an expired pending mint and get refund
- * Can only be called after 10 minutes if the oracle failed to provide randomness
- * Refunds the escrowed payment and frees the reserved mint slot
- */
-export async function cancelExpiredMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string
-): Promise<TransactionInstruction> {
-  const [contentPda] = getContentPda(contentCid);
-  const [pendingMintPda] = getPendingMintPda(buyer, contentPda);
-
-  return await program.methods
-    .cancelExpiredMint()
-    .accounts({
-      content: contentPda,
-      pendingMint: pendingMintPda,
-      buyer: buyer,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-}
+// NOTE: VRF-BASED MINT functions removed - use simpleMintInstruction instead
 
 export async function claimContentRewardsInstruction(
   program: Program,
@@ -898,162 +811,7 @@ export async function burnNftInstruction(
     .instruction();
 }
 
-// ============================================
-// MAGICBLOCK VRF MINT (2-step with fallback)
-// ============================================
-
-export interface MbRequestMintResult {
-  instruction: TransactionInstruction;
-  mintRequestPda: PublicKey;
-  nftAssetPda: PublicKey;
-  programIdentityPda: PublicKey;
-}
-
-/**
- * Request a mint with MagicBlock VRF
- * This is a 2-step process:
- * 1. User calls this to start the mint request
- * 2. MagicBlock oracle fulfills the request (or user claims fallback after timeout)
- *
- * @param program Anchor program instance
- * @param buyer The buyer's public key
- * @param contentCid The content CID
- * @param creator The content creator's public key
- * @param treasury Ecosystem treasury
- * @param platform Platform wallet for commission (optional)
- * @param collectionAsset The Metaplex Core collection asset
- * @param oracleQueue The MagicBlock oracle queue (use MAGICBLOCK_DEFAULT_QUEUE)
- * @param edition The edition number for this mint (minted_count + pending_count + 1)
- */
-export async function mbRequestMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  creator: PublicKey,
-  treasury: PublicKey,
-  platform: PublicKey | null,
-  collectionAsset: PublicKey,
-  oracleQueue: PublicKey,
-  edition: bigint
-): Promise<MbRequestMintResult> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
-  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
-  const [nftAssetPda] = getMbNftAssetPda(mintRequestPda);
-  const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
-
-  // Program identity PDA (required by #[vrf] macro)
-  const [programIdentityPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("identity")],
-    PROGRAM_ID
-  );
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const instruction = await (program.methods as any)
-    .magicblockRequestMint(new BN(edition.toString()))
-    .accounts({
-      ecosystemConfig: ecosystemConfigPda,
-      content: contentPda,
-      mintConfig: mintConfigPda,
-      mintRequest: mintRequestPda,
-      contentRewardPool: contentRewardPoolPda,
-      contentCollection: contentCollectionPda,
-      collectionAsset: collectionAsset,
-      creator: creator,
-      treasury: treasury,
-      platform: platform, // Optional account, can be null
-      buyerWalletState: buyerWalletStatePda,
-      nftAsset: nftAssetPda,
-      nftRewardState: nftRewardStatePda,
-      nftRarity: nftRarityPda,
-      payer: buyer,
-      oracleQueue: oracleQueue,
-      programIdentity: programIdentityPda,
-      vrfProgram: MAGICBLOCK_VRF_PROGRAM_ID,
-      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  return {
-    instruction,
-    mintRequestPda,
-    nftAssetPda,
-    programIdentityPda,
-  };
-}
-
-/**
- * Claim fallback mint after VRF timeout (5 seconds)
- * This mints the NFT using slot hash randomness when the oracle doesn't respond
- */
-export async function mbClaimFallbackInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  edition: bigint
-): Promise<TransactionInstruction> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
-  const [nftAssetPda] = getMbNftAssetPda(mintRequestPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
-  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-
-  // Fetch mint request to get stored values
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mintRequestData = await (program.account as any).magicBlockMintRequest.fetch(mintRequestPda);
-  const { creator, treasury, platform, collectionAsset } = mintRequestData;
-
-  return await program.methods
-    .magicblockClaimFallback()
-    .accounts({
-      mintRequest: mintRequestPda,
-      content: contentPda,
-      contentCollection: contentCollectionPda,
-      collectionAsset: collectionAsset,
-      nftAsset: nftAssetPda,
-      nftRarity: nftRarityPda,
-      nftRewardState: nftRewardStatePda,
-      buyer: buyer,
-      creator: creator,
-      treasury: treasury,
-      platform: platform,
-      contentRewardPool: contentRewardPoolPda,
-      mplCoreProgram: MPL_CORE_PROGRAM_ID,
-      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-}
-
-/**
- * Close a fulfilled MagicBlock mint request
- * This reclaims rent and allows a new mint request for the same wallet+content
- */
-export async function mbCloseFulfilledInstruction(
-  program: Program,
-  buyer: PublicKey,
-  contentCid: string,
-  edition: bigint
-): Promise<TransactionInstruction> {
-  const [contentPda] = getContentPda(contentCid);
-  const [mintRequestPda] = getMbMintRequestPda(buyer, contentPda, edition);
-
-  return await program.methods
-    .magicblockCloseFulfilled()
-    .accounts({
-      mintRequest: mintRequestPda,
-      buyer: buyer,
-    })
-    .instruction();
-}
+// NOTE: MAGICBLOCK VRF MINT functions removed - use simpleMintInstruction instead
 
 // ============================================
 // FETCH FUNCTIONS
@@ -3189,11 +2947,7 @@ export async function fetchBundleWithItems(
 // BUNDLE MINT/RENT INSTRUCTIONS & TYPES
 // ============================================
 
-export interface DirectMintBundleResult {
-  instruction: TransactionInstruction;
-  nftAsset: PublicKey;
-  edition: bigint;
-}
+// NOTE: DirectMintBundleResult removed - use SimpleMintResult instead
 
 export interface RentBundleResult {
   instruction: TransactionInstruction;
@@ -3291,51 +3045,87 @@ export async function updateBundleMintSettingsInstruction(
     .instruction();
 }
 
+// NOTE: directMintBundleInstruction removed - use simpleMintBundleInstruction instead
+
+// ============================================
+// SIMPLE MINT - Unified mint with subscription pool tracking
+// ============================================
+
+export interface SimpleMintResult {
+  instruction: TransactionInstruction;
+  nftAsset: PublicKey;
+  edition: bigint;
+}
+
 /**
- * Direct mint bundle NFT (slot hash randomness)
+ * Simple mint content NFT with slot hash randomness + full subscription pool tracking
+ * Single transaction - no VRF, immediate mint, tracks all reward pools
+ * @param program Anchor program instance
+ * @param buyer The buyer's public key
+ * @param contentCid The content CID
+ * @param creator The content creator's public key
+ * @param treasury Ecosystem treasury
+ * @param platform Platform wallet for commission
+ * @param collectionAsset The Metaplex Core collection asset
  */
-export async function directMintBundleInstruction(
+export async function simpleMintInstruction(
   program: Program,
   buyer: PublicKey,
-  bundleId: string,
+  contentCid: string,
   creator: PublicKey,
   treasury: PublicKey,
   platform: PublicKey,
   collectionAsset: PublicKey
-): Promise<DirectMintBundleResult> {
-  const [bundlePda] = getBundlePda(creator, bundleId);
+): Promise<SimpleMintResult> {
+  const [contentPda] = getContentPda(contentCid);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
-  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
-  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
-  const [buyerWalletStatePda] = getBundleWalletStatePda(buyer, bundlePda);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   // Fetch current minted count to calculate edition
-  const connection = program.provider.connection;
-  const bundleAccount = await (program.account as any).bundle.fetch(bundlePda);
-  const currentMinted = BigInt(bundleAccount.mintedCount?.toString() || "0");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contentAccount = await (program.account as any).contentEntry.fetch(contentPda);
+  const currentMinted = BigInt(contentAccount.mintedCount?.toString() || "0");
   const edition = currentMinted + BigInt(1);
 
-  const [nftAssetPda] = getBundleDirectNftPda(buyer, bundlePda, edition);
-  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
+  const [nftAssetPda] = getSimpleNftPda(buyer, contentPda, edition);
+  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
+  const [unifiedNftStatePda] = getUnifiedNftRewardStatePda(nftAssetPda);
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [creatorDistPoolPda] = getCreatorDistPoolPda();
+  const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+  const [creatorWeightPda] = getCreatorWeightPda(creator);
+
+  // Streaming treasury accounts for lazy distribution
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
 
   const instruction = await program.methods
-    .directMintBundle()
+    .simpleMint()
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
-      bundle: bundlePda,
+      content: contentPda,
       mintConfig: mintConfigPda,
-      bundleRewardPool: bundleRewardPoolPda,
-      bundleCollection: bundleCollectionPda,
+      contentRewardPool: contentRewardPoolPda,
+      contentCollection: contentCollectionPda,
       collectionAsset,
       creator,
       treasury,
       platform,
-      buyerWalletState: buyerWalletStatePda,
       nftAsset: nftAssetPda,
       nftRewardState: nftRewardStatePda,
       nftRarity: nftRarityPda,
+      unifiedNftState: unifiedNftStatePda,
+      globalHolderPool: globalHolderPoolPda,
+      creatorDistPool: creatorDistPoolPda,
+      creatorPatronPool: creatorPatronPoolPda,
+      creatorWeight: creatorWeightPda,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      ecosystemEpochState: ecosystemEpochStatePda,
       payer: buyer,
       slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
@@ -3346,194 +3136,93 @@ export async function directMintBundleInstruction(
   return { instruction, nftAsset: nftAssetPda, edition };
 }
 
-// ============================================
-// MAGICBLOCK VRF BUNDLE MINT (2-step with fallback)
-// ============================================
-
-export interface MbRequestBundleMintResult {
-  instruction: TransactionInstruction;
-  mintRequestPda: PublicKey;
-  nftAssetPda: PublicKey;
-  programIdentityPda: PublicKey;
-}
-
 /**
- * Request a bundle mint with MagicBlock VRF
- * This is a 2-step process:
- * 1. User calls this to start the mint request
- * 2. MagicBlock oracle fulfills the request (or user claims fallback after timeout)
- *
+ * Simple mint bundle NFT with slot hash randomness + full subscription pool tracking
+ * Single transaction - grants access to all bundle content
+ * Distributes 50% of holder rewards to BundleRewardPool and 50% to ContentRewardPools
  * @param program Anchor program instance
  * @param buyer The buyer's public key
  * @param bundleId The bundle ID
  * @param creator The bundle creator's public key
  * @param treasury Ecosystem treasury
- * @param platform Platform wallet for commission (optional)
+ * @param platform Platform wallet for commission
  * @param collectionAsset The Metaplex Core collection asset
- * @param oracleQueue The MagicBlock oracle queue (use MAGICBLOCK_DEFAULT_QUEUE)
- * @param edition The edition number for this mint (minted_count + pending_count + 1)
+ * @param contentCids Array of content CIDs in the bundle (for 50/50 distribution to ContentRewardPools)
  */
-export async function mbRequestBundleMintInstruction(
+export async function simpleMintBundleInstruction(
   program: Program,
   buyer: PublicKey,
   bundleId: string,
   creator: PublicKey,
   treasury: PublicKey,
-  platform: PublicKey | null,
+  platform: PublicKey,
   collectionAsset: PublicKey,
-  oracleQueue: PublicKey,
-  edition: bigint
-): Promise<MbRequestBundleMintResult> {
+  contentCids: string[] = []
+): Promise<SimpleMintResult> {
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
   const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
   const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
-  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
-  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
-  const [buyerWalletStatePda] = getBundleWalletStatePda(buyer, bundlePda);
-  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
 
-  // Program identity PDA (required by #[vrf] macro)
-  const [programIdentityPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("identity")],
-    PROGRAM_ID
-  );
-
+  // Fetch current minted count to calculate edition
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const instruction = await (program.methods as any)
-    .magicblockRequestBundleMint(new BN(edition.toString()))
+  const bundleAccount = await (program.account as any).bundle.fetch(bundlePda);
+  const currentMinted = BigInt(bundleAccount.mintedCount?.toString() || "0");
+  const edition = currentMinted + BigInt(1);
+
+  const [nftAssetPda] = getSimpleBundleNftPda(buyer, bundlePda, edition);
+  const [unifiedNftStatePda] = getUnifiedNftRewardStatePda(nftAssetPda);
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [creatorDistPoolPda] = getCreatorDistPoolPda();
+  const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+  const [creatorWeightPda] = getCreatorWeightPda(creator);
+
+  // Streaming treasury accounts for lazy distribution
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
+
+  // Derive ContentRewardPool PDAs for 50/50 distribution
+  const contentRewardPoolAccounts = contentCids.map(cid => {
+    const [contentPda] = getContentPda(cid);
+    const [rewardPoolPda] = getContentRewardPoolPda(contentPda);
+    return { pubkey: rewardPoolPda, isSigner: false, isWritable: true };
+  });
+
+  const instruction = await program.methods
+    .simpleMintBundle()
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       bundle: bundlePda,
-      mintConfig: mintConfigPda,
-      mintRequest: mintRequestPda,
+      bundleMintConfig: mintConfigPda,
       bundleRewardPool: bundleRewardPoolPda,
       bundleCollection: bundleCollectionPda,
-      collectionAsset: collectionAsset,
-      creator: creator,
-      treasury: treasury,
-      platform: platform, // Optional account, can be null
-      buyerWalletState: buyerWalletStatePda,
+      collectionAsset,
+      creator,
+      treasury,
+      platform,
       nftAsset: nftAssetPda,
-      nftRewardState: nftRewardStatePda,
-      nftRarity: nftRarityPda,
+      unifiedNftState: unifiedNftStatePda,
+      globalHolderPool: globalHolderPoolPda,
+      creatorDistPool: creatorDistPoolPda,
+      creatorPatronPool: creatorPatronPoolPda,
+      creatorWeight: creatorWeightPda,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      ecosystemEpochState: ecosystemEpochStatePda,
       payer: buyer,
-      oracleQueue: oracleQueue,
-      programIdentity: programIdentityPda,
-      vrfProgram: MAGICBLOCK_VRF_PROGRAM_ID,
       slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  return {
-    instruction,
-    mintRequestPda,
-    nftAssetPda,
-    programIdentityPda,
-  };
-}
-
-/**
- * Claim fallback bundle mint after VRF timeout (5 seconds)
- * This mints the NFT using slot hash randomness when the oracle doesn't respond
- */
-export async function mbBundleClaimFallbackInstruction(
-  program: Program,
-  buyer: PublicKey,
-  bundleId: string,
-  creator: PublicKey,
-  edition: bigint
-): Promise<TransactionInstruction> {
-  const [bundlePda] = getBundlePda(creator, bundleId);
-  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
-  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
-  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
-  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
-
-  // Fetch mint request to get stored values
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mintRequestData = await (program.account as any).magicBlockBundleMintRequest.fetch(mintRequestPda);
-  const { treasury, platform, collectionAsset } = mintRequestData;
-
-  return await program.methods
-    .magicblockBundleClaimFallback()
-    .accounts({
-      mintRequest: mintRequestPda,
-      bundle: bundlePda,
-      bundleCollection: bundleCollectionPda,
-      collectionAsset: collectionAsset,
-      nftAsset: nftAssetPda,
-      nftRarity: nftRarityPda,
-      nftRewardState: nftRewardStatePda,
-      buyer: buyer,
-      creator: creator,
-      treasury: treasury,
-      platform: platform,
-      bundleRewardPool: bundleRewardPoolPda,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
-      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
       systemProgram: SystemProgram.programId,
     })
+    .remainingAccounts(contentRewardPoolAccounts)
     .instruction();
+
+  return { instruction, nftAsset: nftAssetPda, edition };
 }
 
-/**
- * Cancel a pending MagicBlock bundle mint request
- * Returns escrowed funds to buyer
- */
-export async function mbCancelBundleMintInstruction(
-  program: Program,
-  buyer: PublicKey,
-  bundleId: string,
-  creator: PublicKey,
-  edition: bigint
-): Promise<TransactionInstruction> {
-  const [bundlePda] = getBundlePda(creator, bundleId);
-  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
-  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
-  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
-
-  return await program.methods
-    .magicblockCancelBundleMint(new BN(edition.toString()))
-    .accounts({
-      bundle: bundlePda,
-      mintRequest: mintRequestPda,
-      nftAsset: nftAssetPda,
-      nftRarity: nftRarityPda,
-      nftRewardState: nftRewardStatePda,
-      buyer: buyer,
-    })
-    .instruction();
-}
-
-/**
- * Close a fulfilled MagicBlock bundle mint request
- * This reclaims rent and allows a new mint request
- */
-export async function mbCloseFulfilledBundleInstruction(
-  program: Program,
-  buyer: PublicKey,
-  bundleId: string,
-  creator: PublicKey,
-  edition: bigint
-): Promise<TransactionInstruction> {
-  const [bundlePda] = getBundlePda(creator, bundleId);
-  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
-
-  return await program.methods
-    .magicblockCloseFulfilledBundle()
-    .accounts({
-      mintRequest: mintRequestPda,
-      buyer: buyer,
-    })
-    .instruction();
-}
+// NOTE: MAGICBLOCK VRF BUNDLE MINT functions removed - use simpleMintBundleInstruction instead
 
 /**
  * Configure rental for a bundle
@@ -3976,6 +3665,200 @@ export async function fetchBundleNftRarities(
 }
 
 // ============================================
+// SUBSCRIPTION INSTRUCTIONS
+// ============================================
+
+/**
+ * Initialize patron config for a creator
+ * Allows creators to set membership and subscription tier prices
+ */
+export async function initPatronConfigInstruction(
+  program: Program,
+  creator: PublicKey,
+  membershipPrice: bigint,
+  subscriptionPrice: bigint
+): Promise<TransactionInstruction> {
+  const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+  const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+
+  return await program.methods
+    .initPatronConfig(
+      new BN(membershipPrice.toString()),
+      new BN(subscriptionPrice.toString())
+    )
+    .accounts({
+      patronConfig: patronConfigPda,
+      creatorPatronPool: creatorPatronPoolPda,
+      creator,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Subscribe to a creator's patron tier
+ * @param tier - 'membership' or 'subscription'
+ */
+export async function subscribePatronInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  creator: PublicKey,
+  tier: 'membership' | 'subscription'
+): Promise<TransactionInstruction> {
+  const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+  const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+
+  const tierArg = tier === 'membership' ? { membership: {} } : { subscription: {} };
+
+  return await program.methods
+    .subscribePatron(tierArg)
+    .accounts({
+      patronConfig: patronConfigPda,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      patronSubscription: patronSubscriptionPda,
+      creator,
+      subscriber,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Cancel patron subscription
+ */
+export async function cancelPatronSubscriptionInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  creator: PublicKey
+): Promise<TransactionInstruction> {
+  const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
+
+  return await program.methods
+    .cancelPatronSubscription()
+    .accounts({
+      patronSubscription: patronSubscriptionPda,
+      creator,
+      subscriber,
+    })
+    .instruction();
+}
+
+/**
+ * Subscribe to ecosystem
+ */
+export async function subscribeEcosystemInstruction(
+  program: Program,
+  subscriber: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemSubConfigPda] = getEcosystemSubConfigPda();
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+
+  return await program.methods
+    .subscribeEcosystem()
+    .accounts({
+      ecosystemSubConfig: ecosystemSubConfigPda,
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      subscriber,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Cancel ecosystem subscription
+ */
+export async function cancelEcosystemSubscriptionInstruction(
+  program: Program,
+  subscriber: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+
+  return await program.methods
+    .cancelEcosystemSubscription()
+    .accounts({
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      subscriber,
+    })
+    .instruction();
+}
+
+/**
+ * Claim content rewards for an NFT (uses UnifiedNftRewardState for subscription system)
+ */
+export async function claimUnifiedContentRewardsInstruction(
+  program: Program,
+  claimer: PublicKey,
+  contentCid: string,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
+
+  return await program.methods
+    .claimUnifiedContentRewards()
+    .accounts({
+      claimer,
+      content: contentPda,
+      contentRewardPool: contentRewardPoolPda,
+      nftAsset,
+      nftRewardState: nftRewardStatePda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Claim patron rewards for an NFT (from creator's patron pool)
+ */
+export async function claimPatronRewardsInstruction(
+  program: Program,
+  claimer: PublicKey,
+  creator: PublicKey,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
+
+  return await program.methods
+    .claimPatronRewards()
+    .accounts({
+      claimer,
+      creatorPatronPool: creatorPatronPoolPda,
+      nftAsset,
+      nftRewardState: nftRewardStatePda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Claim global holder rewards for an NFT (from ecosystem subscriptions)
+ */
+export async function claimGlobalHolderRewardsInstruction(
+  program: Program,
+  claimer: PublicKey,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
+
+  return await program.methods
+    .claimGlobalHolderRewards()
+    .accounts({
+      claimer,
+      globalHolderPool: globalHolderPoolPda,
+      nftAsset,
+      nftRewardState: nftRewardStatePda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+// ============================================
 // HIGH-LEVEL CLIENT
 // ============================================
 
@@ -4049,39 +3932,7 @@ export function createContentRegistryClient(connection: Connection) {
     mintNftSolInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, platform: PublicKey, collectionAsset: PublicKey): Promise<MintNftResult> =>
       mintNftSolInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
 
-    // VRF-based minting with rarity (two-step flow)
-    commitMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, treasury: PublicKey, randomnessAccount: PublicKey, platform: PublicKey): Promise<TransactionInstruction> =>
-      commitMintInstruction(program, buyer, contentCid, creator, treasury, randomnessAccount, platform),
-
-    revealMintInstruction: (buyer: PublicKey, contentCid: string, creator: PublicKey, collectionAsset: PublicKey, randomnessAccount: PublicKey, treasury: PublicKey, platform: PublicKey): Promise<MintNftResult> =>
-      revealMintInstruction(program, buyer, contentCid, creator, collectionAsset, randomnessAccount, treasury, platform),
-
-    // Cancel expired pending mint (refund if oracle failed)
-    cancelExpiredMintInstruction: (buyer: PublicKey, contentCid: string): Promise<TransactionInstruction> =>
-      cancelExpiredMintInstruction(program, buyer, contentCid),
-
-    // MagicBlock VRF mint (2-step with fallback)
-    mbRequestMintInstruction: (
-      buyer: PublicKey,
-      contentCid: string,
-      creator: PublicKey,
-      treasury: PublicKey,
-      platform: PublicKey | null,
-      collectionAsset: PublicKey,
-      oracleQueue: PublicKey,
-      edition: bigint
-    ): Promise<MbRequestMintResult> =>
-      mbRequestMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset, oracleQueue, edition),
-
-    mbClaimFallbackInstruction: (buyer: PublicKey, contentCid: string, edition: bigint): Promise<TransactionInstruction> =>
-      mbClaimFallbackInstruction(program, buyer, contentCid, edition),
-
-    mbCloseFulfilledInstruction: (buyer: PublicKey, contentCid: string, edition: bigint): Promise<TransactionInstruction> =>
-      mbCloseFulfilledInstruction(program, buyer, contentCid, edition),
-
-    // MagicBlock PDA helpers
-    getMbMintRequestPda,
-    getMbNftAssetPda,
+    // NOTE: VRF mint functions removed - use simpleMintInstruction instead
 
     // Claim rewards
     claimContentRewardsInstruction: (holder: PublicKey, contentCid: string) =>
@@ -4191,40 +4042,25 @@ export function createContentRegistryClient(connection: Connection) {
       isActive: boolean | null
     ) => updateBundleMintSettingsInstruction(program, creator, bundleId, price, maxSupply, creatorRoyaltyBps, isActive),
 
-    directMintBundleInstruction: (
+    // Simple mint with subscription pool tracking (replaces VRF and direct mint)
+    simpleMintInstruction: (
+      buyer: PublicKey,
+      contentCid: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey,
+      collectionAsset: PublicKey
+    ): Promise<SimpleMintResult> => simpleMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
+
+    simpleMintBundleInstruction: (
       buyer: PublicKey,
       bundleId: string,
       creator: PublicKey,
       treasury: PublicKey,
       platform: PublicKey,
-      collectionAsset: PublicKey
-    ): Promise<DirectMintBundleResult> => directMintBundleInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset),
-
-    // MagicBlock VRF bundle mint (2-step with fallback)
-    mbRequestBundleMintInstruction: (
-      buyer: PublicKey,
-      bundleId: string,
-      creator: PublicKey,
-      treasury: PublicKey,
-      platform: PublicKey | null,
       collectionAsset: PublicKey,
-      oracleQueue: PublicKey,
-      edition: bigint
-    ): Promise<MbRequestBundleMintResult> =>
-      mbRequestBundleMintInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset, oracleQueue, edition),
-
-    mbBundleClaimFallbackInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
-      mbBundleClaimFallbackInstruction(program, buyer, bundleId, creator, edition),
-
-    mbCancelBundleMintInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
-      mbCancelBundleMintInstruction(program, buyer, bundleId, creator, edition),
-
-    mbCloseFulfilledBundleInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
-      mbCloseFulfilledBundleInstruction(program, buyer, bundleId, creator, edition),
-
-    // MagicBlock bundle PDA helpers
-    getMbBundleMintRequestPda,
-    getMbBundleNftAssetPda,
+      contentCids: string[] = []
+    ): Promise<SimpleMintResult> => simpleMintBundleInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset, contentCids),
 
     configureBundleRentInstruction: (
       creator: PublicKey,
@@ -4267,6 +4103,64 @@ export function createContentRegistryClient(connection: Connection) {
       nftAssets: PublicKey[]
     ) => batchClaimBundleRewardsInstruction(program, claimer, bundleId, creator, nftAssets),
 
+    // Subscription management
+    initPatronConfigInstruction: (
+      creator: PublicKey,
+      membershipPrice: bigint,
+      subscriptionPrice: bigint
+    ) => initPatronConfigInstruction(program, creator, membershipPrice, subscriptionPrice),
+
+    subscribePatronInstruction: (
+      subscriber: PublicKey,
+      creator: PublicKey,
+      tier: 'membership' | 'subscription'
+    ) => subscribePatronInstruction(program, subscriber, creator, tier),
+
+    cancelPatronSubscriptionInstruction: (
+      subscriber: PublicKey,
+      creator: PublicKey
+    ) => cancelPatronSubscriptionInstruction(program, subscriber, creator),
+
+    subscribeEcosystemInstruction: (
+      subscriber: PublicKey
+    ) => subscribeEcosystemInstruction(program, subscriber),
+
+    cancelEcosystemSubscriptionInstruction: (
+      subscriber: PublicKey
+    ) => cancelEcosystemSubscriptionInstruction(program, subscriber),
+
+    // Subscription claim instructions (use UnifiedNftRewardState)
+    claimUnifiedContentRewardsInstruction: (
+      claimer: PublicKey,
+      contentCid: string,
+      nftAsset: PublicKey
+    ) => claimUnifiedContentRewardsInstruction(program, claimer, contentCid, nftAsset),
+
+    claimPatronRewardsInstruction: (
+      claimer: PublicKey,
+      creator: PublicKey,
+      nftAsset: PublicKey
+    ) => claimPatronRewardsInstruction(program, claimer, creator, nftAsset),
+
+    claimGlobalHolderRewardsInstruction: (
+      claimer: PublicKey,
+      nftAsset: PublicKey
+    ) => claimGlobalHolderRewardsInstruction(program, claimer, nftAsset),
+
+    // Subscription PDA helpers
+    getCreatorPatronConfigPda,
+    getCreatorPatronPoolPda,
+    getCreatorPatronSubscriptionPda,
+    getGlobalHolderPoolPda,
+    getCreatorDistPoolPda,
+    getCreatorWeightPda,
+    getCreatorPatronTreasuryPda,
+    getEcosystemStreamingTreasuryPda,
+    getEcosystemEpochStatePda,
+    getEcosystemSubConfigPda,
+    getEcosystemSubscriptionPda,
+    getUnifiedNftRewardStatePda,
+
     // Bundle mint/rent PDA helpers
     getBundleMintConfigPda,
     getBundleRentConfigPda,
@@ -4288,11 +4182,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchBundleNftRarity: (nftAsset: PublicKey) => fetchBundleNftRarity(connection, nftAsset),
     fetchBundleNftRarities: (nftAssets: PublicKey[]) => fetchBundleNftRarities(connection, nftAssets),
 
-    // MagicBlock bundle mint request fetching
-    fetchMbBundleMintRequest: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint) =>
-      fetchMbBundleMintRequest(connection, buyer, bundleId, creator, edition),
-    findPendingBundleMintRequests: (buyer: PublicKey, bundleId: string, creator: PublicKey, maxEditionToCheck: bigint) =>
-      findPendingBundleMintRequests(connection, buyer, bundleId, creator, maxEditionToCheck),
+    // NOTE: MagicBlock bundle mint request fetching removed
 
     // Fetching
     fetchContent: (contentCid: string) => fetchContent(connection, contentCid),
@@ -4321,12 +4211,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchWalletRentalNfts: (wallet: PublicKey) => fetchWalletRentalNfts(connection, wallet),
     fetchRentalNftsFromMetadata: (nftMetadata: WalletNftMetadata[]) => fetchRentalNftsFromMetadata(connection, nftMetadata),
 
-    // Pending mint recovery (VRF mints)
-    fetchPendingMint: (buyer: PublicKey, contentCid: string) => fetchPendingMint(connection, buyer, contentCid),
-    fetchAllPendingMintsForWallet: (wallet: PublicKey) => fetchAllPendingMintsForWallet(connection, wallet),
-
-    // MagicBlock mint request (2-step VRF with fallback)
-    fetchMbMintRequest: (buyer: PublicKey, contentCid: string, edition: bigint) => fetchMbMintRequest(connection, buyer, contentCid, edition),
+    // NOTE: Pending mint recovery and MagicBlock mint request fetching removed
 
     // Reward calculations
     getPendingRewardForContent: (wallet: PublicKey, contentCid: string) => getPendingRewardForContent(connection, wallet, contentCid),

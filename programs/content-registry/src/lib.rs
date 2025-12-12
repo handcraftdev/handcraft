@@ -247,11 +247,13 @@ use state::{
     ContentType, hash_cid,
     MintConfig, PaymentCurrency,
     EcosystemConfig,
-    ContentRewardPool, WalletContentState, NftRewardState, PRECISION,
-    NFT_REWARD_STATE_SEED, ContentCollection, CONTENT_COLLECTION_SEED,
+    ContentRewardPool, WalletContentState, PRECISION,
+    ContentCollection, CONTENT_COLLECTION_SEED,
     RentConfig, RentEntry, RentTier, RENT_ENTRY_SEED,
     BundleType,
-    Rarity, NftRarity, NFT_RARITY_SEED,
+    Rarity,
+    PatronTier,
+    UnifiedNftRewardState, UNIFIED_NFT_REWARD_STATE_SEED,
 };
 use errors::ContentRegistryError;
 use contexts::*;
@@ -635,252 +637,6 @@ pub mod content_registry {
     }
 
     // ============================================
-    // NFT MINTING (SOL PAYMENT ONLY)
-    // ============================================
-
-    /// Mint NFT with SOL payment
-    /// Uses per-content reward pools with wallet-level tracking:
-    /// - Each content has its own reward pool
-    /// - 12% holder rewards go to that content's pool only
-    /// - Wallet-level tracking allows batch claiming
-    pub fn mint_nft_sol(ctx: Context<MintNftSol>) -> Result<()> {
-        let ecosystem = &ctx.accounts.ecosystem_config;
-        let mint_config = &ctx.accounts.mint_config;
-        let content = &mut ctx.accounts.content;
-        let content_reward_pool = &mut ctx.accounts.content_reward_pool;
-        let buyer_wallet_state = &mut ctx.accounts.buyer_wallet_state;
-        let timestamp = Clock::get()?.unix_timestamp;
-
-        // Verify collection_asset matches what's stored in content_collection
-        // We manually deserialize since we use AccountInfo to save stack space
-        {
-            let collection_data = ctx.accounts.content_collection.try_borrow_data()?;
-            let content_collection: ContentCollection = ContentCollection::try_deserialize(
-                &mut &collection_data[..]
-            )?;
-            require!(
-                content_collection.collection_asset == ctx.accounts.collection_asset.key(),
-                ContentRegistryError::ContentMismatch
-            );
-        }
-
-        // Check ecosystem not paused
-        require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
-
-        // Check minting is active and supply available
-        require!(mint_config.is_active, ContentRegistryError::MintingNotActive);
-        require!(
-            mint_config.can_mint(content.minted_count),
-            ContentRegistryError::MaxSupplyReached
-        );
-
-        // Verify SOL currency (only SOL supported now)
-        require!(
-            mint_config.currency == PaymentCurrency::Sol,
-            ContentRegistryError::InvalidCurrency
-        );
-
-        let price = mint_config.price;
-        let is_first_content_mint = content.minted_count == 0;
-        let has_existing_nfts = content_reward_pool.total_nfts > 0;
-
-        // Initialize content reward pool if this is the first mint for this content
-        if content_reward_pool.content == Pubkey::default() {
-            content_reward_pool.content = content.key();
-            content_reward_pool.created_at = timestamp;
-        }
-
-        // Process payment if not free
-        if price > 0 {
-            let (creator_amount, platform_amount, ecosystem_amount, holder_reward_amount) =
-                EcosystemConfig::calculate_primary_split(price);
-
-            // For first NFT of this content, holder reward goes to creator (no holders yet)
-            // Otherwise, holder reward goes to this content's reward pool
-            let final_creator_amount = if !has_existing_nfts {
-                creator_amount + holder_reward_amount
-            } else {
-                creator_amount
-            };
-
-            // Transfer to creator
-            if final_creator_amount > 0 {
-                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                    &ctx.accounts.buyer.key(),
-                    &ctx.accounts.creator.key(),
-                    final_creator_amount,
-                );
-                anchor_lang::solana_program::program::invoke(
-                    &transfer_ix,
-                    &[
-                        ctx.accounts.buyer.to_account_info(),
-                        ctx.accounts.creator.to_account_info(),
-                        ctx.accounts.system_program.to_account_info(),
-                    ],
-                )?;
-            }
-
-            // Transfer holder reward to content reward pool (if existing NFTs)
-            // This increases reward_per_share for holders of THIS CONTENT only
-            if has_existing_nfts && holder_reward_amount > 0 {
-                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                    &ctx.accounts.buyer.key(),
-                    &content_reward_pool.to_account_info().key,
-                    holder_reward_amount,
-                );
-                anchor_lang::solana_program::program::invoke(
-                    &transfer_ix,
-                    &[
-                        ctx.accounts.buyer.to_account_info(),
-                        content_reward_pool.to_account_info(),
-                        ctx.accounts.system_program.to_account_info(),
-                    ],
-                )?;
-
-                // Update reward_per_share BEFORE incrementing total_nfts
-                // This ensures only existing holders benefit from this sale
-                content_reward_pool.add_rewards(holder_reward_amount);
-            }
-
-            // Transfer to platform (if provided)
-            if platform_amount > 0 {
-                let platform_wallet = ctx.accounts.platform.as_ref()
-                    .map(|p| p.key())
-                    .unwrap_or(ecosystem.treasury);
-
-                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                    &ctx.accounts.buyer.key(),
-                    &platform_wallet,
-                    platform_amount,
-                );
-                anchor_lang::solana_program::program::invoke(
-                    &transfer_ix,
-                    &[
-                        ctx.accounts.buyer.to_account_info(),
-                        ctx.accounts.platform.as_ref()
-                            .map(|p| p.to_account_info())
-                            .unwrap_or(ctx.accounts.treasury.to_account_info()),
-                        ctx.accounts.system_program.to_account_info(),
-                    ],
-                )?;
-            }
-
-            // Transfer to ecosystem treasury
-            if ecosystem_amount > 0 {
-                let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                    &ctx.accounts.buyer.key(),
-                    &ctx.accounts.treasury.key(),
-                    ecosystem_amount,
-                );
-                anchor_lang::solana_program::program::invoke(
-                    &transfer_ix,
-                    &[
-                        ctx.accounts.buyer.to_account_info(),
-                        ctx.accounts.treasury.to_account_info(),
-                        ctx.accounts.system_program.to_account_info(),
-                    ],
-                )?;
-            }
-        }
-
-        // Initialize content reward pool if first mint
-        if is_first_content_mint {
-            content_reward_pool.content = content.key();
-            content_reward_pool.reward_per_share = 0;
-            content_reward_pool.total_nfts = 0;
-            content_reward_pool.total_deposited = 0;
-            content_reward_pool.total_claimed = 0;
-            content_reward_pool.created_at = timestamp;
-
-            // Lock content on first mint
-            content.is_locked = true;
-        }
-
-        // Initialize or update buyer's wallet state for this content (for UI display)
-        if buyer_wallet_state.nft_count == 0 {
-            // First NFT for this wallet-content pair
-            buyer_wallet_state.wallet = ctx.accounts.buyer.key();
-            buyer_wallet_state.content = content.key();
-            buyer_wallet_state.nft_count = 0;
-            buyer_wallet_state.reward_debt = 0;
-            buyer_wallet_state.created_at = timestamp;
-            buyer_wallet_state.updated_at = timestamp;
-        }
-
-        // Add NFT to buyer's wallet state (for backwards compatibility / UI)
-        buyer_wallet_state.add_nft(content_reward_pool.reward_per_share, timestamp);
-
-        // Initialize per-NFT reward state - this is the source of truth for rewards
-        // Account is created by Anchor's #[account(init)] constraint
-        let nft_reward_state = &mut ctx.accounts.nft_reward_state;
-        let weight = 1u16; // Default Common weight (no rarity system)
-        nft_reward_state.nft_asset = ctx.accounts.nft_asset.key();
-        nft_reward_state.content = content.key();
-        // IMPORTANT: reward_debt = weight * reward_per_share (weighted system)
-        nft_reward_state.reward_debt = weight as u128 * content_reward_pool.reward_per_share;
-        nft_reward_state.weight = weight;
-        nft_reward_state.created_at = timestamp;
-
-        // Increment content's NFT count in the pool AFTER updating buyer state
-        // This adds weight (1) to total_weight
-        content_reward_pool.increment_nfts();
-
-        // Increment content mint count
-        content.minted_count += 1;
-
-        // Update ecosystem stats
-        let ecosystem_mut = &mut ctx.accounts.ecosystem_config;
-        ecosystem_mut.total_nfts_minted += 1;
-        if price > 0 {
-            let (_, _, ecosystem_amount, _) = EcosystemConfig::calculate_primary_split(price);
-            ecosystem_mut.total_fees_sol += ecosystem_amount;
-        }
-
-        // Create Metaplex Core NFT within the content's collection
-        // NFT ownership is verified at claim time for reward distribution
-        let nft_name = format!("Handcraft #{}", content.minted_count);
-        let nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
-
-        // Derive content_collection PDA bump for signing
-        let content_key = content.key();
-        let (_, content_collection_bump) = Pubkey::find_program_address(
-            &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
-            ctx.program_id,
-        );
-        let signer_seeds: &[&[&[u8]]] = &[&[
-            CONTENT_COLLECTION_SEED,
-            content_key.as_ref(),
-            &[content_collection_bump],
-        ]];
-
-        create_core_nft(
-            &ctx.accounts.mpl_core_program.to_account_info(),
-            &ctx.accounts.nft_asset.to_account_info(),
-            &ctx.accounts.collection_asset.to_account_info(),
-            &ctx.accounts.content_collection.to_account_info(),
-            &ctx.accounts.buyer.to_account_info(),
-            &ctx.accounts.buyer.to_account_info(),
-            &ctx.accounts.system_program.to_account_info(),
-            nft_name,
-            nft_uri,
-            signer_seeds,
-        )?;
-
-        // Emit mint event
-        emit!(NftMintEvent {
-            content: content.key(),
-            buyer: ctx.accounts.buyer.key(),
-            creator: ctx.accounts.creator.key(),
-            edition_number: content.minted_count,
-            price,
-            timestamp,
-            nft_asset: ctx.accounts.nft_asset.key(),
-        });
-
-        Ok(())
-    }
-
-    // ============================================
     // HOLDER REWARD CLAIMS
     // ============================================
 
@@ -981,9 +737,9 @@ pub mod content_registry {
 
             verified_count += 1;
 
-            // Verify NftRewardState PDA
+            // Verify UnifiedNftRewardState PDA
             let (expected_pda, _bump) = Pubkey::find_program_address(
-                &[NFT_REWARD_STATE_SEED, nft_asset_info.key.as_ref()],
+                &[UNIFIED_NFT_REWARD_STATE_SEED, nft_asset_info.key.as_ref()],
                 ctx.program_id,
             );
             require!(
@@ -991,40 +747,35 @@ pub mod content_registry {
                 ContentRegistryError::InvalidNftRewardState
             );
 
-            // Deserialize NftRewardState
+            // Deserialize UnifiedNftRewardState
             let nft_state_data = nft_reward_state_info.try_borrow_data()?;
-            let nft_state: NftRewardState = NftRewardState::try_deserialize(
+            let nft_state: UnifiedNftRewardState = UnifiedNftRewardState::try_deserialize(
                 &mut &nft_state_data[..]
             )?;
 
-            // Verify NftRewardState belongs to this content
+            // Verify this is a content NFT (not bundle) and belongs to this content
             require!(
-                nft_state.content == content_key,
+                !nft_state.is_bundle && nft_state.content_or_bundle == content_key,
                 ContentRegistryError::ContentMismatch
             );
 
             // Calculate pending for this NFT using weight-based formula
-            // For legacy NFTs without weight, default to 100 (Common)
-            let weight = if nft_state.weight == 0 { 100u16 } else { nft_state.weight };
-            let nft_pending = nft_state.pending_reward(current_rps);
+            let weight = nft_state.weight;
+            let nft_pending = nft_state.pending_content_or_bundle_reward(current_rps);
 
             total_pending += nft_pending;
 
             // Drop the borrow before mutating
             drop(nft_state_data);
 
-            // Update NftRewardState's reward_debt
+            // Update UnifiedNftRewardState's content_or_bundle_debt
             {
                 let mut nft_state_data = nft_reward_state_info.try_borrow_mut_data()?;
-                let mut updated_state = NftRewardState::try_deserialize(
+                let mut updated_state = UnifiedNftRewardState::try_deserialize(
                     &mut &nft_state_data[..]
                 )?;
-                // Update reward_debt based on weight
-                updated_state.update_reward_debt(current_rps);
-                // For legacy NFTs, set weight if not set
-                if updated_state.weight == 0 {
-                    updated_state.weight = weight;
-                }
+                // Update content_or_bundle_debt based on weight
+                updated_state.content_or_bundle_debt = (weight as u128) * current_rps;
                 updated_state.try_serialize(&mut &mut nft_state_data[..])?;
             }
         }
@@ -1771,31 +1522,6 @@ pub mod content_registry {
     }
 
     // ============================================
-    // NFT MINTING WITH RARITY (VRF-based)
-    // ============================================
-
-    /// Step 1: Commit to mint with VRF randomness
-    /// Takes payment and commits to a future slot for randomness determination
-    /// User must call reveal_mint after randomness is available (~1-2 slots)
-    pub fn commit_mint(ctx: Context<CommitMint>) -> Result<()> {
-        handle_commit_mint(ctx)
-    }
-
-    /// Step 2: Reveal randomness and complete mint with rarity
-    /// Called after the committed slot has passed and VRF randomness is available
-    /// Determines rarity (Common/Uncommon/Rare/Epic/Legendary) and mints NFT
-    pub fn reveal_mint(ctx: Context<RevealMint>) -> Result<()> {
-        handle_reveal_mint(ctx)
-    }
-
-    /// Cancel an expired pending mint and get refund
-    /// Can only be called after 10 minutes if the oracle failed to provide randomness
-    /// Refunds the escrowed payment and frees the reserved mint slot
-    pub fn cancel_expired_mint(ctx: Context<CancelExpiredMint>) -> Result<()> {
-        handle_cancel_expired_mint(ctx)
-    }
-
-    // ============================================
     // NFT BURN (Testing lifecycle hooks)
     // ============================================
 
@@ -1807,45 +1533,19 @@ pub mod content_registry {
     }
 
     // =========================================================================
-    // MagicBlock VRF Minting - Fast, single-transaction VRF minting
+    // Simple Mint - Unified mint with subscription pool tracking
     // =========================================================================
 
-    /// Request a mint using MagicBlock VRF
-    /// User pays mint price, VRF is requested, callback mints NFT with random rarity
-    /// edition: The edition number for this mint (should be minted_count + pending_count + 1)
-    pub fn magicblock_request_mint(ctx: Context<MagicBlockRequestMint>, edition: u64) -> Result<()> {
-        MagicBlockRequestMint::handler(ctx, edition)
+    /// Simple mint content NFT with slot hash randomness + full subscription pool tracking
+    /// Single transaction - no VRF, immediate mint, tracks all reward pools
+    pub fn simple_mint(ctx: Context<SimpleMint>) -> Result<()> {
+        SimpleMint::handler(ctx)
     }
 
-    /// MagicBlock VRF callback - oracle calls this with randomness to mint NFT
-    /// No user signature required - called automatically by VRF oracle
-    pub fn magicblock_fulfill_mint(ctx: Context<MagicBlockFulfillMint>, randomness: [u8; 32]) -> Result<()> {
-        MagicBlockFulfillMint::handler(ctx, randomness)
-    }
-
-    /// Cancel pending MagicBlock mint request
-    /// Returns escrowed funds to buyer
-    pub fn magicblock_cancel_mint(ctx: Context<MagicBlockCancelMint>, edition: u64) -> Result<()> {
-        MagicBlockCancelMint::handler(ctx, edition)
-    }
-
-    /// Claim NFT with common rarity if VRF oracle doesn't respond
-    /// User can call this after 60 second timeout to get their NFT
-    /// NFT will be minted with Common rarity (no VRF randomness)
-    pub fn magicblock_claim_fallback(ctx: Context<MagicBlockClaimFallback>) -> Result<()> {
-        MagicBlockClaimFallback::handler(ctx)
-    }
-
-    /// Close a fulfilled MagicBlock mint request
-    /// This reclaims rent and allows a new mint request for the same wallet+content
-    pub fn magicblock_close_fulfilled(ctx: Context<MagicBlockCloseFulfilled>) -> Result<()> {
-        MagicBlockCloseFulfilled::handler(ctx)
-    }
-
-    /// Direct mint NFT with slot hash randomness
-    /// Single transaction - no VRF dependency, immediate mint
-    pub fn direct_mint(ctx: Context<DirectMint>) -> Result<()> {
-        DirectMint::handler(ctx)
+    /// Simple mint bundle NFT with slot hash randomness + full subscription pool tracking
+    /// Single transaction - grants access to all bundle content
+    pub fn simple_mint_bundle(ctx: Context<SimpleMintBundle>) -> Result<()> {
+        SimpleMintBundle::handler(ctx)
     }
 
     // =========================================================================
@@ -1872,12 +1572,6 @@ pub mod content_registry {
         is_active: Option<bool>,
     ) -> Result<()> {
         handle_update_bundle_mint_settings(ctx, price, max_supply, creator_royalty_bps, is_active)
-    }
-
-    /// Direct mint bundle NFT with slot hash randomness
-    /// Single transaction - grants access to all content in the bundle
-    pub fn direct_mint_bundle(ctx: Context<DirectMintBundle>) -> Result<()> {
-        handle_direct_mint_bundle(ctx)
     }
 
     /// Configure rental for a bundle (creator only)
@@ -1924,37 +1618,177 @@ pub mod content_registry {
     }
 
     // =========================================================================
-    // MagicBlock VRF Bundle Minting - Fast, VRF-based bundle minting
+    // SUBSCRIPTION SYSTEM - Pool Initialization (Phase 1)
     // =========================================================================
 
-    /// Request a bundle mint using MagicBlock VRF
-    /// User pays mint price, VRF is requested, callback mints NFT with random rarity
-    pub fn magicblock_request_bundle_mint(ctx: Context<MagicBlockRequestBundleMint>, edition: u64) -> Result<()> {
-        MagicBlockRequestBundleMint::handler(ctx, edition)
+    /// Initialize the global singleton pools for ecosystem subscriptions (admin only, one-time)
+    /// Creates: GlobalHolderPool, CreatorDistPool, EcosystemEpochState
+    pub fn initialize_ecosystem_pools(ctx: Context<InitializeEcosystemPools>) -> Result<()> {
+        handle_initialize_ecosystem_pools(ctx)
     }
 
-    /// MagicBlock VRF callback - oracle calls this with randomness to mint bundle NFT
-    /// No user signature required - called automatically by VRF oracle
-    pub fn magicblock_fulfill_bundle_mint(ctx: Context<MagicBlockFulfillBundleMint>, randomness: [u8; 32]) -> Result<()> {
-        MagicBlockFulfillBundleMint::handler(ctx, randomness)
+    /// Initialize the ecosystem subscription configuration (admin only, one-time)
+    pub fn initialize_ecosystem_sub_config(
+        ctx: Context<InitializeEcosystemSubConfig>,
+        price: u64,
+    ) -> Result<()> {
+        handle_initialize_ecosystem_sub_config(ctx, price)
     }
 
-    /// Cancel pending MagicBlock bundle mint request
-    /// Returns escrowed funds to buyer
-    pub fn magicblock_cancel_bundle_mint(ctx: Context<MagicBlockCancelBundleMint>, edition: u64) -> Result<()> {
-        MagicBlockCancelBundleMint::handler(ctx, edition)
+    /// Update ecosystem subscription settings (admin only)
+    pub fn update_ecosystem_sub_config(
+        ctx: Context<UpdateEcosystemSubConfig>,
+        price: Option<u64>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        handle_update_ecosystem_sub_config(ctx, price, is_active)
     }
 
-    /// Claim bundle NFT with random rarity if VRF oracle doesn't respond
-    /// User can call this after timeout to get their NFT with slot hash randomness
-    pub fn magicblock_bundle_claim_fallback(ctx: Context<MagicBlockBundleClaimFallback>) -> Result<()> {
-        MagicBlockBundleClaimFallback::handler(ctx)
+    /// Update epoch duration (admin only, for E2E testing)
+    pub fn update_epoch_duration(
+        ctx: Context<UpdateEpochDuration>,
+        epoch_duration: i64,
+    ) -> Result<()> {
+        handle_update_epoch_duration(ctx, epoch_duration)
     }
 
-    /// Close a fulfilled MagicBlock bundle mint request
-    /// Reclaims rent and allows a new mint request
-    pub fn magicblock_close_fulfilled_bundle(ctx: Context<MagicBlockCloseFulfilledBundle>) -> Result<()> {
-        MagicBlockCloseFulfilledBundle::handler(ctx)
+    // =========================================================================
+    // SUBSCRIPTION SYSTEM - Claim Instructions (Phase 1)
+    // =========================================================================
+
+    /// Claim rewards from ContentRewardPool using UnifiedNftRewardState (immediate pool)
+    pub fn claim_unified_content_rewards(ctx: Context<ClaimUnifiedContentRewards>) -> Result<()> {
+        handle_claim_unified_content_rewards(ctx)
+    }
+
+    /// Claim rewards from BundleRewardPool using UnifiedNftRewardState (immediate pool)
+    pub fn claim_unified_bundle_rewards(ctx: Context<ClaimUnifiedBundleRewards>) -> Result<()> {
+        handle_claim_unified_bundle_rewards(ctx)
+    }
+
+    /// Claim rewards from CreatorPatronPool (lazy pool, triggers epoch distribution)
+    pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>) -> Result<()> {
+        handle_claim_patron_rewards(ctx)
+    }
+
+    /// Claim rewards from GlobalHolderPool (lazy pool, triggers ecosystem distribution)
+    pub fn claim_global_holder_rewards(ctx: Context<ClaimGlobalHolderRewards>) -> Result<()> {
+        handle_claim_global_holder_rewards(ctx)
+    }
+
+    /// Claim creator's share from CreatorDistPool (lazy pool, triggers ecosystem distribution)
+    pub fn claim_creator_ecosystem_payout(ctx: Context<ClaimCreatorEcosystemPayout>) -> Result<()> {
+        handle_claim_creator_ecosystem_payout(ctx)
+    }
+
+    // =========================================================================
+    // SUBSCRIPTION SYSTEM - NFT Registration (Phase 1)
+    // =========================================================================
+
+    /// Register a newly minted content NFT in all subscription pools
+    /// Call after mint to enable subscription reward tracking
+    /// Creates UnifiedNftRewardState with virtual RPS debts
+    pub fn register_nft_in_subscription_pools(
+        ctx: Context<RegisterNftInSubscriptionPools>,
+        weight: u16,
+        is_bundle: bool,
+    ) -> Result<()> {
+        handle_register_nft_in_subscription_pools(ctx, weight, is_bundle)
+    }
+
+    /// Register a newly minted bundle NFT in all subscription pools
+    /// Call after mint to enable subscription reward tracking
+    pub fn register_bundle_nft_in_subscription_pools(
+        ctx: Context<RegisterBundleNftInSubscriptionPools>,
+        weight: u16,
+    ) -> Result<()> {
+        handle_register_bundle_nft_in_subscription_pools(ctx, weight)
+    }
+
+    // =========================================================================
+    // SUBSCRIPTION SYSTEM - Burn with Pool Reconciliation (Phase 1)
+    // =========================================================================
+
+    /// Burn a content NFT with full subscription pool reconciliation
+    /// - Auto-claims pending rewards from all pools
+    /// - Removes weight from ContentRewardPool, CreatorPatronPool, GlobalHolderPool, CreatorDistPool
+    /// - Reduces CreatorWeight.total_weight but keeps debt (creator penalty)
+    /// - Closes UnifiedNftRewardState and burns NFT
+    pub fn burn_nft_with_subscription(ctx: Context<BurnNftWithSubscription>) -> Result<()> {
+        handle_burn_nft_with_subscription(ctx)
+    }
+
+    /// Burn a bundle NFT with full subscription pool reconciliation
+    pub fn burn_bundle_nft_with_subscription(ctx: Context<BurnBundleNftWithSubscription>) -> Result<()> {
+        handle_burn_bundle_nft_with_subscription(ctx)
+    }
+
+    // =========================================================================
+    // PATRON SUBSCRIPTION SYSTEM (Phase 2)
+    // =========================================================================
+
+    /// Initialize patron configuration for a creator
+    /// Sets membership (support-only) and subscription (support + access) prices
+    pub fn init_patron_config(
+        ctx: Context<InitPatronConfig>,
+        membership_price: u64,
+        subscription_price: u64,
+    ) -> Result<()> {
+        handle_init_patron_config(ctx, membership_price, subscription_price)
+    }
+
+    /// Update patron configuration (creator only)
+    pub fn update_patron_config(
+        ctx: Context<UpdatePatronConfig>,
+        membership_price: Option<u64>,
+        subscription_price: Option<u64>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        handle_update_patron_config(ctx, membership_price, subscription_price, is_active)
+    }
+
+    /// Subscribe to a creator (one-time payment for 30 days)
+    /// Distribution: 80% creator, 5% platform, 3% ecosystem, 12% holder pool
+    pub fn subscribe_patron(
+        ctx: Context<SubscribePatron>,
+        tier: PatronTier,
+    ) -> Result<()> {
+        handle_subscribe_patron(ctx, tier)
+    }
+
+    /// Cancel patron subscription
+    pub fn cancel_patron_subscription(ctx: Context<CancelPatronSubscription>) -> Result<()> {
+        handle_cancel_patron_subscription(ctx)
+    }
+
+    /// Renew patron subscription (another 30 days)
+    pub fn renew_patron_subscription(ctx: Context<RenewPatronSubscription>) -> Result<()> {
+        handle_renew_patron_subscription(ctx)
+    }
+
+    // =========================================================================
+    // ECOSYSTEM SUBSCRIPTION SYSTEM (Phase 3)
+    // =========================================================================
+
+    /// Subscribe to ecosystem (one-time payment for 30 days)
+    /// Distribution: 80% creator pool, 12% holder pool, 5% platform, 3% ecosystem
+    pub fn subscribe_ecosystem(ctx: Context<SubscribeEcosystem>) -> Result<()> {
+        handle_subscribe_ecosystem(ctx)
+    }
+
+    /// Cancel ecosystem subscription
+    pub fn cancel_ecosystem_subscription(ctx: Context<CancelEcosystemSubscription>) -> Result<()> {
+        handle_cancel_ecosystem_subscription(ctx)
+    }
+
+    /// Renew ecosystem subscription (another 30 days)
+    pub fn renew_ecosystem_subscription(ctx: Context<RenewEcosystemSubscription>) -> Result<()> {
+        handle_renew_ecosystem_subscription(ctx)
+    }
+
+    /// Check if user has valid subscription access for content
+    pub fn check_subscription_access(ctx: Context<CheckSubscriptionAccess>) -> Result<()> {
+        handle_check_subscription_access(ctx)
     }
 }
 

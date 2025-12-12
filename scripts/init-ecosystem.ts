@@ -1,5 +1,5 @@
 /**
- * Initialize the ecosystem config on devnet
+ * Initialize the ecosystem config and subscription pools on devnet
  * Run with: npx tsx scripts/init-ecosystem.ts
  */
 
@@ -7,10 +7,20 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import * as fs from "fs";
 import * as path from "path";
-import { PROGRAM_ID, getEcosystemConfigPda } from "@handcraft/sdk";
+import {
+  PROGRAM_ID,
+  getEcosystemConfigPda,
+  getGlobalHolderPoolPda,
+  getCreatorDistPoolPda,
+  getEcosystemEpochStatePda,
+  getEcosystemSubConfigPda,
+} from "@handcraft/sdk";
 
 // USDC devnet mint (from Circle)
 const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+
+// Default ecosystem subscription price: 0.1 SOL per month
+const DEFAULT_ECOSYSTEM_SUB_PRICE = 100_000_000; // 0.1 SOL in lamports
 
 async function main() {
   // Load keypair from default Solana config
@@ -38,50 +48,135 @@ async function main() {
   const idl = JSON.parse(fs.readFileSync(idlPath, "utf-8"));
 
   // Create provider and program
-  // In Anchor 0.32.1, the new IDL format includes the address, so we don't pass PROGRAM_ID
   const wallet = new Wallet(keypair);
   const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed" });
   const program = new Program(idl, provider);
 
-  // Get ecosystem config PDA from SDK
+  // =========================================================================
+  // STEP 1: Initialize Ecosystem Config
+  // =========================================================================
+
   const [ecosystemConfigPda] = getEcosystemConfigPda();
+  console.log("\n--- Ecosystem Config ---");
+  console.log("PDA:", ecosystemConfigPda.toBase58());
 
-  console.log("Ecosystem Config PDA:", ecosystemConfigPda.toBase58());
+  const existingEcosystem = await connection.getAccountInfo(ecosystemConfigPda);
+  if (existingEcosystem) {
+    console.log("✓ Ecosystem config already initialized");
+  } else {
+    console.log("Initializing ecosystem config...");
+    console.log("  Admin:", keypair.publicKey.toBase58());
+    console.log("  Treasury:", keypair.publicKey.toBase58());
+    console.log("  USDC Mint:", USDC_DEVNET_MINT.toBase58());
 
-  // Check if already initialized
-  const existingAccount = await connection.getAccountInfo(ecosystemConfigPda);
-  if (existingAccount) {
-    console.log("Ecosystem config already initialized!");
-    return;
+    try {
+      const tx = await program.methods
+        .initializeEcosystem(USDC_DEVNET_MINT)
+        .accounts({
+          ecosystemConfig: ecosystemConfigPda,
+          treasury: keypair.publicKey,
+          admin: keypair.publicKey,
+          systemProgram: PublicKey.default,
+        })
+        .signers([keypair])
+        .rpc();
+
+      console.log("✓ Ecosystem config initialized. Tx:", tx);
+    } catch (error) {
+      console.error("Error initializing ecosystem config:", error);
+      return;
+    }
   }
 
-  console.log("Initializing ecosystem config...");
-  console.log("  Admin:", keypair.publicKey.toBase58());
-  console.log("  Treasury:", keypair.publicKey.toBase58());
-  console.log("  USDC Mint:", USDC_DEVNET_MINT.toBase58());
+  // =========================================================================
+  // STEP 2: Initialize Subscription Pools (Phase 1)
+  // =========================================================================
 
-  try {
-    // In Anchor 0.32.1, use camelCase for methods
-    const tx = await program.methods
-      .initializeEcosystem(USDC_DEVNET_MINT)
-      .accounts({
-        ecosystemConfig: ecosystemConfigPda,
-        treasury: keypair.publicKey, // Using admin as treasury for now
-        admin: keypair.publicKey,
-        systemProgram: PublicKey.default,
-      })
-      .signers([keypair])
-      .rpc();
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [creatorDistPoolPda] = getCreatorDistPoolPda();
+  const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
 
-    console.log("Transaction signature:", tx);
-    console.log("Ecosystem initialized successfully!");
+  console.log("\n--- Subscription Pools ---");
+  console.log("GlobalHolderPool PDA:", globalHolderPoolPda.toBase58());
+  console.log("CreatorDistPool PDA:", creatorDistPoolPda.toBase58());
+  console.log("EcosystemEpochState PDA:", ecosystemEpochStatePda.toBase58());
 
-    // Verify
-    const account = await connection.getAccountInfo(ecosystemConfigPda);
-    console.log("Ecosystem config data length:", account?.data.length);
-  } catch (error) {
-    console.error("Error:", error);
+  const existingHolderPool = await connection.getAccountInfo(globalHolderPoolPda);
+  if (existingHolderPool) {
+    console.log("✓ Subscription pools already initialized");
+  } else {
+    console.log("Initializing subscription pools...");
+
+    try {
+      const tx = await program.methods
+        .initializeEcosystemPools()
+        .accounts({
+          globalHolderPool: globalHolderPoolPda,
+          creatorDistPool: creatorDistPoolPda,
+          ecosystemEpochState: ecosystemEpochStatePda,
+          ecosystemConfig: ecosystemConfigPda,
+          admin: keypair.publicKey,
+          systemProgram: PublicKey.default,
+        })
+        .signers([keypair])
+        .rpc();
+
+      console.log("✓ Subscription pools initialized. Tx:", tx);
+    } catch (error) {
+      console.error("Error initializing subscription pools:", error);
+      // Don't return - try to continue with sub config
+    }
   }
+
+  // =========================================================================
+  // STEP 3: Initialize Ecosystem Subscription Config
+  // =========================================================================
+
+  const [ecosystemSubConfigPda] = getEcosystemSubConfigPda();
+  console.log("\n--- Ecosystem Subscription Config ---");
+  console.log("EcosystemSubConfig PDA:", ecosystemSubConfigPda.toBase58());
+
+  const existingSubConfig = await connection.getAccountInfo(ecosystemSubConfigPda);
+  if (existingSubConfig) {
+    console.log("✓ Ecosystem subscription config already initialized");
+  } else {
+    console.log("Initializing ecosystem subscription config...");
+    console.log("  Price:", DEFAULT_ECOSYSTEM_SUB_PRICE / 1e9, "SOL/month");
+
+    try {
+      const tx = await program.methods
+        .initializeEcosystemSubConfig(new (require("@coral-xyz/anchor").BN)(DEFAULT_ECOSYSTEM_SUB_PRICE))
+        .accounts({
+          ecosystemSubConfig: ecosystemSubConfigPda,
+          ecosystemConfig: ecosystemConfigPda,
+          admin: keypair.publicKey,
+          systemProgram: PublicKey.default,
+        })
+        .signers([keypair])
+        .rpc();
+
+      console.log("✓ Ecosystem subscription config initialized. Tx:", tx);
+    } catch (error) {
+      console.error("Error initializing ecosystem subscription config:", error);
+    }
+  }
+
+  // =========================================================================
+  // Summary
+  // =========================================================================
+
+  console.log("\n========================================");
+  console.log("           INITIALIZATION COMPLETE");
+  console.log("========================================");
+  console.log("");
+  console.log("Ecosystem Config:", ecosystemConfigPda.toBase58());
+  console.log("GlobalHolderPool:", globalHolderPoolPda.toBase58());
+  console.log("CreatorDistPool:", creatorDistPoolPda.toBase58());
+  console.log("EcosystemEpochState:", ecosystemEpochStatePda.toBase58());
+  console.log("EcosystemSubConfig:", ecosystemSubConfigPda.toBase58());
+  console.log("");
+  console.log("Note: CreatorPatronPool and CreatorWeight are");
+  console.log("      initialized lazily on first mint per creator.");
 }
 
 main().catch(console.error);

@@ -31,15 +31,16 @@ pub struct BurnNft<'info> {
     )]
     pub content_reward_pool: Account<'info, ContentRewardPool>,
 
-    /// Per-NFT reward state - will be closed and rent refunded to owner
+    /// Unified NFT reward state - will be closed and rent refunded to owner
     #[account(
         mut,
-        seeds = [NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
+        seeds = [UNIFIED_NFT_REWARD_STATE_SEED, nft_asset.key().as_ref()],
         bump,
-        constraint = nft_reward_state.content == content.key() @ ContentRegistryError::ContentMismatch,
+        constraint = nft_reward_state.content_or_bundle == content.key() @ ContentRegistryError::ContentMismatch,
+        constraint = !nft_reward_state.is_bundle @ ContentRegistryError::ContentMismatch,
         close = owner  // Refund rent to owner when closing
     )]
-    pub nft_reward_state: Account<'info, NftRewardState>,
+    pub nft_reward_state: Account<'info, UnifiedNftRewardState>,
 
     /// The NFT asset to burn (Metaplex Core asset)
     /// CHECK: Verified by Metaplex Core program
@@ -72,11 +73,11 @@ pub fn handle_burn_nft(ctx: Context<BurnNft>) -> Result<()> {
     let weight = if nft_reward_state.weight == 0 { 100u16 } else { nft_reward_state.weight };
 
     // Auto-claim pending rewards before burning
-    // Pending = (weight * reward_per_share - reward_debt) / PRECISION
+    // Pending = (weight * reward_per_share - content_or_bundle_debt) / PRECISION
     let current_rps = content_reward_pool.reward_per_share;
     let weighted_rps = (weight as u128) * current_rps;
-    let pending = if weighted_rps > nft_reward_state.reward_debt {
-        ((weighted_rps - nft_reward_state.reward_debt) / PRECISION) as u64
+    let pending = if weighted_rps > nft_reward_state.content_or_bundle_debt {
+        ((weighted_rps - nft_reward_state.content_or_bundle_debt) / PRECISION) as u64
     } else {
         0
     };

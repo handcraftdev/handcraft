@@ -22,7 +22,7 @@ pub const HOLDER_REWARD_SECONDARY_BPS: u16 = 800;     // 8% - distributed to exi
 pub struct EcosystemConfig {
     /// Admin who can update ecosystem settings
     pub admin: Pubkey,
-    /// Treasury wallet to receive ecosystem fees
+    /// Ecosystem treasury wallet to receive 3% ecosystem fees
     pub treasury: Pubkey,
     /// USDC mint address (for USDC payments)
     pub usdc_mint: Pubkey,

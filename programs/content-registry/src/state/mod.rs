@@ -7,6 +7,7 @@ pub mod collection;
 pub mod rent;
 pub mod bundle;
 pub mod rarity;
+pub mod subscription;
 
 pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
@@ -24,9 +25,6 @@ pub use ecosystem_config::{
 pub use reward_pool::{
     ContentRewardPool, WalletContentState,
     CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED, PRECISION,
-    // Legacy exports for migration
-    GlobalRewardPool, NftRewardState,
-    GLOBAL_REWARD_POOL_SEED, NFT_REWARD_STATE_SEED,
 };
 pub use collection::{ContentCollection, CONTENT_COLLECTION_SEED};
 pub use rent::{
@@ -40,14 +38,34 @@ pub use bundle::{
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
     // Bundle mint/rent types
     BundleMintConfig, BundleRentConfig, BundleCollection,
-    BundleRewardPool, BundleWalletState, BundleNftRewardState,
-    BundleNftRarity, BundleRentEntry,
+    BundleRewardPool, BundleWalletState, BundleRentEntry,
     // Bundle mint/rent seeds
     BUNDLE_MINT_CONFIG_SEED, BUNDLE_RENT_CONFIG_SEED, BUNDLE_COLLECTION_SEED,
-    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED, BUNDLE_NFT_REWARD_STATE_SEED,
-    BUNDLE_NFT_RARITY_SEED, BUNDLE_RENT_ENTRY_SEED,
+    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED, BUNDLE_RENT_ENTRY_SEED,
 };
-pub use rarity::{
-    Rarity, NftRarity, ContentWeightedPool,
-    NFT_RARITY_SEED, WEIGHT_PRECISION,
+pub use rarity::Rarity;
+// Subscription system types (Phase 1)
+pub use subscription::{
+    // Unified NFT reward tracking
+    UnifiedNftRewardState, UNIFIED_NFT_REWARD_STATE_SEED,
+    // Creator patron pool (per creator)
+    CreatorPatronPool, CREATOR_PATRON_POOL_SEED, CREATOR_PATRON_TREASURY_SEED,
+    // Global pools (singletons)
+    GlobalHolderPool, GLOBAL_HOLDER_POOL_SEED,
+    CreatorDistPool, CREATOR_DIST_POOL_SEED,
+    EcosystemEpochState, ECOSYSTEM_EPOCH_STATE_SEED,
+    // Creator weight (per creator)
+    CreatorWeight, CREATOR_WEIGHT_SEED,
+    // Streaming treasury
+    ECOSYSTEM_STREAMING_TREASURY_SEED,
+    // Patron config and subscription
+    CreatorPatronConfig, CREATOR_PATRON_CONFIG_SEED,
+    CreatorPatronSubscription, CREATOR_PATRON_SUB_SEED, PatronTier,
+    // Ecosystem subscription
+    EcosystemSubConfig, ECOSYSTEM_SUB_CONFIG_SEED,
+    EcosystemSubscription, ECOSYSTEM_SUB_SEED,
+    // Constants
+    DEFAULT_EPOCH_DURATION, TEST_EPOCH_DURATION,
+    // Helper functions
+    calculate_primary_split, calculate_ecosystem_split,
 };
