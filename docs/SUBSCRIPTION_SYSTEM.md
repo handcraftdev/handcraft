@@ -6,7 +6,20 @@ This document describes the subscription system that extends Handcraft's existin
 1. **Creator Patronage** - Users support creators directly, gain access to all creator content
 2. **Ecosystem Subscription** - Users pay platform, gain access to all content platform-wide
 
-Both systems integrate with the existing reward distribution pattern: **immediate push distribution + pull-based claims**.
+Both systems:
+- Use the same fee structure as NFT mints (Creator 80%, Platform 5%, Ecosystem 3%, Holders 12%)
+- Integrate with the existing reward distribution pattern: **immediate push distribution + pull-based claims**
+- Use **rarity-weighted** calculations for all distributions
+
+---
+
+## Design Principles
+
+1. **No Public Content** - All content requires access (NFT, patron, ecosystem sub, or rental)
+2. **Unified Fee Structure** - All revenue sources use the same 80/5/3/12 split
+3. **Weight-Based Distribution** - All calculations use rarity weights, not counts
+4. **Burn Reconciliation** - NFT burns reduce weight from all relevant pools
+5. **Bundle → Content Rewards** - Bundle mints distribute to both bundle AND content NFT holders
 
 ---
 
@@ -16,19 +29,19 @@ Both systems integrate with the existing reward distribution pattern: **immediat
 
 | Type | Access | Rewards | Duration |
 |------|--------|---------|----------|
-| **Content NFT** | Specific content | 12% holder rewards | Permanent |
-| **Bundle NFT** | All bundle contents | 12% holder rewards | Permanent |
-| **Content Rental** | Specific content | None | 6h / 1d / 7d |
-| **Bundle Rental** | All bundle contents | None | 6h / 1d / 7d |
+| **Content NFT** | Specific content | 12% holder rewards (weighted) | Permanent |
+| **Bundle NFT** | All bundle contents | 12% holder rewards (weighted) | Permanent |
+| **Content Rental** | Specific content | 12% holder rewards | 6h / 1d / 7d |
+| **Bundle Rental** | All bundle contents | 12% holder rewards | 6h / 1d / 7d |
 
-### Existing Fee Structure
+### Unified Fee Structure (All Sources)
 
-**Primary Sale (Mint):**
+**Primary Sale / Subscription Payment:**
 ```
-Creator:     80%  → creator wallet
-Platform:     5%  → treasury
+Creator:     80%  → creator wallet (or distributed by weight for ecosystem sub)
+Platform:     5%  → platform treasury
 Ecosystem:    3%  → ecosystem treasury
-Holders:     12%  → ContentRewardPool / BundleRewardPool
+Holders:     12%  → Reward pools (weighted by rarity)
 ─────────────────
 Total:      100%
 ```
@@ -39,51 +52,51 @@ Seller:      ~88% → seller wallet (remaining after fees)
 Creator:     2-10% → creator wallet (configurable royalty)
 Platform:     1%  → treasury
 Ecosystem:    1%  → ecosystem treasury
-Holders:      8%  → ContentRewardPool / BundleRewardPool
+Holders:      8%  → Reward pools (weighted by rarity)
 ```
 
-### Existing Reward Pattern
+### Rarity Weights
 
-**Push Distribution (Immediate):**
-```rust
-// On every mint/sale, rewards are immediately distributed to the pool
-reward_pool.add_rewards(holder_reward_amount);
-// This updates: reward_per_share += (amount * PRECISION) / total_weight
-```
+| Rarity | Weight | Probability |
+|--------|--------|-------------|
+| Common | 1 | 55% |
+| Uncommon | 5 | 27% |
+| Rare | 20 | 13% |
+| Epic | 60 | 4% |
+| Legendary | 120 | 1% |
 
-**Pull-Based Claim:**
+**All pool calculations use weight, not count:**
 ```rust
-// Users claim their accumulated rewards anytime
+reward_per_share += (amount * PRECISION) / total_weight
 pending = (nft_weight * reward_per_share - reward_debt) / PRECISION
-// Transfer pending to user, update reward_debt
 ```
 
 ---
 
-## New Subscription System
-
-### Access Hierarchy
+## Access Hierarchy
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     ACCESS HIERARCHY                             │
+│                     (No Public Content)                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Level 3: NFT Holder        → Owns specific content/bundle NFT  │
 │           ├── Permanent access                                   │
-│           └── Earns holder rewards (12% primary, 8% secondary)  │
+│           └── Earns holder rewards (12% weighted)               │
 │                                                                  │
 │  Level 2: Creator Patron    → Active patron of creator          │
 │           ├── Access to ALL creator's content (visibility ≤ 2)  │
-│           ├── Creator-defined perks                              │
-│           └── NO holder rewards (creator perks only)            │
+│           └── Earns holder rewards (12% weighted to all NFTs)   │
 │                                                                  │
 │  Level 1: Ecosystem Sub     → Active ecosystem subscriber       │
 │           ├── Access to ALL platform content (visibility ≤ 1)   │
-│           └── NO holder rewards (access only)                   │
+│           └── Earns holder rewards (12% weighted to all NFTs)   │
 │                                                                  │
-│  Level 0: Public            → Everyone                          │
-│           └── Preview only (encrypted content gated)            │
+│  Level 0: Renter            → Has active rental                 │
+│           └── Temporary access, no rewards                      │
+│                                                                  │
+│  No Access: Preview only (encrypted content gated)              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -94,10 +107,11 @@ Creators set visibility per content:
 
 | Level | Name | Who Can Access |
 |-------|------|----------------|
-| 0 | Public | Everyone (free content) |
 | 1 | Ecosystem | Ecosystem subscribers + Patrons + NFT holders |
 | 2 | Patron | Creator's patrons + NFT holders only |
 | 3 | NFT Only | NFT holders only |
+
+**Note:** No public (free) content. All content is gated.
 
 ---
 
@@ -110,17 +124,22 @@ Users support specific creators via token streaming. In exchange:
 - Creator-defined perks (early access, exclusive content, badges)
 - Stream can be cancelled anytime with remaining balance refunded
 
-### Fee Structure
+### Fee Structure (Same as NFT Mint)
 
 ```
-Patron Payment (Streamed):
-Creator:    100%  → streamed directly to creator wallet
+Patron Payment Distribution:
+Creator:     80%  → creator wallet
+Platform:     5%  → platform treasury
+Ecosystem:    3%  → ecosystem treasury
+Holders:     12%  → All creator's content NFT pools (weighted)
 ─────────────────
 Total:      100%
-
-Note: No holder rewards from patronage.
-Creators define custom perks for patrons instead.
 ```
+
+**Holder reward distribution for patronage:**
+- 12% is distributed across ALL ContentRewardPools for creator's content
+- Distribution is proportional to each content's total_weight
+- This rewards all NFT holders of creator's content
 
 ### Accounts
 
@@ -130,18 +149,19 @@ Creators define custom perks for patrons instead.
 pub struct CreatorPatronConfig {
     pub creator: Pubkey,
     pub is_active: bool,
-    pub tiers: [PatronTier; 3],          // Bronze, Silver, Gold
-    pub default_content_visibility: u8,   // Default for new content
+    pub tiers: [PatronTier; 3],           // Bronze, Silver, Gold
+    pub default_content_visibility: u8,    // Default for new content (1, 2, or 3)
     pub total_patrons: u64,
-    pub total_earned: u64,                // All-time earnings
+    pub total_weight: u64,                 // Sum of all creator's content weights
+    pub total_earned: u64,                 // All-time creator earnings
     pub created_at: i64,
     pub updated_at: i64,
 }
 
 pub struct PatronTier {
-    pub name: String,                     // "Bronze", "Silver", "Gold"
-    pub price_per_day: u64,               // Lamports per day
-    pub perks_cid: String,                // IPFS metadata describing perks
+    pub name: String,                      // "Bronze", "Silver", "Gold"
+    pub price_per_day: u64,                // Lamports per day
+    pub perks_cid: String,                 // IPFS metadata describing perks
     pub is_active: bool,
 }
 
@@ -150,9 +170,9 @@ pub struct PatronTier {
 pub struct CreatorPatronSubscription {
     pub subscriber: Pubkey,
     pub creator: Pubkey,
-    pub tier: u8,                         // 0=Bronze, 1=Silver, 2=Gold
-    pub stream_account: Pubkey,           // Streamflow stream address
-    pub deposited_amount: u64,            // Total deposited
+    pub tier: u8,                          // 0=Bronze, 1=Silver, 2=Gold
+    pub stream_account: Pubkey,            // Streamflow stream address
+    pub deposited_amount: u64,             // Total deposited
     pub started_at: i64,
     pub is_active: bool,
 }
@@ -168,47 +188,60 @@ close_patron_config()
 
 // User subscription
 subscribe_patron(creator: Pubkey, tier: u8, deposit_amount: u64)
-  → Creates Streamflow stream: subscriber → creator
+  → Creates Streamflow stream: subscriber → treasury PDA
   → Creates CreatorPatronSubscription PDA
   → Stream rate = tier.price_per_day
 
 topup_patron(creator: Pubkey, amount: u64)
   → Tops up existing Streamflow stream
 
-upgrade_patron_tier(creator: Pubkey, new_tier: u8, additional_deposit: u64)
-  → Cancels old stream, creates new stream at higher rate
-
 cancel_patron(creator: Pubkey)
   → Cancels Streamflow stream (refunds remaining balance)
   → Closes CreatorPatronSubscription PDA
 
-// Creator withdrawal (from Streamflow)
-withdraw_patron_earnings()
-  → Creator withdraws accumulated stream balance
+// Distribution (called when treasury receives streamed funds)
+distribute_patron_revenue(creator: Pubkey)
+  → Reads treasury balance for this creator
+  → Splits: 80% creator, 5% platform, 3% ecosystem, 12% holders
+  → Distributes 12% to all creator's ContentRewardPools by weight
 ```
 
-### Reward Flow
+### Patron Reward Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                  PATRON REWARD FLOW                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  User subscribes (deposits 10 SOL for ~1 month):                │
-│                                                                  │
-│  ┌──────────┐    Stream (0.33 SOL/day)    ┌──────────┐         │
-│  │   User   │ ─────────────────────────►  │ Creator  │         │
-│  │  Wallet  │                             │  Wallet  │         │
-│  └──────────┘                             └──────────┘         │
-│       │                                                         │
-│       │ Cancel anytime                                          │
-│       ▼                                                         │
-│  Remaining balance refunded to user                             │
-│                                                                  │
-│  NO holder rewards - this is direct creator support             │
-│  Creator defines custom perks in tier metadata                  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     PATRON REWARD FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  User subscribes (streams 0.33 SOL/day to treasury):                    │
+│                                                                          │
+│  ┌──────────┐    Stream     ┌──────────┐    distribute_patron_revenue() │
+│  │   User   │ ────────────► │ Treasury │ ─────────────────────────────► │
+│  │  Wallet  │               │   PDA    │                                │
+│  └──────────┘               └──────────┘                                │
+│                                    │                                     │
+│                                    ▼                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                      FEE DISTRIBUTION                             │   │
+│  ├──────────────────────────────────────────────────────────────────┤   │
+│  │                                                                   │   │
+│  │  Creator (80%)  ──────────────────────────►  Creator Wallet      │   │
+│  │  Platform (5%)  ──────────────────────────►  Platform Treasury   │   │
+│  │  Ecosystem (3%) ──────────────────────────►  Ecosystem Treasury  │   │
+│  │  Holders (12%)  ──┬───────────────────────►  Content Pool A      │   │
+│  │                   │  (by weight ratio)       (weight: 100)       │   │
+│  │                   ├───────────────────────►  Content Pool B      │   │
+│  │                   │                          (weight: 500)       │   │
+│  │                   └───────────────────────►  Content Pool C      │   │
+│  │                                              (weight: 200)       │   │
+│  │                                                                   │   │
+│  │  Pool A gets: 12% * (100 / 800) = 1.5%                           │   │
+│  │  Pool B gets: 12% * (500 / 800) = 7.5%                           │   │
+│  │  Pool C gets: 12% * (200 / 800) = 3.0%                           │   │
+│  │                                                                   │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -217,28 +250,35 @@ withdraw_patron_earnings()
 
 ### Concept
 
-Users pay platform for access to ALL content (respecting visibility settings). Revenue is distributed to creators based on their mint share (total NFTs minted for their content).
+Users pay platform for access to ALL content (respecting visibility settings). Revenue follows the same fee structure, with the creator portion distributed by mint weight.
 
-### Fee Structure
+### Fee Structure (Same as NFT Mint)
 
 ```
-Ecosystem Payment (Streamed):
-Treasury:   100%  → streamed to ecosystem treasury
+Ecosystem Payment Distribution:
+Creators:    80%  → distributed by total_weight across all creators
+Platform:     5%  → platform treasury
+Ecosystem:    3%  → ecosystem treasury
+Holders:     12%  → GlobalHolderRewardPool (all NFT holders by weight)
 ─────────────────
 Total:      100%
-
-Distribution from Treasury (periodic):
-Creators:   100%  → distributed by mint share
 ```
 
-### Mint Share Formula
+### Weight-Based Distribution
 
+**For Holders (12%):**
 ```
-creator_mint_share = creator_total_mints / platform_total_mints
-creator_payout = distributable_pool * creator_mint_share
+GlobalHolderRewardPool.reward_per_share += (holder_amount * PRECISION) / global_total_weight
 ```
+- `global_total_weight` = sum of all NFT weights platform-wide
+- Every NFT holder can claim based on their NFT's weight
 
-Where `creator_total_mints` = all content NFTs + bundle NFTs minted for that creator.
+**For Creators (80%):**
+```
+CreatorDistPool.reward_per_share += (creator_amount * PRECISION) / global_total_weight
+```
+- Each creator claims based on their `total_content_weight`
+- `total_content_weight` = sum of weights of all NFTs minted for their content
 
 ### Accounts
 
@@ -246,12 +286,12 @@ Where `creator_total_mints` = all content NFTs + bundle NFTs minted for that cre
 /// Global ecosystem subscription configuration
 /// PDA: ["ecosystem_sub_config"]
 pub struct EcosystemSubConfig {
-    pub authority: Pubkey,                // Platform admin
-    pub price_per_day: u64,               // Lamports per day
-    pub treasury: Pubkey,                 // Stream destination
+    pub authority: Pubkey,                 // Platform admin
+    pub price_per_day: u64,                // Lamports per day
+    pub treasury: Pubkey,                  // Stream destination
     pub total_subscribers: u64,
-    pub total_collected: u64,             // All-time revenue
-    pub total_distributed: u64,           // All-time distributed
+    pub total_collected: u64,              // All-time revenue
+    pub total_distributed: u64,            // All-time distributed
     pub last_distribution_at: i64,
     pub is_active: bool,
 }
@@ -260,30 +300,47 @@ pub struct EcosystemSubConfig {
 /// PDA: ["ecosystem_sub", subscriber]
 pub struct EcosystemSubscription {
     pub subscriber: Pubkey,
-    pub stream_account: Pubkey,           // Streamflow stream address
+    pub stream_account: Pubkey,            // Streamflow stream address
     pub deposited_amount: u64,
     pub started_at: i64,
     pub is_active: bool,
 }
 
-/// Creator's share tracking for ecosystem distribution
-/// PDA: ["creator_mint_share", creator]
-pub struct CreatorMintShare {
+/// Global holder reward pool for ecosystem subscriptions
+/// PDA: ["global_holder_pool"]
+pub struct GlobalHolderRewardPool {
+    pub reward_per_share: u128,            // Per weight unit (scaled by PRECISION)
+    pub total_weight: u64,                 // Sum of all NFT weights platform-wide
+    pub total_deposited: u64,
+    pub total_claimed: u64,
+}
+
+/// Creator distribution pool for ecosystem subscriptions
+/// PDA: ["creator_dist_pool"]
+pub struct CreatorDistributionPool {
+    pub reward_per_share: u128,            // Per weight unit (scaled by PRECISION)
+    pub total_weight: u64,                 // Sum of all minted NFT weights platform-wide
+    pub total_deposited: u64,
+    pub total_claimed: u64,
+}
+
+/// Creator's weight tracking for ecosystem distribution
+/// PDA: ["creator_weight", creator]
+pub struct CreatorWeight {
     pub creator: Pubkey,
-    pub total_mints: u64,                 // Content + Bundle NFTs minted
-    pub reward_debt: u128,                // For pull-based claiming
-    pub total_claimed: u64,               // All-time claimed
+    pub total_weight: u64,                 // Sum of all NFT weights for this creator
+    pub reward_debt: u128,                 // For pull-based claiming
+    pub total_claimed: u64,
     pub last_claim_at: i64,
 }
 
-/// Ecosystem distribution pool (follows existing pattern)
-/// PDA: ["ecosystem_distribution_pool"]
-pub struct EcosystemDistributionPool {
-    pub reward_per_share: u128,           // Per mint share (scaled by PRECISION)
-    pub total_mints: u64,                 // Platform-wide total
-    pub total_deposited: u64,
-    pub total_claimed: u64,
-    pub last_distribution_at: i64,
+/// Per-NFT state for global holder rewards
+/// PDA: ["global_nft_state", nft_asset]
+pub struct GlobalNftRewardState {
+    pub nft_asset: Pubkey,
+    pub weight: u16,
+    pub reward_debt: u128,
+    pub created_at: i64,
 }
 ```
 
@@ -300,201 +357,185 @@ subscribe_ecosystem(deposit_amount: u64)
   → Creates EcosystemSubscription PDA
 
 topup_ecosystem(amount: u64)
-  → Tops up existing stream
-
 cancel_ecosystem()
-  → Cancels stream (refunds remaining)
-  → Closes subscription PDA
 
 // Distribution (permissionless - anyone can call)
 distribute_ecosystem_revenue()
   → Reads treasury balance (new funds since last distribution)
-  → Updates reward_per_share: += (new_funds * PRECISION) / total_mints
-  → Updates last_distribution_at
+  → Splits: 80% creators, 5% platform, 3% ecosystem, 12% holders
+  → Updates GlobalHolderRewardPool.reward_per_share
+  → Updates CreatorDistributionPool.reward_per_share
 
-// Creator claim (pull-based)
-claim_ecosystem_payout()
-  → Calculates pending: (creator_mints * reward_per_share - reward_debt) / PRECISION
-  → Transfers pending to creator
-  → Updates reward_debt
+// Claims (pull-based)
+claim_global_holder_reward(nft_asset: Pubkey)
+  → pending = (nft_weight * global_rps - nft_debt) / PRECISION
+  → Transfer to holder
+
+claim_creator_ecosystem_payout()
+  → pending = (creator_weight * creator_rps - creator_debt) / PRECISION
+  → Transfer to creator
 ```
 
-### Reward Flow
+### Ecosystem Reward Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│               ECOSYSTEM SUBSCRIPTION REWARD FLOW                 │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  STEP 1: Users Subscribe (Continuous Streaming)                 │
-│                                                                  │
-│  ┌──────────┐     Stream      ┌──────────┐                      │
-│  │  User A  │ ──────────────► │          │                      │
-│  └──────────┘                 │ Treasury │                      │
-│  ┌──────────┐     Stream      │   PDA    │                      │
-│  │  User B  │ ──────────────► │          │                      │
-│  └──────────┘                 └────┬─────┘                      │
-│  ┌──────────┐     Stream           │                            │
-│  │  User C  │ ──────────────►      │                            │
-│  └──────────┘                      │                            │
-│                                    │                            │
-│  ────────────────────────────────────────────────────────────── │
-│                                    │                            │
-│  STEP 2: Distribution (Push - Immediate)                        │
-│                                    │                            │
-│  Anyone calls distribute_ecosystem_revenue()                    │
-│                                    │                            │
-│                                    ▼                            │
-│                        ┌─────────────────────┐                  │
-│                        │ EcosystemDistPool   │                  │
-│                        │ reward_per_share += │                  │
-│                        │ (amount * PRECISION)│                  │
-│                        │   / total_mints     │                  │
-│                        └─────────────────────┘                  │
-│                                                                  │
-│  ────────────────────────────────────────────────────────────── │
-│                                                                  │
-│  STEP 3: Creator Claims (Pull-Based)                            │
-│                                                                  │
-│  ┌─────────────────┐     claim_ecosystem_payout()              │
-│  │ Creator A       │ ──────────────────────────►               │
-│  │ 1000 mints (10%)│     pending = 1000 * rps - debt          │
-│  └─────────────────┘                                           │
-│                                                                  │
-│  ┌─────────────────┐     claim_ecosystem_payout()              │
-│  │ Creator B       │ ──────────────────────────►               │
-│  │ 5000 mints (50%)│     pending = 5000 * rps - debt          │
-│  └─────────────────┘                                           │
-│                                                                  │
-│  ┌─────────────────┐     claim_ecosystem_payout()              │
-│  │ Creator C       │ ──────────────────────────►               │
-│  │ 4000 mints (40%)│     pending = 4000 * rps - debt          │
-│  └─────────────────┘                                           │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Mint Share Tracking
-
-To enable ecosystem distribution by mint share, we track mints per creator:
-
-### Update Existing Mint Instructions
-
-```rust
-// In mint_nft (content) - add after successful mint:
-creator_mint_share.total_mints += 1;
-ecosystem_distribution_pool.total_mints += 1;
-
-// In mint_bundle_nft - add after successful mint:
-creator_mint_share.total_mints += 1;
-ecosystem_distribution_pool.total_mints += 1;
-```
-
-### Account Initialization
-
-```rust
-// CreatorMintShare is created on first content registration
-// or lazily on first mint if not exists
-
-// EcosystemDistributionPool is singleton, created by admin
+┌─────────────────────────────────────────────────────────────────────────┐
+│                  ECOSYSTEM SUBSCRIPTION REWARD FLOW                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  STEP 1: Users Subscribe (Continuous Streaming)                         │
+│                                                                          │
+│  ┌──────────┐     Stream      ┌──────────┐                              │
+│  │  User A  │ ──────────────► │          │                              │
+│  └──────────┘                 │ Treasury │                              │
+│  ┌──────────┐     Stream      │   PDA    │                              │
+│  │  User B  │ ──────────────► │          │                              │
+│  └──────────┘                 └────┬─────┘                              │
+│                                    │                                     │
+│  ────────────────────────────────────────────────────────────────────── │
+│                                    │                                     │
+│  STEP 2: distribute_ecosystem_revenue() - Anyone can call               │
+│                                    │                                     │
+│                                    ▼                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                      FEE DISTRIBUTION                             │   │
+│  ├──────────────────────────────────────────────────────────────────┤   │
+│  │                                                                   │   │
+│  │  Platform (5%)   ─────────────────────►  Platform Treasury       │   │
+│  │  Ecosystem (3%)  ─────────────────────►  Ecosystem Treasury      │   │
+│  │                                                                   │   │
+│  │  Holders (12%)   ─────────────────────►  GlobalHolderRewardPool  │   │
+│  │                                          reward_per_share +=     │   │
+│  │                                          (amt * PRECISION) /     │   │
+│  │                                          global_total_weight     │   │
+│  │                                                                   │   │
+│  │  Creators (80%)  ─────────────────────►  CreatorDistributionPool │   │
+│  │                                          reward_per_share +=     │   │
+│  │                                          (amt * PRECISION) /     │   │
+│  │                                          global_total_weight     │   │
+│  │                                                                   │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ────────────────────────────────────────────────────────────────────── │
+│                                                                          │
+│  STEP 3: Pull-Based Claims                                              │
+│                                                                          │
+│  NFT Holders:                                                           │
+│  ┌─────────────────┐     claim_global_holder_reward()                  │
+│  │ Holder (w=20)   │ ──► pending = (20 * rps - debt) / PRECISION       │
+│  └─────────────────┘                                                    │
+│                                                                          │
+│  Creators:                                                               │
+│  ┌─────────────────┐     claim_creator_ecosystem_payout()              │
+│  │ Creator A       │ ──► pending = (creator_weight * rps - debt)       │
+│  │ weight: 1000    │         / PRECISION                               │
+│  └─────────────────┘                                                    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Clockwork Auto-Renewal
+## Bundle Mint Rewards (IMPORTANT FIX)
 
-### Concept
+### Problem
 
-Clockwork threads monitor stream balances and auto-topup when low (if user has enabled and has wallet funds).
+Previously, bundle mints only distributed rewards to bundle NFT holders, not to content NFT holders within the bundle. This disincentivizes content NFT purchases when bundles are popular.
 
-### Thread Setup
+### Solution
 
-```rust
-/// Auto-renewal configuration per subscription
-/// PDA: ["auto_renewal", subscription_pda]
-pub struct AutoRenewalConfig {
-    pub subscription: Pubkey,             // Patron or Ecosystem sub
-    pub subscription_type: u8,            // 0=Patron, 1=Ecosystem
-    pub thread_id: Pubkey,                // Clockwork thread
-    pub topup_amount: u64,                // Amount to topup when triggered
-    pub min_balance_days: u8,             // Trigger when balance < X days
-    pub is_active: bool,
-}
+Bundle mints distribute 12% holder rewards to **BOTH**:
+1. **Bundle NFT holders** - BundleRewardPool
+2. **Content NFT holders** - Each ContentRewardPool for items in the bundle
+
+### Distribution Formula
+
+```
+bundle_holder_reward = 12% of mint price
+
+// Split between bundle pool and content pools
+bundle_pool_share = bundle_holder_reward * 0.5  // 50% to bundle holders
+content_pools_share = bundle_holder_reward * 0.5  // 50% to content holders
+
+// Bundle pool
+BundleRewardPool.add_rewards(bundle_pool_share)
+
+// Content pools (weighted by each content's total_weight)
+for each content in bundle:
+    content_share = content_pools_share * (content.total_weight / total_bundle_content_weight)
+    ContentRewardPool[content].add_rewards(content_share)
 ```
 
-### Clockwork Thread
+### Example
 
-```rust
-Thread {
-    trigger: Trigger::Cron {
-        schedule: "0 0 * * *",            // Daily check
-        skippable: true,
-    },
-    instructions: vec![
-        check_and_topup_instruction(subscription_pda)
-    ],
-}
+```
+Bundle with 3 contents:
+- Content A: total_weight = 100
+- Content B: total_weight = 300
+- Content C: total_weight = 100
+- Total content weight: 500
 
-// check_and_topup logic:
-fn check_and_topup(subscription: Pubkey) {
-    let stream_balance = streamflow.get_balance(subscription.stream_account);
-    let daily_rate = get_daily_rate(subscription);
-    let days_remaining = stream_balance / daily_rate;
+Bundle mint price: 10 SOL
+Holder reward: 1.2 SOL (12%)
 
-    if days_remaining < config.min_balance_days {
-        let user_balance = get_balance(subscription.subscriber);
-        if user_balance >= config.topup_amount {
-            streamflow.topup(subscription.stream_account, config.topup_amount);
-        }
-    }
-}
+Distribution:
+- Bundle pool: 0.6 SOL (50%)
+- Content pools: 0.6 SOL (50%)
+  - Content A: 0.6 * (100/500) = 0.12 SOL
+  - Content B: 0.6 * (300/500) = 0.36 SOL
+  - Content C: 0.6 * (100/500) = 0.12 SOL
 ```
 
 ---
 
-## Streamflow Integration
+## NFT Burn Reconciliation
 
-### Overview
+### Requirement
 
-[Streamflow](https://streamflow.finance/) provides token streaming on Solana.
+When an NFT is burned, its weight must be removed from all relevant pools to maintain correct reward distribution.
 
-### Key Operations
+### Content NFT Burn
 
-```typescript
-import { StreamflowSolana } from "@streamflow/stream";
+```rust
+fn burn_content_nft(nft_asset: Pubkey) {
+    let nft_state = fetch_nft_state(nft_asset);
+    let weight = nft_state.weight;
 
-// Create stream
-const stream = await client.create({
-    recipient: creatorWallet,
-    mint: NATIVE_MINT,                    // SOL
-    depositedAmount: 10 * LAMPORTS_PER_SOL,
-    period: 1,                            // 1 second periods
-    cliff: 0,
-    amountPerPeriod: pricePerSecond,
-    name: "Patron: CreatorName",
-    canTopup: true,
-    cancelableBySender: true,
-    cancelableByRecipient: false,
-});
+    // 1. Remove from content reward pool
+    content_reward_pool.total_weight -= weight;
 
-// Topup stream
-await client.topup({
-    id: streamId,
-    amount: 5 * LAMPORTS_PER_SOL,
-});
+    // 2. Remove from global holder pool (for ecosystem sub)
+    global_holder_pool.total_weight -= weight;
 
-// Cancel stream (refunds remaining to sender)
-await client.cancel({
-    id: streamId,
-});
+    // 3. Update creator's total weight
+    creator_weight.total_weight -= weight;
 
-// Withdraw accumulated (recipient)
-await client.withdraw({
-    id: streamId,
-    amount: withdrawAmount,
-});
+    // 4. Close NFT state accounts
+    close_nft_reward_state(nft_asset);
+    close_global_nft_state(nft_asset);
+}
+```
+
+### Bundle NFT Burn
+
+```rust
+fn burn_bundle_nft(nft_asset: Pubkey) {
+    let nft_state = fetch_bundle_nft_state(nft_asset);
+    let weight = nft_state.weight;
+
+    // 1. Remove from bundle reward pool
+    bundle_reward_pool.total_weight -= weight;
+
+    // 2. Remove from global holder pool
+    global_holder_pool.total_weight -= weight;
+
+    // 3. Update creator's total weight
+    creator_weight.total_weight -= weight;
+
+    // 4. Close NFT state accounts
+    close_bundle_nft_state(nft_asset);
+    close_global_nft_state(nft_asset);
+}
 ```
 
 ---
@@ -504,106 +545,133 @@ await client.withdraw({
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        COMPLETE REWARD FLOW                                  │
+│                    (All sources use same fee structure)                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                         PAYMENT SOURCES                              │    │
 │  ├─────────────────────────────────────────────────────────────────────┤    │
 │  │                                                                      │    │
-│  │   NFT Mint          NFT Resale         Patron Sub      Ecosystem Sub │    │
-│  │   (Content/Bundle)  (Secondary)        (Streaming)     (Streaming)   │    │
-│  │        │                 │                  │               │        │    │
-│  └────────┼─────────────────┼──────────────────┼───────────────┼────────┘    │
-│           │                 │                  │               │             │
-│           ▼                 ▼                  ▼               ▼             │
+│  │  Content Mint    Bundle Mint     Patron Sub     Ecosystem Sub       │    │
+│  │       │              │               │               │              │    │
+│  │       │              │               │               │              │    │
+│  │       ▼              ▼               ▼               ▼              │    │
+│  │  ┌─────────────────────────────────────────────────────────────┐   │    │
+│  │  │              UNIFIED FEE SPLIT (All Sources)                 │   │    │
+│  │  │                                                              │   │    │
+│  │  │   Creator:    80%   Platform:  5%                           │   │    │
+│  │  │   Ecosystem:   3%   Holders:  12%                           │   │    │
+│  │  └─────────────────────────────────────────────────────────────┘   │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                      IMMEDIATE DISTRIBUTION (PUSH)                   │    │
+│  │                    HOLDER REWARD DISTRIBUTION (12%)                  │    │
 │  ├─────────────────────────────────────────────────────────────────────┤    │
 │  │                                                                      │    │
-│  │   ┌──────────────────────────────────────────────────────────────┐  │    │
-│  │   │ NFT MINT SPLIT                                                │  │    │
-│  │   │ ├── Creator (80%)      → creator wallet                      │  │    │
-│  │   │ ├── Platform (5%)      → platform treasury                   │  │    │
-│  │   │ ├── Ecosystem (3%)     → ecosystem treasury                  │  │    │
-│  │   │ └── Holders (12%)      → ContentRewardPool.add_rewards()     │  │    │
-│  │   │                           BundleRewardPool.add_rewards()     │  │    │
-│  │   └──────────────────────────────────────────────────────────────┘  │    │
+│  │  CONTENT MINT:                                                       │    │
+│  │  └── 12% → ContentRewardPool (weighted)                             │    │
 │  │                                                                      │    │
-│  │   ┌──────────────────────────────────────────────────────────────┐  │    │
-│  │   │ NFT RESALE SPLIT                                              │  │    │
-│  │   │ ├── Seller (~88%)      → seller wallet                       │  │    │
-│  │   │ ├── Creator (2-10%)    → creator wallet                      │  │    │
-│  │   │ ├── Platform (1%)      → platform treasury                   │  │    │
-│  │   │ ├── Ecosystem (1%)     → ecosystem treasury                  │  │    │
-│  │   │ └── Holders (8%)       → RewardPool.sync_secondary_royalties()│  │    │
-│  │   └──────────────────────────────────────────────────────────────┘  │    │
+│  │  BUNDLE MINT:                                                        │    │
+│  │  └── 12% split:                                                      │    │
+│  │      ├── 6% → BundleRewardPool (weighted)                           │    │
+│  │      └── 6% → All ContentRewardPools in bundle (by content weight)  │    │
 │  │                                                                      │    │
-│  │   ┌──────────────────────────────────────────────────────────────┐  │    │
-│  │   │ PATRON SUBSCRIPTION                                           │  │    │
-│  │   │ └── Creator (100%)     → streamed to creator wallet          │  │    │
-│  │   │     (No holder rewards - creator defines custom perks)       │  │    │
-│  │   └──────────────────────────────────────────────────────────────┘  │    │
+│  │  PATRON SUB:                                                         │    │
+│  │  └── 12% → All creator's ContentRewardPools (by content weight)     │    │
 │  │                                                                      │    │
-│  │   ┌──────────────────────────────────────────────────────────────┐  │    │
-│  │   │ ECOSYSTEM SUBSCRIPTION                                        │  │    │
-│  │   │ └── Treasury (100%)    → streamed to treasury PDA            │  │    │
-│  │   │     Then: distribute_ecosystem_revenue()                     │  │    │
-│  │   │     └── EcosystemDistPool.reward_per_share +=                │  │    │
-│  │   │         (new_funds * PRECISION) / total_mints                │  │    │
-│  │   └──────────────────────────────────────────────────────────────┘  │    │
+│  │  ECOSYSTEM SUB:                                                      │    │
+│  │  └── 12% → GlobalHolderRewardPool (all NFTs by weight)              │    │
 │  │                                                                      │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
-│                                    │                                         │
-│                                    ▼                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    CREATOR REWARD DISTRIBUTION (80%)                 │    │
+│  ├─────────────────────────────────────────────────────────────────────┤    │
+│  │                                                                      │    │
+│  │  CONTENT MINT:    80% → content creator wallet                      │    │
+│  │  BUNDLE MINT:     80% → bundle creator wallet                       │    │
+│  │  PATRON SUB:      80% → patron's creator wallet                     │    │
+│  │  ECOSYSTEM SUB:   80% → CreatorDistPool (by creator's total weight) │    │
+│  │                                                                      │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                         REWARD POOLS                                 │    │
 │  ├─────────────────────────────────────────────────────────────────────┤    │
 │  │                                                                      │    │
-│  │  ┌───────────────────┐  ┌───────────────────┐  ┌──────────────────┐ │    │
-│  │  │ ContentRewardPool │  │ BundleRewardPool  │  │ EcosystemDistPool│ │    │
-│  │  │ (per content)     │  │ (per bundle)      │  │ (singleton)      │ │    │
-│  │  ├───────────────────┤  ├───────────────────┤  ├──────────────────┤ │    │
-│  │  │ reward_per_share  │  │ reward_per_share  │  │ reward_per_share │ │    │
-│  │  │ total_weight      │  │ total_weight      │  │ total_mints      │ │    │
-│  │  │ total_deposited   │  │ total_deposited   │  │ total_deposited  │ │    │
-│  │  │ total_claimed     │  │ total_claimed     │  │ total_claimed    │ │    │
-│  │  └───────────────────┘  └───────────────────┘  └──────────────────┘ │    │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │    │
+│  │  │ContentRewardPool│  │BundleRewardPool │  │GlobalHolderRewardPool│  │    │
+│  │  │ (per content)   │  │ (per bundle)    │  │ (singleton)          │  │    │
+│  │  ├─────────────────┤  ├─────────────────┤  ├─────────────────────┤  │    │
+│  │  │ reward_per_share│  │ reward_per_share│  │ reward_per_share    │  │    │
+│  │  │ total_weight    │  │ total_weight    │  │ total_weight        │  │    │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │    │
+│  │                                                                      │    │
+│  │  ┌─────────────────────┐                                            │    │
+│  │  │CreatorDistPool      │  For ecosystem sub creator payouts         │    │
+│  │  │ (singleton)         │                                            │    │
+│  │  ├─────────────────────┤                                            │    │
+│  │  │ reward_per_share    │                                            │    │
+│  │  │ total_weight        │                                            │    │
+│  │  └─────────────────────┘                                            │    │
 │  │                                                                      │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
-│                                    │                                         │
-│                                    ▼                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                      PULL-BASED CLAIMS                               │    │
 │  ├─────────────────────────────────────────────────────────────────────┤    │
 │  │                                                                      │    │
-│  │   NFT Holder Claims:                                                 │    │
-│  │   ┌─────────────────────────────────────────────────────────────┐   │    │
-│  │   │ claim_content_rewards(content, nft_asset)                    │   │    │
-│  │   │ pending = (nft_weight * pool.rps - nft_state.debt) / PRECISION│   │    │
-│  │   │ Transfer pending → holder wallet                             │   │    │
-│  │   │ nft_state.debt = nft_weight * pool.rps                       │   │    │
-│  │   └─────────────────────────────────────────────────────────────┘   │    │
+│  │  claim_content_rewards(nft):                                        │    │
+│  │    pending = (nft_weight * content_pool.rps - debt) / PRECISION     │    │
 │  │                                                                      │    │
-│  │   ┌─────────────────────────────────────────────────────────────┐   │    │
-│  │   │ claim_bundle_rewards(bundle, nft_asset)                      │   │    │
-│  │   │ pending = (nft_weight * pool.rps - nft_state.debt) / PRECISION│   │    │
-│  │   │ Transfer pending → holder wallet                             │   │    │
-│  │   │ nft_state.debt = nft_weight * pool.rps                       │   │    │
-│  │   └─────────────────────────────────────────────────────────────┘   │    │
+│  │  claim_bundle_rewards(nft):                                         │    │
+│  │    pending = (nft_weight * bundle_pool.rps - debt) / PRECISION      │    │
 │  │                                                                      │    │
-│  │   Creator Claims (Ecosystem Distribution):                          │    │
-│  │   ┌─────────────────────────────────────────────────────────────┐   │    │
-│  │   │ claim_ecosystem_payout()                                     │   │    │
-│  │   │ pending = (creator_mints * pool.rps - share.debt) / PRECISION│   │    │
-│  │   │ Transfer pending → creator wallet                            │   │    │
-│  │   │ share.debt = creator_mints * pool.rps                        │   │    │
-│  │   └─────────────────────────────────────────────────────────────┘   │    │
+│  │  claim_global_holder_reward(nft):                                   │    │
+│  │    pending = (nft_weight * global_pool.rps - debt) / PRECISION      │    │
+│  │                                                                      │    │
+│  │  claim_creator_ecosystem_payout():                                  │    │
+│  │    pending = (creator_weight * creator_pool.rps - debt) / PRECISION │    │
 │  │                                                                      │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Weight Tracking Summary
+
+### On Mint
+
+```rust
+// Content NFT mint
+content_reward_pool.total_weight += nft_weight;
+global_holder_pool.total_weight += nft_weight;
+creator_weight.total_weight += nft_weight;
+creator_dist_pool.total_weight += nft_weight;
+
+// Bundle NFT mint
+bundle_reward_pool.total_weight += nft_weight;
+global_holder_pool.total_weight += nft_weight;
+creator_weight.total_weight += nft_weight;
+creator_dist_pool.total_weight += nft_weight;
+```
+
+### On Burn
+
+```rust
+// Content NFT burn
+content_reward_pool.total_weight -= nft_weight;
+global_holder_pool.total_weight -= nft_weight;
+creator_weight.total_weight -= nft_weight;
+creator_dist_pool.total_weight -= nft_weight;
+
+// Bundle NFT burn
+bundle_reward_pool.total_weight -= nft_weight;
+global_holder_pool.total_weight -= nft_weight;
+creator_weight.total_weight -= nft_weight;
+creator_dist_pool.total_weight -= nft_weight;
 ```
 
 ---
@@ -614,11 +682,6 @@ await client.withdraw({
 fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
     let content_entry = fetch_content(content);
     let visibility = content_entry.visibility_level;
-
-    // Level 3: Anyone can access public content
-    if visibility == 0 {
-        return AccessResult::Granted(AccessType::Public);
-    }
 
     // Check 1: Is user the creator?
     if content_entry.creator == user {
@@ -640,7 +703,7 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
         return AccessResult::Granted(AccessType::Renter);
     }
 
-    // Level 3 content: NFT only
+    // Level 3 content: NFT only - stop here
     if visibility == 3 {
         return AccessResult::Denied;
     }
@@ -650,8 +713,8 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
         return AccessResult::Granted(AccessType::Patron);
     }
 
-    // Check 6: Is active ecosystem subscriber? (visibility <= 1)
-    if visibility <= 1 && user_is_ecosystem_subscriber(user) {
+    // Check 6: Is active ecosystem subscriber? (visibility == 1)
+    if visibility == 1 && user_is_ecosystem_subscriber(user) {
         return AccessResult::Granted(AccessType::EcosystemSub);
     }
 
@@ -663,12 +726,16 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ## Implementation Phases
 
-### Phase 1: Foundation
-- [ ] Add `visibility_level` field to Content account
-- [ ] Add `visibility_level` field to Bundle account
-- [ ] Create CreatorMintShare account
-- [ ] Create EcosystemDistributionPool account
-- [ ] Update mint instructions to track mint counts
+### Phase 1: Foundation & Bundle Fix
+- [ ] Fix bundle mint to distribute to content NFT holders (50/50 split)
+- [ ] Add `visibility_level` field to Content account (default: 1)
+- [ ] Add `visibility_level` field to Bundle account (default: 1)
+- [ ] Create GlobalHolderRewardPool account
+- [ ] Create GlobalNftRewardState account (per NFT)
+- [ ] Create CreatorDistributionPool account
+- [ ] Create CreatorWeight account (per creator)
+- [ ] Update mint instructions to track global weights
+- [ ] Implement burn reconciliation for all pools
 - [ ] Research Streamflow SDK integration
 - [ ] Research Clockwork SDK integration
 
@@ -678,8 +745,8 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 - [ ] Streamflow integration for patron streams
 - [ ] `init_patron_config` instruction
 - [ ] `subscribe_patron` instruction
-- [ ] `topup_patron` instruction
-- [ ] `cancel_patron` instruction
+- [ ] `topup_patron` / `cancel_patron` instructions
+- [ ] `distribute_patron_revenue` instruction
 - [ ] Unit tests
 
 ### Phase 3: Creator Patronage (SDK + Web)
@@ -695,21 +762,18 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 - [ ] EcosystemSubConfig account + instructions
 - [ ] EcosystemSubscription account
 - [ ] Streamflow integration for ecosystem streams
-- [ ] `init_ecosystem_sub_config` instruction
-- [ ] `subscribe_ecosystem` instruction
-- [ ] `topup_ecosystem` instruction
-- [ ] `cancel_ecosystem` instruction
-- [ ] `distribute_ecosystem_revenue` instruction
-- [ ] `claim_ecosystem_payout` instruction
+- [ ] `distribute_ecosystem_revenue` instruction (splits 80/5/3/12)
+- [ ] `claim_global_holder_reward` instruction
+- [ ] `claim_creator_ecosystem_payout` instruction
 - [ ] Unit tests
 
 ### Phase 5: Ecosystem Subscription (SDK + Web)
 - [ ] SDK: Ecosystem instruction builders
 - [ ] SDK: Ecosystem account fetchers
 - [ ] Web: EcosystemSubscribeModal
+- [ ] Web: Global holder rewards in claim modal
 - [ ] Web: Ecosystem earnings in creator dashboard
 - [ ] Web: Subscribe button in header
-- [ ] Web: Full access control integration
 
 ### Phase 6: Clockwork Auto-Renewal
 - [ ] AutoRenewalConfig account
@@ -720,8 +784,8 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ### Phase 7: Polish & Testing
 - [ ] E2E testing all flows
-- [ ] Edge cases handling
-- [ ] Off-chain notifications (expiring soon, etc.)
+- [ ] Edge cases (burn during active claim, etc.)
+- [ ] Off-chain notifications
 - [ ] Documentation updates
 
 ---
@@ -730,26 +794,28 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ### Revenue Sources & Distribution
 
-| Source | Creator | Platform | Ecosystem | NFT Holders | Notes |
-|--------|---------|----------|-----------|-------------|-------|
-| Content NFT Mint | 80% | 5% | 3% | 12% | Holder rewards to content pool |
-| Bundle NFT Mint | 80% | 5% | 3% | 12% | Holder rewards to bundle pool |
-| Content NFT Resale | 2-10% | 1% | 1% | 8% | Creator royalty configurable |
-| Bundle NFT Resale | 2-10% | 1% | 1% | 8% | Creator royalty configurable |
-| Content Rental | 80% | 5% | 3% | 12% | Same as mint |
-| Bundle Rental | 80% | 5% | 3% | 12% | Same as mint |
-| Creator Patron | 100% | 0% | 0% | 0% | Streamed directly |
-| Ecosystem Sub | 0% | 0% | 100%* | 0% | *Distributed by mint share |
+| Source | Creator | Platform | Ecosystem | Holders | Holder Pool |
+|--------|---------|----------|-----------|---------|-------------|
+| Content NFT Mint | 80% | 5% | 3% | 12% | ContentRewardPool |
+| Bundle NFT Mint | 80% | 5% | 3% | 12% | 50% Bundle + 50% Content pools |
+| Content Rental | 80% | 5% | 3% | 12% | ContentRewardPool |
+| Bundle Rental | 80% | 5% | 3% | 12% | 50% Bundle + 50% Content pools |
+| Content Resale | 2-10% | 1% | 1% | 8% | ContentRewardPool |
+| Bundle Resale | 2-10% | 1% | 1% | 8% | BundleRewardPool |
+| Creator Patron | 80% | 5% | 3% | 12% | All creator's ContentRewardPools |
+| Ecosystem Sub | 80%* | 5% | 3% | 12% | GlobalHolderRewardPool |
+
+*Ecosystem sub creator portion distributed by CreatorDistributionPool (by weight)
 
 ### Access Types & Rewards
 
-| Access Type | Rewards | Duration | Cost |
-|-------------|---------|----------|------|
-| Content NFT Owner | 12% primary, 8% secondary | Permanent | Mint price |
-| Bundle NFT Owner | 12% primary, 8% secondary | Permanent | Mint price |
-| Creator Patron | Creator perks only | Subscription | Stream rate |
-| Ecosystem Sub | None | Subscription | Stream rate |
-| Renter | None | 6h/1d/7d | Rental fee |
+| Access Type | Earns Holder Rewards? | Duration | Notes |
+|-------------|----------------------|----------|-------|
+| Content NFT Owner | Yes (content pool + global pool) | Permanent | Weight-based |
+| Bundle NFT Owner | Yes (bundle pool + global pool) | Permanent | Weight-based |
+| Creator Patron | No (access only) | Subscription | Creator perks |
+| Ecosystem Sub | No (access only) | Subscription | Platform-wide access |
+| Renter | No | 6h/1d/7d | Temporary access |
 
 ---
 
