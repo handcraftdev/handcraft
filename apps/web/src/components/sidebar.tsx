@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { icon: "🏠", label: "Home", href: "/" },
+  { icon: "🔍", label: "Explore", href: "/explore" },
   { icon: "🔥", label: "Trending", href: "/trending" },
   { icon: "👥", label: "Communities", href: "/communities" },
-  { icon: "🎵", label: "Audio", href: "/audio" },
-  { icon: "📺", label: "Videos", href: "/videos" },
 ];
 
 const libraryItems = [
