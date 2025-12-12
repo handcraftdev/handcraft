@@ -100,14 +100,6 @@ export function getContentCollectionPda(contentPda: PublicKey): [PublicKey, numb
   );
 }
 
-/**
- * @deprecated Use getUnifiedNftRewardStatePda instead - legacy NftRewardState accounts no longer created
- */
-export function getNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
-  // Legacy - use getUnifiedNftRewardStatePda for new code
-  return getUnifiedNftRewardStatePda(nftAsset);
-}
-
 export function calculatePrimarySplit(price: bigint): { creator: bigint; platform: bigint; ecosystem: bigint; holderReward: bigint } {
   const creator = (price * BigInt(CREATOR_FEE_PRIMARY_BPS)) / BigInt(10000);
   const platform = (price * BigInt(PLATFORM_FEE_PRIMARY_BPS)) / BigInt(10000);
@@ -147,14 +139,6 @@ export function getPendingMintPda(buyer: PublicKey, contentPda: PublicKey): [Pub
     [Buffer.from(PENDING_MINT_SEED), buyer.toBuffer(), contentPda.toBuffer()],
     PROGRAM_ID
   );
-}
-
-/**
- * @deprecated Rarity is now stored in UnifiedNftRewardState - use getUnifiedNftRewardStatePda
- */
-export function getNftRarityPda(nftAsset: PublicKey): [PublicKey, number] {
-  // Legacy - rarity is now part of UnifiedNftRewardState
-  return getUnifiedNftRewardStatePda(nftAsset);
 }
 
 /**
@@ -286,24 +270,6 @@ export function getBundleWalletStatePda(wallet: PublicKey, bundlePda: PublicKey)
     [Buffer.from(BUNDLE_WALLET_STATE_SEED), wallet.toBuffer(), bundlePda.toBuffer()],
     PROGRAM_ID
   );
-}
-
-/**
- * @deprecated Use getUnifiedNftRewardStatePda instead - legacy BundleNftRewardState accounts no longer created
- * @param nftAsset - The NFT asset's public key
- */
-export function getBundleNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
-  // Legacy - use getUnifiedNftRewardStatePda for new code
-  return getUnifiedNftRewardStatePda(nftAsset);
-}
-
-/**
- * @deprecated Rarity is now stored in UnifiedNftRewardState - use getUnifiedNftRewardStatePda
- * @param nftAsset - The NFT asset's public key
- */
-export function getBundleNftRarityPda(nftAsset: PublicKey): [PublicKey, number] {
-  // Legacy - rarity is now part of UnifiedNftRewardState
-  return getUnifiedNftRewardStatePda(nftAsset);
 }
 
 /**

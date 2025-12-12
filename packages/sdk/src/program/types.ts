@@ -14,6 +14,7 @@ export interface ContentEntry {
   isEncrypted: boolean;
   previewCid: string;
   encryptionMetaCid: string;
+  visibilityLevel: number; // 0=Public, 1=Basic (ecosystem sub/NFT), 2=Creator subscription
 }
 
 export interface CidRegistry {

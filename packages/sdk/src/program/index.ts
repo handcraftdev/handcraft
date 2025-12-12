@@ -17,7 +17,7 @@ import {
   ContentType,
   PaymentCurrency,
   RentTier,
-  getContentCategory,
+  getContentDomain,
 } from "./constants";
 
 import {
@@ -76,11 +76,9 @@ import {
   getContentRewardPoolPda,
   getWalletContentStatePda,
   getContentCollectionPda,
-  getNftRewardStatePda,
   getRentConfigPda,
   getRentEntryPda,
   getPendingMintPda,
-  getNftRarityPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
   getMbBundleMintRequestPda,
@@ -92,8 +90,6 @@ import {
   getBundleCollectionPda,
   getBundleRewardPoolPda,
   getBundleWalletStatePda,
-  getBundleNftRewardStatePda,
-  getBundleNftRarityPda,
   getBundleRentEntryPda,
   getBundleDirectNftPda,
   calculatePendingRewardForNft,
@@ -470,7 +466,7 @@ export async function mintNftSolInstruction(
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   const nftAssetKeypair = Keypair.generate();
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetKeypair.publicKey);
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAssetKeypair.publicKey);
 
   const instruction = await program.methods
     .mintNftSol()
@@ -555,7 +551,7 @@ export async function claimRewardsVerifiedInstruction(
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   const remainingAccounts = nftAssets.flatMap(nftAsset => {
-    const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+    const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
     return [
       { pubkey: nftAsset, isSigner: false, isWritable: false },
       { pubkey: nftRewardStatePda, isSigner: false, isWritable: true },
@@ -793,7 +789,7 @@ export async function burnNftInstruction(
   const [contentPda] = getContentPda(contentCid);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
 
   return await program.methods
     .burnNft()
@@ -843,6 +839,7 @@ export async function fetchContent(
       isEncrypted: decoded.isEncrypted ?? false,
       previewCid: decoded.previewCid ?? "",
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+      visibilityLevel: decoded.visibilityLevel ?? 0,
     };
   } catch {
     return null;
@@ -874,6 +871,7 @@ export async function fetchContentByPda(
       isEncrypted: decoded.isEncrypted ?? false,
       previewCid: decoded.previewCid ?? "",
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+      visibilityLevel: decoded.visibilityLevel ?? 0,
     };
   } catch {
     return null;
@@ -1073,7 +1071,7 @@ export async function fetchBundleNftRewardStatesBatch(
 
   try {
     const program = createProgram(connection);
-    const nftRewardStatePdas = nftAssets.map(nft => getBundleNftRewardStatePda(nft)[0]);
+    const nftRewardStatePdas = nftAssets.map(nft => getUnifiedNftRewardStatePda(nft)[0]);
 
     // Batch fetch all accounts in a single RPC call
     const accounts = await connection.getMultipleAccountsInfo(nftRewardStatePdas);
@@ -1252,7 +1250,7 @@ export async function fetchNftRewardStatesBatch(
 
   try {
     const program = createProgram(connection);
-    const nftRewardStatePdas = nftAssets.map(nft => getNftRewardStatePda(nft)[0]);
+    const nftRewardStatePdas = nftAssets.map(nft => getUnifiedNftRewardStatePda(nft)[0]);
 
     // Batch fetch all accounts in a single RPC call
     const accounts = await connection.getMultipleAccountsInfo(nftRewardStatePdas);
@@ -1399,7 +1397,7 @@ export async function fetchNftRewardState(
 ): Promise<NftRewardState | null> {
   try {
     const program = createProgram(connection);
-    const [nftRewardStatePda] = getNftRewardStatePda(nftAsset);
+    const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
 
     // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1418,75 +1416,7 @@ export async function fetchNftRewardState(
   }
 }
 
-export async function fetchNftRarity(
-  connection: Connection,
-  nftAsset: PublicKey
-): Promise<NftRarity | null> {
-  try {
-    const program = createProgram(connection);
-    const [nftRarityPda] = getNftRarityPda(nftAsset);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).nftRarity.fetch(nftRarityPda);
-
-    return {
-      nftAsset: decoded.nftAsset,
-      content: decoded.content,
-      rarity: parseAnchorRarity(decoded.rarity),
-      weight: decoded.weight,
-      randomnessAccount: decoded.randomnessAccount,
-      commitSlot: BigInt(decoded.commitSlot.toString()),
-      revealedAt: BigInt(decoded.revealedAt.toString()),
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function fetchNftRaritiesBatch(
-  connection: Connection,
-  nftAssets: PublicKey[]
-): Promise<Map<string, NftRarity>> {
-  const results = new Map<string, NftRarity>();
-  if (nftAssets.length === 0) return results;
-
-  try {
-    const program = createProgram(connection);
-    const pdas = nftAssets.map((nft) => getNftRarityPda(nft)[0]);
-
-    // Batch fetch all NftRarity accounts
-    const accounts = await connection.getMultipleAccountsInfo(pdas);
-
-    for (let i = 0; i < nftAssets.length; i++) {
-      const accountInfo = accounts[i];
-      if (!accountInfo) continue;
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const decoded = (program.account as any).nftRarity.coder.accounts.decode(
-          "nftRarity",
-          accountInfo.data
-        );
-
-        results.set(nftAssets[i].toBase58(), {
-          nftAsset: decoded.nftAsset,
-          content: decoded.content,
-          rarity: parseAnchorRarity(decoded.rarity),
-          weight: decoded.weight,
-          randomnessAccount: decoded.randomnessAccount,
-          commitSlot: BigInt(decoded.commitSlot.toString()),
-          revealedAt: BigInt(decoded.revealedAt.toString()),
-        });
-      } catch {
-        // Skip invalid accounts
-      }
-    }
-  } catch (err) {
-    console.error("[fetchNftRaritiesBatch] Error:", err);
-  }
-
-  return results;
-}
+// NOTE: fetchNftRarity and fetchNftRaritiesBatch removed - rarity data is now in UnifiedNftRewardState
 
 export async function fetchRentConfig(
   connection: Connection,
@@ -3090,8 +3020,6 @@ export async function simpleMintInstruction(
   const edition = currentMinted + BigInt(1);
 
   const [nftAssetPda] = getSimpleNftPda(buyer, contentPda, edition);
-  const [nftRewardStatePda] = getNftRewardStatePda(nftAssetPda);
-  const [nftRarityPda] = getNftRarityPda(nftAssetPda);
   const [unifiedNftStatePda] = getUnifiedNftRewardStatePda(nftAssetPda);
   const [globalHolderPoolPda] = getGlobalHolderPoolPda();
   const [creatorDistPoolPda] = getCreatorDistPoolPda();
@@ -3116,8 +3044,6 @@ export async function simpleMintInstruction(
       treasury,
       platform,
       nftAsset: nftAssetPda,
-      nftRewardState: nftRewardStatePda,
-      nftRarity: nftRarityPda,
       unifiedNftState: unifiedNftStatePda,
       globalHolderPool: globalHolderPoolPda,
       creatorDistPool: creatorDistPoolPda,
@@ -3345,7 +3271,7 @@ export async function claimBundleRewardsInstruction(
 ): Promise<TransactionInstruction> {
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
-  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAsset);
+  const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
 
   return await program.methods
     .claimBundleRewards()
@@ -3377,7 +3303,7 @@ export async function batchClaimBundleRewardsInstruction(
   // Build remaining accounts: pairs of (nft_asset, nft_reward_state)
   const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
   for (const nftAsset of nftAssets) {
-    const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAsset);
+    const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
     remainingAccounts.push(
       { pubkey: nftAsset, isSigner: false, isWritable: false },
       { pubkey: nftRewardStatePda, isSigner: false, isWritable: true }
@@ -3589,80 +3515,7 @@ export async function fetchBundleWalletState(
   }
 }
 
-/**
- * Fetch bundle NFT rarity
- */
-export async function fetchBundleNftRarity(
-  connection: Connection,
-  nftAsset: PublicKey
-): Promise<BundleNftRarity | null> {
-  try {
-    const program = createProgram(connection);
-    const [nftRarityPda] = getBundleNftRarityPda(nftAsset);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).bundleNftRarity.fetch(nftRarityPda);
-
-    return {
-      nftAsset: decoded.nftAsset,
-      bundle: decoded.bundle,
-      rarity: parseAnchorRarity(decoded.rarity),
-      weight: decoded.weight,
-      revealedAt: BigInt(decoded.revealedAt.toString()),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fetch all bundle NFT rarities for a list of NFT assets
- * Returns all rarity accounts that can be decoded (the NFT assets passed in are already owned)
- */
-export async function fetchBundleNftRarities(
-  connection: Connection,
-  nftAssets: PublicKey[]
-): Promise<Map<string, BundleNftRarity>> {
-  const result = new Map<string, BundleNftRarity>();
-  if (nftAssets.length === 0) return result;
-
-  try {
-    const program = createProgram(connection);
-
-    // Batch fetch all rarity accounts
-    const rarityPdas = nftAssets.map(nft => getBundleNftRarityPda(nft)[0]);
-
-    const accounts = await connection.getMultipleAccountsInfo(rarityPdas);
-
-    for (let i = 0; i < accounts.length; i++) {
-      const account = accounts[i];
-      if (!account) continue;
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const decoded = (program.coder.accounts as any).decode("bundleNftRarity", account.data);
-        const revealedAt = BigInt(decoded.revealedAt?.toString() || "0");
-
-        // Include all rarity accounts - the NFT assets passed in are already verified owned
-        // Old accounts may have revealedAt = 0 but still have valid rarity
-        result.set(nftAssets[i].toBase58(), {
-          nftAsset: decoded.nftAsset,
-          bundle: decoded.bundle,
-          rarity: parseAnchorRarity(decoded.rarity),
-          weight: decoded.weight,
-          revealedAt,
-        });
-      } catch (err) {
-        // Skip accounts that fail to decode (schema mismatch)
-        console.log(`[fetchBundleNftRarities] Failed to decode rarity for ${nftAssets[i].toBase58()}:`, err);
-      }
-    }
-  } catch (error) {
-    console.error("Error fetching bundle NFT rarities:", error);
-  }
-
-  return result;
-}
+// NOTE: fetchBundleNftRarity and fetchBundleNftRarities removed - rarity data is now in UnifiedNftRewardState
 
 // ============================================
 // SUBSCRIPTION INSTRUCTIONS
@@ -3786,6 +3639,54 @@ export async function cancelEcosystemSubscriptionInstruction(
 }
 
 /**
+ * Renew patron subscription (extends by 30 days)
+ */
+export async function renewPatronSubscriptionInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  creator: PublicKey
+): Promise<TransactionInstruction> {
+  const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
+
+  return await program.methods
+    .renewPatronSubscription()
+    .accounts({
+      patronConfig: patronConfigPda,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      patronSubscription: patronSubscriptionPda,
+      creator,
+      subscriber,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Renew ecosystem subscription (extends by 30 days)
+ */
+export async function renewEcosystemSubscriptionInstruction(
+  program: Program,
+  subscriber: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemSubConfigPda] = getEcosystemSubConfigPda();
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+
+  return await program.methods
+    .renewEcosystemSubscription()
+    .accounts({
+      ecosystemSubConfig: ecosystemSubConfigPda,
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      subscriber,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
  * Claim content rewards for an NFT (uses UnifiedNftRewardState for subscription system)
  */
 export async function claimUnifiedContentRewardsInstruction(
@@ -3874,11 +3775,10 @@ export function createContentRegistryClient(connection: Connection) {
     getContentRewardPoolPda,
     getWalletContentStatePda,
     getContentCollectionPda,
-    getNftRewardStatePda,
+    getUnifiedNftRewardStatePda,
     getRentConfigPda,
     getRentEntryPda,
     getPendingMintPda,
-    getNftRarityPda,
     hashCid,
     calculateWeightedPendingReward,
 
@@ -4129,6 +4029,15 @@ export function createContentRegistryClient(connection: Connection) {
       subscriber: PublicKey
     ) => cancelEcosystemSubscriptionInstruction(program, subscriber),
 
+    renewPatronSubscriptionInstruction: (
+      subscriber: PublicKey,
+      creator: PublicKey
+    ) => renewPatronSubscriptionInstruction(program, subscriber, creator),
+
+    renewEcosystemSubscriptionInstruction: (
+      subscriber: PublicKey
+    ) => renewEcosystemSubscriptionInstruction(program, subscriber),
+
     // Subscription claim instructions (use UnifiedNftRewardState)
     claimUnifiedContentRewardsInstruction: (
       claimer: PublicKey,
@@ -4159,7 +4068,6 @@ export function createContentRegistryClient(connection: Connection) {
     getEcosystemEpochStatePda,
     getEcosystemSubConfigPda,
     getEcosystemSubscriptionPda,
-    getUnifiedNftRewardStatePda,
 
     // Bundle mint/rent PDA helpers
     getBundleMintConfigPda,
@@ -4167,8 +4075,6 @@ export function createContentRegistryClient(connection: Connection) {
     getBundleCollectionPda,
     getBundleRewardPoolPda,
     getBundleWalletStatePda,
-    getBundleNftRewardStatePda,
-    getBundleNftRarityPda,
     getBundleRentEntryPda,
     getBundleDirectNftPda,
 
@@ -4179,9 +4085,8 @@ export function createContentRegistryClient(connection: Connection) {
     fetchBundleCollection: (creator: PublicKey, bundleId: string) => fetchBundleCollection(connection, creator, bundleId),
     fetchBundleRewardPool: (creator: PublicKey, bundleId: string) => fetchBundleRewardPool(connection, creator, bundleId),
     fetchBundleWalletState: (wallet: PublicKey, creator: PublicKey, bundleId: string) => fetchBundleWalletState(connection, wallet, creator, bundleId),
-    fetchBundleNftRarity: (nftAsset: PublicKey) => fetchBundleNftRarity(connection, nftAsset),
-    fetchBundleNftRarities: (nftAssets: PublicKey[]) => fetchBundleNftRarities(connection, nftAssets),
 
+    // NOTE: fetchBundleNftRarity and fetchBundleNftRarities removed - rarity now in UnifiedNftRewardState
     // NOTE: MagicBlock bundle mint request fetching removed
 
     // Fetching
@@ -4199,9 +4104,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),
     fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
-    // NFT Rarity fetching
-    fetchNftRarity: (nftAsset: PublicKey) => fetchNftRarity(connection, nftAsset),
-    fetchNftRaritiesBatch: (nftAssets: PublicKey[]) => fetchNftRaritiesBatch(connection, nftAssets),
+    // NOTE: fetchNftRarity and fetchNftRaritiesBatch removed - rarity now in UnifiedNftRewardState
 
     // Rent fetching
     fetchRentConfig: (contentCid: string) => fetchRentConfig(connection, contentCid),
@@ -4250,6 +4153,14 @@ export function createContentRegistryClient(connection: Connection) {
       bundleCollections: Map<string, BundleCollection>
     ) => getBundlePendingRewardsOptimized(connection, wallet, walletBundleNfts, bundleRewardPools, bundleCollections),
 
+    // Pending mint request helpers
+    findPendingBundleMintRequests: (
+      buyer: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      maxEdition: bigint
+    ) => findPendingBundleMintRequests(connection, buyer, bundleId, creator, maxEdition),
+
     // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {
       try {
@@ -4287,6 +4198,7 @@ export function createContentRegistryClient(connection: Connection) {
               isEncrypted: decoded.isEncrypted ?? false,
               previewCid: decoded.previewCid ?? "",
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+              visibilityLevel: decoded.visibilityLevel,
             });
           } catch {
             // Skip accounts that fail to decode (old format without pendingCount)
@@ -4337,6 +4249,7 @@ export function createContentRegistryClient(connection: Connection) {
               isEncrypted: decoded.isEncrypted ?? false,
               previewCid: decoded.previewCid ?? "",
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+              visibilityLevel: decoded.visibilityLevel,
             });
           } catch {
             // Skip accounts that fail to decode
@@ -4388,6 +4301,7 @@ export function createContentRegistryClient(connection: Connection) {
               isEncrypted: decoded.isEncrypted ?? false,
               previewCid: decoded.previewCid ?? "",
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
+              visibilityLevel: decoded.visibilityLevel ?? 0,
             });
           } catch {
             // Skip accounts that fail to decode

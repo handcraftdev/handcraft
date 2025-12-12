@@ -18,10 +18,6 @@ export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
 export const WALLET_CONTENT_STATE_SEED = "wallet_content";
 export const CONTENT_COLLECTION_SEED = "content_collection";
 
-// Legacy seeds - kept for reading old accounts only (no longer created)
-// export const GLOBAL_REWARD_POOL_SEED = "global_reward_pool";  // REMOVED
-// export const NFT_REWARD_STATE_SEED = "nft_reward";  // REMOVED - use UNIFIED_NFT_REWARD_STATE_SEED
-
 // Rent seeds
 export const RENT_CONFIG_SEED = "rent_config";
 export const RENT_ENTRY_SEED = "rent_entry";
@@ -65,10 +61,12 @@ export const PLATFORM_FEE_PRIMARY_BPS = 500;   // 5%
 export const ECOSYSTEM_FEE_PRIMARY_BPS = 300;  // 3%
 export const CREATOR_FEE_PRIMARY_BPS = 8000;   // 80%
 export const HOLDER_REWARD_PRIMARY_BPS = 1200; // 12% - distributed to existing NFT holders
+
+// Secondary sale: Creator 4% (fixed), Platform 1%, Ecosystem 1%, Holders 4% = 10% total
 export const PLATFORM_FEE_SECONDARY_BPS = 100; // 1%
-export const ECOSYSTEM_FEE_SECONDARY_BPS = 50; // 0.5%
-export const MIN_CREATOR_ROYALTY_BPS = 200;    // 2%
-export const MAX_CREATOR_ROYALTY_BPS = 1000;   // 10%
+export const ECOSYSTEM_FEE_SECONDARY_BPS = 100; // 1%
+export const HOLDER_REWARD_SECONDARY_BPS = 400; // 4% - distributed to existing NFT holders
+export const FIXED_CREATOR_ROYALTY_BPS = 400;  // 4% (fixed)
 
 // Minimum prices (SOL only)
 export const MIN_PRICE_LAMPORTS = 1_000_000;   // 0.001 SOL
@@ -166,19 +164,12 @@ export function getDomainLabel(domain: ContentDomain): string {
   }
 }
 
-// Legacy alias for backward compatibility
-export type ContentCategory = ContentDomain;
-export const getContentCategory = getContentDomain;
-
 // Payment currency enum (SOL only now)
 export enum PaymentCurrency {
   Sol = 0,
 }
 
 // ========== RARITY CONSTANTS ==========
-
-// Rarity PDA seeds
-// export const NFT_RARITY_SEED = "nft_rarity";  // REMOVED - rarity is now in UnifiedNftRewardState
 export const PENDING_MINT_SEED = "pending_mint";
 
 // Rarity weights (matches program)
@@ -210,8 +201,6 @@ export const BUNDLE_RENT_CONFIG_SEED = "bundle_rent_config";
 export const BUNDLE_COLLECTION_SEED = "bundle_collection";
 export const BUNDLE_REWARD_POOL_SEED = "bundle_reward_pool";
 export const BUNDLE_WALLET_STATE_SEED = "bundle_wallet";
-// export const BUNDLE_NFT_REWARD_STATE_SEED = "bundle_nft_reward";  // REMOVED - use UnifiedNftRewardState
-// export const BUNDLE_NFT_RARITY_SEED = "bundle_nft_rarity";  // REMOVED - rarity is now in UnifiedNftRewardState
 export const BUNDLE_RENT_ENTRY_SEED = "bundle_rent_entry";
 export const BUNDLE_DIRECT_NFT_SEED = "bundle_direct_nft";
 export const BUNDLE_RENTAL_NFT_SEED = "bundle_rental_nft";
@@ -331,18 +320,39 @@ export enum PatronTier {
 }
 
 // Visibility levels (matches program)
+// Access is CUMULATIVE: higher levels grant access to all lower levels
+// Level 0: Anyone can access
+// Level 1: Ecosystem sub OR Creator sub OR NFT/Rental
+// Level 2: Creator sub OR NFT/Rental (ecosystem sub NOT enough)
+// Level 3: NFT/Rental ONLY (no subscription grants access)
 export enum VisibilityLevel {
-  Public = 0,           // No access requirement
-  Basic = 1,            // Ecosystem subscription or NFT ownership
-  CreatorSubscription = 2, // Patron subscription or NFT ownership
+  Public = 0,           // No access requirement (free content)
+  Ecosystem = 1,        // Ecosystem sub + Creator sub + NFT/Rental can access
+  Subscriber = 2,       // Creator sub + NFT/Rental only (ecosystem sub NOT enough)
+  NftOnly = 3,          // ONLY NFT owners or active renters (no subscribers)
 }
 
 // Helper to get visibility level label
 export function getVisibilityLevelLabel(level: VisibilityLevel): string {
   switch (level) {
     case VisibilityLevel.Public: return "Public";
-    case VisibilityLevel.Basic: return "Basic (Ecosystem or NFT)";
-    case VisibilityLevel.CreatorSubscription: return "Creator Subscription";
+    case VisibilityLevel.Ecosystem: return "Ecosystem Access";
+    case VisibilityLevel.Subscriber: return "Subscriber Only";
+    case VisibilityLevel.NftOnly: return "NFT/Rental Only";
+  }
+}
+
+// Helper to get visibility level description
+export function getVisibilityLevelDescription(level: VisibilityLevel): string {
+  switch (level) {
+    case VisibilityLevel.Public:
+      return "Anyone can access this content for free";
+    case VisibilityLevel.Ecosystem:
+      return "Requires ecosystem subscription, creator subscription, or NFT ownership";
+    case VisibilityLevel.Subscriber:
+      return "Requires creator subscription or NFT ownership (ecosystem sub not enough)";
+    case VisibilityLevel.NftOnly:
+      return "Only NFT owners or active renters can access (subscriptions don't grant access)";
   }
 }
 
