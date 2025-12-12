@@ -29,6 +29,7 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Preview Generation | ✅ Done | Auto-generate preview (first 10% or 5MB) |
 | Session Authentication | ✅ Done | Wallet signature-based 24h sessions |
 | Access Verification | ✅ Done | Check creator/NFT owner status for decryption |
+| Bundle Access | ✅ Done | Bundle NFT owners can access all content in the bundle |
 | Server-held Keys | ✅ Done | Deterministic key derivation (no per-content storage) |
 
 ### 3. NFT Minting System
@@ -62,15 +63,19 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Content Reward Pools | ✅ Done | Per-content accumulated rewards with reward_per_share |
+| Bundle Reward Pools | ✅ Done | Per-bundle accumulated rewards for bundle NFT holders |
 | Per-NFT Tracking | ✅ Done | Individual reward debt per NFT with weight |
 | Weighted Rewards | ✅ Done | Formula: `(weight * reward_per_share - debt) / PRECISION` |
 | Claim Rewards | ✅ Done | Claim pending rewards from content |
-| Transaction Batching | ✅ Done | Up to 25 NFTs per claim transaction (64 account limit) |
+| Unified Claim | ✅ Done | Claim content + bundle rewards in combined transactions |
+| Batch Bundle Claims | ✅ Done | All NFTs per bundle claimed in single instruction |
+| Transaction Batching | ✅ Done | Up to 4 instructions per transaction (content + bundle) |
 | Multi-Content Claims | ✅ Done | Claim from multiple contents across transactions |
 | Verified Claims | ✅ Done | On-chain NFT ownership verification for claims |
 | Transfer Sync | ✅ Done | Update reward positions on NFT transfer |
 | Rarity Multipliers | ✅ Done | Weighted reward distribution by rarity |
 | Mint Sequence Display | ✅ Done | NFTs sorted by createdAt in claim modal |
+| Secondary Sale Sync | ✅ Done | Auto-sync royalties to reward pool on claim |
 
 ### 6. Rental System
 
@@ -91,34 +96,55 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Bundle Items | ✅ Done | Add/remove content with ordering |
 | Bundle Types | ✅ Done | 7 types: Album, Series, Playlist, Course, Newsletter, Collection, ProductPack |
 | Bundle Metadata | ✅ Done | IPFS metadata for bundle info |
+| Drag-and-Drop Ordering | ✅ Done | Reorder items via metadata with position tracking |
+| Bundle NFT Minting | ✅ Done | Mint NFTs for bundles with VRF rarity |
+| Bundle Direct Mint | ✅ Done | Direct minting without VRF (deterministic) |
+| Bundle Rentals | ✅ Done | 3-tier rental pricing (6h, 1d, 7d) for bundles |
+| Bundle Reward Pools | ✅ Done | 12% holder rewards distributed to bundle NFT holders |
+| Bundle Collections | ✅ Done | Metaplex Core collection per bundle |
+| Bundle Content Access | ✅ Done | Bundle NFT grants access to all encrypted content |
+| Bundle Locking | ✅ Done | Bundle locks after first NFT mint |
+| Bundle Page | ✅ Done | Dedicated page showing bundle contents and purchase options |
 
 ### 8. Web Application
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Home Feed | ✅ Done | "For You" and "Your Content" tabs |
+| Home Feed | ✅ Done | "Discover" and "Your Content" tabs |
+| Bundle Feed | ✅ Done | Dedicated tab for browsing bundles |
 | Content Cards | ✅ Done | Preview, metadata, actions, rarity badges |
-| Creator Dashboard | ✅ Done | Stats, content table, rewards overview |
+| Bundle Cards | ✅ Done | Bundle preview with item count and pricing |
+| Creator Dashboard | ✅ Done | Stats, content table, bundles, rewards overview |
 | User Profiles | ✅ Done | Created/Collected/Rewards tabs |
 | Wallet Integration | ✅ Done | Solana Wallet Adapter (auto-detect) |
 | Upload Wizard | ✅ Done | Multi-step with encryption option |
 | Buy NFT Modal | ✅ Done | VRF minting with rarity reveal |
+| Buy Bundle Modal | ✅ Done | Purchase bundle NFTs with VRF rarity |
 | Rent Modal | ✅ Done | Tier selection, extension support |
+| Rent Bundle Modal | ✅ Done | Rent bundles with tier selection |
 | Sell NFT Modal | ✅ Done | Secondary market sale |
 | Burn NFT Modal | ✅ Done | Burn owned NFTs |
-| Claim Modal | ✅ Done | View and claim pending rewards |
+| Claim Modal | ✅ Done | Unified content + bundle rewards claim |
+| Manage Content Modal | ✅ Done | Configure mint/rent settings for content |
+| Manage Bundle Modal | ✅ Done | Configure mint/rent settings, manage items |
+| Create Bundle Modal | ✅ Done | Create bundles with metadata and items |
 | Edit/Delete Modals | ✅ Done | Content management for creators |
 | Session Auth | ✅ Done | Sign message for encrypted access |
 | Rarity Display | ✅ Done | Colored badges/bubbles by rarity |
+| Combined Rewards Header | ✅ Done | Header shows total pending (content + bundle) |
+| Transaction Simulation | ✅ Done | All mutations simulate before wallet prompt |
 
 ### 9. SDK Capabilities
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Client Factory | ✅ Done | `createContentRegistryClient()` |
-| All Instructions | ✅ Done | 31 instruction builders |
-| Fetch Functions | ✅ Done | Single and batch fetching |
-| PDA Derivation | ✅ Done | All 12 PDA types |
+| All Instructions | ✅ Done | 45+ instruction builders (content, bundle, mint, rent, rewards) |
+| Fetch Functions | ✅ Done | Single and batch fetching with caching |
+| PDA Derivation | ✅ Done | All 20+ PDA types (content, bundle, mint, rent, rewards) |
+| Bundle Instructions | ✅ Done | Create, update, delete, add/remove items |
+| Bundle Mint/Rent | ✅ Done | Configure and execute bundle minting/rentals |
+| Batch Claims | ✅ Done | Batch claim instructions for content and bundles |
 | IPFS Upload | ✅ Done | Filebase S3 integration |
 | Encryption Utils | ✅ Done | NaCl encrypt/decrypt |
 | Format Utils | ✅ Done | Address, duration, count formatting |
@@ -200,33 +226,34 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 ## Architecture Summary
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Web App (Next.js 15)                     │
-├──────────────┬──────────────┬──────────────┬────────────────┤
-│    Pages     │  Components  │    Hooks     │   API Routes   │
-│  - Feed      │  - Header    │  - Registry  │  - /session    │
-│  - Profile   │  - Sidebar   │  - Session   │  - /content    │
-│  - Dashboard │  - Modals    │  - Upload    │  - /upload     │
-└──────┬───────┴──────┬───────┴──────┬───────┴────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      Web App (Next.js 15)                        │
+├──────────────┬──────────────┬──────────────┬────────────────────┤
+│    Pages     │  Components  │    Hooks     │    API Routes      │
+│  - Feed      │  - Header    │  - Registry  │  - /session        │
+│  - Bundle    │  - Sidebar   │  - Session   │  - /content        │
+│  - Profile   │  - Modals    │  - Upload    │  - /upload         │
+│  - Dashboard │  - Cards     │              │                    │
+└──────┬───────┴──────┬───────┴──────┬───────┴────────────────────┘
        │              │              │
        ▼              ▼              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        SDK Package                           │
-├──────────────┬──────────────┬──────────────┬────────────────┤
-│  Instructions│   Fetching   │    Types     │   Utilities    │
-│  (31 total)  │  (batch opt) │  (14 accts)  │  - IPFS        │
-│              │              │              │  - Crypto      │
-└──────────────┴──────┬───────┴──────────────┴────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         SDK Package                              │
+├──────────────┬──────────────┬──────────────┬────────────────────┤
+│  Instructions│   Fetching   │    Types     │    Utilities       │
+│  (45+ total) │  (batch opt) │  (20+ accts) │  - IPFS            │
+│              │              │              │  - Crypto          │
+└──────────────┴──────┬───────┴──────────────┴────────────────────┘
                       │
                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Solana Program (content-registry)               │
-├──────────────┬──────────────┬──────────────┬────────────────┤
-│   Content    │   Minting    │   Rewards    │   Rentals      │
-│  - Register  │  - VRF       │  - Pools     │  - Configure   │
-│  - Update    │  - Escrow    │  - Claims    │  - Execute     │
-│  - Delete    │  - Fallback  │  - Sync      │  - Extend      │
-└──────────────┴──────────────┴──────────────┴────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│               Solana Program (content-registry)                  │
+├─────────────┬─────────────┬─────────────┬─────────────┬─────────┤
+│   Content   │   Bundles   │   Minting   │   Rewards   │ Rentals │
+│  - Register │  - Create   │  - VRF      │  - Pools    │ - Config│
+│  - Update   │  - Items    │  - Escrow   │  - Claims   │ - Exec  │
+│  - Delete   │  - Mint/Rent│  - Fallback │  - Batch    │ - Extend│
+└─────────────┴─────────────┴─────────────┴─────────────┴─────────┘
         │              │              │
         ▼              ▼              ▼
 ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
@@ -254,4 +281,4 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 ---
 
-*Last updated: December 11, 2025*
+*Last updated: December 12, 2024*
