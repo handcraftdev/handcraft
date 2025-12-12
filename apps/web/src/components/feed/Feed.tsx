@@ -191,7 +191,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent } = useContentRegistry();
+  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts } = useContentRegistry();
 
   const { data: mintConfig, isLoading: isLoadingMintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: rentConfig, isLoading: isLoadingRentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
@@ -233,6 +233,13 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   // Get on-chain bundle memberships for this content
   const contentBundles = getBundlesForContent(content.contentCid);
 
+  // Check if user owns an NFT from any bundle that contains this content
+  const ownsNftFromBundle = contentBundles.length > 0 && walletBundleNfts.some(nft =>
+    nft.bundleId && nft.creator && contentBundles.some(bundle =>
+      bundle.bundleId === nft.bundleId && bundle.creator.toBase58() === nft.creator?.toBase58()
+    )
+  );
+
   const shortAddress = content.creatorAddress
     ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}`
     : "Unknown";
@@ -253,11 +260,11 @@ function ContentCard({ content }: { content: EnrichedContent }) {
     ? fullContentUrl
     : decryptedUrl || previewUrl || null;
 
-  // Show locked overlay for non-owners without access
-  const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft;
+  // Show locked overlay for non-owners without access (includes bundle ownership)
+  const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft && !ownsNftFromBundle;
 
   // Show "needs session" state for creators/owners with encrypted content but no session
-  const needsSession = isEncrypted && (isCreator || ownsNft) && !decryptedUrl && !sessionToken;
+  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle) && !decryptedUrl && !sessionToken;
 
   // Show placeholder if encrypted but no content URL available (no preview)
   const showPlaceholder = isEncrypted && !contentUrl;
@@ -332,11 +339,11 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       setHasAccess(true);
       return;
     }
-    // Auto-decrypt if creator or owns NFT and hasn't decrypted yet
-    if ((isCreator || ownsNft) && !decryptedUrl && !isDecrypting) {
+    // Auto-decrypt if creator or owns NFT (direct or via bundle) and hasn't decrypted yet
+    if ((isCreator || ownsNft || ownsNftFromBundle) && !decryptedUrl && !isDecrypting) {
       requestDecryptedContent();
     }
-  }, [isEncrypted, publicKey, isCreator, ownsNft, decryptedUrl, isDecrypting, content.contentCid, requestDecryptedContent, sessionToken]);
+  }, [isEncrypted, publicKey, isCreator, ownsNft, ownsNftFromBundle, decryptedUrl, isDecrypting, content.contentCid, requestDecryptedContent, sessionToken]);
 
 
   return (

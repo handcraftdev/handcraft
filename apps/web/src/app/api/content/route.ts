@@ -6,6 +6,7 @@ import {
   decodeBase64,
   NETWORKS,
   getContentPda,
+  PROGRAM_ID,
 } from "@handcraft/sdk";
 import { verifySessionToken } from "@/lib/session";
 
@@ -153,7 +154,13 @@ async function checkAuthorization(
 
     // Check if requester owns an NFT for this content
     const hasNFT = await checkNFTOwnership(connection, wallet, contentCid);
-    return hasNFT;
+    if (hasNFT) {
+      return true;
+    }
+
+    // Check if requester owns an NFT from any bundle containing this content
+    const hasBundleAccess = await checkBundleOwnership(connection, wallet, contentCid);
+    return hasBundleAccess;
   } catch (error) {
     console.error("Authorization check error:", error);
     return false;
@@ -213,6 +220,114 @@ async function checkNFTOwnership(
     return false;
   } catch (error) {
     console.error("NFT ownership check error:", error);
+    return false;
+  }
+}
+
+/**
+ * Check if wallet owns an NFT from any bundle containing this content
+ */
+async function checkBundleOwnership(
+  connection: Connection,
+  wallet: string,
+  contentCid: string
+): Promise<boolean> {
+  try {
+    const walletPubkey = new PublicKey(wallet);
+
+    // 1. Find all BundleItem accounts for this content
+    // BundleItem accounts have the contentCid stored as a hash
+    const bundleItemAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        // Filter by BundleItem discriminator
+        { memcmp: { offset: 0, bytes: "GLe4oZPLqZw" } }, // base58 of BundleItem discriminator
+      ],
+    });
+
+    // Map content CID to bundles that contain it
+    const bundlesWithContent: Array<{ bundlePda: PublicKey; creator: PublicKey }> = [];
+
+    for (const { account } of bundleItemAccounts) {
+      const data = account.data;
+      if (data.length < 100) continue;
+
+      // Parse BundleItem: discriminator(8) + bundle(32) + contentCid(string with 4-byte length prefix)
+      const bundlePda = new PublicKey(data.slice(8, 40));
+
+      // Read contentCid string (4-byte length prefix + string)
+      const contentCidLen = data.readUInt32LE(40);
+      const itemContentCid = data.slice(44, 44 + contentCidLen).toString('utf8');
+
+      if (itemContentCid === contentCid) {
+        // Find the bundle to get its creator
+        const bundleAccount = await connection.getAccountInfo(bundlePda);
+        if (bundleAccount) {
+          // Bundle: discriminator(8) + creator(32)
+          const creator = new PublicKey(bundleAccount.data.slice(8, 40));
+          bundlesWithContent.push({ bundlePda, creator });
+        }
+      }
+    }
+
+    if (bundlesWithContent.length === 0) {
+      return false;
+    }
+
+    // 2. Find BundleCollection accounts for these bundles
+    const bundleCollectionAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        // Filter by BundleCollection discriminator
+        { memcmp: { offset: 0, bytes: "4CqhbQFPvDm" } }, // base58 of BundleCollection discriminator
+      ],
+    });
+
+    const bundleToCollection = new Map<string, PublicKey>();
+    for (const { account } of bundleCollectionAccounts) {
+      const data = account.data;
+      if (data.length < 72) continue;
+      // BundleCollection: discriminator(8) + bundle(32) + collectionAsset(32)
+      const bundlePdaKey = new PublicKey(data.slice(8, 40)).toBase58();
+      const collectionAsset = new PublicKey(data.slice(40, 72));
+      bundleToCollection.set(bundlePdaKey, collectionAsset);
+    }
+
+    // 3. Get collection addresses for bundles containing this content
+    const collectionAddresses = new Set<string>();
+    for (const bundle of bundlesWithContent) {
+      const collection = bundleToCollection.get(bundle.bundlePda.toBase58());
+      if (collection) {
+        collectionAddresses.add(collection.toBase58());
+      }
+    }
+
+    if (collectionAddresses.size === 0) {
+      return false;
+    }
+
+    // 4. Check if wallet owns any NFTs from these collections
+    const walletAssets = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: "2" } }, // Asset type
+        { memcmp: { offset: 1, bytes: walletPubkey.toBase58() } }, // Owner
+      ],
+    });
+
+    for (const { account } of walletAssets) {
+      const data = account.data;
+      // Check update authority type for collection
+      // offset 33 = updateAuthorityType, if 2 = collection
+      if (data.length > 65 && data[33] === 2) {
+        // Collection address is at offset 34 (32 bytes)
+        const collectionPubkey = new PublicKey(data.slice(34, 66));
+        if (collectionAddresses.has(collectionPubkey.toBase58())) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("Bundle ownership check error:", error);
     return false;
   }
 }
