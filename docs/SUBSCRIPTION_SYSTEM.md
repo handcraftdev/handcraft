@@ -1688,7 +1688,7 @@ Created on each NFT mint (UnifiedNftRewardState).
 - [x] E2E testing: Ecosystem subscription (payment to streaming treasury)
 - [x] E2E testing: Content reward claims
 - [x] E2E testing: Virtual RPS calculations protect late minters
-- [ ] E2E testing: `simple_mint_bundle` with 50/50 distribution
+- [x] E2E testing: `simple_mint_bundle` with 50/50 distribution (verified Dec 13, 2025)
 - [ ] E2E testing: Subscription renew/cancel flows
 - [ ] E2E testing: Patron/global holder claims (after epoch distribution)
 - [x] E2E testing: Burn reconciliation updates all pools (verified with common & uncommon NFTs)
@@ -1709,6 +1709,7 @@ Created on each NFT mint (UnifiedNftRewardState).
 | Pool Weight Tracking (Mint) | ✅ | All 5 pools correctly increment on mint |
 | Burn Common NFT | ✅ | All 5 pools correctly decrement by weight=1 |
 | Burn Uncommon NFT | ✅ | All 5 pools correctly decrement by weight=5 |
+| Bundle 50/50 Distribution | ✅ | 50% to BundleRewardPool, 50% to 3 ContentRewardPools |
 
 ---
 
@@ -1943,7 +1944,7 @@ mint_content_nft():
 
 ---
 
-*Last updated: December 13, 2025 - E2E tests passed (rarity, pool weights, burn reconciliation), subscription system deployed to devnet*
+*Last updated: December 13, 2025 - E2E tests passed (rarity, pool weights, burn, bundle 50/50), subscription system deployed to devnet*
 
 ---
 
@@ -1959,7 +1960,7 @@ mint_content_nft():
    - [x] Test rarity distribution (chi-square validation passed)
    - [x] Test pool weight tracking on mint (all 5 pools)
    - [x] Test burn reconciliation decrements weight from all 5 pools (common & uncommon NFTs)
-   - [ ] Test `simple_mint_bundle` with 50/50 holder reward distribution
+   - [x] Test `simple_mint_bundle` with 50/50 holder reward distribution (verified Dec 13, 2025)
    - [ ] Test subscription renew/cancel flows
    - [ ] Test claim flows: patron, global holder, creator payout
    - [ ] Test epoch distribution triggers on first claim after 30 days
@@ -2044,3 +2045,14 @@ CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
 - Common NFT (weight: 1) - All 5 pools decremented correctly
 - Uncommon NFT (weight: 5) - All 5 pools decremented correctly
 - UnifiedNftRewardState account closed and rent refunded to user
+
+### Bug Fix: Bundle 50/50 SOL Transfer (Dec 13, 2025)
+
+**Problem:** `simple_mint_bundle` was using direct lamport manipulation to transfer SOL to ContentRewardPools, which failed with "instruction spent from the balance of an account it does not own".
+
+**Solution:** Changed from direct lamport manipulation to `solana_program::program::invoke` with `system_instruction::transfer`, which properly authorizes the transfer through the payer's signature.
+
+**Verification:** Bundle 50/50 distribution tested and verified working:
+- 0.05 SOL mint price generates 0.006 SOL holder rewards (12%)
+- 50% (0.003 SOL) correctly sent to BundleRewardPool
+- 50% (0.003 SOL) correctly distributed across 3 ContentRewardPools (0.001 SOL each)

@@ -1544,7 +1544,7 @@ pub mod content_registry {
 
     /// Simple mint bundle NFT with slot hash randomness + full subscription pool tracking
     /// Single transaction - grants access to all bundle content
-    pub fn simple_mint_bundle(ctx: Context<SimpleMintBundle>) -> Result<()> {
+    pub fn simple_mint_bundle<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>) -> Result<()> {
         SimpleMintBundle::handler(ctx)
     }
 

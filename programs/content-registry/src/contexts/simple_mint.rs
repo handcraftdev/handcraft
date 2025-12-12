@@ -698,7 +698,7 @@ pub struct SimpleMintBundle<'info> {
 }
 
 impl<'info> SimpleMintBundle<'info> {
-    pub fn handler(ctx: Context<SimpleMintBundle>) -> Result<()> {
+    pub fn handler<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>) -> Result<()> {
         let clock = Clock::get()?;
         let timestamp = clock.unix_timestamp;
 
@@ -910,6 +910,9 @@ impl<'info> SimpleMintBundle<'info> {
                     let per_pool_share = content_share / content_pool_count as u64;
                     let remainder = content_share % content_pool_count as u64;
 
+                    // Clone payer info once, outside the loop
+                    let payer_ai = ctx.accounts.payer.to_account_info();
+
                     for i in 0..content_pool_count {
                         let pool_share = if i == 0 {
                             per_pool_share + remainder
@@ -918,11 +921,20 @@ impl<'info> SimpleMintBundle<'info> {
                         };
 
                         if pool_share > 0 {
-                            let pool_info = &ctx.remaining_accounts[i];
+                            let pool_info = ctx.remaining_accounts[i].clone();
+                            let pool_key = *pool_info.key;
 
-                            // Transfer SOL via lamport manipulation (payer is signer, pool is writable)
-                            **pool_info.try_borrow_mut_lamports()? += pool_share;
-                            **ctx.accounts.payer.try_borrow_mut_lamports()? -= pool_share;
+                            // Transfer SOL using system_program invoke
+                            let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+                                &payer_key,
+                                &pool_key,
+                                pool_share,
+                            );
+
+                            anchor_lang::solana_program::program::invoke(
+                                &transfer_ix,
+                                &[payer_ai.clone(), pool_info.clone()],
+                            )?;
 
                             // Update ContentRewardPool's reward_per_share
                             // Layout: discriminator(8) + content(32) + reward_per_share(16) + total_nfts(8) + total_weight(8) + total_deposited(8) + ...
