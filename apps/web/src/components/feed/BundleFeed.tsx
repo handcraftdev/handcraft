@@ -100,7 +100,7 @@ export function BundleFeed() {
     <div className="pb-20">
       {/* Type Filter */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
-        <div className="flex items-center gap-1.5 px-4 py-3 overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap justify-center gap-1.5 px-4 py-3">
           {BUNDLE_TYPE_FILTERS.map((filter) => (
             <button
               key={String(filter.value)}
