@@ -1,14 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Feed, BundleFeed } from "@/components/feed";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 
 type MainTab = "content" | "bundles";
 
+const TAB_STORAGE_KEY = "handcraft-main-tab";
+
+function usePersistedTab(key: string, defaultValue: MainTab): [MainTab, (value: MainTab) => void, boolean] {
+  const [value, setValue] = useState<MainTab>(defaultValue);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(key);
+    if (saved === "content" || saved === "bundles") setValue(saved);
+    setIsReady(true);
+  }, [key]);
+
+  const setAndPersist = useCallback((newValue: MainTab) => {
+    setValue(newValue);
+    localStorage.setItem(key, newValue);
+  }, [key]);
+
+  return [value, setAndPersist, isReady];
+}
+
 export default function Home() {
-  const [mainTab, setMainTab] = useState<MainTab>("content");
+  const [mainTab, setMainTab, isTabReady] = usePersistedTab(TAB_STORAGE_KEY, "content");
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -19,7 +39,7 @@ export default function Home() {
           {/* Main Tab Navigation */}
           <div className="sticky top-16 z-40 bg-black border-b border-gray-800">
             <div className="max-w-2xl mx-auto px-4">
-              <div className="flex">
+              <div className={`flex transition-opacity duration-150 ${isTabReady ? "opacity-100" : "opacity-0"}`}>
                 <button
                   onClick={() => setMainTab("content")}
                   className={`flex-1 py-4 text-center font-medium transition-colors relative ${
