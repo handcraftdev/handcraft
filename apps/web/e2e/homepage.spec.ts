@@ -6,53 +6,68 @@ test.describe("Homepage", () => {
   });
 
   test("should load homepage successfully", async ({ page }) => {
-    // Check page title
     await expect(page).toHaveTitle(/Handcraft/i);
   });
 
-  test("should display header with navigation", async ({ page }) => {
-    // Check header exists
+  test("should display header with logo", async ({ page }) => {
     const header = page.locator("header");
     await expect(header).toBeVisible();
 
-    // Check logo/brand is present
-    const logo = page.getByRole("link", { name: /handcraft/i }).first();
+    // Logo text "Handcraft"
+    const logo = page.locator("header").getByText("Handcraft");
     await expect(logo).toBeVisible();
   });
 
-  test("should display hero section", async ({ page }) => {
-    // Check for main heading or hero content
-    const mainContent = page.locator("main");
-    await expect(mainContent).toBeVisible();
+  test("should display hero section with heading", async ({ page }) => {
+    const main = page.locator("main");
+    await expect(main).toBeVisible();
+
+    // Hero heading
+    const heroTitle = page.getByRole("heading", { name: /Own Your Content/i });
+    await expect(heroTitle).toBeVisible();
   });
 
-  test("should have explore link in navigation", async ({ page }) => {
-    // Find and verify explore link
-    const exploreLink = page.getByRole("link", { name: /explore/i }).first();
+  test("should have Explore Content link", async ({ page }) => {
+    const exploreLink = page.getByRole("link", { name: /Explore Content/i });
     await expect(exploreLink).toBeVisible();
   });
 
-  test("should navigate to explore page", async ({ page }) => {
-    // Click explore link
-    const exploreLink = page.getByRole("link", { name: /explore/i }).first();
-    await exploreLink.click();
+  test("should have Start Creating link", async ({ page }) => {
+    const dashboardLink = page.getByRole("link", { name: /Start Creating/i }).first();
+    await expect(dashboardLink).toBeVisible();
+  });
 
-    // Verify navigation
+  test("should navigate to explore page", async ({ page }) => {
+    await page.getByRole("link", { name: /Explore Content/i }).click();
     await expect(page).toHaveURL(/\/explore/);
   });
 
-  test("should display connect wallet button", async ({ page }) => {
-    // Look for wallet connection button
-    const walletButton = page.getByRole("button", { name: /connect|wallet/i }).first();
+  test("should navigate to dashboard page", async ({ page }) => {
+    await page.getByRole("link", { name: /Start Creating/i }).first().click();
+    await expect(page).toHaveURL(/\/dashboard/);
+  });
+
+  test("should display wallet connect button", async ({ page }) => {
+    // WalletMultiButton shows "Select Wallet" when not connected
+    const walletButton = page.getByRole("button", { name: /Select Wallet/i });
     await expect(walletButton).toBeVisible();
   });
 
+  test("should display features section", async ({ page }) => {
+    // Feature headings
+    await expect(page.getByText("17+ Content Types")).toBeVisible();
+    await expect(page.getByText("Bundle Collections")).toBeVisible();
+    await expect(page.getByText("On-Chain Ownership")).toBeVisible();
+  });
+
   test("should be responsive on mobile viewport", async ({ page }) => {
-    // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
 
-    // Page should still load and display content
-    const mainContent = page.locator("main");
-    await expect(mainContent).toBeVisible();
+    const main = page.locator("main");
+    await expect(main).toBeVisible();
+
+    // Hero should still be visible
+    const heroTitle = page.getByRole("heading", { name: /Own Your Content/i });
+    await expect(heroTitle).toBeVisible();
   });
 });

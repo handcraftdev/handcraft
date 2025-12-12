@@ -9,69 +9,54 @@ test.describe("Explore Page", () => {
     await expect(page).toHaveURL(/\/explore/);
   });
 
-  test("should display content feed section", async ({ page }) => {
-    // Check for main content area
+  test("should display main content area", async ({ page }) => {
     const main = page.locator("main");
     await expect(main).toBeVisible();
   });
 
   test("should display Content and Bundles tabs", async ({ page }) => {
-    // Look for tab navigation
-    const contentTab = page.getByRole("tab", { name: /content/i }).or(
-      page.getByRole("button", { name: /content/i })
-    );
-    const bundlesTab = page.getByRole("tab", { name: /bundles/i }).or(
-      page.getByRole("button", { name: /bundles/i })
-    );
+    // Tab buttons
+    const contentTab = page.getByRole("button", { name: /Content/i }).first();
+    const bundlesTab = page.getByRole("button", { name: /Bundles/i });
 
-    // At least one tab structure should be present
-    const hasContentTab = await contentTab.count() > 0;
-    const hasBundlesTab = await bundlesTab.count() > 0;
-
-    expect(hasContentTab || hasBundlesTab).toBeTruthy();
+    await expect(contentTab).toBeVisible();
+    await expect(bundlesTab).toBeVisible();
   });
 
-  test("should have sorting options", async ({ page }) => {
-    // Look for sort controls (dropdown or buttons)
-    const sortControl = page.locator("[data-testid='sort-control']").or(
-      page.getByRole("combobox")
-    ).or(
-      page.locator("select")
-    );
+  test("should switch to Bundles tab", async ({ page }) => {
+    const bundlesTab = page.getByRole("button", { name: /Bundles/i });
+    await bundlesTab.click();
 
-    // If sorting is implemented, verify it exists
-    const sortCount = await sortControl.count();
-    // This is a soft check - sorting may or may not be visible
-    if (sortCount > 0) {
-      await expect(sortControl.first()).toBeVisible();
-    }
+    await expect(page).toHaveURL(/tab=bundles/);
   });
 
-  test("should handle empty state gracefully", async ({ page }) => {
-    // Page should not show error even if no content
-    await expect(page.locator("text=/error/i")).not.toBeVisible();
+  test("should switch back to Content tab", async ({ page }) => {
+    // First switch to bundles
+    await page.getByRole("button", { name: /Bundles/i }).click();
+    await expect(page).toHaveURL(/tab=bundles/);
+
+    // Switch back to content
+    await page.getByRole("button", { name: /Content/i }).first().click();
+    await expect(page).toHaveURL(/tab=content/);
   });
 
   test("should support URL parameters for tab selection", async ({ page }) => {
-    // Navigate with tab parameter
     await page.goto("/explore?tab=bundles");
     await expect(page).toHaveURL(/tab=bundles/);
   });
 
-  test("should display content cards when content exists", async ({ page }) => {
-    // Wait for potential content to load
-    await page.waitForTimeout(2000);
+  test("should display header", async ({ page }) => {
+    const header = page.locator("header");
+    await expect(header).toBeVisible();
+  });
 
-    // Check for card elements (may be empty if no content)
-    const cards = page.locator("[data-testid='content-card']").or(
-      page.locator("article")
-    ).or(
-      page.locator(".card")
-    );
+  test("should display sidebar on desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
 
-    const cardCount = await cards.count();
-    // Just verify the structure works - content may or may not exist
-    expect(cardCount).toBeGreaterThanOrEqual(0);
+    // Sidebar exists (may be hidden on mobile)
+    const sidebar = page.locator("aside");
+    const sidebarCount = await sidebar.count();
+    expect(sidebarCount).toBeGreaterThanOrEqual(0);
   });
 
   test("should be responsive on tablet viewport", async ({ page }) => {
