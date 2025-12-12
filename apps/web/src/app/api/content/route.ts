@@ -16,6 +16,27 @@ const MASTER_SECRET = process.env.CONTENT_ENCRYPTION_SECRET;
 const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs";
 const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as keyof typeof NETWORKS;
 
+/**
+ * Validate CID format
+ * CIDv0: Starts with "Qm" and is 46 characters (base58btc)
+ * CIDv1: Starts with various prefixes like "bafy" (base32), "bafk", etc.
+ */
+function isValidCid(cid: string): boolean {
+  if (!cid || typeof cid !== "string") return false;
+
+  // CIDv0: 46 character base58btc starting with Qm
+  if (cid.startsWith("Qm") && cid.length === 46) {
+    return /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(cid);
+  }
+
+  // CIDv1: base32 encoded, typically starts with "bafy" or "bafk"
+  if (cid.startsWith("baf") && cid.length >= 50) {
+    return /^[a-z2-7]+$/.test(cid);
+  }
+
+  return false;
+}
+
 interface EncryptedContentMeta {
   version: number;
   algorithm: string;
@@ -49,6 +70,14 @@ export async function GET(request: NextRequest) {
   if (!contentCid || !metaCid || !sessionToken) {
     return NextResponse.json(
       { error: "Missing required parameters" },
+      { status: 400 }
+    );
+  }
+
+  // Validate CID formats to prevent SSRF and injection attacks
+  if (!isValidCid(contentCid) || !isValidCid(metaCid)) {
+    return NextResponse.json(
+      { error: "Invalid CID format" },
       { status: 400 }
     );
   }
@@ -122,8 +151,55 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * Parse visibility level from content account data
+ * Handles variable-length Borsh strings
+ */
+function parseVisibilityLevel(data: Buffer): number {
+  let offset = 8; // Skip discriminator
+  offset += 32; // Skip creator
+
+  // Skip content_cid (4-byte length + string bytes)
+  const contentCidLen = data.readUInt32LE(offset);
+  offset += 4 + contentCidLen;
+
+  // Skip metadata_cid
+  const metadataCidLen = data.readUInt32LE(offset);
+  offset += 4 + metadataCidLen;
+
+  // Skip content_type (1 byte enum)
+  offset += 1;
+  // Skip tips_received (u64)
+  offset += 8;
+  // Skip created_at (i64)
+  offset += 8;
+  // Skip is_locked (bool)
+  offset += 1;
+  // Skip minted_count (u64)
+  offset += 8;
+  // Skip pending_count (u64)
+  offset += 8;
+  // Skip is_encrypted (bool)
+  offset += 1;
+
+  // Skip preview_cid
+  const previewCidLen = data.readUInt32LE(offset);
+  offset += 4 + previewCidLen;
+
+  // Skip encryption_meta_cid
+  const encryptionMetaCidLen = data.readUInt32LE(offset);
+  offset += 4 + encryptionMetaCidLen;
+
+  // Read visibility_level (u8)
+  return data.readUInt8(offset);
+}
+
+/**
  * Check if wallet is authorized to access content
- * Returns true if wallet is creator OR owns an NFT for this content
+ * Implements 4-tier visibility model:
+ * - Level 0: Public - anyone can access
+ * - Level 1: Ecosystem - ecosystem sub OR creator sub OR NFT/Rental
+ * - Level 2: Subscriber - creator sub OR NFT/Rental (ecosystem sub NOT enough)
+ * - Level 3: NFT Only - ONLY NFT owners or renters
  */
 async function checkAuthorization(
   wallet: string,
@@ -144,12 +220,26 @@ async function checkAuthorization(
       return false;
     }
 
-    // Parse account data to get creator
+    // Parse account data
     const data = accountInfo.data;
     const creatorBytes = data.slice(8, 40);
     const creator = new PublicKey(creatorBytes);
 
-    // Check if requester is creator
+    // Parse visibility level
+    let visibilityLevel = 0;
+    try {
+      visibilityLevel = parseVisibilityLevel(data);
+    } catch {
+      // Default to level 0 if parsing fails (backwards compatibility)
+      visibilityLevel = 0;
+    }
+
+    // Level 0: Public - anyone can access
+    if (visibilityLevel === 0) {
+      return true;
+    }
+
+    // Creator always has access
     if (creator.toString() === wallet) {
       return true;
     }
@@ -162,7 +252,24 @@ async function checkAuthorization(
 
     // Check if requester owns an NFT from any bundle containing this content
     const hasBundleAccess = await checkBundleOwnership(connection, wallet, contentCid);
-    return hasBundleAccess;
+    if (hasBundleAccess) {
+      return true;
+    }
+
+    // Level 3: NFT Only - no subscription access
+    if (visibilityLevel === 3) {
+      return false;
+    }
+
+    // Levels 1-2: Check subscription access
+    // Level 1: Ecosystem subscription OR creator subscription
+    // Level 2: Creator subscription only
+    // TODO: Implement subscription checks when subscription system is fully deployed
+    // For now, return false if NFT access not found for levels 1-2
+    // This will be updated to check:
+    // - EcosystemSubState for level 1
+    // - PatronSubState for levels 1-2
+    return false;
   } catch (error) {
     console.error("Authorization check error:", error);
     return false;

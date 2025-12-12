@@ -12,6 +12,9 @@ const filebase = process.env.FILEBASE_KEY && process.env.FILEBASE_SECRET && proc
 
 const MASTER_SECRET = process.env.CONTENT_ENCRYPTION_SECRET;
 
+// Maximum file size: 2GB (same as video limit, the largest domain)
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
+
 /**
  * Generate a preview from content
  * Preview should be a teaser, not the full content
@@ -56,6 +59,14 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: "No file" }, { status: 400 });
+    }
+
+    // Check file size before processing
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is 2 GB.` },
+        { status: 413 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
