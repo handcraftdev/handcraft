@@ -10,52 +10,97 @@ Features are prioritized based on:
 
 ---
 
-## Priority 1: Critical Path (Next 2-4 weeks)
+## Completed Features
 
-These features are essential for a usable product.
+### ✅ Content Type Filters
+- Content type filters (17 types) on Feed tab
+- Bundle type filters (7 types) on Bundles tab
+- Persistent filter/tab selection via localStorage
+- Centered, wrapping filter chips
 
-### 1.1 Search & Discovery
+---
+
+# Part A: Core Features (No Backend Required)
+
+These features can be built using on-chain data and client-side storage only.
+
+## A1. Search & Discovery
+
 **Why:** Users cannot find content without search. Critical for retention.
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | Basic Search | Medium | Full-text search on title, description, tags |
-| Content Filters | Low | Filter by type, domain, price, rarity |
 | Search Results Page | Low | Display matching content with cards |
 | Search History | Low | Recent searches stored locally |
+| Advanced Filters | Low | Filter by price range, rarity, date |
 
 **Implementation:**
-- Add search API route using on-chain content metadata
-- Create `/search` page with results
-- Add filter dropdowns to search UI
+- Query IPFS metadata (already cached in React Query)
+- Client-side filtering and sorting
+- localStorage for search history
 
-### 1.2 ~~Content Type Pages~~ ✅ DONE
-**Status:** Implemented as filters instead of separate pages.
+## A2. Trending & Discovery
 
-- ✅ Content type filters (17 types) on Feed tab
-- ✅ Bundle type filters (7 types) on Bundles tab
-- ✅ Persistent filter/tab selection via localStorage
-- ✅ Centered, wrapping filter chips
-
-**Remaining:**
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| /trending Page | Medium | Sort by recent mints/tips (simple algorithm) |
+| Trending Page | Medium | Sort by recent mints/tips (on-chain data) |
+| New Releases | Low | Sort by creation date |
+| Top Creators | Medium | Rank by total sales/tips |
 
-### 1.3 Social Features (Requires Backend Service)
-**Why:** Core social features. Too expensive/complex for on-chain.
+**Implementation:**
+- Use existing on-chain data (mintedCount, tips)
+- Simple scoring algorithm
+- No backend needed
 
-**Recommendation:** Build a lightweight social backend service to handle:
+## A3. Creator Tools
 
-| Feature | Storage | Description |
-|---------|---------|-------------|
-| Following System | PostgreSQL | Follow/unfollow creators |
-| Comments & Reactions | PostgreSQL | Comments, replies, emoji reactions |
-| Notifications | PostgreSQL + WebSocket | Real-time alerts |
-| View Counts | Redis/PostgreSQL | Track content views |
-| Watch Later / Liked | PostgreSQL | User library features |
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Revenue Charts | Medium | Visualize on-chain earnings |
+| Top Content | Low | Sort creator's content by performance |
+| Draft Saving | Low | localStorage for incomplete uploads |
+| Batch Upload | Medium | Upload multiple files at once |
 
-**Architecture Options:**
+## A4. Advanced Minting (On-Chain)
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Batch Minting | Medium | Mint multiple NFTs at once |
+| Whitelist Minting | Medium | Allowlist for early access |
+| Auction Minting | High | Time-limited bidding |
+| Bonding Curve | High | Price increases with supply |
+
+## A5. Marketplace (On-Chain)
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| List NFTs for Sale | High | Fixed price listings |
+| Buy Listed NFTs | High | Purchase from listings |
+| Marketplace Page | Medium | Browse all listings |
+
+## A6. UI/UX Improvements
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Copy Share Link | Low | Copy content URL button |
+| Content Duration | Low | Show video/audio length |
+| Better Video Player | Medium | Chapters, quality, speed controls |
+| Audio Player | Medium | Playlist, queue, shuffle |
+
+---
+
+# Part B: Social Features (Requires Backend Service)
+
+These features require a backend service for efficient storage and real-time updates.
+
+## Backend Architecture
+
+**Recommended: Supabase**
+- Built-in auth (wallet signature verification)
+- Real-time subscriptions for notifications
+- Row-level security for user data
+- Easy integration with Next.js
 
 | Option | Pros | Cons | Cost |
 |--------|------|------|------|
@@ -64,95 +109,80 @@ These features are essential for a usable product.
 | **PlanetScale + Vercel** | Serverless, scalable | MySQL not Postgres | $0-29/mo |
 | **Self-hosted** | Full control | Maintenance burden | VPS cost |
 
-**Recommended: Supabase**
-- Built-in auth (wallet signature verification)
-- Real-time subscriptions for notifications
-- Row-level security for user data
-- Easy integration with Next.js
+**Database Schema:**
+```sql
+-- Users (wallet-based)
+users (wallet_address PK, display_name, avatar_cid, bio, created_at)
 
-**Implementation Order:**
-1. Set up Supabase project
-2. User profiles table (wallet address as ID)
-3. Follows table (follower → following)
-4. Comments table (content_cid, user, text, parent_id)
-5. Notifications table (user, type, data, read)
-6. Real-time subscriptions for notifications
+-- Social graph
+follows (follower, following, created_at)
 
----
+-- Engagement
+comments (id, content_cid, user, text, parent_id, created_at)
+reactions (id, content_cid, user, emoji, created_at)
+views (content_cid, user, viewed_at)
 
-## Priority 2: Engagement & Retention
+-- Library
+bookmarks (user, content_cid, list_type, created_at)  -- watch_later, liked
 
-These features require the social backend.
+-- Notifications
+notifications (id, user, type, data, read, created_at)
+```
 
-### 2.1 Following System
+## B1. Following System
+
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | Follow/Unfollow | Low | Button on profiles/cards |
 | Following Feed | Medium | Filter feed to followed creators |
 | Follower Count | Low | Display on profiles |
+| Following List | Low | View who user follows |
 
-### 2.2 Comments & Reactions
+## B2. Comments & Reactions
+
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | Comments | Medium | Text comments on content |
-| Emoji Reactions | Low | Quick reactions (❤️ 🔥 etc.) |
+| Emoji Reactions | Low | Quick reactions |
 | Reply Threading | Medium | Nested comment replies |
+| Comment Moderation | Medium | Delete, report, hide |
 
-### 2.3 Notifications
+## B3. Notifications
+
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | In-App Notifications | Medium | Bell icon with dropdown |
-| Real-time Updates | Medium | Supabase real-time |
+| Real-time Updates | Medium | Supabase real-time subscriptions |
+| Email Notifications | Medium | Optional email alerts |
 | Push Notifications | High | Browser/mobile push |
 
-### 2.4 Library Features
+**Notification Types:**
+- New follower
+- Comment on your content
+- Reply to your comment
+- NFT sold (primary/secondary)
+- Rewards available to claim
+- New content from followed creator
+
+## B4. Library Features
+
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | Watch Later | Low | Save content for later |
 | Liked Content | Low | Track liked content |
-| Playlists | Medium | User-created playlists |
+| View History | Low | Recently viewed content |
+| Custom Playlists | Medium | User-created playlists |
 
----
-
-## Priority 3: Creator Tools (Weeks 5-8)
-
-Help creators succeed to attract more content.
-
-### 3.1 Analytics Dashboard
-**Why:** Creators need data to improve. Current dashboard is basic.
+## B5. Analytics (Backend Required)
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | View Counts | Medium | Track content views |
-| Revenue Charts | Medium | Visualize earnings over time |
-| Top Content | Low | Show best performing content |
-| Audience Stats | High | Geographic, referral data |
+| Audience Demographics | High | Geographic, device data |
+| Referral Tracking | Medium | Traffic sources |
+| Engagement Metrics | Medium | Watch time, completion rate |
 
-### 3.2 Scheduling
-**Why:** Creators want to plan content releases.
-
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Scheduled Publishing | Medium | Set future publish date |
-| Draft Saving | Low | Save incomplete uploads |
-
-### 3.3 Better Upload Experience
-**Why:** Current upload is basic. Large files may fail.
-
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Resumable Uploads | High | Handle large file interruptions |
-| Progress Persistence | Medium | Recover from browser close |
-| Batch Upload | Medium | Upload multiple files at once |
-
----
-
-## Priority 4: Advanced Features (Weeks 7-12)
-
-Differentiation and advanced use cases.
-
-### 4.1 Communities
-**Why:** Reddit-style communities for discussion and content curation.
+## B6. Communities
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -161,33 +191,13 @@ Differentiation and advanced use cases.
 | Community Moderation | High | Mod tools, rules |
 | Token Gating | Medium | NFT required to join |
 
-### 4.2 Advanced Minting
-**Why:** More monetization options for creators.
-
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Batch Minting | Medium | Mint multiple at once |
-| Auction Minting | High | Time-limited bidding |
-| Whitelist Minting | Medium | Allowlist for early access |
-| Bonding Curve | High | Price increases with supply |
-
-### 4.3 Marketplace Integration
-**Why:** Secondary trading increases NFT value.
-
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Listing NFTs | High | List for sale at fixed price |
-| Buying Listed NFTs | High | Purchase from listings |
-| Marketplace Page | Medium | Browse all listings |
-
 ---
 
-## Priority 5: Platform Expansion (Weeks 10+)
+# Part C: Platform Expansion
 
-Scale and new platforms.
+Long-term features for scale.
 
-### 5.1 Mobile App
-**Why:** Mobile is primary consumption platform.
+## C1. Mobile App
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -195,8 +205,7 @@ Scale and new platforms.
 | TikTok-style Feed | High | Vertical swipe navigation |
 | Background Audio | Medium | Play audio while browsing |
 
-### 5.2 Indexer
-**Why:** Faster queries, historical data, analytics.
+## C2. Indexer Service
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -204,8 +213,12 @@ Scale and new platforms.
 | GraphQL API | High | Query indexed data |
 | Historical Analytics | Medium | Track metrics over time |
 
-### 5.3 Token Integration
-**Why:** Platform token creates ecosystem value.
+**Options:**
+- Helius Webhooks → PostgreSQL
+- Custom Geyser plugin
+- Managed service (Shyft, Helius DAS)
+
+## C3. Token Integration
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -215,61 +228,60 @@ Scale and new platforms.
 
 ---
 
-## Recommended Starting Point
+## Implementation Order
 
-Based on the analysis, here's the **recommended first feature to implement**:
-
-### 🎯 Search & Discovery
-
-**Rationale:**
-1. **High Impact** - Users literally cannot find content
-2. **Low Complexity** - Uses existing data, no new on-chain work
-3. **Foundation** - Required for all discovery features
-4. **Quick Win** - Can be done in 2-3 days
-
-**Scope:**
-1. Add `/api/search` route that queries content by title/description/tags
-2. Create `/search` page with search results
-3. Wire up header search bar to search page
-4. Add basic filters (content type, domain)
-
-**Alternative Starting Point:**
-
-### 🎯 Content Type Pages (/videos, /audio)
-
-**Rationale:**
-1. **Very Low Effort** - Just filter existing feed
-2. **Fixes Broken UX** - Sidebar links currently lead nowhere
-3. **Quick Win** - Can be done in 1 day
-
----
-
-## Implementation Order Summary
-
+### Phase 1: No Backend Required
 ```
-Week 1-2:  Search + Content Type Pages
-Week 2-3:  Following System
-Week 3-4:  Trending Algorithm
-Week 4-5:  Comments (basic)
-Week 5-6:  Notifications
-Week 6-7:  Library Features
-Week 7-8:  Analytics Dashboard
-Week 8-10: Communities (basic)
-Week 10+:  Mobile, Marketplace, Token
+1. Search & Discovery
+2. Trending Page
+3. UI/UX Improvements (share link, duration)
+4. Creator Revenue Charts
+```
+
+### Phase 2: Set Up Social Backend (Supabase)
+```
+1. User profiles
+2. Following system
+3. View counts
+4. Library (watch later, liked)
+```
+
+### Phase 3: Social Engagement
+```
+1. Comments & reactions
+2. Notifications
+3. Activity feed
+```
+
+### Phase 4: Advanced Features
+```
+1. Advanced minting options
+2. Marketplace
+3. Communities
+```
+
+### Phase 5: Scale
+```
+1. Indexer service
+2. Mobile app
+3. Token integration
 ```
 
 ---
 
 ## Quick Wins (< 1 day each)
 
-1. **Content Type Pages** - Filter existing feed by type
-2. **Watch Later** - Local storage bookmark
-3. **Liked Content** - Local storage with wallet
-4. **Search History** - Local storage recent searches
-5. **Copy Share Link** - Copy content URL button
-6. **Content Duration** - Show video/audio length
-7. **View Count** - Simple view counter (local or API)
+**No Backend:**
+- Copy Share Link button
+- Content Duration display
+- Search History (localStorage)
+- Better loading states
+
+**With Backend:**
+- View Count display
+- Follow button
+- Like button
 
 ---
 
-*Which feature would you like to start with?*
+*Start with Part A features, then set up Supabase for Part B.*
