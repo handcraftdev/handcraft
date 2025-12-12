@@ -52,7 +52,11 @@ function usePersistedFilter<T>(key: string, defaultValue: T): [T, (value: T) => 
 
   useEffect(() => {
     const saved = localStorage.getItem(key);
-    if (saved !== null) setValue(saved as T);
+    if (saved !== null) {
+      // Handle "all" string or numeric enum values
+      const parsed = saved === "all" ? "all" : (!isNaN(Number(saved)) ? Number(saved) : saved);
+      setValue(parsed as T);
+    }
     setIsReady(true);
   }, [key]);
 
