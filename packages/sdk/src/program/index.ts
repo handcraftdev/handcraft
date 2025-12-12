@@ -189,7 +189,8 @@ export async function registerContentInstruction(
   contentType: ContentType,
   isEncrypted: boolean = false,
   previewCid: string = "",
-  encryptionMetaCid: string = ""
+  encryptionMetaCid: string = "",
+  visibilityLevel: number = 0
 ): Promise<TransactionInstruction> {
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
@@ -203,7 +204,8 @@ export async function registerContentInstruction(
       contentTypeToAnchor(contentType),
       isEncrypted,
       previewCid,
-      encryptionMetaCid
+      encryptionMetaCid,
+      visibilityLevel
     )
     .accounts({
       content: contentPda,
@@ -231,7 +233,8 @@ export async function registerContentWithMintInstruction(
   platform: PublicKey,
   isEncrypted: boolean = false,
   previewCid: string = "",
-  encryptionMetaCid: string = ""
+  encryptionMetaCid: string = "",
+  visibilityLevel: number = 0
 ): Promise<RegisterContentWithMintResult> {
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
@@ -253,7 +256,8 @@ export async function registerContentWithMintInstruction(
       creatorRoyaltyBps,
       isEncrypted,
       previewCid,
-      encryptionMetaCid
+      encryptionMetaCid,
+      visibilityLevel
     )
     .accounts({
       content: contentPda,
@@ -3790,8 +3794,9 @@ export function createContentRegistryClient(connection: Connection) {
       contentType: ContentType,
       isEncrypted: boolean = false,
       previewCid: string = "",
-      encryptionMetaCid: string = ""
-    ) => registerContentInstruction(program, authority, contentCid, metadataCid, contentType, isEncrypted, previewCid, encryptionMetaCid),
+      encryptionMetaCid: string = "",
+      visibilityLevel: number = 0
+    ) => registerContentInstruction(program, authority, contentCid, metadataCid, contentType, isEncrypted, previewCid, encryptionMetaCid, visibilityLevel),
 
     registerContentWithMintInstruction: (
       authority: PublicKey,
@@ -3804,9 +3809,10 @@ export function createContentRegistryClient(connection: Connection) {
       platform: PublicKey,
       isEncrypted: boolean = false,
       previewCid: string = "",
-      encryptionMetaCid: string = ""
+      encryptionMetaCid: string = "",
+      visibilityLevel: number = 0
     ) => registerContentWithMintInstruction(
-      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, platform, isEncrypted, previewCid, encryptionMetaCid
+      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, platform, isEncrypted, previewCid, encryptionMetaCid, visibilityLevel
     ),
 
     updateContentInstruction: (creator: PublicKey, contentCid: string, metadataCid: string) =>
