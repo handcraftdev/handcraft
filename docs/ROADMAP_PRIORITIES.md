@@ -29,71 +29,86 @@ These features are essential for a usable product.
 - Create `/search` page with results
 - Add filter dropdowns to search UI
 
-### 1.2 Content Type Pages
-**Why:** Sidebar links exist but lead nowhere. Confusing UX.
+### 1.2 ~~Content Type Pages~~ ✅ DONE
+**Status:** Implemented as filters instead of separate pages.
 
+- ✅ Content type filters (17 types) on Feed tab
+- ✅ Bundle type filters (7 types) on Bundles tab
+- ✅ Persistent filter/tab selection via localStorage
+- ✅ Centered, wrapping filter chips
+
+**Remaining:**
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| /videos Page | Low | Filter feed to video content types |
-| /audio Page | Low | Filter feed to audio content types |
 | /trending Page | Medium | Sort by recent mints/tips (simple algorithm) |
 
-**Implementation:**
-- Reuse Feed component with content type filter
-- Add simple trending score (mints + tips in 24h)
+### 1.3 Social Features (Requires Backend Service)
+**Why:** Core social features. Too expensive/complex for on-chain.
 
-### 1.3 Following System
-**Why:** Core social feature. Users need to follow creators they like.
+**Recommendation:** Build a lightweight social backend service to handle:
 
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Follow/Unfollow | Medium | On-chain or local storage |
-| Following Feed | Medium | Show content from followed creators |
-| Follower Count | Low | Display on profiles |
+| Feature | Storage | Description |
+|---------|---------|-------------|
+| Following System | PostgreSQL | Follow/unfollow creators |
+| Comments & Reactions | PostgreSQL | Comments, replies, emoji reactions |
+| Notifications | PostgreSQL + WebSocket | Real-time alerts |
+| View Counts | Redis/PostgreSQL | Track content views |
+| Watch Later / Liked | PostgreSQL | User library features |
 
-**Implementation Options:**
-- **Option A:** On-chain (new instruction, ~3 days)
-- **Option B:** Off-chain with signature verification (~1 day)
-- Recommend Option B first, migrate to on-chain later
+**Architecture Options:**
+
+| Option | Pros | Cons | Cost |
+|--------|------|------|------|
+| **Supabase** | Fast setup, real-time, auth | Vendor lock-in | $25/mo+ |
+| **Railway + PostgreSQL** | Flexible, cheap | More setup | $5-20/mo |
+| **PlanetScale + Vercel** | Serverless, scalable | MySQL not Postgres | $0-29/mo |
+| **Self-hosted** | Full control | Maintenance burden | VPS cost |
+
+**Recommended: Supabase**
+- Built-in auth (wallet signature verification)
+- Real-time subscriptions for notifications
+- Row-level security for user data
+- Easy integration with Next.js
+
+**Implementation Order:**
+1. Set up Supabase project
+2. User profiles table (wallet address as ID)
+3. Follows table (follower → following)
+4. Comments table (content_cid, user, text, parent_id)
+5. Notifications table (user, type, data, read)
+6. Real-time subscriptions for notifications
 
 ---
 
-## Priority 2: Engagement & Retention (Weeks 3-6)
+## Priority 2: Engagement & Retention
 
-These features keep users coming back.
+These features require the social backend.
 
-### 2.1 Comments & Reactions
-**Why:** Social interaction drives engagement. Users want to discuss content.
-
+### 2.1 Following System
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Comments | High | On-chain or hybrid comments |
-| Emoji Reactions | Medium | Quick reactions (❤️ 🔥 etc.) |
-| Reply Threading | High | Nested comment replies |
+| Follow/Unfollow | Low | Button on profiles/cards |
+| Following Feed | Medium | Filter feed to followed creators |
+| Follower Count | Low | Display on profiles |
 
-**Implementation:**
-- Start with local/signed comments (faster)
-- Add on-chain comments later for permanence
+### 2.2 Comments & Reactions
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Comments | Medium | Text comments on content |
+| Emoji Reactions | Low | Quick reactions (❤️ 🔥 etc.) |
+| Reply Threading | Medium | Nested comment replies |
 
-### 2.2 Notifications
-**Why:** Re-engage users. Alert on sales, rewards, follows.
-
+### 2.3 Notifications
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | In-App Notifications | Medium | Bell icon with dropdown |
-| Notification Preferences | Low | Toggle notification types |
+| Real-time Updates | Medium | Supabase real-time |
 | Push Notifications | High | Browser/mobile push |
 
-**Implementation:**
-- Start with polling-based in-app notifications
-- Add WebSocket for real-time later
-
-### 2.3 Library Features
-**Why:** Sidebar shows these but they're not implemented.
-
+### 2.4 Library Features
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Watch Later | Low | Save content for later (local) |
+| Watch Later | Low | Save content for later |
 | Liked Content | Low | Track liked content |
 | Playlists | Medium | User-created playlists |
 
