@@ -1355,6 +1355,24 @@ export function useContentRegistry() {
     },
   });
 
+  // Batch fetch ALL bundle mint configs in one RPC call
+  const allBundleMintConfigsQuery = useQuery({
+    queryKey: ["allBundleMintConfigs"],
+    queryFn: async () => {
+      if (!client) return new Map<string, BundleMintConfig>();
+      return client.fetchAllBundleMintConfigs();
+    },
+    enabled: !!client,
+    staleTime: 60000, // Cache for 60 seconds
+    gcTime: 300000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('429')) return false;
+      return failureCount < 2;
+    },
+  });
+
   // Batch fetch ALL rent configs in one RPC call (much more efficient)
   const allRentConfigsQuery = useQuery({
     queryKey: ["allRentConfigs"],
@@ -2822,6 +2840,8 @@ export function useContentRegistry() {
     // State
     content: userContent, // Derived from cached globalContent
     globalContent: globalContentQuery.data || [],
+    allMintConfigs: allMintConfigsQuery.data, // Map of contentPda -> MintConfig
+    allBundleMintConfigs: allBundleMintConfigsQuery.data, // Map of bundlePda -> BundleMintConfig
     mintableContent, // Derived from cached globalContent + allMintConfigs
     ecosystemConfig: ecosystemConfigQuery.data,
     isLoadingContent: isLoadingUserContent,

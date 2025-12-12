@@ -6,17 +6,18 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import Link from "next/link";
 import { useContentRegistry, Bundle, Rarity } from "@/hooks/useContentRegistry";
-import { getIpfsUrl, getBundleTypeLabel, BundleType } from "@handcraft/sdk";
+import { getIpfsUrl, getBundleTypeLabel, BundleType, getBundlePda } from "@handcraft/sdk";
 import { BuyBundleModal, RentBundleModal } from "@/components/bundle";
 
 type BundleTypeFilter = "all" | BundleType;
-type SortType = "date" | "minted" | "items" | "random";
+type SortType = "date" | "minted" | "items" | "price" | "random";
 type SortDirection = "desc" | "asc";
 
 const SORT_TYPES: { value: SortType; label: string }[] = [
   { value: "date", label: "Date" },
   { value: "minted", label: "Minted" },
   { value: "items", label: "Items" },
+  { value: "price", label: "Price" },
   { value: "random", label: "Random" },
 ];
 
@@ -67,7 +68,7 @@ function parseFilter(param: string | null): BundleTypeFilter {
 
 // Parse sort type from URL param
 function parseSortType(param: string | null): SortType {
-  if (param && ["date", "minted", "items", "random"].includes(param)) {
+  if (param && ["date", "minted", "items", "price", "random"].includes(param)) {
     return param as SortType;
   }
   return "date";
@@ -96,7 +97,16 @@ export function BundleFeed() {
     globalBundles,
     isLoadingGlobalBundles,
     client,
+    allBundleMintConfigs,
   } = useContentRegistry();
+
+  // Helper to get price from bundle mint config
+  const getPrice = useCallback((bundle: Bundle): bigint => {
+    if (!allBundleMintConfigs) return BigInt(0);
+    const [bundlePda] = getBundlePda(bundle.creator, bundle.bundleId);
+    const config = allBundleMintConfigs.get(bundlePda.toBase58());
+    return config?.price ?? BigInt(0);
+  }, [allBundleMintConfigs]);
 
   // Update URL params
   const updateParams = useCallback((updates: { filter?: string; sort?: string; dir?: string }) => {
@@ -213,6 +223,11 @@ export function BundleFeed() {
           return dir * (Number(a.mintedCount ?? 0) - Number(b.mintedCount ?? 0));
         case "items":
           return dir * (Number(a.itemCount ?? 0) - Number(b.itemCount ?? 0));
+        case "price": {
+          const priceA = getPrice(a);
+          const priceB = getPrice(b);
+          return dir * Number(priceA - priceB);
+        }
         case "random":
           // Use consistent hash per item for stable random order
           return getItemHash(randomSeed, a.bundleId) - getItemHash(randomSeed, b.bundleId);
@@ -228,7 +243,7 @@ export function BundleFeed() {
     const hasMore = visibleCount < totalItems;
 
     return { displayBundles: displayed, totalItems, hasMore };
-  }, [baseBundles, typeFilter, sortType, sortDir, visibleCount, randomSeed]);
+  }, [baseBundles, typeFilter, sortType, sortDir, visibleCount, randomSeed, getPrice]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {

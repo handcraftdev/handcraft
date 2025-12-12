@@ -3739,6 +3739,38 @@ export async function fetchBundleMintConfig(
 }
 
 /**
+ * Batch fetch all bundle mint configs in a single RPC call.
+ * Returns a Map keyed by bundle PDA base58 string.
+ */
+export async function fetchAllBundleMintConfigs(
+  connection: Connection
+): Promise<Map<string, BundleMintConfig>> {
+  const configs = new Map<string, BundleMintConfig>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allConfigs = await (program.account as any).bundleMintConfig.all();
+
+    for (const { account } of allConfigs) {
+      const bundleKey = account.bundle.toBase58();
+      configs.set(bundleKey, {
+        bundle: account.bundle,
+        creator: account.creator,
+        price: BigInt(account.price.toString()),
+        maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
+        creatorRoyaltyBps: account.creatorRoyaltyBps,
+        isActive: account.isActive,
+        createdAt: BigInt(account.createdAt.toString()),
+        updatedAt: BigInt(account.updatedAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllBundleMintConfigs] Error:", err);
+  }
+  return configs;
+}
+
+/**
  * Fetch bundle rent config
  */
 export async function fetchBundleRentConfig(
@@ -4248,6 +4280,7 @@ export function createContentRegistryClient(connection: Connection) {
 
     // Bundle mint/rent fetching
     fetchBundleMintConfig: (creator: PublicKey, bundleId: string) => fetchBundleMintConfig(connection, creator, bundleId),
+    fetchAllBundleMintConfigs: () => fetchAllBundleMintConfigs(connection),
     fetchBundleRentConfig: (creator: PublicKey, bundleId: string) => fetchBundleRentConfig(connection, creator, bundleId),
     fetchBundleCollection: (creator: PublicKey, bundleId: string) => fetchBundleCollection(connection, creator, bundleId),
     fetchBundleRewardPool: (creator: PublicKey, bundleId: string) => fetchBundleRewardPool(connection, creator, bundleId),

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda } from "@handcraft/sdk";
 import { BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
@@ -17,12 +17,13 @@ import { getContentTypeLabel, getTimeAgo, formatDuration } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
 type ContentTypeFilter = "all" | SDKContentType;
-type SortType = "date" | "minted" | "random";
+type SortType = "date" | "minted" | "price" | "random";
 type SortDirection = "desc" | "asc";
 
 const SORT_TYPES: { value: SortType; label: string }[] = [
   { value: "date", label: "Date" },
   { value: "minted", label: "Minted" },
+  { value: "price", label: "Price" },
   { value: "random", label: "Random" },
 ];
 
@@ -76,7 +77,7 @@ function parseFilter(param: string | null): ContentTypeFilter {
 
 // Parse sort type from URL param
 function parseSortType(param: string | null): SortType {
-  if (param && ["date", "minted", "random"].includes(param)) {
+  if (param && ["date", "minted", "price", "random"].includes(param)) {
     return param as SortType;
   }
   return "date";
@@ -101,7 +102,7 @@ export function Feed() {
   const [randomSeed] = useState(() => Date.now()); // Consistent seed for session
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE); // For infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const { globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
+  const { globalContent: rawGlobalContent, isLoadingGlobalContent, allMintConfigs, client } = useContentRegistry();
 
   // Update URL params
   const updateParams = useCallback((updates: { filter?: string; sort?: string; dir?: string }) => {
@@ -207,6 +208,14 @@ export function Feed() {
   const isLoading = !client || isLoadingGlobalContent || isEnrichingGlobal;
   const baseContent = globalContent;
 
+  // Helper to get price from mint config
+  const getPrice = useCallback((contentCid: string): bigint => {
+    if (!allMintConfigs) return BigInt(0);
+    const [contentPda] = getContentPda(contentCid);
+    const config = allMintConfigs.get(contentPda.toBase58());
+    return config?.priceSol ?? BigInt(0);
+  }, [allMintConfigs]);
+
   // Apply content type filter, sort, and infinite scroll slicing
   const { displayContent, totalItems, hasMore } = useMemo(() => {
     // Filter
@@ -220,6 +229,11 @@ export function Feed() {
       switch (sortType) {
         case "minted":
           return dir * (Number(a.mintedCount ?? 0) - Number(b.mintedCount ?? 0));
+        case "price": {
+          const priceA = getPrice(a.contentCid);
+          const priceB = getPrice(b.contentCid);
+          return dir * Number(priceA - priceB);
+        }
         case "random":
           // Use consistent hash per item for stable random order
           return getItemHash(randomSeed, a.contentCid) - getItemHash(randomSeed, b.contentCid);
@@ -235,7 +249,7 @@ export function Feed() {
     const hasMore = visibleCount < totalItems;
 
     return { displayContent: displayed, totalItems, hasMore };
-  }, [baseContent, typeFilter, sortType, sortDir, visibleCount, randomSeed]);
+  }, [baseContent, typeFilter, sortType, sortDir, visibleCount, randomSeed, getPrice]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
