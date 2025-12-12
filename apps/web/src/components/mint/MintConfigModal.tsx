@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   useContentRegistry,
-  MIN_CREATOR_ROYALTY_BPS,
-  MAX_CREATOR_ROYALTY_BPS,
+  FIXED_CREATOR_ROYALTY_BPS,
   MIN_PRICE_LAMPORTS,
 } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
@@ -39,7 +38,8 @@ export function MintConfigModal({
   const [price, setPrice] = useState("");
   const [supplyType, setSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [maxSupply, setMaxSupply] = useState("");
-  const [royaltyPercent, setRoyaltyPercent] = useState("5");
+  // Royalty is now fixed at 4% (FIXED_CREATOR_ROYALTY_BPS)
+  const royaltyPercent = FIXED_CREATOR_ROYALTY_BPS / 100;
   const [error, setError] = useState<string | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -62,8 +62,7 @@ export function MintConfigModal({
         setMaxSupply("");
       }
 
-      // Set royalty
-      setRoyaltyPercent((existingConfig.creatorRoyaltyBps / 100).toString());
+      // Royalty is now fixed at 4%, no need to set from existing config
 
       setHasInitialized(true);
     }
@@ -114,13 +113,8 @@ export function MintConfigModal({
         maxSupplyValue = BigInt(supplyNum);
       }
 
-      // Parse royalty
-      const royaltyFloat = parseFloat(royaltyPercent);
-      if (isNaN(royaltyFloat) || royaltyFloat < 2 || royaltyFloat > 10) {
-        setError("Royalty must be between 2% and 10%");
-        return;
-      }
-      const royaltyBps = Math.floor(royaltyFloat * 100);
+      // Royalty is now fixed at 4%
+      const royaltyBps = FIXED_CREATOR_ROYALTY_BPS;
 
       if (existingConfig) {
         // Update existing config
@@ -140,7 +134,7 @@ export function MintConfigModal({
           contentCid,
           price: priceValue,
           maxSupply: maxSupplyForUpdate,
-          // Don't change royalty if content is locked (NFTs have been minted)
+          // Don't change royalty if content is locked (editions have been minted)
           creatorRoyaltyBps: isLocked ? null : royaltyBps,
           isActive: null, // Keep current value
         });
@@ -170,7 +164,7 @@ export function MintConfigModal({
 
       <div className="relative bg-gray-900 rounded-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">NFT Settings</h2>
+          <h2 className="text-xl font-bold">Content Settings</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white"
@@ -183,7 +177,7 @@ export function MintConfigModal({
 
         {contentTitle && (
           <p className="text-gray-400 mb-4 text-sm">
-            {existingConfig ? "Editing" : "Setting up"} NFT minting for: <span className="text-white">{contentTitle}</span>
+            {existingConfig ? "Editing" : "Setting up"} minting for: <span className="text-white">{contentTitle}</span>
           </p>
         )}
 
@@ -308,29 +302,16 @@ export function MintConfigModal({
             )}
           </div>
 
-          {/* Royalty */}
+          {/* Royalty - Fixed at 4% */}
           <div>
             <label className="block text-sm font-medium mb-2">
-              Secondary Sale Royalty: {royaltyPercent}%
+              Secondary Sale Royalty
             </label>
-            <input
-              type="range"
-              min="2"
-              max="10"
-              step="0.5"
-              value={royaltyPercent}
-              onChange={(e) => setRoyaltyPercent(e.target.value)}
-              disabled={isLocked}
-              className={`w-full ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-            />
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>2%</span>
-              <span>10%</span>
+            <div className="bg-gray-800 rounded px-3 py-2 text-white">
+              {royaltyPercent}% (fixed)
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              {isLocked
-                ? "Royalty cannot be changed after NFTs have been minted"
-                : "You'll receive this percentage on every resale"}
+              Creator royalty is fixed at 4% on all secondary sales
             </p>
           </div>
 

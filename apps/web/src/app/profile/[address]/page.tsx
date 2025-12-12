@@ -12,7 +12,7 @@ import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
 import { BurnNftModal } from "@/components/nft";
 import { RarityBadge } from "@/components/rarity";
-import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, NftRarity } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -89,16 +89,17 @@ export default function ProfilePage() {
     return allNfts.filter(nft => !rentalNftAssets.has(nft.nftAsset.toBase58()));
   }, [allNfts, rentalNftAssets]);
 
-  // Fetch rarities for owned NFTs
+  // Fetch rarities for owned NFTs (from UnifiedNftRewardState)
   const { data: nftRarities = new Map<string, Rarity>(), isLoading: isLoadingRarities } = useQuery({
     queryKey: ["profileNftRarities", profileAddress?.toBase58(), ownedNfts.length],
     queryFn: async () => {
       if (!profileAddress || !client || ownedNfts.length === 0) return new Map<string, Rarity>();
       const nftAssets = ownedNfts.map(nft => nft.nftAsset);
-      const rarities = await client.fetchNftRaritiesBatch(nftAssets);
+      const rewardStates = await client.fetchNftRewardStatesBatch(nftAssets);
       const result = new Map<string, Rarity>();
-      for (const [key, nftRarity] of rarities) {
-        result.set(key, nftRarity.rarity);
+      for (const [key, state] of rewardStates) {
+        // Convert weight to rarity enum
+        result.set(key, getRarityFromWeight(state.weight));
       }
       return result;
     },
