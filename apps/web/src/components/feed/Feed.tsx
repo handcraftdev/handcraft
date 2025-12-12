@@ -17,12 +17,12 @@ import { getContentTypeLabel, getTimeAgo, formatDuration } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
 type ContentTypeFilter = "all" | SDKContentType;
-type SortOption = "newest" | "oldest" | "most_minted" | "random";
+type SortType = "date" | "minted" | "random";
+type SortDirection = "desc" | "asc";
 
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "most_minted", label: "Most Minted" },
+const SORT_TYPES: { value: SortType; label: string }[] = [
+  { value: "date", label: "Date" },
+  { value: "minted", label: "Minted" },
   { value: "random", label: "Random" },
 ];
 
@@ -74,12 +74,18 @@ function parseFilter(param: string | null): ContentTypeFilter {
   return "all";
 }
 
-// Parse sort from URL param
-function parseSort(param: string | null): SortOption {
-  if (param && ["newest", "oldest", "most_minted", "random"].includes(param)) {
-    return param as SortOption;
+// Parse sort type from URL param
+function parseSortType(param: string | null): SortType {
+  if (param && ["date", "minted", "random"].includes(param)) {
+    return param as SortType;
   }
-  return "newest";
+  return "date";
+}
+
+// Parse sort direction from URL param
+function parseSortDir(param: string | null): SortDirection {
+  if (param === "asc") return "asc";
+  return "desc";
 }
 
 export function Feed() {
@@ -88,7 +94,8 @@ export function Feed() {
 
   // Read from URL params
   const typeFilter = parseFilter(searchParams.get("filter"));
-  const sortOption = parseSort(searchParams.get("sort"));
+  const sortType = parseSortType(searchParams.get("sort"));
+  const sortDir = parseSortDir(searchParams.get("dir"));
 
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [randomSeed] = useState(() => Date.now()); // Consistent seed for session
@@ -97,7 +104,7 @@ export function Feed() {
   const { globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
 
   // Update URL params
-  const updateParams = useCallback((updates: { filter?: string; sort?: string }) => {
+  const updateParams = useCallback((updates: { filter?: string; sort?: string; dir?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
 
     if (updates.filter !== undefined) {
@@ -109,10 +116,22 @@ export function Feed() {
     }
 
     if (updates.sort !== undefined) {
-      if (updates.sort === "newest") {
+      if (updates.sort === "date") {
         params.delete("sort");
       } else {
         params.set("sort", updates.sort);
+      }
+      // Clear dir when switching to random
+      if (updates.sort === "random") {
+        params.delete("dir");
+      }
+    }
+
+    if (updates.dir !== undefined) {
+      if (updates.dir === "desc") {
+        params.delete("dir");
+      } else {
+        params.set("dir", updates.dir);
       }
     }
 
@@ -125,10 +144,15 @@ export function Feed() {
     updateParams({ filter: String(filter) });
   }, [updateParams]);
 
-  const setSortOption = useCallback((sort: SortOption) => {
+  const setSortType = useCallback((sort: SortType) => {
     setVisibleCount(ITEMS_PER_PAGE); // Reset on sort change
     updateParams({ sort });
   }, [updateParams]);
+
+  const toggleSortDir = useCallback(() => {
+    setVisibleCount(ITEMS_PER_PAGE); // Reset on sort change
+    updateParams({ dir: sortDir === "desc" ? "asc" : "desc" });
+  }, [updateParams, sortDir]);
 
   // Global feed state - enrich from cached query data
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);
@@ -192,18 +216,16 @@ export function Feed() {
 
     // Sort
     const sorted = [...filtered].sort((a, b) => {
-      switch (sortOption) {
-        case "oldest":
-          return Number(a.createdAt) - Number(b.createdAt);
-        case "most_minted":
-          return Number(b.mintedCount ?? 0) - Number(a.mintedCount ?? 0);
-        case "random": {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortType) {
+        case "minted":
+          return dir * (Number(a.mintedCount ?? 0) - Number(b.mintedCount ?? 0));
+        case "random":
           // Use consistent hash per item for stable random order
           return getItemHash(randomSeed, a.contentCid) - getItemHash(randomSeed, b.contentCid);
-        }
-        case "newest":
+        case "date":
         default:
-          return Number(b.createdAt) - Number(a.createdAt);
+          return dir * (Number(a.createdAt) - Number(b.createdAt));
       }
     });
 
@@ -213,7 +235,7 @@ export function Feed() {
     const hasMore = visibleCount < totalItems;
 
     return { displayContent: displayed, totalItems, hasMore };
-  }, [baseContent, typeFilter, sortOption, visibleCount, randomSeed]);
+  }, [baseContent, typeFilter, sortType, sortDir, visibleCount, randomSeed]);
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -238,8 +260,8 @@ export function Feed() {
       {/* Content Type Filter & Sort */}
       <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
         <div className="flex flex-wrap justify-center items-center gap-1.5 px-4 py-3">
-          {/* Sort Dropdown */}
-          <div className="relative mr-2">
+          {/* Sort Type Dropdown */}
+          <div className="relative">
             <button
               onClick={() => setShowSortDropdown(!showSortDropdown)}
               className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
@@ -247,7 +269,7 @@ export function Feed() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
               </svg>
-              {SORT_OPTIONS.find(s => s.value === sortOption)?.label}
+              {SORT_TYPES.find(s => s.value === sortType)?.label}
               <svg className={`w-3 h-3 transition-transform ${showSortDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -258,16 +280,16 @@ export function Feed() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowSortDropdown(false)}
                 />
-                <div className="absolute top-full left-0 mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[120px] overflow-hidden">
-                  {SORT_OPTIONS.map((option) => (
+                <div className="absolute top-full left-0 mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[100px] overflow-hidden">
+                  {SORT_TYPES.map((option) => (
                     <button
                       key={option.value}
                       onClick={() => {
-                        setSortOption(option.value);
+                        setSortType(option.value);
                         setShowSortDropdown(false);
                       }}
                       className={`w-full px-3 py-2 text-left text-xs transition-colors ${
-                        sortOption === option.value
+                        sortType === option.value
                           ? "bg-primary-500/20 text-primary-400"
                           : "text-gray-300 hover:bg-gray-800"
                       }`}
@@ -279,8 +301,26 @@ export function Feed() {
               </>
             )}
           </div>
+          {/* Sort Direction Toggle - hidden for random */}
+          {sortType !== "random" && (
+            <button
+              onClick={toggleSortDir}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+              title={sortDir === "desc" ? "Descending (newest/most first)" : "Ascending (oldest/least first)"}
+            >
+              {sortDir === "desc" ? (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+              )}
+            </button>
+          )}
           {/* Divider */}
-          <div className="w-px h-4 bg-gray-700 mr-2" />
+          <div className="w-px h-4 bg-gray-700 mx-1" />
           {/* Type Filters */}
           {CONTENT_TYPE_FILTERS.map((filter) => (
             <button
