@@ -2,17 +2,18 @@
 
 ## Overview
 
-This document describes the complete monetization and reward system:
-1. **Existing Monetization** - Content mints, rentals, secondary sales
-2. **Creator Patronage** - Membership (support) and Subscription (support + access)
-3. **Ecosystem Subscription** - Platform-wide content access (Spotify-style)
+This document describes the subscription and recurring revenue system:
+1. **Creator Patronage** - Membership (support) and Subscription (support + access)
+2. **Ecosystem Subscription** - Platform-wide content access (Spotify-style)
+3. **Reward Pool Architecture** - How subscription revenue flows to creators and holders
+
+**For content monetization (minting, rentals, secondary sales), see [CONTENT_SYSTEM.md](./CONTENT_SYSTEM.md).**
 
 All systems use:
-- **Immediate push distribution** for content mints/sales (on every transaction)
 - **Epoch-based lazy distribution** for subscriptions (on first claim after epoch)
 - **Pull-based claims** for NFT holders
 - **Rarity-weighted calculations** for all distributions
-- **Slot hash randomness** for rarity determination (no VRF dependency)
+- **Unified fee structure** (80/5/3/12 split)
 
 ### Why NFT Weight (Not Views/Streams)?
 
@@ -250,32 +251,8 @@ Alice claims: (25 × 0.0078 - 0.039) / PRECISION = 0.156 SOL
 
 ## Access Hierarchy (4-Tier Visibility Model)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     ACCESS HIERARCHY                             │
-│               (4 Visibility Levels: 0, 1, 2, 3)                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Level 0: Public                                                │
-│  └── Anyone can access (free content, samples, previews)        │
-│                                                                  │
-│  Level 1: Ecosystem Access                                      │
-│  └── Ecosystem subscribers + Creator subscribers + NFT/Rental   │
-│      (Broadest gated access - any subscription works)           │
-│                                                                  │
-│  Level 2: Subscriber Access                                     │
-│  └── Creator subscribers + NFT/Rental holders can access        │
-│      (Ecosystem subscription NOT enough)                        │
-│      (Membership holders CANNOT access - support only)          │
-│                                                                  │
-│  Level 3: NFT/Rental Only                                       │
-│  └── Only NFT owners or active renters can access               │
-│      (Even subscribers CANNOT access - most exclusive)          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+**See [CONTENT_SYSTEM.md](./CONTENT_SYSTEM.md) for the complete visibility level flow chart.**
 
-**Visibility Levels:**
 | Level | Name | Who Can Access |
 |-------|------|----------------|
 | 0 | Public | Anyone (free) |
@@ -283,98 +260,27 @@ Alice claims: (25 × 0.0078 - 0.039) / PRECISION = 0.156 SOL
 | 2 | Subscriber | Creator sub OR NFT/Rental (ecosystem sub NOT enough) |
 | 3 | NFT Only | NFT owner OR Renter ONLY (no subscriptions) |
 
-**Key Points:**
-- **Rental** = NFT-like access with time limit, NO reward participation
-- **Membership** = Pure support, NO content access, 12% to NFT holders
+**Subscription-specific points:**
+- **Membership** = Pure support tier, NO content access, 12% to NFT holders
 - **Subscription** = Support + Level 1-2 content access, 12% to NFT holders
-- **Level 3 content** = Premium exclusive, requires purchase/rental
-- **Level 0 content** = Free samples, trailers, public posts
+- Ecosystem subscription unlocks Level 1 content platform-wide
+- Creator subscription unlocks Level 1-2 content from that creator
 
 ---
 
-## Existing Monetization
+## Content Monetization Reference
 
-### Content NFT Mint/Sale
+**See [CONTENT_SYSTEM.md](./CONTENT_SYSTEM.md) for complete content monetization details including:**
+- Primary sale splits (mint/rental): 80/5/3/12
+- Secondary sale splits: 90/4/1/1/4
+- Bundle monetization with 50/50 holder split
+- Pricing rules (minimum 0.001 SOL, no free minting)
+- Rarity system and reward pool mechanics
 
-| Recipient | Share | Destination |
-|-----------|-------|-------------|
-| Creator | 80% | Creator wallet |
-| Platform | 5% | Platform treasury |
-| Ecosystem | 3% | Ecosystem treasury |
-| **Holders** | **12%** | **ContentRewardPool** (content NFT holders only) |
-
-### Content Rental
-
-Same as content mint. **Renters do NOT earn rewards** - access only.
-
-### Content Secondary Sale
-
-| Recipient | Share | Destination |
-|-----------|-------|-------------|
-| Seller | 90% | Seller wallet |
-| Creator | 4% | Creator wallet (fixed royalty) |
-| Platform | 1% | Platform treasury |
-| Ecosystem | 1% | Ecosystem treasury |
-| **Holders** | **4%** | **ContentRewardPool** (content NFT holders only) |
-
-### Bundle NFT Mint/Sale
-
-| Recipient | Share | Destination |
-|-----------|-------|-------------|
-| Creator | 80% | Creator wallet |
-| Platform | 5% | Platform treasury |
-| Ecosystem | 3% | Ecosystem treasury |
-| **Holders** | **12%** | **Split:** 6% BundleRewardPool + 6% ContentRewardPools |
-
-**Bundle holder rewards split (50/50):**
-- 50% (6%) → BundleRewardPool (bundle NFT holders, by weight)
-- 50% (6%) → All ContentRewardPools in bundle (content NFT holders, by weight)
-
-This prevents bundle sales from cannibalizing content sales. Users still have incentive to buy individual content.
-
-### Bundle Rental
-
-Same as bundle mint - 50/50 split. Renters do NOT earn rewards.
-
-### Bundle Secondary Sale
-
-| Recipient | Share | Destination |
-|-----------|-------|-------------|
-| Seller | 90% | Seller wallet |
-| Creator | 4% | Creator wallet (fixed royalty) |
-| Platform | 1% | Platform treasury |
-| Ecosystem | 1% | Ecosystem treasury |
-| **Holders** | **4%** | **Split:** 2% BundleRewardPool + 2% ContentRewardPools |
-
-**Bundle holder rewards split (50/50):**
-- 50% (2%) → BundleRewardPool (bundle NFT holders, by weight)
-- 50% (2%) → All ContentRewardPools in bundle (content NFT holders, by weight)
-
-### Bundle → Content Distribution
-
-For bundles with many items:
-- Bundle items capped at **50 items max**
-- Pass ContentRewardPool PDAs as **remaining accounts**
-- Distribute to each by weight ratio
-
-```rust
-pub fn bundle_mint_nft(ctx: Context<BundleMintNft>, ...) {
-    let holder_fee = price * 12 / 100;
-    let bundle_share = holder_fee / 2;      // 6%
-    let content_share = holder_fee / 2;     // 6%
-
-    // Update bundle pool
-    ctx.accounts.bundle_reward_pool.add_rewards(bundle_share);
-
-    // Distribute to content pools (remaining accounts)
-    let total_content_weight = sum_content_weights(&ctx.remaining_accounts);
-    for pool_info in ctx.remaining_accounts.iter() {
-        let pool = ContentRewardPool::deserialize(pool_info)?;
-        let share = content_share * pool.total_weight / total_content_weight;
-        pool.add_rewards(share);
-    }
-}
-```
+**Key points relevant to subscriptions:**
+- Content/bundle mints use **immediate distribution** to reward pools
+- Renters do NOT earn rewards (access only)
+- First mint sends 12% holder share to creator (no existing holders)
 
 ---
 

@@ -36,7 +36,7 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Mint Configuration | ✅ Done | Set price, supply (limited/unlimited), royalty |
+| Mint Configuration | ✅ Done | Set price (min 0.001 SOL, no free), supply, royalty |
 | SOL Payments | ✅ Done | Pay with SOL for minting |
 | Simple Mint | ✅ Done | Single-transaction minting with slot hash randomness |
 | Rarity Distribution | ✅ Done | Fair rarity distribution (Common 55%, Uncommon 27%, Rare 13%, Epic 4%, Legendary 1%) |

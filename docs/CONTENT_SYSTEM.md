@@ -2,7 +2,7 @@
 
 **Last Updated:** December 13, 2025
 
-This document describes the complete content upload, storage, and retrieval system for Handcraft.
+This document describes the complete content upload, storage, retrieval, and monetization system for Handcraft.
 
 ---
 
@@ -25,8 +25,55 @@ Handcraft uses a hybrid on-chain/off-chain architecture:
 │  ├── Query ContentEntry accounts from Solana                    │
 │  ├── Fetch metadata JSON from IPFS                              │
 │  └── Access control → Decrypt if authorized                     │
+├─────────────────────────────────────────────────────────────────┤
+│  Monetization                                                    │
+│  ├── Primary Sales (Minting) → 80/5/3/12 split                  │
+│  ├── Rentals (Temporary access) → 80/5/3/12 split               │
+│  └── Secondary Sales (Resale) → 90/4/1/1/4 split                │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Implementation Status
+
+### Completed Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Content Registration | ✅ Done | SHA256-based CID uniqueness |
+| 17 Content Types | ✅ Done | Video, Music, Photo, etc. |
+| 6 Content Domains | ✅ Done | Video, Audio, Image, Document, File, Text |
+| File Upload to IPFS | ✅ Done | Filebase S3 integration |
+| Metadata Upload | ✅ Done | Metaplex-compliant JSON |
+| Content Encryption | ✅ Done | NaCl Secretbox |
+| Preview Generation | ✅ Done | First 10% or 5MB |
+| Minting System | ✅ Done | Simple mint with slot hash randomness |
+| Rarity Distribution | ✅ Done | 55/27/13/4/1% for C/U/R/E/L |
+| Rental System | ✅ Done | 3-tier pricing (6h/1d/7d) |
+| Reward Pools | ✅ Done | Per-content holder rewards |
+| Fixed Royalty | ✅ Done | 4% on secondary sales |
+| File Size Validation | ✅ Done | Client + server validation |
+| CID Format Validation | ✅ Done | CIDv0/v1 format checking |
+| Visibility Level UI | ✅ Done | 4-tier selector in upload |
+| No Free Minting | ✅ Done | Minimum 0.001 SOL enforced |
+| Locked Overlay Pricing | ✅ Done | Shows mint/rent prices |
+
+### In Progress
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Visibility Level Enforcement | 🔶 Partial | UI done, on-chain pending |
+| Subscription Access Check | 🔶 Partial | Awaiting subscription system |
+
+### Planned
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| Language metadata field | High | ISO 639-1 code |
+| Duration as number | Medium | Seconds instead of string |
+| Content warnings | Low | NSFW, spoilers flags |
+| License metadata | Low | CC-BY, MIT, proprietary |
 
 ---
 
@@ -80,6 +127,80 @@ Handcraft uses a hybrid on-chain/off-chain architecture:
 
 ---
 
+## Content Monetization
+
+### Pricing Rules
+
+| Rule | Value | Enforcement |
+|------|-------|-------------|
+| **Minimum Price** | 0.001 SOL | On-chain + client |
+| **Free Minting** | **Not allowed** | On-chain validation |
+| **Creator Royalty** | Fixed 4% | Cannot be changed |
+| **Minimum Rent** | 0.001 SOL per tier | On-chain validation |
+
+### Primary Sale Split (Mint / Rental)
+
+When someone mints an edition or rents content:
+
+| Recipient | Share | Destination |
+|-----------|-------|-------------|
+| Creator | 80% | Creator wallet (immediate) |
+| Platform | 5% | Platform treasury |
+| Ecosystem | 3% | Ecosystem treasury |
+| **Holders** | **12%** | **ContentRewardPool** |
+
+**Note:** On first mint (no existing holders), the 12% holder share goes to the creator.
+
+### Secondary Sale Split (Resale)
+
+When an edition is resold on marketplace:
+
+| Recipient | Share | Destination |
+|-----------|-------|-------------|
+| Seller | 90% | Seller wallet |
+| Creator | 4% | Creator wallet (fixed royalty) |
+| Platform | 1% | Platform treasury |
+| Ecosystem | 1% | Ecosystem treasury |
+| **Holders** | **4%** | **ContentRewardPool** |
+
+### Rental Pricing Tiers
+
+| Tier | Duration | Typical Price |
+|------|----------|---------------|
+| Tier 1 | 6 hours | 0.001-0.01 SOL |
+| Tier 2 | 1 day | 0.01-0.05 SOL |
+| Tier 3 | 7 days | 0.05-0.2 SOL |
+
+**Important:** Renters do NOT earn rewards - access only.
+
+### Rarity System
+
+| Rarity | Weight | Probability | Reward Multiplier |
+|--------|--------|-------------|-------------------|
+| Common | 1 | 55% | 1x |
+| Uncommon | 5 | 27% | 5x |
+| Rare | 20 | 13% | 20x |
+| Epic | 60 | 4% | 60x |
+| Legendary | 120 | 1% | 120x |
+
+Rarity is determined at mint time using slot hash randomness (single transaction, no VRF).
+
+### Reward Pool Mechanics
+
+Each content has a **ContentRewardPool** that:
+- Receives 12% of primary sales (mint/rental)
+- Receives 4% of secondary sales
+- Distributes to edition holders by rarity weight
+- Uses `reward_per_share` accounting
+
+```rust
+// Reward calculation
+reward_per_share += (amount * PRECISION) / total_weight
+pending = (nft_weight * reward_per_share - reward_debt) / PRECISION
+```
+
+---
+
 ## Upload Flow
 
 ### Architecture
@@ -90,10 +211,11 @@ User Browser (UploadModal.tsx)
 ├── 2. Content Type Selection (17 types)
 ├── 3. File Selection + Local Preview
 ├── 4. Metadata Details (type-specific fields)
-└── 5. Monetization Config (price, supply, rent tiers)
+└── 5. Monetization Config (price, supply, visibility, rent tiers)
          │
          ▼
 /api/upload (POST)
+├── Validate file size (per domain limits)
 ├── Generate unique contentId (nanoid)
 ├── Optional: Encrypt file (NaCl Secretbox)
 ├── Optional: Generate preview (first 10% or 5MB)
@@ -108,11 +230,23 @@ User Browser (UploadModal.tsx)
          │
          ▼
 SDK: registerContentWithMintInstruction()
+├── Validate price >= MIN_PRICE_LAMPORTS (no free minting)
 ├── Create ContentEntry PDA (seeded by SHA256 of CID)
 ├── Create MintConfig PDA
 ├── Create ContentCollection (Metaplex Core)
 └── Optional: Create RentConfig PDA
 ```
+
+### File Size Limits
+
+| Domain | Max Size | Enforced At |
+|--------|----------|-------------|
+| Video | 2 GB | Client + Server |
+| Audio | 500 MB | Client + Server |
+| Image | 50 MB | Client + Server |
+| Document | 100 MB | Client + Server |
+| File | 1 GB | Client + Server |
+| Text | 10 MB | Client + Server |
 
 ### File Upload API
 
@@ -288,21 +422,19 @@ interface ContentEntry {
 ```typescript
 {
   contentCid: string,
-  walletAddress: string,
-  signature: string,    // Session signature
+  metaCid: string,
+  sessionToken: string,    // Session signature
 }
 ```
 
-**Access Verification:**
-1. Check if user is content creator
-2. Check if user owns edition of this content
-3. Check if user owns bundle containing this content
-4. Check if user has active rental
-5. Check subscription status (for visibility levels 1-2)
+**Validation:**
+- CID format validation (CIDv0/v1)
+- Session token verification
+- Access control check
 
 ---
 
-## Visibility Levels
+## Visibility Levels (4-Tier Model)
 
 ### Definition
 
@@ -378,6 +510,14 @@ Content Access Request
 │ YES → Grant access                  │
 └─────────────────────────────────────┘
 ```
+
+### Key Points
+
+- **Rental** = Edition-like access with time limit, NO reward participation
+- **Membership** = Pure support, NO content access (see SUBSCRIPTION_SYSTEM.md)
+- **Subscription** = Support + Level 1-2 content access
+- **Level 3 content** = Premium exclusive, requires purchase/rental
+- **Level 0 content** = Free samples, trailers, public posts
 
 ---
 
@@ -475,7 +615,9 @@ pub struct ContentEntry {
 ```rust
 pub struct MintConfig {
     pub content: Pubkey,           // ContentEntry PDA
-    pub price_sol: u64,            // Price in lamports (0 = free)
+    pub creator: Pubkey,           // Creator who owns this config
+    pub price: u64,                // Price in lamports (min 0.001 SOL, no free)
+    pub currency: PaymentCurrency, // SOL or USDC
     pub max_supply: Option<u64>,   // None = unlimited
     pub creator_royalty_bps: u16,  // Fixed at 400 (4%)
     pub is_active: bool,           // Minting enabled
@@ -489,10 +631,25 @@ pub struct MintConfig {
 ```rust
 pub struct RentConfig {
     pub content: Pubkey,           // ContentEntry PDA
-    pub tier1_price: u64,          // 6-hour rental price
-    pub tier2_price: u64,          // 1-day rental price
-    pub tier3_price: u64,          // 7-day rental price
+    pub creator: Pubkey,           // Creator who can update
+    pub rent_fee_6h: u64,          // 6-hour rental price
+    pub rent_fee_1d: u64,          // 1-day rental price
+    pub rent_fee_7d: u64,          // 7-day rental price
     pub is_active: bool,           // Rentals enabled
+}
+```
+
+### ContentRewardPool PDA
+
+**Seeds:** `["content_reward_pool", content_pda]`
+
+```rust
+pub struct ContentRewardPool {
+    pub content: Pubkey,
+    pub reward_per_share: u128,    // Accumulated rewards per weight unit
+    pub total_weight: u64,         // Sum of all edition weights
+    pub total_deposited: u64,      // Total SOL deposited
+    pub total_claimed: u64,        // Total SOL claimed
 }
 ```
 
@@ -510,71 +667,78 @@ Metaplex Core collection that groups all editions of a content piece.
 
 Valid IPFS CID formats:
 - **CIDv0**: `Qm...` (46 characters, base58btc)
-- **CIDv1**: `bafy...` (59 characters, base32)
+- **CIDv1**: `bafy...` or `bafk...` (base32)
 
 ```typescript
-const CID_V0_REGEX = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/;
-const CID_V1_REGEX = /^b[a-z2-7]{58}$/;
+function isValidCid(cid: string): boolean {
+  if (!cid || typeof cid !== "string") return false;
 
-function isValidCID(cid: string): boolean {
-  return CID_V0_REGEX.test(cid) || CID_V1_REGEX.test(cid);
+  // CIDv0: 46 character base58btc starting with Qm
+  if (cid.startsWith("Qm") && cid.length === 46) {
+    return /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(cid);
+  }
+
+  // CIDv1: base32 encoded, starts with "baf"
+  if (cid.startsWith("baf") && cid.length >= 50) {
+    return /^[a-z2-7]+$/.test(cid);
+  }
+
+  return false;
 }
 ```
 
-### File Size Limits
-
-| Domain | Max Size |
-|--------|----------|
-| Video | 2 GB |
-| Audio | 500 MB |
-| Image | 50 MB |
-| Document | 100 MB |
-| File | 1 GB |
-| Text | 10 MB |
-
 ### Price Constraints
 
-- **Minimum price**: 0.001 SOL (if not free)
-- **Free minting**: Price = 0
-- **Creator royalty**: Fixed at 4%
+| Constraint | Value | Enforced |
+|------------|-------|----------|
+| Minimum mint price | 0.001 SOL (1,000,000 lamports) | On-chain |
+| Minimum rent price | 0.001 SOL per tier | On-chain |
+| Free minting | **Not allowed** | On-chain + Client |
+| Creator royalty | Fixed 4% (400 bps) | On-chain |
 
 ---
 
-## Future Enhancements
+## Bundle System
 
-### High Priority
+Bundles group multiple content pieces (albums, series, courses, etc.).
 
-| Feature | Description |
-|---------|-------------|
-| Visibility UI | Allow creators to select visibility level during upload |
-| File size enforcement | Validate file sizes before upload |
-| CID validation | Validate CID format in API and SDK |
-| Language field | Add ISO 639-1 language code to metadata |
-| Duration standardization | Store duration as seconds (number) not string |
+### Bundle Types (7)
 
-### Medium Priority
+| Type | Use Case |
+|------|----------|
+| Album | Music albums |
+| Series | TV series, video series |
+| Playlist | Curated collections |
+| Course | Educational content |
+| Newsletter | Ongoing publications |
+| Collection | Art collections |
+| ProductPack | Software bundles |
 
-| Feature | Description |
-|---------|-------------|
-| Preview for non-owners | Display preview content for users without access |
-| Metadata validation | JSON schema validation for metadata |
-| Subscription queries | Pre-check subscription status before access attempt |
-| Unified access control | Single instruction for all access verification |
+### Bundle Monetization
 
-### Lower Priority
+**Primary Sale (Bundle Mint/Rental):**
 
-| Feature | Description |
-|---------|-------------|
-| Content warnings | NSFW, spoilers, flashing lights flags |
-| License metadata | CC-BY, MIT, proprietary licenses |
-| Quality metadata | Resolution, bitrate, codec info |
-| Accessibility | Subtitles, audio descriptions |
-| Full-text search | Index content metadata for search |
+| Recipient | Share | Destination |
+|-----------|-------|-------------|
+| Creator | 80% | Creator wallet |
+| Platform | 5% | Platform treasury |
+| Ecosystem | 3% | Ecosystem treasury |
+| **Holders** | **12%** | **Split: 6% Bundle + 6% Content** |
+
+The 12% holder share is split 50/50:
+- 50% (6%) → BundleRewardPool (bundle edition holders)
+- 50% (6%) → ContentRewardPools (distributed by weight to content in bundle)
+
+This prevents bundle sales from cannibalizing individual content sales.
+
+### Bundle Access
+
+Bundle edition owners can access ALL encrypted content within the bundle, regardless of individual content visibility levels.
 
 ---
 
 ## Related Documentation
 
 - [CURRENT_FEATURES.md](./CURRENT_FEATURES.md) - Feature overview
-- [SUBSCRIPTION_SYSTEM.md](./SUBSCRIPTION_SYSTEM.md) - Subscription and rewards
+- [SUBSCRIPTION_SYSTEM.md](./SUBSCRIPTION_SYSTEM.md) - Subscription and creator patronage
 - [ROADMAP_PRIORITIES.md](./ROADMAP_PRIORITIES.md) - Development roadmap
