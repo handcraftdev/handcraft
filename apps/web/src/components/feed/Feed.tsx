@@ -44,9 +44,20 @@ const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: SDKContentType.Post, label: "Post" },
 ];
 
+const FILTER_STORAGE_KEY = "handcraft-content-filter";
+
 export function Feed() {
-  const [typeFilter, setTypeFilter] = useState<ContentTypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<ContentTypeFilter>(() => {
+    if (typeof window === "undefined") return "all";
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    return (saved as ContentTypeFilter) || "all";
+  });
   const { globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
+
+  // Persist filter to localStorage
+  useEffect(() => {
+    localStorage.setItem(FILTER_STORAGE_KEY, String(typeFilter));
+  }, [typeFilter]);
 
   // Global feed state - enrich from cached query data
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);

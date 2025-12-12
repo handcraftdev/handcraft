@@ -34,13 +34,24 @@ interface EnrichedBundle extends Bundle {
   creatorAddress: string;
 }
 
+const FILTER_STORAGE_KEY = "handcraft-bundle-filter";
+
 export function BundleFeed() {
-  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<BundleTypeFilter>(() => {
+    if (typeof window === "undefined") return "all";
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    return (saved as BundleTypeFilter) || "all";
+  });
   const {
     globalBundles,
     isLoadingGlobalBundles,
     client,
   } = useContentRegistry();
+
+  // Persist filter to localStorage
+  useEffect(() => {
+    localStorage.setItem(FILTER_STORAGE_KEY, String(typeFilter));
+  }, [typeFilter]);
 
   // Enriched bundles state
   const [enrichedGlobalBundles, setEnrichedGlobalBundles] = useState<EnrichedBundle[]>([]);
