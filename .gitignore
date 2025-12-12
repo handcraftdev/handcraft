@@ -18,6 +18,10 @@ out
 
 # Testing
 coverage
+playwright-report
+test-results
+e2e/screenshots
+.playwright
 
 # Environment
 .env

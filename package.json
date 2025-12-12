@@ -9,7 +9,11 @@
     "dev:web": "turbo dev --filter=@handcraft/web",
     "dev:mobile": "turbo dev --filter=@handcraft/mobile",
     "build:web": "turbo build --filter=@handcraft/web",
-    "build:mobile": "turbo build --filter=@handcraft/mobile"
+    "build:mobile": "turbo build --filter=@handcraft/mobile",
+    "test:e2e": "pnpm --filter=@handcraft/web test:e2e",
+    "test:e2e:ui": "pnpm --filter=@handcraft/web test:e2e:ui",
+    "test:e2e:headed": "pnpm --filter=@handcraft/web test:e2e:headed",
+    "test:e2e:debug": "pnpm --filter=@handcraft/web test:e2e:debug"
   },
   "devDependencies": {
     "@metaplex-foundation/mpl-core": "^1.7.0",
