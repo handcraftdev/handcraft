@@ -15,8 +15,25 @@ Features are prioritized based on:
 ### ✅ Content Type Filters
 - Content type filters (17 types) on Feed tab
 - Bundle type filters (7 types) on Bundles tab
-- Persistent filter/tab selection via localStorage
+- URL-based filter/tab selection (shareable links)
 - Centered, wrapping filter chips
+
+### ✅ Search & Discovery
+- Basic search page with client-side filtering
+- Search by title, description, creator address
+- Filter search results by content type
+- Sort results by relevance, newest, oldest, most minted
+
+### ✅ Sorting Options
+- Sort by date (newest/oldest)
+- Sort by mints (most minted)
+- Sort by random (consistent within session, new on refresh)
+
+### ✅ UI/UX Improvements
+- Copy share link button on content/bundle cards
+- Content duration badges for video/audio
+- Infinite scroll replacing pagination
+- URL params for shareable filter/sort state
 
 ---
 
@@ -24,38 +41,40 @@ Features are prioritized based on:
 
 These features use only on-chain data + IPFS metadata + client-side storage.
 
-## A1. Search & Discovery
+## A1. Search & Discovery ✅ DONE
 
 **Why:** Users cannot find content without search. Critical for retention.
 
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Basic Search | Medium | Search title, description, tags from IPFS metadata |
-| Search Results Page | Low | Display matching content with cards |
-| Search History | Low | Recent searches in localStorage |
-| Advanced Filters | Low | Filter by price range, rarity, creator |
+| Feature | Complexity | Status |
+|---------|------------|--------|
+| Basic Search | Medium | ✅ Done |
+| Search Results Page | Low | ✅ Done |
+| Search History | Low | Pending |
+| Advanced Filters | Low | Partial (content type only) |
 
 **Implementation:**
 - Query IPFS metadata (already cached in React Query)
 - Client-side filtering and sorting
-- localStorage for search history
+- URL params for shareable search state
 
-## A2. Sorting Options
+## A2. Sorting Options ✅ DONE
 
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Sort by Date | Low | Newest/oldest first (on-chain createdAt) |
-| Sort by Price | Low | Highest/lowest price (on-chain mintConfig) |
-| Sort by Mints | Low | Most minted (on-chain mintedCount) |
+| Feature | Complexity | Status |
+|---------|------------|--------|
+| Sort by Date | Low | ✅ Done |
+| Sort by Price | Low | Pending |
+| Sort by Mints | Low | ✅ Done |
+| Sort by Random | Low | ✅ Done |
 
-## A3. UI/UX Improvements
+## A3. UI/UX Improvements (Partial)
 
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Copy Share Link | Low | Copy content/bundle URL button |
-| Content Duration | Low | Show video/audio length from metadata |
-| Better Loading States | Low | Skeleton loaders, progress indicators |
-| Keyboard Shortcuts | Low | Navigate feed with keys |
+| Feature | Complexity | Status |
+|---------|------------|--------|
+| Copy Share Link | Low | ✅ Done |
+| Content Duration | Low | ✅ Done |
+| Infinite Scroll | Low | ✅ Done |
+| Better Loading States | Low | ✅ Done (skeleton loaders) |
+| Keyboard Shortcuts | Low | Pending |
 
 ## A4. Creator Dashboard Enhancements
 
@@ -301,11 +320,13 @@ Long-term features for scale.
 ## Quick Wins (< 1 day each)
 
 **Part A - On-Chain Only:**
-- Copy Share Link button
-- Content Duration display
-- Search with client-side filtering
-- Sort by date/price/mints
-- Better loading states
+- ~~Copy Share Link button~~ ✅
+- ~~Content Duration display~~ ✅
+- ~~Search with client-side filtering~~ ✅
+- ~~Sort by date/mints~~ ✅
+- Sort by price
+- ~~Better loading states~~ ✅
+- Search history (localStorage)
 
 **Part B - Needs Indexer:**
 - Trending score display

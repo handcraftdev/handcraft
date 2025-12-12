@@ -110,10 +110,16 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Home Feed | ✅ Done | "Discover" and "Your Content" tabs |
+| Home Feed | ✅ Done | Content and Bundles tabs with infinite scroll |
 | Bundle Feed | ✅ Done | Dedicated tab for browsing bundles |
-| Content Cards | ✅ Done | Preview, metadata, actions, rarity badges |
+| Content Cards | ✅ Done | Preview, metadata, actions, rarity badges, duration |
 | Bundle Cards | ✅ Done | Bundle preview with item count and pricing |
+| Search Page | ✅ Done | Client-side search by title, description, creator |
+| Sorting Options | ✅ Done | Newest, oldest, most minted, random |
+| Infinite Scroll | ✅ Done | Auto-load more content on scroll |
+| URL Params | ✅ Done | Shareable links with filter/sort/tab state |
+| Copy Share Link | ✅ Done | Share content/bundle URLs |
+| Duration Display | ✅ Done | Video/audio length badges |
 | Creator Dashboard | ✅ Done | Stats, content table, bundles, rewards overview |
 | User Profiles | ✅ Done | Created/Collected/Rewards tabs |
 | Wallet Integration | ✅ Done | Solana Wallet Adapter (auto-detect) |
@@ -155,7 +161,6 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Search | 🔶 UI Only | Search bar exists but no backend |
 | Trending | 🔶 Placeholder | Route exists, no algorithm |
 | Communities | 🔶 Placeholder | Sidebar link only |
 | Audio Page | 🔶 Placeholder | Route exists, no content filtering |
@@ -171,12 +176,11 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 ## Not Yet Implemented
 
 ### Critical Missing Features
-1. **Search & Discovery** - No search functionality
-2. **Feed Algorithm** - Just chronological, no personalization
-3. **Following System** - No follow/unfollow creators
-4. **Notifications** - No notification system
-5. **Comments/Reactions** - No social interaction
-6. **Mobile App** - Only web implemented
+1. **Feed Algorithm** - Just chronological/random, no personalization
+2. **Following System** - No follow/unfollow creators
+3. **Notifications** - No notification system
+4. **Comments/Reactions** - No social interaction
+5. **Mobile App** - Only web implemented
 
 ### Content Features
 - Video player controls (chapters, quality, speed)
@@ -281,4 +285,4 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 ---
 
-*Last updated: December 12, 2024*
+*Last updated: December 12, 2025*
