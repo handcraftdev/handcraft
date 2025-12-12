@@ -21,10 +21,10 @@ pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
 /// This enforces secondary sale royalties on-chain
 ///
 /// Royalty distribution on secondary sales:
-/// - Creator: 2-10% (configurable)
+/// - Creator: 4% (fixed)
 /// - Platform: 1%
 /// - Ecosystem (Treasury): 1%
-/// - Holder Reward Pool: 8%
+/// - Holder Reward Pool: 4%
 fn create_collection<'info>(
     mpl_core_program: &AccountInfo<'info>,
     collection: &AccountInfo<'info>,
@@ -40,7 +40,7 @@ fn create_collection<'info>(
     creator_royalty_bps: u16,
 ) -> Result<()> {
     // Calculate total royalty in basis points
-    // Creator royalty (2-10%) + Platform (1%) + Ecosystem (1%) + Holders (8%)
+    // Creator royalty (4%) + Platform (1%) + Ecosystem (1%) + Holders (4%) = 10% total
     let total_royalty_bps = EcosystemConfig::total_secondary_royalty_bps(creator_royalty_bps);
 
     // Calculate percentage share for each recipient (must sum to 100)

@@ -3,7 +3,7 @@ use crate::state::{
     Bundle, BundleItem, BundleType, ContentEntry,
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
 };
-use crate::errors::ContentError;
+use crate::errors::ContentRegistryError;
 
 /// Create a new bundle
 #[derive(Accounts)]
@@ -33,13 +33,13 @@ pub struct AddBundleItem<'info> {
     #[account(
         mut,
         has_one = creator,
-        constraint = !bundle.is_locked @ ContentError::BundleLocked
+        constraint = !bundle.is_locked @ ContentRegistryError::BundleLocked
     )]
     pub bundle: Account<'info, Bundle>,
 
     /// The content to add to the bundle
     #[account(
-        constraint = content.creator == creator.key() @ ContentError::NotContentCreator
+        constraint = content.creator == creator.key() @ ContentRegistryError::NotContentCreator
     )]
     pub content: Account<'info, ContentEntry>,
 
@@ -64,7 +64,7 @@ pub struct RemoveBundleItem<'info> {
     #[account(
         mut,
         has_one = creator,
-        constraint = !bundle.is_locked @ ContentError::BundleLocked
+        constraint = !bundle.is_locked @ ContentRegistryError::BundleLocked
     )]
     pub bundle: Account<'info, Bundle>,
 
@@ -98,7 +98,7 @@ pub struct DeleteBundle<'info> {
     #[account(
         mut,
         has_one = creator,
-        constraint = bundle.item_count == 0 @ ContentError::BundleNotEmpty,
+        constraint = bundle.item_count == 0 @ ContentRegistryError::BundleNotEmpty,
         close = creator
     )]
     pub bundle: Account<'info, Bundle>,
@@ -143,7 +143,7 @@ pub fn handle_add_bundle_item(
     // Check max items
     require!(
         bundle.item_count < MAX_BUNDLE_ITEMS,
-        ContentError::BundleItemLimitReached
+        ContentRegistryError::BundleItemLimitReached
     );
 
     // Use provided position or append at end

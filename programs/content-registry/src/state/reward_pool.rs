@@ -18,7 +18,6 @@ pub struct ContentRewardPool {
     pub content: Pubkey,
     /// Accumulated reward per weight unit (scaled by PRECISION)
     /// Increases with each sale: reward_per_share += (holder_reward * PRECISION) / total_weight
-    /// Note: Named reward_per_share for backwards compatibility, but represents per-weight-unit
     pub reward_per_share: u128,
     /// Total NFTs minted for this content
     pub total_nfts: u64,
@@ -55,12 +54,6 @@ impl ContentRewardPool {
     pub fn remove_nft(&mut self, weight: u16) {
         self.total_nfts = self.total_nfts.saturating_sub(1);
         self.total_weight = self.total_weight.saturating_sub(weight as u64);
-    }
-
-    /// Legacy: Increment total NFTs with default Common weight (1)
-    /// For backwards compatibility with existing mints before rarity system
-    pub fn increment_nfts(&mut self) {
-        self.add_nft(1); // Default Common weight
     }
 
     /// Sync secondary sale royalties that arrived from Metaplex Core Royalties plugin

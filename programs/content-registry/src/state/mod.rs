@@ -13,8 +13,7 @@ pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
 pub use mint_config::{
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
-    MIN_CREATOR_ROYALTY_BPS, MAX_CREATOR_ROYALTY_BPS,
-    MIN_PRICE_LAMPORTS, MIN_PRICE_USDC,
+    FIXED_CREATOR_ROYALTY_BPS, MIN_PRICE_LAMPORTS, MIN_PRICE_USDC,
 };
 pub use ecosystem_config::{
     EcosystemConfig, ECOSYSTEM_CONFIG_SEED,

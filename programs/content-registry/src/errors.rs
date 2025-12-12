@@ -26,7 +26,7 @@ pub enum ContentRegistryError {
     MaxSupplyReached,
     #[msg("Price below minimum allowed")]
     PriceTooLow,
-    #[msg("Royalty percentage out of allowed range (2-10%)")]
+    #[msg("Royalty must be fixed at 4% (400 bps)")]
     InvalidRoyalty,
     #[msg("Insufficient payment amount")]
     InsufficientPayment,
@@ -174,9 +174,8 @@ pub enum ContentRegistryError {
     InvalidEcosystemSubPrice,
     #[msg("Subscription required for this content")]
     SubscriptionRequired,
+    #[msg("NFT ownership or active rental required for this content (subscriptions not accepted)")]
+    NftOrRentalRequired,
     #[msg("Invalid input value")]
     InvalidInput,
 }
-
-// Alias for backward compatibility
-pub use ContentRegistryError as ContentError;

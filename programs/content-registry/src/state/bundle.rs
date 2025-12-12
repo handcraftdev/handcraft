@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use crate::state::rarity::Rarity;
 use crate::state::rent::{RentTier, RENT_PERIOD_6H, RENT_PERIOD_1D, RENT_PERIOD_7D, MIN_RENT_FEE_LAMPORTS};
-use crate::state::mint_config::{MIN_CREATOR_ROYALTY_BPS, MAX_CREATOR_ROYALTY_BPS, MIN_PRICE_LAMPORTS};
+use crate::state::mint_config::{FIXED_CREATOR_ROYALTY_BPS, MIN_PRICE_LAMPORTS};
 use crate::state::reward_pool::PRECISION;
 
 // Seeds for PDA derivation
@@ -79,10 +78,11 @@ pub struct Bundle {
     /// Whether bundle is locked (becomes true after first mint)
     pub is_locked: bool,
 
-    /// Visibility level for subscription access (default: 1)
-    /// Level 0: Public (no access requirement)
-    /// Level 1: Basic access (ecosystem subscription or NFT ownership)
-    /// Level 2: Creator subscription required (patron subscription or NFT ownership)
+    /// Visibility level for access control (4-tier model, default: 1)
+    /// Level 0: Public - anyone can access (free content, samples, previews)
+    /// Level 1: Ecosystem - ecosystem sub OR creator sub OR NFT/Rental
+    /// Level 2: Subscriber - creator sub OR NFT/Rental (ecosystem sub NOT enough)
+    /// Level 3: NFT Only - ONLY NFT owners or renters (subscriptions don't grant access)
     pub visibility_level: u8,
 }
 
@@ -178,9 +178,9 @@ impl BundleMintConfig {
         price == 0 || price >= MIN_PRICE_LAMPORTS
     }
 
-    /// Validate royalty is within allowed range
+    /// Validate royalty is the fixed 4% rate
     pub fn validate_royalty(royalty_bps: u16) -> bool {
-        royalty_bps >= MIN_CREATOR_ROYALTY_BPS && royalty_bps <= MAX_CREATOR_ROYALTY_BPS
+        royalty_bps == FIXED_CREATOR_ROYALTY_BPS
     }
 }
 

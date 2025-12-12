@@ -10,9 +10,10 @@ pub const CREATOR_FEE_PRIMARY_BPS: u16 = 8000;   // 80%
 pub const HOLDER_REWARD_PRIMARY_BPS: u16 = 1200; // 12% - distributed to existing NFT holders
 
 /// Secondary sale fixed fees (on top of creator royalty)
+/// Total: 4% creator + 1% platform + 1% ecosystem + 4% holders = 10%
 pub const PLATFORM_FEE_SECONDARY_BPS: u16 = 100;      // 1%
 pub const ECOSYSTEM_FEE_SECONDARY_BPS: u16 = 100;     // 1%
-pub const HOLDER_REWARD_SECONDARY_BPS: u16 = 800;     // 8% - distributed to existing NFT holders
+pub const HOLDER_REWARD_SECONDARY_BPS: u16 = 400;     // 4% - distributed to existing NFT holders
 
 /// Global ecosystem configuration
 /// PDA seeds: ["ecosystem"]

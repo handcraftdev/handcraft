@@ -21,10 +21,11 @@ pub struct ContentEntry {
     pub preview_cid: String,   // Preview CID for non-owners (empty if not gated)
     #[max_len(64)]
     pub encryption_meta_cid: String, // Encryption metadata CID (empty if not encrypted)
-    /// Visibility level for subscription access (default: 1)
-    /// Level 0: Public (no access requirement)
-    /// Level 1: Basic access (ecosystem subscription or NFT ownership)
-    /// Level 2: Creator subscription required (patron subscription or NFT ownership)
+    /// Visibility level for access control (4-tier model, default: 1)
+    /// Level 0: Public - anyone can access (free content, samples, previews)
+    /// Level 1: Ecosystem - ecosystem sub OR creator sub OR NFT/Rental
+    /// Level 2: Subscriber - creator sub OR NFT/Rental (ecosystem sub NOT enough)
+    /// Level 3: NFT Only - ONLY NFT owners or renters (subscriptions don't grant access)
     pub visibility_level: u8,
 }
 

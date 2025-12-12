@@ -2,10 +2,9 @@ use anchor_lang::prelude::*;
 
 pub const MINT_CONFIG_SEED: &[u8] = b"mint_config";
 
-/// Minimum creator royalty percentage (basis points: 200 = 2%)
-pub const MIN_CREATOR_ROYALTY_BPS: u16 = 200;
-/// Maximum creator royalty percentage (basis points: 1000 = 10%)
-pub const MAX_CREATOR_ROYALTY_BPS: u16 = 1000;
+/// Fixed creator royalty percentage (basis points: 400 = 4%)
+/// Per subscription design: fixed 4% creator royalty on secondary sales
+pub const FIXED_CREATOR_ROYALTY_BPS: u16 = 400;
 
 /// Minimum price in lamports (0.001 SOL) - only if not free
 pub const MIN_PRICE_LAMPORTS: u64 = 1_000_000;
@@ -67,8 +66,8 @@ impl MintConfig {
         }
     }
 
-    /// Validate royalty is within allowed range
+    /// Validate royalty is the fixed 4% rate
     pub fn validate_royalty(royalty_bps: u16) -> bool {
-        royalty_bps >= MIN_CREATOR_ROYALTY_BPS && royalty_bps <= MAX_CREATOR_ROYALTY_BPS
+        royalty_bps == FIXED_CREATOR_ROYALTY_BPS
     }
 }
