@@ -2,7 +2,7 @@
 
 ## Overview
 
-Handcraft is a decentralized content platform on Solana combining features of TikTok, YouTube, Spotify, Patreon, and Reddit with on-chain monetization through NFTs and rentals.
+Handcraft is a decentralized content platform on Solana combining features of TikTok, YouTube, Spotify, Patreon, and Reddit with on-chain monetization through content editions and rentals.
 
 ---
 
@@ -17,7 +17,7 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Content Domains | ✅ Done | 6 domains: Video, Audio, Image, Document, File, Text |
 | Content Update | ✅ Done | Update metadata CID (before first mint) |
 | Content Delete | ✅ Done | Delete content (before first mint) |
-| Content Locking | ✅ Done | Content locks after first NFT mint (immutable) |
+| Content Locking | ✅ Done | Content locks after first mint (immutable) |
 | CID Uniqueness | ✅ Done | SHA256-based CID registry prevents duplicates |
 | Tips | ✅ Done | Direct SOL tipping to creators |
 
@@ -28,33 +28,30 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Content Encryption | ✅ Done | NaCl symmetric encryption for gated content |
 | Preview Generation | ✅ Done | Auto-generate preview (first 10% or 5MB) |
 | Session Authentication | ✅ Done | Wallet signature-based 24h sessions |
-| Access Verification | ✅ Done | Check creator/NFT owner status for decryption |
-| Bundle Access | ✅ Done | Bundle NFT owners can access all content in the bundle |
+| Access Verification | ✅ Done | Check creator/edition owner status for decryption |
+| Bundle Access | ✅ Done | Bundle edition owners can access all content in the bundle |
 | Server-held Keys | ✅ Done | Deterministic key derivation (no per-content storage) |
 
-### 3. NFT Minting System
+### 3. Content Minting System
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Mint Configuration | ✅ Done | Set price, supply (limited/unlimited), royalty |
 | SOL Payments | ✅ Done | Pay with SOL for minting |
-| MagicBlock VRF | ✅ Done | Fast 2-transaction VRF minting with fallback |
-| VRF Rarity | ✅ Done | Fair rarity distribution (Common 55%, Uncommon 27%, Rare 13%, Epic 4%, Legendary 1%) |
-| Fallback Claim | ✅ Done | Slot-hash based randomness if VRF times out |
-| Pending Mint Recovery | ✅ Done | Cross-device recovery of interrupted mints |
-| Cancel Expired Mint | ✅ Done | Refund after timeout if oracle fails |
-| Escrow Pattern | ✅ Done | Payment held until VRF callback completes |
-| Metaplex Core NFTs | ✅ Done | Modern NFT standard with plugins |
+| Simple Mint | ✅ Done | Single-transaction minting with slot hash randomness |
+| Rarity Distribution | ✅ Done | Fair rarity distribution (Common 55%, Uncommon 27%, Rare 13%, Epic 4%, Legendary 1%) |
+| Metaplex Core | ✅ Done | Modern on-chain asset standard with plugins |
 | Edition Numbering | ✅ Done | Sequential edition numbers per content |
 | Rarity Weights | ✅ Done | 1/5/20/60/120 for Common/Uncommon/Rare/Epic/Legendary |
+| Fixed Royalty | ✅ Done | 4% creator royalty on secondary sales |
 
 ### 4. Fee Structure & Revenue Splits
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Primary Sale Split | ✅ Done | Creator 80%, Platform 5%, Ecosystem 3%, Holders 12% |
-| Secondary Royalties | ✅ Done | 2-10% configurable via Metaplex plugin |
-| Holder Rewards | ✅ Done | 12% primary / 8% secondary to NFT holders |
+| Secondary Royalties | ✅ Done | Fixed 4% creator royalty via Metaplex plugin |
+| Holder Rewards | ✅ Done | 12% primary / 8% secondary to edition holders |
 | Rarity-Weighted Rewards | ✅ Done | Higher rarity = more rewards |
 | First-Mint Logic | ✅ Done | Holder portion goes to creator if no existing holders |
 
@@ -63,18 +60,18 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Content Reward Pools | ✅ Done | Per-content accumulated rewards with reward_per_share |
-| Bundle Reward Pools | ✅ Done | Per-bundle accumulated rewards for bundle NFT holders |
-| Per-NFT Tracking | ✅ Done | Individual reward debt per NFT with weight |
+| Bundle Reward Pools | ✅ Done | Per-bundle accumulated rewards for bundle edition holders |
+| Per-Edition Tracking | ✅ Done | Individual reward debt per edition with weight |
 | Weighted Rewards | ✅ Done | Formula: `(weight * reward_per_share - debt) / PRECISION` |
 | Claim Rewards | ✅ Done | Claim pending rewards from content |
 | Unified Claim | ✅ Done | Claim content + bundle rewards in combined transactions |
-| Batch Bundle Claims | ✅ Done | All NFTs per bundle claimed in single instruction |
+| Batch Bundle Claims | ✅ Done | All editions per bundle claimed in single instruction |
 | Transaction Batching | ✅ Done | Up to 4 instructions per transaction (content + bundle) |
 | Multi-Content Claims | ✅ Done | Claim from multiple contents across transactions |
-| Verified Claims | ✅ Done | On-chain NFT ownership verification for claims |
-| Transfer Sync | ✅ Done | Update reward positions on NFT transfer |
+| Verified Claims | ✅ Done | On-chain edition ownership verification for claims |
+| Transfer Sync | ✅ Done | Update reward positions on edition transfer |
 | Rarity Multipliers | ✅ Done | Weighted reward distribution by rarity |
-| Mint Sequence Display | ✅ Done | NFTs sorted by createdAt in claim modal |
+| Mint Sequence Display | ✅ Done | Editions sorted by createdAt in claim modal |
 | Secondary Sale Sync | ✅ Done | Auto-sync royalties to reward pool on claim |
 
 ### 6. Rental System
@@ -82,10 +79,10 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Feature | Status | Description |
 |---------|--------|-------------|
 | Rental Configuration | ✅ Done | 3-tier pricing (6h, 1d, 7d) |
-| Rental Execution | ✅ Done | Create frozen rental NFT with expiry |
+| Rental Execution | ✅ Done | Create frozen rental token with expiry |
 | Rental Extensions | ✅ Done | Extend active rentals |
 | Expiry Tracking | ✅ Done | On-chain expiration timestamp |
-| Freeze Delegate | ✅ Done | Prevent rental NFT transfers |
+| Freeze Delegate | ✅ Done | Prevent rental token transfers |
 | Rental Access Check | ✅ Done | Verify rental is still valid |
 
 ### 7. Bundle System
@@ -97,13 +94,12 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Bundle Types | ✅ Done | 7 types: Album, Series, Playlist, Course, Newsletter, Collection, ProductPack |
 | Bundle Metadata | ✅ Done | IPFS metadata for bundle info |
 | Drag-and-Drop Ordering | ✅ Done | Reorder items via metadata with position tracking |
-| Bundle NFT Minting | ✅ Done | Mint NFTs for bundles with VRF rarity |
-| Bundle Direct Mint | ✅ Done | Direct minting without VRF (deterministic) |
+| Bundle Minting | ✅ Done | Mint editions for bundles with rarity |
 | Bundle Rentals | ✅ Done | 3-tier rental pricing (6h, 1d, 7d) for bundles |
-| Bundle Reward Pools | ✅ Done | 12% holder rewards distributed to bundle NFT holders |
+| Bundle Reward Pools | ✅ Done | 12% holder rewards distributed to bundle edition holders |
 | Bundle Collections | ✅ Done | Metaplex Core collection per bundle |
-| Bundle Content Access | ✅ Done | Bundle NFT grants access to all encrypted content |
-| Bundle Locking | ✅ Done | Bundle locks after first NFT mint |
+| Bundle Content Access | ✅ Done | Bundle edition grants access to all encrypted content |
+| Bundle Locking | ✅ Done | Bundle locks after first mint |
 | Bundle Page | ✅ Done | Dedicated page showing bundle contents and purchase options |
 
 ### 8. Web Application
@@ -125,12 +121,12 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | User Profiles | ✅ Done | Created/Collected/Rewards tabs |
 | Wallet Integration | ✅ Done | Solana Wallet Adapter (auto-detect) |
 | Upload Wizard | ✅ Done | Multi-step with encryption option |
-| Buy NFT Modal | ✅ Done | VRF minting with rarity reveal |
-| Buy Bundle Modal | ✅ Done | Purchase bundle NFTs with VRF rarity |
+| Buy Content Modal | ✅ Done | Minting with rarity reveal |
+| Buy Bundle Modal | ✅ Done | Purchase bundle editions with rarity |
 | Rent Modal | ✅ Done | Tier selection, extension support |
 | Rent Bundle Modal | ✅ Done | Rent bundles with tier selection |
-| Sell NFT Modal | ✅ Done | Secondary market sale |
-| Burn NFT Modal | ✅ Done | Burn owned NFTs |
+| Sell Modal | ✅ Done | Secondary market sale |
+| Burn Modal | ✅ Done | Burn owned editions |
 | Claim Modal | ✅ Done | Unified content + bundle rewards claim |
 | Manage Content Modal | ✅ Done | Configure mint/rent settings for content |
 | Manage Bundle Modal | ✅ Done | Configure mint/rent settings, manage items |
@@ -217,12 +213,12 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 - A/B testing
 - Scheduling
 
-### Advanced NFT Features
+### Advanced Content Features
 - Batch minting
 - Auctions
 - Dutch auctions
 - Whitelist minting
-- NFT marketplace integration
+- Marketplace integration
 
 ---
 
@@ -260,11 +256,11 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 └─────────────┴─────────────┴─────────────┴─────────────┴─────────┘
         │              │              │
         ▼              ▼              ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│ Metaplex Core │ │ MagicBlock    │ │    IPFS       │
-│  - NFTs       │ │  - VRF        │ │  - Content    │
-│  - Royalties  │ │  - Randomness │ │  - Metadata   │
-└───────────────┘ └───────────────┘ └───────────────┘
+┌───────────────┐ ┌───────────────┐
+│ Metaplex Core │ │    IPFS       │
+│  - Assets     │ │  - Content    │
+│  - Royalties  │ │  - Metadata   │
+└───────────────┘ └───────────────┘
 ```
 
 ---
@@ -276,8 +272,8 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 | Frontend | Next.js 15, React, TailwindCSS |
 | State | React Query (TanStack) |
 | Blockchain | Solana, Anchor 0.32.1 |
-| NFTs | Metaplex Core |
-| Randomness | MagicBlock VRF (ephemeral-vrf-sdk) |
+| Assets | Metaplex Core |
+| Randomness | Slot hash based randomness |
 | Storage | IPFS (Filebase S3) |
 | Encryption | TweetNaCl |
 | Wallet | Solana Wallet Adapter |
@@ -285,4 +281,4 @@ Handcraft is a decentralized content platform on Solana combining features of Ti
 
 ---
 
-*Last updated: December 12, 2025*
+*Last updated: December 13, 2025*

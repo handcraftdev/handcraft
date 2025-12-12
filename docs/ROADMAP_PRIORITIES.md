@@ -99,7 +99,7 @@ These features use only on-chain data + IPFS metadata + client-side storage.
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Batch Minting | Medium | Mint multiple NFTs at once |
+| Batch Minting | Medium | Mint multiple editions at once |
 | Whitelist Minting | Medium | Allowlist for early access |
 | Auction Minting | High | Time-limited bidding |
 | Bonding Curve | High | Price increases with supply |
@@ -108,8 +108,8 @@ These features use only on-chain data + IPFS metadata + client-side storage.
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| List NFTs for Sale | High | Fixed price listings |
-| Buy Listed NFTs | High | Purchase from listings |
+| List for Sale | High | Fixed price listings |
+| Buy Listed Content | High | Purchase from listings |
 | Marketplace Page | Medium | Browse all listings |
 
 ---
@@ -142,7 +142,7 @@ These features need historical data, aggregations, or high-frequency writes that
 |---------|------------|-------------|
 | View Counts | Medium | Track content views |
 | Revenue Over Time | Medium | Historical earnings charts |
-| Mint History | Medium | When NFTs were minted |
+| Mint History | Medium | When editions were minted |
 | Audience Insights | High | Geographic, referral data |
 
 **Why Backend:** High-frequency writes (views), time-series data, aggregations.
@@ -231,7 +231,7 @@ notifications (id, user, type, data, read, created_at)
 - New follower
 - Comment on your content
 - Reply to your comment
-- NFT sold (primary/secondary)
+- Content sold (primary/secondary)
 - Rewards available to claim
 - New content from followed creator
 
@@ -260,7 +260,7 @@ notifications (id, user, type, data, read, created_at)
 | Community Creation | High | Create named communities |
 | Community Posts | High | Text posts with upvotes |
 | Community Moderation | High | Mod tools, rules |
-| Token Gating | Medium | NFT required to join |
+| Token Gating | Medium | Edition ownership required to join |
 
 ---
 
