@@ -5,9 +5,10 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
-import { useContentRegistry, getBundleTypeLabel } from "@/hooks/useContentRegistry";
+import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
+import { ManageContentModal } from "@/components/content";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -24,6 +25,7 @@ export default function Dashboard() {
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [showCreateBundleModal, setShowCreateBundleModal] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [selectedContent, setSelectedContent] = useState<ContentEntry | null>(null);
 
   const { data: pendingRewards } = usePendingRewards();
   const myBundles = myBundlesQuery.data ?? [];
@@ -175,7 +177,11 @@ export default function Dashboard() {
                         const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
 
                         return (
-                          <tr key={item.contentCid} className="hover:bg-gray-800/30 transition-colors">
+                          <tr
+                            key={item.contentCid}
+                            onClick={() => setSelectedContent(item)}
+                            className="hover:bg-gray-800/30 transition-colors cursor-pointer"
+                          >
                             <td className="py-4 px-5">
                               <div className="flex items-center gap-3">
                                 {previewUrl ? (
@@ -310,6 +316,15 @@ export default function Dashboard() {
           onClose={() => setSelectedBundle(null)}
           bundle={selectedBundle}
           availableContent={myContent}
+        />
+      )}
+
+      {/* Manage Content Modal */}
+      {selectedContent && (
+        <ManageContentModal
+          isOpen={!!selectedContent}
+          onClose={() => setSelectedContent(null)}
+          content={selectedContent}
         />
       )}
     </div>
