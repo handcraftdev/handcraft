@@ -38,6 +38,14 @@ pub use rent::{
 pub use bundle::{
     Bundle, BundleItem, BundleType,
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
+    // Bundle mint/rent types
+    BundleMintConfig, BundleRentConfig, BundleCollection,
+    BundleRewardPool, BundleWalletState, BundleNftRewardState,
+    BundleNftRarity, BundleRentEntry,
+    // Bundle mint/rent seeds
+    BUNDLE_MINT_CONFIG_SEED, BUNDLE_RENT_CONFIG_SEED, BUNDLE_COLLECTION_SEED,
+    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED, BUNDLE_NFT_REWARD_STATE_SEED,
+    BUNDLE_NFT_RARITY_SEED, BUNDLE_RENT_ENTRY_SEED,
 };
 pub use rarity::{
     Rarity, NftRarity, ContentWeightedPool,

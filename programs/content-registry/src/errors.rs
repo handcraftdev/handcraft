@@ -102,6 +102,24 @@ pub enum ContentRegistryError {
     BundleItemLimitReached,
     #[msg("Only the content creator can add to bundles")]
     NotContentCreator,
+    #[msg("Bundle is locked after first NFT mint")]
+    BundleLocked,
+    #[msg("Bundle mint configuration already exists")]
+    BundleMintConfigExists,
+    #[msg("Bundle mint configuration not found")]
+    BundleMintConfigNotFound,
+    #[msg("Bundle rent configuration already exists")]
+    BundleRentConfigExists,
+    #[msg("Invalid BundleCollection PDA")]
+    InvalidBundleCollection,
+    #[msg("Invalid BundleRewardPool PDA")]
+    InvalidBundleRewardPool,
+    #[msg("Invalid BundleNftRewardState PDA")]
+    InvalidBundleNftRewardState,
+    #[msg("Invalid BundleRentEntry PDA")]
+    InvalidBundleRentEntry,
+    #[msg("Bundle does not match")]
+    BundleMismatch,
 
     // Randomness/Rarity errors
     #[msg("Randomness has already been revealed")]

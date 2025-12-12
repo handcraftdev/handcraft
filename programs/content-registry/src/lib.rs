@@ -1712,6 +1712,34 @@ pub mod content_registry {
         handle_create_bundle(ctx, bundle_id, metadata_cid, bundle_type)
     }
 
+    /// Create a bundle with mint and rent configuration in a single transaction
+    /// Bundle is created as published with mint and rent enabled by default
+    pub fn create_bundle_with_mint_and_rent(
+        ctx: Context<CreateBundleWithMintAndRent>,
+        bundle_id: String,
+        metadata_cid: String,
+        bundle_type: BundleType,
+        mint_price: u64,
+        mint_max_supply: Option<u64>,
+        creator_royalty_bps: u16,
+        rent_fee_6h: u64,
+        rent_fee_1d: u64,
+        rent_fee_7d: u64,
+    ) -> Result<()> {
+        handle_create_bundle_with_mint_and_rent(
+            ctx,
+            bundle_id,
+            metadata_cid,
+            bundle_type,
+            mint_price,
+            mint_max_supply,
+            creator_royalty_bps,
+            rent_fee_6h,
+            rent_fee_1d,
+            rent_fee_7d,
+        )
+    }
+
     /// Add content to an existing bundle
     /// Only the bundle creator can add content, and only their own content
     pub fn add_bundle_item(
@@ -1818,6 +1846,115 @@ pub mod content_registry {
     /// Single transaction - no VRF dependency, immediate mint
     pub fn direct_mint(ctx: Context<DirectMint>) -> Result<()> {
         DirectMint::handler(ctx)
+    }
+
+    // =========================================================================
+    // Bundle Mint/Rent/Rewards - Full commerce for bundles
+    // =========================================================================
+
+    /// Configure NFT minting for a bundle (creator only)
+    /// Creates mint config and Metaplex Core collection
+    pub fn configure_bundle_mint(
+        ctx: Context<ConfigureBundleMint>,
+        price: u64,
+        max_supply: Option<u64>,
+        creator_royalty_bps: u16,
+    ) -> Result<()> {
+        handle_configure_bundle_mint(ctx, price, max_supply, creator_royalty_bps)
+    }
+
+    /// Update bundle mint settings (creator only)
+    pub fn update_bundle_mint_settings(
+        ctx: Context<UpdateBundleMintSettings>,
+        price: Option<u64>,
+        max_supply: Option<Option<u64>>,
+        creator_royalty_bps: Option<u16>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        handle_update_bundle_mint_settings(ctx, price, max_supply, creator_royalty_bps, is_active)
+    }
+
+    /// Direct mint bundle NFT with slot hash randomness
+    /// Single transaction - grants access to all content in the bundle
+    pub fn direct_mint_bundle(ctx: Context<DirectMintBundle>) -> Result<()> {
+        handle_direct_mint_bundle(ctx)
+    }
+
+    /// Configure rental for a bundle (creator only)
+    /// Sets the rent fees for 3 tiers: 6h, 1d, 7d
+    pub fn configure_bundle_rent(
+        ctx: Context<ConfigureBundleRent>,
+        rent_fee_6h: u64,
+        rent_fee_1d: u64,
+        rent_fee_7d: u64,
+    ) -> Result<()> {
+        handle_configure_bundle_rent(ctx, rent_fee_6h, rent_fee_1d, rent_fee_7d)
+    }
+
+    /// Update bundle rent settings (creator only)
+    pub fn update_bundle_rent_config(
+        ctx: Context<UpdateBundleRentConfig>,
+        rent_fee_6h: Option<u64>,
+        rent_fee_1d: Option<u64>,
+        rent_fee_7d: Option<u64>,
+        is_active: Option<bool>,
+    ) -> Result<()> {
+        handle_update_bundle_rent_config(ctx, rent_fee_6h, rent_fee_1d, rent_fee_7d, is_active)
+    }
+
+    /// Rent a bundle with SOL payment
+    /// Creates a frozen rental NFT granting access to all bundle content
+    pub fn rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Result<()> {
+        handle_rent_bundle_sol(ctx, tier)
+    }
+
+    /// Check if a bundle rental has expired
+    pub fn check_bundle_rent_expiry(ctx: Context<CheckBundleRentExpiry>) -> Result<()> {
+        handle_check_bundle_rent_expiry(ctx)
+    }
+
+    /// Claim holder rewards for a bundle NFT
+    pub fn claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<()> {
+        handle_claim_bundle_rewards(ctx)
+    }
+
+    /// Batch claim bundle rewards for multiple NFTs
+    pub fn batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) -> Result<()> {
+        handle_batch_claim_bundle_rewards(ctx)
+    }
+
+    // =========================================================================
+    // MagicBlock VRF Bundle Minting - Fast, VRF-based bundle minting
+    // =========================================================================
+
+    /// Request a bundle mint using MagicBlock VRF
+    /// User pays mint price, VRF is requested, callback mints NFT with random rarity
+    pub fn magicblock_request_bundle_mint(ctx: Context<MagicBlockRequestBundleMint>, edition: u64) -> Result<()> {
+        MagicBlockRequestBundleMint::handler(ctx, edition)
+    }
+
+    /// MagicBlock VRF callback - oracle calls this with randomness to mint bundle NFT
+    /// No user signature required - called automatically by VRF oracle
+    pub fn magicblock_fulfill_bundle_mint(ctx: Context<MagicBlockFulfillBundleMint>, randomness: [u8; 32]) -> Result<()> {
+        MagicBlockFulfillBundleMint::handler(ctx, randomness)
+    }
+
+    /// Cancel pending MagicBlock bundle mint request
+    /// Returns escrowed funds to buyer
+    pub fn magicblock_cancel_bundle_mint(ctx: Context<MagicBlockCancelBundleMint>, edition: u64) -> Result<()> {
+        MagicBlockCancelBundleMint::handler(ctx, edition)
+    }
+
+    /// Claim bundle NFT with random rarity if VRF oracle doesn't respond
+    /// User can call this after timeout to get their NFT with slot hash randomness
+    pub fn magicblock_bundle_claim_fallback(ctx: Context<MagicBlockBundleClaimFallback>) -> Result<()> {
+        MagicBlockBundleClaimFallback::handler(ctx)
+    }
+
+    /// Close a fulfilled MagicBlock bundle mint request
+    /// Reclaims rent and allows a new mint request
+    pub fn magicblock_close_fulfilled_bundle(ctx: Context<MagicBlockCloseFulfilledBundle>) -> Result<()> {
+        MagicBlockCloseFulfilledBundle::handler(ctx)
     }
 }
 

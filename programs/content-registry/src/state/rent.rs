@@ -12,7 +12,7 @@ pub const RENT_PERIOD_7D: i64 = 7 * 24 * 3600; // 7 days = 604,800 seconds
 pub const MIN_RENT_FEE_LAMPORTS: u64 = 1_000_000;
 
 /// Rental tier selection (0 = 6h, 1 = 1d, 2 = 7d)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RentTier {
     SixHours = 0,
     OneDay = 1,

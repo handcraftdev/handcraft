@@ -1,0 +1,236 @@
+use anchor_lang::prelude::*;
+use mpl_core::instructions::CreateCollectionV2CpiBuilder;
+use mpl_core::types::{
+    Plugin, PluginAuthorityPair,
+    Royalties, Creator, RuleSet,
+};
+
+use crate::state::*;
+use crate::errors::ContentRegistryError;
+use crate::MPL_CORE_ID;
+
+// ============================================================================
+// CREATE BUNDLE WITH MINT AND RENT - All-in-one bundle creation
+// ============================================================================
+
+/// Create a bundle with mint and rent configuration in a single transaction
+/// This combines:
+/// - CreateBundle: Creates the bundle PDA
+/// - ConfigureBundleMint: Sets up minting with Metaplex collection
+/// - ConfigureBundleRent: Sets up rental tiers
+///
+/// Bundle is created as published (is_active=true) with mint and rent enabled
+#[derive(Accounts)]
+#[instruction(bundle_id: String)]
+pub struct CreateBundleWithMintAndRent<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    /// The bundle to create
+    #[account(
+        init,
+        payer = creator,
+        space = Bundle::space(),
+        seeds = [BUNDLE_SEED, creator.key().as_ref(), bundle_id.as_bytes()],
+        bump
+    )]
+    pub bundle: Account<'info, Bundle>,
+
+    /// Mint config PDA for the bundle
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + BundleMintConfig::INIT_SPACE,
+        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        bump
+    )]
+    pub mint_config: Account<'info, BundleMintConfig>,
+
+    /// Rent config PDA for the bundle
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + BundleRentConfig::INIT_SPACE,
+        seeds = [BUNDLE_RENT_CONFIG_SEED, bundle.key().as_ref()],
+        bump
+    )]
+    pub rent_config: Account<'info, BundleRentConfig>,
+
+    /// Bundle collection PDA (tracks the Metaplex collection)
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + BundleCollection::INIT_SPACE,
+        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
+        bump
+    )]
+    pub bundle_collection: Account<'info, BundleCollection>,
+
+    /// CHECK: The Metaplex Core Collection asset to create
+    #[account(mut)]
+    pub collection_asset: Signer<'info>,
+
+    /// Ecosystem config for treasury address
+    #[account(
+        seeds = [ECOSYSTEM_CONFIG_SEED],
+        bump
+    )]
+    pub ecosystem_config: Account<'info, EcosystemConfig>,
+
+    /// CHECK: Platform wallet for royalties
+    #[account()]
+    pub platform: AccountInfo<'info>,
+
+    /// CHECK: MPL Core program
+    #[account(address = MPL_CORE_ID)]
+    pub mpl_core_program: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handle_create_bundle_with_mint_and_rent(
+    ctx: Context<CreateBundleWithMintAndRent>,
+    bundle_id: String,
+    metadata_cid: String,
+    bundle_type: BundleType,
+    // Mint config
+    mint_price: u64,
+    mint_max_supply: Option<u64>,
+    creator_royalty_bps: u16,
+    // Rent config
+    rent_fee_6h: u64,
+    rent_fee_1d: u64,
+    rent_fee_7d: u64,
+) -> Result<()> {
+    // Validate mint price
+    require!(
+        BundleMintConfig::validate_price(mint_price),
+        ContentRegistryError::PriceTooLow
+    );
+
+    // Validate royalty
+    require!(
+        BundleMintConfig::validate_royalty(creator_royalty_bps),
+        ContentRegistryError::InvalidRoyalty
+    );
+
+    // Validate rent fees
+    require!(
+        BundleRentConfig::validate_fee(rent_fee_6h),
+        ContentRegistryError::RentFeeTooLow
+    );
+    require!(
+        BundleRentConfig::validate_fee(rent_fee_1d),
+        ContentRegistryError::RentFeeTooLow
+    );
+    require!(
+        BundleRentConfig::validate_fee(rent_fee_7d),
+        ContentRegistryError::RentFeeTooLow
+    );
+
+    let clock = Clock::get()?;
+    let bundle_key = ctx.accounts.bundle.key();
+
+    // ========== 1. Initialize Bundle ==========
+    let bundle = &mut ctx.accounts.bundle;
+    bundle.creator = ctx.accounts.creator.key();
+    bundle.bundle_id = bundle_id.clone();
+    bundle.metadata_cid = metadata_cid.clone();
+    bundle.bundle_type = bundle_type;
+    bundle.item_count = 0;
+    bundle.is_active = true; // Published by default
+    bundle.is_locked = false;
+    bundle.minted_count = 0;
+    bundle.pending_count = 0;
+    bundle.created_at = clock.unix_timestamp;
+    bundle.updated_at = clock.unix_timestamp;
+
+    // ========== 2. Initialize Mint Config ==========
+    let mint_config = &mut ctx.accounts.mint_config;
+    mint_config.bundle = bundle_key;
+    mint_config.creator = ctx.accounts.creator.key();
+    mint_config.price = mint_price;
+    mint_config.max_supply = mint_max_supply;
+    mint_config.creator_royalty_bps = creator_royalty_bps;
+    mint_config.is_active = true;
+    mint_config.created_at = clock.unix_timestamp;
+    mint_config.updated_at = clock.unix_timestamp;
+
+    // ========== 3. Initialize Rent Config ==========
+    let rent_config = &mut ctx.accounts.rent_config;
+    rent_config.bundle = bundle_key;
+    rent_config.creator = ctx.accounts.creator.key();
+    rent_config.rent_fee_6h = rent_fee_6h;
+    rent_config.rent_fee_1d = rent_fee_1d;
+    rent_config.rent_fee_7d = rent_fee_7d;
+    rent_config.is_active = true;
+    rent_config.total_rentals = 0;
+    rent_config.total_fees_collected = 0;
+    rent_config.created_at = clock.unix_timestamp;
+    rent_config.updated_at = clock.unix_timestamp;
+
+    // ========== 4. Initialize Bundle Collection ==========
+    let bundle_collection = &mut ctx.accounts.bundle_collection;
+    bundle_collection.bundle = bundle_key;
+    bundle_collection.collection_asset = ctx.accounts.collection_asset.key();
+    bundle_collection.creator = ctx.accounts.creator.key();
+    bundle_collection.created_at = clock.unix_timestamp;
+
+    // ========== 5. Create Metaplex Core Collection ==========
+    // Derive BundleRewardPool PDA for holder royalties
+    let (holder_reward_pool, _) = Pubkey::find_program_address(
+        &[BUNDLE_REWARD_POOL_SEED, bundle_key.as_ref()],
+        ctx.program_id,
+    );
+
+    // Create the Metaplex Core Collection with Royalties plugin
+    let collection_name = "Handcraft Bundle Collection".to_string();
+    let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", metadata_cid);
+
+    // Calculate royalty shares
+    let total_royalty_bps = EcosystemConfig::total_secondary_royalty_bps(creator_royalty_bps);
+    let creator_share = (creator_royalty_bps as u32 * 100 / total_royalty_bps as u32) as u8;
+    let platform_share = (100_u32 * 100 / total_royalty_bps as u32) as u8;
+    let treasury_share = (100_u32 * 100 / total_royalty_bps as u32) as u8;
+    let holder_share = 100 - creator_share - platform_share - treasury_share;
+
+    // Build creators vec (deduplicate)
+    let mut creators_map: std::collections::BTreeMap<Pubkey, u8> = std::collections::BTreeMap::new();
+    *creators_map.entry(ctx.accounts.creator.key()).or_insert(0) += creator_share;
+    *creators_map.entry(ctx.accounts.platform.key()).or_insert(0) += platform_share;
+    *creators_map.entry(ctx.accounts.ecosystem_config.treasury).or_insert(0) += treasury_share;
+    *creators_map.entry(holder_reward_pool).or_insert(0) += holder_share;
+
+    let creators_vec: Vec<Creator> = creators_map
+        .into_iter()
+        .map(|(address, percentage)| Creator { address, percentage })
+        .collect();
+
+    let royalties = Royalties {
+        basis_points: total_royalty_bps,
+        creators: creators_vec,
+        rule_set: RuleSet::None,
+    };
+
+    let royalties_plugin = PluginAuthorityPair {
+        plugin: Plugin::Royalties(royalties),
+        authority: None,
+    };
+
+    // Create collection with bundle_collection as update authority
+    CreateCollectionV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
+        .collection(&ctx.accounts.collection_asset.to_account_info())
+        .payer(&ctx.accounts.creator.to_account_info())
+        .update_authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+        .system_program(&ctx.accounts.system_program.to_account_info())
+        .name(collection_name)
+        .uri(collection_uri)
+        .plugins(vec![royalties_plugin])
+        .invoke()?;
+
+    msg!("Bundle created with mint and rent: id={}, type={:?}", bundle_id, bundle_type);
+    msg!("Mint: price={}, max_supply={:?}, royalty_bps={}", mint_price, mint_max_supply, creator_royalty_bps);
+    msg!("Rent: 6h={}, 1d={}, 7d={}", rent_fee_6h, rent_fee_1d, rent_fee_7d);
+
+    Ok(())
+}

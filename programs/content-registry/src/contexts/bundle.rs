@@ -24,7 +24,7 @@ pub struct CreateBundle<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Add content to a bundle
+/// Add content to a bundle (only allowed for unpublished bundles)
 #[derive(Accounts)]
 pub struct AddBundleItem<'info> {
     #[account(mut)]
@@ -33,7 +33,7 @@ pub struct AddBundleItem<'info> {
     #[account(
         mut,
         has_one = creator,
-        constraint = bundle.is_active @ ContentError::BundleNotActive
+        constraint = !bundle.is_locked @ ContentError::BundleLocked
     )]
     pub bundle: Account<'info, Bundle>,
 
@@ -55,7 +55,7 @@ pub struct AddBundleItem<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Remove content from a bundle
+/// Remove content from a bundle (only allowed for unpublished bundles)
 #[derive(Accounts)]
 pub struct RemoveBundleItem<'info> {
     #[account(mut)]
@@ -63,7 +63,8 @@ pub struct RemoveBundleItem<'info> {
 
     #[account(
         mut,
-        has_one = creator
+        has_one = creator,
+        constraint = !bundle.is_locked @ ContentError::BundleLocked
     )]
     pub bundle: Account<'info, Bundle>,
 
@@ -119,11 +120,14 @@ pub fn handle_create_bundle(
     bundle.metadata_cid = metadata_cid;
     bundle.bundle_type = bundle_type;
     bundle.item_count = 0;
-    bundle.is_active = true;
+    bundle.is_active = false; // Start as draft (unpublished)
+    bundle.is_locked = false;
+    bundle.minted_count = 0;
+    bundle.pending_count = 0;
     bundle.created_at = clock.unix_timestamp;
     bundle.updated_at = clock.unix_timestamp;
 
-    msg!("Bundle created: {} (type: {:?})", bundle.bundle_id, bundle.bundle_type);
+    msg!("Bundle created as draft: {} (type: {:?})", bundle.bundle_id, bundle.bundle_type);
 
     Ok(())
 }
