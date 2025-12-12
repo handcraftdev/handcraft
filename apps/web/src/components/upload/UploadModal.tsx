@@ -373,6 +373,26 @@ function getTypesForDomain(domain: ContentDomain) {
   return CONTENT_TYPES.filter(t => t.domain === domain);
 }
 
+// File size limits per domain (in bytes)
+const FILE_SIZE_LIMITS: Record<ContentDomain, number> = {
+  video: 2 * 1024 * 1024 * 1024, // 2 GB
+  audio: 500 * 1024 * 1024, // 500 MB
+  image: 50 * 1024 * 1024, // 50 MB
+  document: 100 * 1024 * 1024, // 100 MB
+  file: 1024 * 1024 * 1024, // 1 GB
+  text: 10 * 1024 * 1024, // 10 MB
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  }
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
 export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const { publicKey } = useWallet();
   const [step, setStep] = useState<Step>("domain");
@@ -391,11 +411,17 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     tags: "",
   });
 
-  // NFT minting config
+  // Minting config
   const [nftPrice, setNftPrice] = useState("");
   const [nftSupplyType, setNftSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [nftMaxSupply, setNftMaxSupply] = useState("");
-  const [nftRoyaltyPercent, setNftRoyaltyPercent] = useState("5");
+  // Royalty is now fixed at 4%
+  const FIXED_ROYALTY_PERCENT = 4;
+  // Minimum price (0.001 SOL) - free minting is not allowed
+  const MIN_PRICE_SOL = 0.001;
+
+  // Visibility level (0=Public, 1=Ecosystem, 2=Subscriber, 3=Edition-only)
+  const [visibilityLevel, setVisibilityLevel] = useState<number>(0);
 
   // Rental config
   const [rentFee6h, setRentFee6h] = useState("");
@@ -411,6 +437,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     encryptionMetaCid?: string | null;
   } | null>(null);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
+  const [fileSizeError, setFileSizeError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -455,7 +482,17 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+    if (!selectedFile || !contentType) return;
+
+    // Validate file size
+    const maxSize = FILE_SIZE_LIMITS[contentType.domain];
+    if (selectedFile.size > maxSize) {
+      setFileSizeError(
+        `File too large. Maximum size for ${contentType.domain} is ${formatFileSize(maxSize)}. Your file is ${formatFileSize(selectedFile.size)}.`
+      );
+      return;
+    }
+    setFileSizeError(null);
 
     setFile(selectedFile);
 
@@ -468,7 +505,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     updateMetadata("title", nameWithoutExt);
 
     setStep("details");
-  }, [updateMetadata]);
+  }, [updateMetadata, contentType]);
 
   const handleUpload = useCallback(async () => {
     if (!file || !contentType) return;
@@ -476,7 +513,6 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     const currentNftPrice = nftPrice;
     const currentNftSupplyType = nftSupplyType;
     const currentNftMaxSupply = nftMaxSupply;
-    const currentNftRoyaltyPercent = nftRoyaltyPercent;
     const currentContentType = contentType.onChainType;
     const currentRentFee6h = rentFee6h;
     const currentRentFee1d = rentFee1d;
@@ -530,20 +566,19 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       if (publicKey && result.metadata) {
         setStep("registering");
         try {
-          let priceValue: bigint;
-          if (currentNftPrice === "" || currentNftPrice === "0") {
-            priceValue = BigInt(0);
-          } else {
-            const priceFloat = parseFloat(currentNftPrice);
-            priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
+          // Parse price - free minting is not allowed
+          const priceFloat = parseFloat(currentNftPrice);
+          if (isNaN(priceFloat) || priceFloat < MIN_PRICE_SOL) {
+            throw new Error(`Price must be at least ${MIN_PRICE_SOL} SOL`);
           }
+          const priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
 
           let maxSupplyValue: bigint | null = null;
           if (currentNftSupplyType === "limited" && currentNftMaxSupply) {
             maxSupplyValue = BigInt(parseInt(currentNftMaxSupply));
           }
 
-          const royaltyBps = Math.floor(parseFloat(currentNftRoyaltyPercent) * 100);
+          const royaltyBps = FIXED_ROYALTY_PERCENT * 100; // 4% = 400 bps
 
           if (!ecosystemConfig) {
             throw new Error("Ecosystem config not loaded. Please try again.");
@@ -572,6 +607,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             isEncrypted: result.isEncrypted || false,
             previewCid: result.previewCid || "",
             encryptionMetaCid: result.encryptionMetaCid || "",
+            visibilityLevel,
             ...rentFees,
           });
 
@@ -595,7 +631,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     }
   }, [
     file, contentType, metadata, nftPrice, nftSupplyType, nftMaxSupply,
-    nftRoyaltyPercent, rentFee6h, rentFee1d, rentFee7d,
+    rentFee6h, rentFee1d, rentFee7d,
     uploadResult, publicKey, uploadContent, registerContentWithMintAndRent,
     ecosystemConfig, onSuccess, markComplete, LAMPORTS_PER_SOL,
   ]);
@@ -616,12 +652,13 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     setNftPrice("");
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
-    setNftRoyaltyPercent("5");
+    setVisibilityLevel(0);
     setRentFee6h("");
     setRentFee1d("");
     setRentFee7d("");
     setUploadResult(null);
     setRegistrationError(null);
+    setFileSizeError(null);
     reset();
     resetSession();
     onClose();
@@ -1036,10 +1073,14 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
           {/* Step: File Upload */}
           {step === "file" && contentType && (
-            <div>
+            <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center cursor-pointer hover:border-primary-500 hover:bg-gray-800/50 transition-all"
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all ${
+                  fileSizeError
+                    ? "border-red-500 bg-red-500/5"
+                    : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
+                }`}
               >
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center text-gray-400">
                   {contentType.icon}
@@ -1048,6 +1089,9 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   Drop your {contentType.label.toLowerCase()} here
                 </p>
                 <p className="text-sm text-gray-500">or click to browse</p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Max size: {formatFileSize(FILE_SIZE_LIMITS[contentType.domain])}
+                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1056,6 +1100,11 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   className="hidden"
                 />
               </div>
+              {fileSizeError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                  {fileSizeError}
+                </div>
+              )}
             </div>
           )}
 
@@ -1119,7 +1168,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    NFT Minting
+                    Content Minting
                   </div>
                   {monetizationTab === "minting" && (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
@@ -1147,7 +1196,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               {monetizationTab === "minting" && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-400">
-                    Configure how others can mint NFTs to permanently own your content.
+                    Configure how others can mint editions to permanently own your content.
                   </p>
 
                   <div>
@@ -1156,10 +1205,10 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                       <input
                         type="number"
                         step="0.001"
-                        min="0"
+                        min="0.001"
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
-                        placeholder="0 for free"
+                        placeholder="Min 0.001"
                         className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
                       />
                       <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
@@ -1202,20 +1251,40 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      Secondary Sale Royalty: {nftRoyaltyPercent}%
+                      Secondary Sale Royalty
                     </label>
-                    <input
-                      type="range"
-                      min="2"
-                      max="10"
-                      step="0.5"
-                      value={nftRoyaltyPercent}
-                      onChange={(e) => setNftRoyaltyPercent(e.target.value)}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>2%</span>
-                      <span>10%</span>
+                    <div className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300">
+                      {FIXED_ROYALTY_PERCENT}% <span className="text-gray-500 text-sm">(fixed)</span>
+                    </div>
+                  </div>
+
+                  {/* Visibility Level */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Content Visibility</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { level: 0, label: "Public", desc: "Anyone can view", icon: "🌍" },
+                        { level: 1, label: "Ecosystem", desc: "Ecosystem members", icon: "🏠" },
+                        { level: 2, label: "Subscriber", desc: "Your subscribers", icon: "⭐" },
+                        { level: 3, label: "Edition Only", desc: "Edition holders only", icon: "🔒" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.level}
+                          type="button"
+                          onClick={() => setVisibilityLevel(opt.level)}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            visibilityLevel === opt.level
+                              ? "border-primary-500 bg-primary-500/10"
+                              : "border-gray-700 hover:border-gray-600"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span>{opt.icon}</span>
+                            <span className="font-medium text-sm">{opt.label}</span>
+                          </div>
+                          <p className="text-xs text-gray-500">{opt.desc}</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1301,7 +1370,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 text-sm">
                     <p className="text-amber-400 font-medium mb-2">About Rentals</p>
                     <ul className="text-amber-200/80 space-y-1">
-                      <li>• Temporary access via non-transferable NFTs</li>
+                      <li>• Temporary access via non-transferable tokens</li>
                       <li>• Access expires automatically after rental period</li>
                       <li>• Same revenue split as minting (80% to creator)</li>
                     </ul>
@@ -1339,6 +1408,13 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               )}
 
               {/* Rental validation - require all or none */}
+              {/* Price validation - free minting not allowed */}
+              {nftPrice && parseFloat(nftPrice) < MIN_PRICE_SOL && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                  Minimum price is {MIN_PRICE_SOL} SOL. Free minting is not allowed.
+                </div>
+              )}
+
               {(() => {
                 const hasAnyRent = rentFee6h || rentFee1d || rentFee7d;
                 const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
@@ -1367,6 +1443,9 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 disabled={
                   isLoadingEcosystemConfig ||
                   !ecosystemConfig ||
+                  // Disable if price is too low (free minting not allowed)
+                  !nftPrice ||
+                  parseFloat(nftPrice) < MIN_PRICE_SOL ||
                   // Disable if partial rental fees (require all or none)
                   Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
                 }

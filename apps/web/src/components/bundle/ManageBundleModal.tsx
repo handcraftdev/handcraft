@@ -332,8 +332,14 @@ export function ManageBundleModal({
     }
 
     try {
-      const priceLamports = BigInt(Math.floor(parseFloat(mintPrice) * LAMPORTS_PER_SOL));
-      if (priceLamports > 0 && priceLamports < BigInt(MIN_PRICE_LAMPORTS)) {
+      // Free minting is not allowed
+      const priceFloat = parseFloat(mintPrice);
+      if (isNaN(priceFloat) || priceFloat <= 0) {
+        setError("Price is required. Free minting is not allowed.");
+        return;
+      }
+      const priceLamports = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
+      if (priceLamports < BigInt(MIN_PRICE_LAMPORTS)) {
         setError(`Minimum price is ${MIN_PRICE_LAMPORTS / LAMPORTS_PER_SOL} SOL`);
         return;
       }
@@ -684,10 +690,12 @@ export function ManageBundleModal({
                           type="number"
                           value={mintPrice}
                           onChange={(e) => setMintPrice(e.target.value)}
-                          min="0"
-                          step="0.01"
+                          min="0.001"
+                          step="0.001"
+                          placeholder="Min 0.001"
                           className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
                         />
+                        <p className="text-xs text-gray-500 mt-1">Minimum 0.001 SOL (free minting not allowed)</p>
                       </div>
 
                       {/* Max Supply */}

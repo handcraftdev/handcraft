@@ -290,6 +290,7 @@ export function useContentRegistry() {
       isEncrypted = false,
       previewCid = "",
       encryptionMetaCid = "",
+      visibilityLevel = 0,
       rentFee6h,
       rentFee1d,
       rentFee7d,
@@ -304,6 +305,7 @@ export function useContentRegistry() {
       isEncrypted?: boolean;
       previewCid?: string;
       encryptionMetaCid?: string;
+      visibilityLevel?: number;
       rentFee6h?: bigint;
       rentFee1d?: bigint;
       rentFee7d?: bigint;
@@ -336,7 +338,8 @@ export function useContentRegistry() {
         platform,
         isEncrypted,
         previewCid,
-        encryptionMetaCid
+        encryptionMetaCid,
+        visibilityLevel
       );
 
       console.log("Collection Asset pubkey:", collectionAssetKeypair.publicKey.toBase58());

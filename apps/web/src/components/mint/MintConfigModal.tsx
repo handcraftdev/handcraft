@@ -85,21 +85,16 @@ export function MintConfigModal({
     }
 
     try {
-      // Parse price (SOL only)
-      let priceValue: bigint;
-      if (price === "" || price === "0") {
-        priceValue = BigInt(0); // Free mint
-      } else {
-        const priceFloat = parseFloat(price);
-        if (isNaN(priceFloat) || priceFloat < 0) {
-          setError("Invalid price");
-          return;
-        }
-        priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
-        if (priceValue > 0 && priceValue < MIN_PRICE_LAMPORTS) {
-          setError(`Minimum price is ${MIN_PRICE_LAMPORTS / LAMPORTS_PER_SOL} SOL`);
-          return;
-        }
+      // Parse price (SOL only) - free minting is not allowed
+      const priceFloat = parseFloat(price);
+      if (isNaN(priceFloat) || priceFloat <= 0) {
+        setError("Price is required. Free minting is not allowed.");
+        return;
+      }
+      const priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
+      if (priceValue < MIN_PRICE_LAMPORTS) {
+        setError(`Minimum price is ${MIN_PRICE_LAMPORTS / LAMPORTS_PER_SOL} SOL`);
+        return;
       }
 
       // Parse supply
@@ -197,10 +192,10 @@ export function MintConfigModal({
               <input
                 type="number"
                 step="0.001"
-                min="0"
+                min="0.001"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="0 for free"
+                placeholder="Min 0.001"
                 className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
               />
               <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">
@@ -208,7 +203,7 @@ export function MintConfigModal({
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Leave empty or 0 for free minting
+              Minimum price is 0.001 SOL (free minting not allowed)
             </p>
           </div>
 

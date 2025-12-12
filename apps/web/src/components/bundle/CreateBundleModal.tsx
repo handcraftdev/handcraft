@@ -143,8 +143,12 @@ export function CreateBundleModal({
       return;
     }
 
-    // Parse values
-    const priceFloat = nftPrice ? parseFloat(nftPrice) : 0;
+    // Parse values - free minting is not allowed
+    const priceFloat = parseFloat(nftPrice);
+    if (isNaN(priceFloat) || priceFloat < 0.001) {
+      setError("Minimum price is 0.001 SOL. Free minting is not allowed.");
+      return;
+    }
     const royaltyNum = parseFloat(nftRoyaltyPercent);
 
     if (isNaN(royaltyNum) || royaltyNum < 2 || royaltyNum > 10) {
@@ -570,7 +574,7 @@ export function CreateBundleModal({
               {monetizationTab === "minting" && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-400">
-                    Configure how others can mint NFTs to permanently own your bundle.
+                    Configure how others can mint editions to permanently own your bundle.
                   </p>
 
                   <div>
@@ -579,14 +583,15 @@ export function CreateBundleModal({
                       <input
                         type="number"
                         step="0.001"
-                        min="0"
+                        min="0.001"
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
-                        placeholder="0 for free"
+                        placeholder="Min 0.001"
                         className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
                       />
                       <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">Minimum price is 0.001 SOL (free minting not allowed)</p>
                   </div>
 
                   <div>
