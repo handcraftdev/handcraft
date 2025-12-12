@@ -83,6 +83,147 @@ pending = (nft_weight * reward_per_share - reward_debt) / PRECISION
 
 ---
 
+## Virtual RPS (Late-Mint Protection)
+
+### The Problem
+
+For **lazy distribution pools** (CreatorPatronPool, GlobalHolderPool, CreatorDistPool), funds accumulate in a treasury and are only distributed when someone claims after epoch ends.
+
+```
+Epoch 1:
+├── Day 1: Treasury = 0 SOL, Alice mints NFT (weight 20)
+├── Day 15: Treasury = 5 SOL (from subscriptions)
+├── Day 28: Treasury = 9 SOL
+├── Day 29: Bob mints NFT (weight 20)  ← PROBLEM
+└── Day 30: Epoch ends
+
+Without virtual RPS:
+├── Distribution: 9 SOL × 12% = 1.08 SOL to holder pool
+├── reward_per_share = 1.08 × PRECISION / 40 = 0.027 per weight
+├── Alice claims: 20 × 0.027 = 0.54 SOL
+├── Bob claims: 20 × 0.027 = 0.54 SOL  ← UNFAIR! Bob held for 1 day
+```
+
+Bob minted on Day 29 but gets the same rewards as Alice who held for 30 days.
+
+### The Solution: Virtual RPS
+
+When minting, calculate debt based on **what the RPS would be if treasury distributed now**:
+
+```rust
+virtual_rps = pool.reward_per_share + (treasury * share% * PRECISION) / pool.total_weight
+```
+
+This excludes the new minter from pre-existing treasury funds.
+
+```
+With virtual RPS:
+├── Bob mints on Day 29
+├── Treasury = 9 SOL at mint time
+├── virtual_rps = 0 + (9 × 0.12 × PRECISION) / 20 = 0.054 per weight
+├── Bob's debt = 20 × 0.054 = 1.08 (equals entire treasury holder share!)
+├──
+├── Epoch ends, distribution happens:
+├── actual_rps = 0.054 per weight (same as virtual)
+├── Alice claims: (20 × 0.054 - 0) / PRECISION = 1.08 SOL ✓
+├── Bob claims: (20 × 0.054 - 1.08) / PRECISION = 0 SOL ✓ FAIR!
+```
+
+### Which Debts Need Virtual RPS?
+
+| Debt Field | Pool | Distribution | Virtual RPS? |
+|------------|------|--------------|--------------|
+| `content_or_bundle_debt` | ContentRewardPool / BundleRewardPool | **Immediate** | **No** |
+| `patron_debt` | CreatorPatronPool | **Lazy** (epoch) | **Yes** |
+| `global_debt` | GlobalHolderPool | **Lazy** (epoch) | **Yes** |
+| `creator_weight.reward_debt` | CreatorDistPool | **Lazy** (epoch) | **Yes** |
+
+**Why immediate pools don't need it:**
+- RPS is updated on every transaction
+- No undistributed funds exist in treasury
+- Pool state always reflects all past distributions
+
+---
+
+## NFT Debt vs Creator Debt
+
+### Key Distinction
+
+| Type | Operation | Reason |
+|------|-----------|--------|
+| **NFT Debt** | **SET** | Each NFT is independent, tracks its own entry point |
+| **Creator Debt** | **ADD** | Accumulates across all NFTs the creator has |
+
+### NFT Debt: SET
+
+Each NFT tracks its own debt independently:
+
+```rust
+// On mint - SET (not add)
+nft_state.content_or_bundle_debt = weight * pool.reward_per_share;
+nft_state.patron_debt = weight * virtual_patron_rps;
+nft_state.global_debt = weight * virtual_global_rps;
+```
+
+**Why SET?** Each NFT has its own lifecycle. When NFT is minted, it starts tracking from current RPS. When claimed, debt updates to current RPS. Independent of other NFTs.
+
+### Creator Debt: ADD
+
+Creator's debt accumulates across all their NFTs:
+
+```rust
+// On mint - ADD (not set)
+creator_weight.reward_debt += nft_weight * virtual_creator_dist_rps;
+```
+
+**Why ADD?** CreatorDistPool distributes 80% of ecosystem subscription to creators by their total weight. Each new NFT adds to creator's weight AND adds corresponding debt to prevent claiming pre-existing funds.
+
+### Verification Example
+
+```
+Setup:
+├── Creator Alice has 0 NFTs, CreatorDistPool total_weight = 1000
+├── Ecosystem treasury = 10 SOL
+├── virtual_rps = 0 + (10 × 0.80 × PRECISION) / 1000 = 0.008 per weight
+
+Mint 1: Alice's user mints NFT (weight 20)
+├── creator_weight.total_weight = 0 + 20 = 20
+├── creator_dist_pool.total_weight = 1000 + 20 = 1020
+├── creator_weight.reward_debt = 0 + (20 × 0.008) = 0.16  ← ADD
+├──
+├── If Alice claims now (before distribution):
+│   pending = (20 × 0.008 - 0.16) / PRECISION = 0 ✓
+
+Mint 2: Another user mints Alice's NFT (weight 5)
+├── creator_weight.total_weight = 20 + 5 = 25
+├── creator_dist_pool.total_weight = 1020 + 5 = 1025
+├── New virtual_rps = 0 + (10 × 0.80 × PRECISION) / 1025 = 0.0078
+├── creator_weight.reward_debt = 0.16 + (5 × 0.0078) = 0.199  ← ADD
+├──
+├── If Alice claims now:
+│   pending = (25 × 0.0078 - 0.199) / PRECISION ≈ 0 ✓
+
+Distribution happens (epoch ends):
+├── actual_rps = 0.0078 (matches virtual at time of last mint)
+├── Alice claims: (25 × 0.0078 - 0.199) / PRECISION ≈ 0
+├──
+├── Alice only earns from NEW ecosystem subscriptions after her mints
+```
+
+**If we used SET instead of ADD (wrong):**
+```rust
+// WRONG - would reset debt on each mint
+creator_weight.reward_debt = nft_weight * virtual_rps;  // Overwrites!
+
+Mint 1: debt = 20 × 0.008 = 0.16
+Mint 2: debt = 5 × 0.0078 = 0.039  ← Lost previous debt!
+
+Alice claims: (25 × 0.0078 - 0.039) / PRECISION = 0.156 SOL
+← Alice steals from pre-existing treasury!
+```
+
+---
+
 ## Access Hierarchy
 
 ```
@@ -148,7 +289,7 @@ Same as content mint. **Renters do NOT earn rewards** - access only.
 | **Holders** | **12%** | **Split:** 6% BundleRewardPool + 6% ContentRewardPools |
 
 **Bundle holder rewards split (50/50):**
-- 50% (6%) → BundleRewardPool (bundle NFT holders)
+- 50% (6%) → BundleRewardPool (bundle NFT holders, by weight)
 - 50% (6%) → All ContentRewardPools in bundle (content NFT holders, by weight)
 
 This prevents bundle sales from cannibalizing content sales. Users still have incentive to buy individual content.
@@ -161,13 +302,15 @@ Same as bundle mint - 50/50 split. Renters do NOT earn rewards.
 
 | Recipient | Share | Destination |
 |-----------|-------|-------------|
-| Seller | ~88% | Seller wallet |
-| Creator | 2-10% | Creator wallet |
+| Seller | 94% | Seller wallet |
+| Creator | 4% | Creator wallet |
 | Platform | 1% | Platform treasury |
 | Ecosystem | 1% | Ecosystem treasury |
-| **Holders** | **8%** | **BundleRewardPool only** |
+| **Holders** | **4%** | **Split:** 2% BundleRewardPool + 2% ContentRewardPools |
 
-Secondary sales only go to bundle pool (the specific bundle NFT was resold).
+**Bundle holder rewards split (50/50):**
+- 50% (2%) → BundleRewardPool (bundle NFT holders, by weight)
+- 50% (2%) → All ContentRewardPools in bundle (content NFT holders, by weight)
 
 ### Bundle → Content Distribution
 
@@ -721,79 +864,234 @@ pub struct UnifiedNftRewardState {
 
 ## Weight Tracking (Eager - On Every Mint)
 
-### On Content NFT Mint
+### On Content NFT Mint (Complete Implementation)
 
 ```rust
-fn mint_content_nft(...) {
+pub fn mint_content_nft(ctx: Context<MintContentNft>, rarity: Rarity) -> Result<()> {
     let weight = get_rarity_weight(rarity);
 
-    // 1. Content reward pool
-    content_reward_pool.total_weight += weight;
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: Add weight to ALL pools FIRST (before calculating virtual RPS)
+    // ═══════════════════════════════════════════════════════════════════
 
-    // 2. Creator patron pool
-    creator_patron_pool.total_weight += weight;
+    ctx.accounts.content_reward_pool.total_weight += weight;
+    ctx.accounts.creator_patron_pool.total_weight += weight;
+    ctx.accounts.global_holder_pool.total_weight += weight;
+    ctx.accounts.creator_weight.total_weight += weight;
+    ctx.accounts.creator_dist_pool.total_weight += weight;
 
-    // 3. Global holder pool
-    global_holder_pool.total_weight += weight;
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 2: Calculate Virtual RPS for lazy pools (include undistributed treasury)
+    // ═══════════════════════════════════════════════════════════════════
 
-    // 4. Creator weight (for ecosystem creator dist)
-    creator_weight.total_weight += weight;
-    creator_dist_pool.total_weight += weight;
-
-    // 5. Create unified NFT state
-    create_unified_nft_state(nft, creator, weight, is_bundle: false);
-}
-```
-
-### On Bundle NFT Mint
-
-```rust
-fn mint_bundle_nft(...) {
-    let weight = get_rarity_weight(rarity);
-
-    // 1. Bundle reward pool
-    bundle_reward_pool.total_weight += weight;
-
-    // 2. Creator patron pool
-    creator_patron_pool.total_weight += weight;
-
-    // 3. Global holder pool
-    global_holder_pool.total_weight += weight;
-
-    // 4. Creator weight
-    creator_weight.total_weight += weight;
-    creator_dist_pool.total_weight += weight;
-
-    // 5. Create unified NFT state
-    create_unified_nft_state(nft, creator, weight, is_bundle: true);
-
-    // 6. Distribute content share to content pools (remaining accounts)
-    distribute_to_content_pools(content_share, &ctx.remaining_accounts);
-}
-```
-
-### On NFT Burn
-
-```rust
-fn burn_nft(nft: Pubkey) {
-    let state = fetch_unified_nft_state(nft);
-    let weight = state.weight;
-
-    // Decrement ALL pools
-    if state.is_bundle {
-        bundle_reward_pool.total_weight -= weight;
+    // Patron pool: 12% of creator treasury goes to holders
+    let patron_treasury = ctx.accounts.creator_treasury.lamports();
+    let virtual_patron_rps = if ctx.accounts.creator_patron_pool.total_weight > 0 {
+        ctx.accounts.creator_patron_pool.reward_per_share
+            + (patron_treasury as u128 * 12 * PRECISION / 100)
+              / ctx.accounts.creator_patron_pool.total_weight as u128
     } else {
-        content_reward_pool.total_weight -= weight;
-    }
-    creator_patron_pool.total_weight -= weight;
-    global_holder_pool.total_weight -= weight;
-    creator_weight.total_weight -= weight;
-    creator_dist_pool.total_weight -= weight;
+        0
+    };
 
-    // Close state account
-    close_unified_nft_state(nft);
+    // Global pool: 12% of ecosystem treasury goes to all holders
+    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    let virtual_global_rps = if ctx.accounts.global_holder_pool.total_weight > 0 {
+        ctx.accounts.global_holder_pool.reward_per_share
+            + (ecosystem_treasury as u128 * 12 * PRECISION / 100)
+              / ctx.accounts.global_holder_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    // Creator dist pool: 80% of ecosystem treasury goes to creators
+    let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
+        ctx.accounts.creator_dist_pool.reward_per_share
+            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+              / ctx.accounts.creator_dist_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 3: SET NFT debts (each NFT independent)
+    // ═══════════════════════════════════════════════════════════════════
+
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    nft_state.nft_asset = ctx.accounts.nft_asset.key();
+    nft_state.creator = ctx.accounts.creator.key();
+    nft_state.weight = weight as u16;
+    nft_state.is_bundle = false;
+    nft_state.created_at = Clock::get()?.unix_timestamp;
+
+    // Content pool: NO virtual RPS (immediate distribution)
+    nft_state.content_or_bundle_debt = weight as u128
+        * ctx.accounts.content_reward_pool.reward_per_share;
+
+    // Patron pool: YES virtual RPS (lazy distribution)
+    nft_state.patron_debt = weight as u128 * virtual_patron_rps;
+
+    // Global pool: YES virtual RPS (lazy distribution)
+    nft_state.global_debt = weight as u128 * virtual_global_rps;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 4: ADD to creator debt (accumulative across all NFTs)
+    // ═══════════════════════════════════════════════════════════════════
+
+    ctx.accounts.creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+
+    Ok(())
 }
 ```
+
+### On Bundle NFT Mint (Complete Implementation)
+
+```rust
+pub fn mint_bundle_nft(ctx: Context<MintBundleNft>, rarity: Rarity) -> Result<()> {
+    let weight = get_rarity_weight(rarity);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 1: Add weight to ALL pools FIRST
+    // ═══════════════════════════════════════════════════════════════════
+
+    ctx.accounts.bundle_reward_pool.total_weight += weight;
+    ctx.accounts.creator_patron_pool.total_weight += weight;
+    ctx.accounts.global_holder_pool.total_weight += weight;
+    ctx.accounts.creator_weight.total_weight += weight;
+    ctx.accounts.creator_dist_pool.total_weight += weight;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 2: Calculate Virtual RPS for lazy pools
+    // ═══════════════════════════════════════════════════════════════════
+
+    let patron_treasury = ctx.accounts.creator_treasury.lamports();
+    let virtual_patron_rps = if ctx.accounts.creator_patron_pool.total_weight > 0 {
+        ctx.accounts.creator_patron_pool.reward_per_share
+            + (patron_treasury as u128 * 12 * PRECISION / 100)
+              / ctx.accounts.creator_patron_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    let virtual_global_rps = if ctx.accounts.global_holder_pool.total_weight > 0 {
+        ctx.accounts.global_holder_pool.reward_per_share
+            + (ecosystem_treasury as u128 * 12 * PRECISION / 100)
+              / ctx.accounts.global_holder_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
+        ctx.accounts.creator_dist_pool.reward_per_share
+            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+              / ctx.accounts.creator_dist_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 3: SET NFT debts
+    // ═══════════════════════════════════════════════════════════════════
+
+    let nft_state = &mut ctx.accounts.nft_reward_state;
+    nft_state.nft_asset = ctx.accounts.nft_asset.key();
+    nft_state.creator = ctx.accounts.creator.key();
+    nft_state.weight = weight as u16;
+    nft_state.is_bundle = true;
+    nft_state.created_at = Clock::get()?.unix_timestamp;
+
+    // Bundle pool: NO virtual RPS (immediate distribution)
+    nft_state.content_or_bundle_debt = weight as u128
+        * ctx.accounts.bundle_reward_pool.reward_per_share;
+
+    // Patron & Global: YES virtual RPS
+    nft_state.patron_debt = weight as u128 * virtual_patron_rps;
+    nft_state.global_debt = weight as u128 * virtual_global_rps;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 4: ADD to creator debt
+    // ═══════════════════════════════════════════════════════════════════
+
+    ctx.accounts.creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP 5: Distribute 6% content share to content pools (remaining accounts)
+    // ═══════════════════════════════════════════════════════════════════
+
+    let holder_fee = ctx.accounts.price * 12 / 100;
+    let content_share = holder_fee / 2;  // 6%
+    distribute_to_content_pools(content_share, &ctx.remaining_accounts);
+
+    Ok(())
+}
+```
+
+### On NFT Burn (Complete Implementation)
+
+```rust
+pub fn burn_nft(ctx: Context<BurnNft>) -> Result<()> {
+    let nft_state = &ctx.accounts.nft_reward_state;
+    let weight = nft_state.weight as u64;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Decrement weight from ALL pools
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Content or Bundle pool
+    if nft_state.is_bundle {
+        ctx.accounts.bundle_reward_pool.total_weight -= weight;
+    } else {
+        ctx.accounts.content_reward_pool.total_weight -= weight;
+    }
+
+    // Creator patron pool
+    ctx.accounts.creator_patron_pool.total_weight -= weight;
+
+    // Global holder pool
+    ctx.accounts.global_holder_pool.total_weight -= weight;
+
+    // Creator weight & dist pool
+    ctx.accounts.creator_weight.total_weight -= weight;
+    ctx.accounts.creator_dist_pool.total_weight -= weight;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Reconcile creator debt (subtract the burned NFT's contribution)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Calculate what this NFT's debt contribution was at current virtual RPS
+    let ecosystem_treasury = ctx.accounts.ecosystem_treasury.lamports();
+    let virtual_creator_dist_rps = if ctx.accounts.creator_dist_pool.total_weight > 0 {
+        ctx.accounts.creator_dist_pool.reward_per_share
+            + (ecosystem_treasury as u128 * 80 * PRECISION / 100)
+              / ctx.accounts.creator_dist_pool.total_weight as u128
+    } else {
+        0
+    };
+
+    // Subtract from creator debt (reverse of ADD on mint)
+    // Note: Use min to prevent underflow if debt was already claimed
+    let debt_contribution = weight as u128 * virtual_creator_dist_rps;
+    ctx.accounts.creator_weight.reward_debt = ctx.accounts.creator_weight.reward_debt
+        .saturating_sub(debt_contribution);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Close NFT state account (return rent to burner)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Account closure handled by Anchor close constraint
+
+    Ok(())
+}
+```
+
+### Weight Update Summary
+
+| Operation | Pools Updated | Debt Handling |
+|-----------|---------------|---------------|
+| Content Mint | 5 pools + NFT state | SET NFT debts, ADD creator debt |
+| Bundle Mint | 5 pools + NFT state + N content pools | SET NFT debts, ADD creator debt |
+| NFT Burn | 5 pools - weight | SUB creator debt, close NFT state |
 
 ---
 
@@ -982,3 +1280,60 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 ---
 
 *Last updated: December 12, 2025*
+
+---
+
+## Appendix: Order of Operations
+
+### Critical: Weight Before Virtual RPS
+
+When minting, the order matters:
+
+```
+1. Add weight to pools FIRST
+2. Calculate virtual RPS (uses updated total_weight)
+3. Set debts using virtual RPS
+```
+
+**Why this order?**
+
+If we calculated virtual RPS before adding weight:
+```
+Pool total_weight = 100
+New NFT weight = 20
+Treasury = 10 SOL
+
+Wrong order (virtual RPS first):
+├── virtual_rps = 10 × 0.12 × PRECISION / 100 = 0.012
+├── Add weight: total_weight = 120
+├── debt = 20 × 0.012 = 0.24
+├──
+├── Later distribution: actual_rps = 10 × 0.12 × PRECISION / 120 = 0.01
+├── pending = 20 × 0.01 - 0.24 = -0.04  ← NEGATIVE! Debt too high!
+
+Correct order (weight first):
+├── Add weight: total_weight = 120
+├── virtual_rps = 10 × 0.12 × PRECISION / 120 = 0.01
+├── debt = 20 × 0.01 = 0.20
+├──
+├── Later distribution: actual_rps = 10 × 0.12 × PRECISION / 120 = 0.01
+├── pending = 20 × 0.01 - 0.20 = 0  ← CORRECT! Zero rewards for pre-existing funds
+```
+
+### Complete Mint Sequence
+
+```
+mint_content_nft():
+├── 1. Add weight to ContentRewardPool
+├── 2. Add weight to CreatorPatronPool
+├── 3. Add weight to GlobalHolderPool
+├── 4. Add weight to CreatorWeight
+├── 5. Add weight to CreatorDistPool
+├── 6. Calculate virtual_patron_rps (using updated weights)
+├── 7. Calculate virtual_global_rps (using updated weights)
+├── 8. Calculate virtual_creator_dist_rps (using updated weights)
+├── 9. SET nft_state.content_or_bundle_debt = weight × actual_rps
+├── 10. SET nft_state.patron_debt = weight × virtual_patron_rps
+├── 11. SET nft_state.global_debt = weight × virtual_global_rps
+└── 12. ADD creator_weight.reward_debt += weight × virtual_creator_dist_rps
+```
