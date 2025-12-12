@@ -8,7 +8,8 @@ This document describes the complete monetization and reward system:
 3. **Ecosystem Subscription** - Platform-wide content access (Spotify-style)
 
 All systems use:
-- **Immediate push distribution** to reward pools (on every mint/payment)
+- **Immediate push distribution** for NFT mints/sales (on every transaction)
+- **Epoch-based lazy distribution** for subscriptions (on first claim after epoch)
 - **Pull-based claims** for NFT holders
 - **Rarity-weighted calculations** for all distributions
 
@@ -36,7 +37,8 @@ NFT weight-based distribution:
 3. **Weight-Based Distribution** - All calculations use rarity weights, not counts or views
 4. **Burn Reconciliation** - NFT burns reduce weight from all relevant pools
 5. **Rental = Access Only** - Rentals provide temporary access, no rewards
-6. **Eager Weight Tracking** - Update all pools on every mint (user pays, it's cheap)
+6. **Eager Weight Tracking** - Update all pools on every mint (user pays, cheap)
+7. **Lazy Distribution** - Subscription rewards distributed on first claim after epoch
 
 ---
 
@@ -195,6 +197,159 @@ pub fn bundle_mint_nft(ctx: Context<BundleMintNft>, ...) {
 
 ---
 
+## Account Update Simulations
+
+### Content NFT Mint
+
+| Account | Field | Update |
+|---------|-------|--------|
+| ContentRewardPool | `total_weight` | `+= nft_weight` |
+| CreatorPatronPool | `total_weight` | `+= nft_weight` |
+| GlobalHolderPool | `total_weight` | `+= nft_weight` |
+| CreatorWeight | `total_weight` | `+= nft_weight` |
+| CreatorDistPool | `total_weight` | `+= nft_weight` |
+| UnifiedNftRewardState | (new) | Create account |
+
+**Total: 5 account updates + 1 account creation = 6 accounts**
+**Cost: ~40,000 CU (of 1,400,000 limit = 2.8%)**
+
+### Bundle NFT Mint
+
+| Account | Field | Update |
+|---------|-------|--------|
+| BundleRewardPool | `total_weight` | `+= nft_weight` |
+| CreatorPatronPool | `total_weight` | `+= nft_weight` |
+| GlobalHolderPool | `total_weight` | `+= nft_weight` |
+| CreatorWeight | `total_weight` | `+= nft_weight` |
+| CreatorDistPool | `total_weight` | `+= nft_weight` |
+| UnifiedNftRewardState | (new) | Create account |
+| ContentRewardPool[0..N] | `reward_per_share` | Add 6% content share |
+
+**Total: 6 accounts + N content pools (remaining accounts)**
+**Cost: ~190,000 CU for 30-item bundle (13.5% of limit)**
+
+### NFT Burn (Content or Bundle)
+
+| Account | Field | Update |
+|---------|-------|--------|
+| ContentRewardPool OR BundleRewardPool | `total_weight` | `-= nft_weight` |
+| CreatorPatronPool | `total_weight` | `-= nft_weight` |
+| GlobalHolderPool | `total_weight` | `-= nft_weight` |
+| CreatorWeight | `total_weight` | `-= nft_weight` |
+| CreatorDistPool | `total_weight` | `-= nft_weight` |
+| UnifiedNftRewardState | (close) | Return rent to user |
+
+**Total: 5 account updates + 1 account closure = 6 accounts**
+**Cost: ~35,000 CU**
+
+### Subscribe to Creator
+
+| Account | Action |
+|---------|--------|
+| CreatorPatronSubscription | Create PDA |
+| Streamflow Stream | Create stream: user → creator treasury |
+| User Wallet | Deduct deposit amount |
+
+**Total: 2 account creations + 1 transfer = ~30,000 CU**
+
+No reward pool updates - just creates the stream. Treasury accumulates over time.
+
+### Subscribe to Ecosystem
+
+| Account | Action |
+|---------|--------|
+| EcosystemSubscription | Create PDA |
+| Streamflow Stream | Create stream: user → ecosystem treasury |
+| User Wallet | Deduct deposit amount |
+
+**Total: 2 account creations + 1 transfer = ~30,000 CU**
+
+No reward pool updates - just creates the stream.
+
+---
+
+## Distribution Approaches
+
+### Problem: Timing Fairness
+
+```
+NFT mints/sales: Immediate distribution ✓ (no timing issue)
+Subscriptions:   Treasury accumulates → Distribution later ✗ (timing issue)
+
+If Alice sells NFT before distribution, she loses rewards she "earned"
+while holding. New owner Carol gets those rewards instead.
+```
+
+### Solution: Epoch-Based Lazy Distribution
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    EPOCH-BASED LAZY DISTRIBUTION                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Rule: Whoever holds NFT when epoch ends and claims gets that epoch's   │
+│        rewards. Like stock dividends with ex-dividend date.             │
+│                                                                          │
+│  Month 1 (Epoch 1):                                                     │
+│  ├── Patrons stream to Treasury (accumulates)                           │
+│  ├── No distribution happens                                            │
+│  └── epoch_ended = false                                                │
+│                                                                          │
+│  Month 2 starts (Epoch 1 ended):                                        │
+│  ├── First NFT holder to claim triggers distribution                    │
+│  ├── Treasury → Pool (80/5/3/12 split)                                  │
+│  ├── reward_per_share updated                                           │
+│  ├── All holders can now claim from pool                                │
+│  └── epoch_ended = true, last_distribution_at = now                     │
+│                                                                          │
+│  Key: Distribution triggered by CLAIM, not by scheduler                 │
+│       NFT holders have incentive to claim (they want rewards!)          │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Lazy Distribution?
+
+| Approach | Monthly Cost (100k creators) | Complexity |
+|----------|------------------------------|------------|
+| Clockwork per creator | 0.5 SOL + 200 SOL rent | High (100k threads) |
+| Clockwork batch | 0.025 SOL | Medium |
+| Keeper 0.1% incentive | 100-1000 SOL | Low |
+| **Lazy on claim** | **0 SOL** | **Low** |
+
+**Lazy distribution costs nothing. Claimers pay their own transaction fees.**
+
+### Who Triggers Distribution?
+
+**NFT holders!** They have direct incentive - they want their rewards.
+
+```
+Bob holds Alice's NFT (weight: 20)
+Alice's Treasury: 10 SOL accumulated (Month 1)
+Bob's estimated share: 10 × 12% × (20/1000) = 0.024 SOL
+
+Month 2 starts (Epoch ended):
+Bob calls claim_patron_rewards(bob_nft)
+├── Epoch check: now >= last_distribution + 30 days ✓
+├── Distribute Alice's treasury to pool
+├── Bob receives 0.024 SOL
+└── Other NFT holders can now claim too
+```
+
+### What If No One Claims?
+
+```
+Creator with no active NFT holders claiming:
+├── Treasury accumulates (safe, just waiting)
+├── Distribution never triggered
+├── Multiple epochs of rewards build up
+└── Eventually someone claims, gets all accumulated rewards
+```
+
+Not a problem - funds are safe in treasury.
+
+---
+
 ## Creator Patronage
 
 ### Membership vs Subscription
@@ -217,16 +372,6 @@ Creators define their own tiers (like Patreon):
 
 Both use same fee structure (80/5/3/12).
 
-### Fee Distribution
-
-```
-Creator Patronage (Membership or Subscription):
-Creator:     80%  → creator wallet
-Platform:     5%  → platform treasury
-Ecosystem:    3%  → ecosystem treasury
-Holders:     12%  → CreatorPatronPool (ALL creator's NFT holders)
-```
-
 ### CreatorPatronPool
 
 One pool per creator (not per content):
@@ -236,45 +381,108 @@ One pool per creator (not per content):
 pub struct CreatorPatronPool {
     pub creator: Pubkey,
     pub reward_per_share: u128,
-    pub total_weight: u64,          // Sum of ALL creator NFT weights
+    pub total_weight: u64,              // Sum of ALL creator NFT weights
     pub total_deposited: u64,
     pub total_claimed: u64,
+    pub last_distribution_at: i64,      // Epoch tracking
+    pub epoch_duration: i64,            // 30 days in seconds
 }
 ```
 
 - Tracks total weight of ALL creator's NFTs (content + bundle)
 - Any holder of creator's NFTs can claim from this pool
 
-### Patron Flow
+### Claim with Lazy Distribution
+
+```rust
+pub fn claim_patron_rewards(ctx: Context<ClaimPatronRewards>, nft: Pubkey) {
+    let creator = ctx.accounts.nft_state.creator;
+    let pool = &mut ctx.accounts.creator_patron_pool;
+    let treasury = &ctx.accounts.creator_treasury;
+    let now = Clock::get()?.unix_timestamp;
+
+    // If epoch ended and treasury has funds, distribute first
+    if now >= pool.last_distribution_at + pool.epoch_duration
+       && treasury.lamports() > 0
+    {
+        // Distribute treasury to pool
+        let treasury_balance = treasury.lamports();
+        let creator_share = treasury_balance * 80 / 100;
+        let platform_share = treasury_balance * 5 / 100;
+        let ecosystem_share = treasury_balance * 3 / 100;
+        let holder_share = treasury_balance * 12 / 100;
+
+        // Transfer 80/5/3
+        transfer(treasury → creator_wallet, creator_share);
+        transfer(treasury → platform_treasury, platform_share);
+        transfer(treasury → ecosystem_treasury, ecosystem_share);
+
+        // Update pool reward_per_share
+        pool.reward_per_share += (holder_share * PRECISION) / pool.total_weight;
+        pool.total_deposited += holder_share;
+        pool.last_distribution_at = now;
+    }
+
+    // Now claim from pool
+    let nft_state = &mut ctx.accounts.nft_state;
+    let pending = (nft_state.weight as u128 * pool.reward_per_share
+                   - nft_state.patron_debt) / PRECISION;
+
+    transfer(pool → holder, pending);
+    nft_state.patron_debt = nft_state.weight as u128 * pool.reward_per_share;
+}
+```
+
+### Patron Distribution Simulation
+
+**When claim_patron_rewards() triggers distribution:**
+
+| Account | Field | Update |
+|---------|-------|--------|
+| Creator Treasury PDA | `balance` | Drain to 0 |
+| Creator Wallet | `balance` | `+= 80%` |
+| Platform Treasury | `balance` | `+= 5%` |
+| Ecosystem Treasury | `balance` | `+= 3%` |
+| CreatorPatronPool | `reward_per_share` | `+= (12% * PRECISION) / total_weight` |
+| CreatorPatronPool | `last_distribution_at` | `= now` |
+| UnifiedNftRewardState | `patron_debt` | Update after claim |
+
+**Total: 6 accounts + claim transfer = ~35,000 CU**
+
+### Patron Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      CREATOR PATRONAGE FLOW                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  User subscribes to Creator Alice (1 SOL/month):                        │
+│  SUBSCRIBE (one-time):                                                  │
+│  ┌──────────┐   Streamflow    ┌──────────────┐                          │
+│  │   User   │ ──────────────► │   Creator    │  (accumulates over time) │
+│  │  Wallet  │    streaming    │ Treasury PDA │                          │
+│  └──────────┘                 └──────────────┘                          │
 │                                                                          │
-│  ┌──────────┐   Streamflow    ┌──────────┐    distribute_patron()       │
-│  │   User   │ ──────────────► │ Treasury │ ─────────────────────────►   │
-│  │  Wallet  │                 │   PDA    │                              │
-│  └──────────┘                 └──────────┘                              │
-│                                     │                                    │
-│                                     ▼                                    │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  80% (0.8 SOL) ──────────────►  Alice's Wallet                   │   │
-│  │   5% (0.05 SOL) ─────────────►  Platform Treasury                │   │
-│  │   3% (0.03 SOL) ─────────────►  Ecosystem Treasury               │   │
-│  │  12% (0.12 SOL) ─────────────►  CreatorPatronPool[Alice]         │   │
-│  │                                  reward_per_share +=              │   │
-│  │                                  (0.12 * PRECISION) /             │   │
-│  │                                  alice_total_nft_weight           │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
-│                                                                          │
-│  NFT Holder claims from patron pool:                                    │
-│  ┌─────────────────────────────┐                                        │
-│  │ Holder owns Alice's NFT     │  claim_patron_reward(nft):             │
-│  │ (weight: 20)                │  pending = (20 * rps - debt) / PREC    │
-│  └─────────────────────────────┘                                        │
+│  CLAIM (when epoch ends):                                               │
+│  ┌──────────┐                 ┌──────────────┐                          │
+│  │   NFT    │ ── claim() ──►  │ If treasury  │                          │
+│  │  Holder  │                 │ has funds &  │                          │
+│  └──────────┘                 │ epoch ended: │                          │
+│       │                       │ DISTRIBUTE   │                          │
+│       │                       └──────┬───────┘                          │
+│       │                              │                                   │
+│       │                              ▼                                   │
+│       │         ┌────────────────────────────────────────────┐          │
+│       │         │  80% → Creator Wallet                      │          │
+│       │         │   5% → Platform Treasury                   │          │
+│       │         │   3% → Ecosystem Treasury                  │          │
+│       │         │  12% → CreatorPatronPool.reward_per_share  │          │
+│       │         └────────────────────────────────────────────┘          │
+│       │                              │                                   │
+│       │                              ▼                                   │
+│       │                   ┌──────────────────┐                          │
+│       └─────────────────► │ Calculate & pay  │                          │
+│                           │ holder's share   │                          │
+│                           └──────────────────┘                          │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -290,16 +498,6 @@ Users pay platform for access to ALL Level 1 content. Revenue distributed:
 - 12% to all NFT holders (by weight)
 - 5% + 3% to platform/ecosystem
 
-### Fee Distribution
-
-```
-Ecosystem Subscription:
-Creators:    80%  → CreatorDistPool (by each creator's weight)
-Platform:     5%  → platform treasury
-Ecosystem:    3%  → ecosystem treasury
-Holders:     12%  → GlobalHolderPool (all NFT holders by weight)
-```
-
 ### GlobalHolderPool
 
 For ecosystem subscription holder rewards (12%):
@@ -308,9 +506,11 @@ For ecosystem subscription holder rewards (12%):
 /// PDA: ["global_holder_pool"]
 pub struct GlobalHolderPool {
     pub reward_per_share: u128,
-    pub total_weight: u64,          // Sum of ALL NFT weights globally
+    pub total_weight: u64,              // Sum of ALL NFT weights globally
     pub total_deposited: u64,
     pub total_claimed: u64,
+    pub last_distribution_at: i64,      // Epoch tracking
+    pub epoch_duration: i64,            // 30 days
 }
 ```
 
@@ -322,15 +522,17 @@ For ecosystem subscription creator payouts (80%):
 /// PDA: ["creator_dist_pool"]
 pub struct CreatorDistPool {
     pub reward_per_share: u128,
-    pub total_weight: u64,          // Sum of ALL NFT weights globally
+    pub total_weight: u64,              // Sum of ALL NFT weights globally
     pub total_deposited: u64,
     pub total_claimed: u64,
+    pub last_distribution_at: i64,
+    pub epoch_duration: i64,
 }
 
 /// PDA: ["creator_weight", creator]
 pub struct CreatorWeight {
     pub creator: Pubkey,
-    pub total_weight: u64,          // Sum of creator's NFT weights
+    pub total_weight: u64,              // Sum of creator's NFT weights
     pub reward_debt: u128,
     pub total_claimed: u64,
 }
@@ -342,49 +544,96 @@ pub struct CreatorWeight {
 - Can't distribute directly to each creator in one instruction
 - Pool accumulates funds, creators pull-claim by their weight share
 
-### Ecosystem Flow
+### Ecosystem Claim with Lazy Distribution
+
+```rust
+pub fn claim_global_holder_reward(ctx: Context<...>, nft: Pubkey) {
+    let pool = &mut ctx.accounts.global_holder_pool;
+    let treasury = &ctx.accounts.ecosystem_treasury;
+    let now = Clock::get()?.unix_timestamp;
+
+    // If epoch ended, distribute treasury
+    if now >= pool.last_distribution_at + pool.epoch_duration
+       && treasury.lamports() > 0
+    {
+        let balance = treasury.lamports();
+        let platform_share = balance * 5 / 100;
+        let ecosystem_share = balance * 3 / 100;
+        let holder_share = balance * 12 / 100;
+        let creator_share = balance * 80 / 100;
+
+        // Transfers
+        transfer(treasury → platform, platform_share);
+        transfer(treasury → ecosystem, ecosystem_share);
+
+        // Update pools
+        global_holder_pool.reward_per_share +=
+            (holder_share * PRECISION) / global_holder_pool.total_weight;
+        creator_dist_pool.reward_per_share +=
+            (creator_share * PRECISION) / creator_dist_pool.total_weight;
+
+        pool.last_distribution_at = now;
+    }
+
+    // Claim holder's share
+    let pending = calculate_pending(nft, pool);
+    transfer(pool → holder, pending);
+}
+```
+
+### Ecosystem Distribution Simulation
+
+**When claim_global_holder_reward() triggers distribution:**
+
+| Account | Field | Update |
+|---------|-------|--------|
+| Ecosystem Treasury PDA | `balance` | Drain to 0 |
+| Platform Treasury | `balance` | `+= 5%` |
+| Ecosystem Treasury | `balance` | `+= 3%` |
+| GlobalHolderPool | `reward_per_share` | `+= (12% * PRECISION) / total_weight` |
+| CreatorDistPool | `reward_per_share` | `+= (80% * PRECISION) / total_weight` |
+| GlobalHolderPool | `last_distribution_at` | `= now` |
+
+**Total: 6 accounts = ~35,000 CU**
+
+### Ecosystem Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    ECOSYSTEM SUBSCRIPTION FLOW                           │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  STEP 1: Users stream to ecosystem treasury                             │
+│  SUBSCRIBE:                                                             │
+│  ┌──────────┐     Stream      ┌──────────────┐                          │
+│  │  User A  │ ──────────────► │              │                          │
+│  └──────────┘                 │  Ecosystem   │  (accumulates)           │
+│  ┌──────────┐     Stream      │ Treasury PDA │                          │
+│  │  User B  │ ──────────────► │              │                          │
+│  └──────────┘                 └──────────────┘                          │
 │                                                                          │
-│  ┌──────────┐     Stream      ┌──────────┐                              │
-│  │  User A  │ ──────────────► │          │                              │
-│  └──────────┘                 │ Treasury │                              │
-│  ┌──────────┐     Stream      │   PDA    │                              │
-│  │  User B  │ ──────────────► │          │                              │
-│  └──────────┘                 └────┬─────┘                              │
-│                                    │                                     │
-│  STEP 2: distribute_ecosystem_revenue() - permissionless               │
-│                                    │                                     │
-│                                    ▼                                     │
+│  CLAIM (when epoch ends):                                               │
+│  First claimer triggers distribution:                                   │
+│                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │   5% ────────────────────────────────►  Platform Treasury        │   │
-│  │   3% ────────────────────────────────►  Ecosystem Treasury       │   │
-│  │  12% ────────────────────────────────►  GlobalHolderPool         │   │
-│  │  80% ────────────────────────────────►  CreatorDistPool          │   │
+│  │   5% → Platform Treasury                                         │   │
+│  │   3% → Ecosystem Treasury                                        │   │
+│  │  12% → GlobalHolderPool.reward_per_share                         │   │
+│  │  80% → CreatorDistPool.reward_per_share                          │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
-│  STEP 3: Pull-based claims                                              │
-│                                                                          │
-│  NFT Holders claim from GlobalHolderPool:                               │
+│  HOLDER CLAIMS:                                                         │
 │  ┌─────────────────┐                                                    │
 │  │ Holder (w=20)   │ → pending = (20 * rps - debt) / PRECISION         │
 │  └─────────────────┘                                                    │
 │                                                                          │
-│  Creators claim from CreatorDistPool:                                   │
+│  CREATOR CLAIMS:                                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │ Creator Alice: weight 1000 (50% of 2000 total)                  │   │
 │  │ Creator Bob:   weight 600  (30% of 2000 total)                  │   │
-│  │ Creator Carol: weight 400  (20% of 2000 total)                  │   │
 │  │                                                                  │   │
-│  │ If 8 SOL in pool:                                               │   │
+│  │ If 8 SOL in CreatorDistPool:                                    │   │
 │  │   Alice claims: 8 * (1000/2000) = 4 SOL                         │   │
 │  │   Bob claims:   8 * (600/2000)  = 2.4 SOL                       │   │
-│  │   Carol claims: 8 * (400/2000)  = 1.6 SOL                       │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -403,19 +652,22 @@ pub struct CreatorWeight {
 │  ┌─────────────────────┐                                                     │
 │  │ ContentRewardPool   │  Receives: Content mint/rent/secondary (12%/8%)    │
 │  │ (per content)       │  + Bundle mint/rent content share (6%)             │
+│  │                     │  Distribution: IMMEDIATE on transaction            │
 │  │                     │  Claims: Content NFT holders                        │
 │  └─────────────────────┘                                                     │
 │                                                                              │
 │  PER-BUNDLE:                                                                 │
 │  ┌─────────────────────┐                                                     │
 │  │ BundleRewardPool    │  Receives: Bundle mint/rent (6%) + secondary (8%)  │
-│  │ (per bundle)        │  Claims: Bundle NFT holders                         │
+│  │ (per bundle)        │  Distribution: IMMEDIATE on transaction            │
+│  │                     │  Claims: Bundle NFT holders                         │
 │  └─────────────────────┘                                                     │
 │                                                                              │
 │  PER-CREATOR:                                                                │
 │  ┌─────────────────────┐                                                     │
 │  │ CreatorPatronPool   │  Receives: Membership + Subscription (12%)         │
-│  │ (per creator)       │  Tracks: ALL creator NFT weights                    │
+│  │ (per creator)       │  Distribution: LAZY on first claim after epoch     │
+│  │                     │  Tracks: ALL creator NFT weights                    │
 │  │                     │  Claims: Any holder of creator's NFTs               │
 │  └─────────────────────┘                                                     │
 │                                                                              │
@@ -426,8 +678,8 @@ pub struct CreatorWeight {
 │  │ Receives: Ecosystem │  │ Receives: Ecosystem │                           │
 │  │   subscription 12%  │  │   subscription 80%  │                           │
 │  │                     │  │                     │                           │
-│  │ Tracks: ALL NFT     │  │ Tracks: ALL NFT     │                           │
-│  │   weights globally  │  │   weights globally  │                           │
+│  │ Distribution: LAZY  │  │ Distribution: LAZY  │                           │
+│  │   on first claim    │  │   on first claim    │                           │
 │  │                     │  │                     │                           │
 │  │ Claims: Any NFT     │  │ Claims: Creators    │                           │
 │  │   holder by weight  │  │   by their weight   │                           │
@@ -558,15 +810,25 @@ Each NFT can claim from **3 pools**:
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  1. ContentRewardPool     ←── Content mints/rentals/secondary   │    │
 │  │                               + Bundle mint content share        │    │
+│  │                               (IMMEDIATE distribution)           │    │
+│  │                                                                  │    │
 │  │  2. CreatorPatronPool     ←── Creator membership/subscription   │    │
+│  │                               (LAZY distribution on claim)       │    │
+│  │                                                                  │    │
 │  │  3. GlobalHolderPool      ←── Ecosystem subscriptions           │    │
+│  │                               (LAZY distribution on claim)       │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │  BUNDLE NFT HOLDER claims from:                                         │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  1. BundleRewardPool      ←── Bundle mints/rentals/secondary    │    │
+│  │                               (IMMEDIATE distribution)           │    │
+│  │                                                                  │    │
 │  │  2. CreatorPatronPool     ←── Creator membership/subscription   │    │
+│  │                               (LAZY distribution on claim)       │    │
+│  │                                                                  │    │
 │  │  3. GlobalHolderPool      ←── Ecosystem subscriptions           │    │
+│  │                               (LAZY distribution on claim)       │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │  All tracked in single UnifiedNftRewardState account                    │
@@ -629,17 +891,17 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ### Revenue Sources & Distribution
 
-| Source | Holder % | Pool(s) |
-|--------|----------|---------|
-| Content Mint | 12% | ContentRewardPool |
-| Content Rental | 12% | ContentRewardPool |
-| Content Secondary | 8% | ContentRewardPool |
-| Bundle Mint | 12% | 50% BundleRewardPool + 50% ContentRewardPools |
-| Bundle Rental | 12% | 50% BundleRewardPool + 50% ContentRewardPools |
-| Bundle Secondary | 8% | BundleRewardPool only |
-| Creator Membership | 12% | CreatorPatronPool |
-| Creator Subscription | 12% | CreatorPatronPool |
-| Ecosystem Subscription | 12% | GlobalHolderPool |
+| Source | Holder % | Pool(s) | Distribution |
+|--------|----------|---------|--------------|
+| Content Mint | 12% | ContentRewardPool | Immediate |
+| Content Rental | 12% | ContentRewardPool | Immediate |
+| Content Secondary | 8% | ContentRewardPool | Immediate |
+| Bundle Mint | 12% | 50% Bundle + 50% Content pools | Immediate |
+| Bundle Rental | 12% | 50% Bundle + 50% Content pools | Immediate |
+| Bundle Secondary | 8% | BundleRewardPool only | Immediate |
+| Creator Membership | 12% | CreatorPatronPool | Lazy (epoch) |
+| Creator Subscription | 12% | CreatorPatronPool | Lazy (epoch) |
+| Ecosystem Subscription | 12% | GlobalHolderPool | Lazy (epoch) |
 
 ### Access vs Rewards
 
@@ -654,13 +916,25 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 
 ### Claim Instructions
 
-| Claim | Who Can Call | Pool |
-|-------|--------------|------|
-| `claim_content_rewards(nft)` | Content NFT owner | ContentRewardPool |
-| `claim_bundle_rewards(nft)` | Bundle NFT owner | BundleRewardPool |
-| `claim_patron_rewards(nft)` | Any creator's NFT owner | CreatorPatronPool |
-| `claim_global_holder_reward(nft)` | Any NFT owner | GlobalHolderPool |
-| `claim_creator_ecosystem_payout()` | Any creator | CreatorDistPool |
+| Claim | Who Can Call | Pool | Triggers Distribution? |
+|-------|--------------|------|------------------------|
+| `claim_content_rewards(nft)` | Content NFT owner | ContentRewardPool | No (immediate) |
+| `claim_bundle_rewards(nft)` | Bundle NFT owner | BundleRewardPool | No (immediate) |
+| `claim_patron_rewards(nft)` | Any creator's NFT owner | CreatorPatronPool | Yes (if epoch ended) |
+| `claim_global_holder_reward(nft)` | Any NFT owner | GlobalHolderPool | Yes (if epoch ended) |
+| `claim_creator_ecosystem_payout()` | Any creator | CreatorDistPool | Yes (if epoch ended) |
+
+### Cost Summary
+
+| Operation | Accounts | CU Estimate |
+|-----------|----------|-------------|
+| Content NFT Mint | 6 | ~40,000 |
+| Bundle NFT Mint (30 items) | 36 | ~190,000 |
+| NFT Burn | 6 | ~35,000 |
+| Subscribe to Creator | 3 | ~30,000 |
+| Subscribe to Ecosystem | 3 | ~30,000 |
+| Claim (with distribution) | 6 | ~35,000 |
+| Claim (no distribution) | 2 | ~15,000 |
 
 ---
 
@@ -670,42 +944,39 @@ fn check_content_access(user: Pubkey, content: Pubkey) -> AccessResult {
 - [ ] Add `visibility_level` to Content/Bundle accounts (default: 1)
 - [ ] Fix bundle mint to distribute 50/50 to bundle + content pools
 - [ ] Create UnifiedNftRewardState account + PDA
-- [ ] Create CreatorPatronPool account + PDA
-- [ ] Create GlobalHolderPool account + PDA
-- [ ] Create CreatorDistPool account + PDA
+- [ ] Create CreatorPatronPool account + PDA (with epoch fields)
+- [ ] Create GlobalHolderPool account + PDA (with epoch fields)
+- [ ] Create CreatorDistPool account + PDA (with epoch fields)
 - [ ] Create CreatorWeight account + PDA
 - [ ] Update all mint instructions to track weights in new pools (eager)
 - [ ] Implement burn reconciliation for all pools
 
 ### Phase 2: Creator Patronage
 - [ ] CreatorPatronConfig account (membership/subscription tiers)
+- [ ] Creator Treasury PDA for streaming
 - [ ] Streamflow integration for patron streams
 - [ ] `init_patron_config` instruction
 - [ ] `subscribe_patron` instruction
-- [ ] `distribute_patron_revenue` instruction
-- [ ] `claim_patron_rewards` instruction
+- [ ] `claim_patron_rewards` instruction (with lazy distribution)
 - [ ] SDK instruction builders
 - [ ] Web: Patron setup modal (creator)
 - [ ] Web: Patron subscribe modal (user)
 
 ### Phase 3: Ecosystem Subscription
 - [ ] EcosystemSubConfig account
+- [ ] Ecosystem Treasury PDA for streaming
 - [ ] Streamflow integration for ecosystem streams
-- [ ] `distribute_ecosystem_revenue` instruction
-- [ ] `claim_global_holder_reward` instruction
+- [ ] `subscribe_ecosystem` instruction
+- [ ] `claim_global_holder_reward` instruction (with lazy distribution)
 - [ ] `claim_creator_ecosystem_payout` instruction
 - [ ] SDK instruction builders
 - [ ] Web: Ecosystem subscribe modal
 - [ ] Web: Global rewards in claim modal
 
-### Phase 4: Clockwork Auto-Renewal
-- [ ] Auto-renewal config
-- [ ] Clockwork thread creation
-- [ ] Auto-topup logic
-
-### Phase 5: Testing & Polish
+### Phase 4: Testing & Polish
 - [ ] E2E testing all flows
-- [ ] Edge cases (burn during claim, etc.)
+- [ ] Edge cases (burn during claim, epoch boundaries, etc.)
+- [ ] UI for epoch status and estimated rewards
 - [ ] Documentation updates
 
 ---
