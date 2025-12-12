@@ -1,25 +1,38 @@
 "use client";
 
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
+function formatPrice(lamports: bigint | number): string {
+  const sol = Number(lamports) / LAMPORTS_PER_SOL;
+  if (sol === 0) return "Free";
+  if (sol < 0.001) return "<0.001 SOL";
+  return `${sol.toFixed(sol < 1 ? 3 : 2)} SOL`;
+}
+
 export function LockedOverlay({
   hasMintConfig,
   hasRentConfig,
+  mintPrice,
+  lowestRentPrice,
   onBuyClick,
   onRentClick,
 }: {
   hasMintConfig: boolean;
   hasRentConfig?: boolean;
+  mintPrice?: bigint | number;
+  lowestRentPrice?: bigint | number;
   onBuyClick: () => void;
   onRentClick?: () => void;
 }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
-      <div className="w-16 h-16 mb-4 rounded-full bg-gray-800/80 flex items-center justify-center">
-        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-14 h-14 mb-3 rounded-full bg-gray-800/80 flex items-center justify-center">
+        <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
         </svg>
       </div>
-      <p className="text-white font-medium mb-2">Premium Content</p>
-      <p className="text-gray-400 text-sm mb-4 text-center px-4">
+      <p className="text-white font-medium mb-1">Premium Content</p>
+      <p className="text-gray-400 text-sm mb-3 text-center px-4">
         {hasMintConfig || hasRentConfig
           ? "Purchase or rent to unlock full access"
           : "This content is encrypted"
@@ -30,23 +43,23 @@ export function LockedOverlay({
           {hasMintConfig && (
             <button
               onClick={onBuyClick}
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-full font-medium transition-colors flex items-center gap-2"
+              className="px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-full font-medium transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              Buy
+              Buy {mintPrice !== undefined && <span className="text-primary-200">{formatPrice(mintPrice)}</span>}
             </button>
           )}
           {hasRentConfig && onRentClick && (
             <button
               onClick={onRentClick}
-              className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-medium transition-colors flex items-center gap-2"
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-medium transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Rent
+              Rent {lowestRentPrice !== undefined && <span className="text-amber-200">from {formatPrice(lowestRentPrice)}</span>}
             </button>
           )}
         </div>

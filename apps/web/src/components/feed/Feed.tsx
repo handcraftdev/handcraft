@@ -470,6 +470,17 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const isCreator = publicKey?.toBase58() === content.creatorAddress;
   const hasMintConfig = mintConfig && mintConfig.isActive;
   const hasRentConfig = rentConfig && rentConfig.isActive;
+
+  // Get prices for overlay display
+  const mintPrice = hasMintConfig ? mintConfig.priceSol : undefined;
+  const lowestRentPrice = hasRentConfig
+    ? Math.min(
+        Number(rentConfig.rentFee6h ?? Infinity),
+        Number(rentConfig.rentFee1d ?? Infinity),
+        Number(rentConfig.rentFee7d ?? Infinity)
+      )
+    : undefined;
+
   // Content is locked if NFTs have been minted - use mintedCount from content entry
   const actualMintedCount = Number(content.mintedCount ?? 0);
   const isLocked = content.isLocked || actualMintedCount > 0;
@@ -686,7 +697,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               {formatDuration(duration)}
             </div>
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} mintPrice={mintPrice} lowestRentPrice={lowestRentPrice} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
@@ -709,7 +720,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               {formatDuration(duration)}
             </div>
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} mintPrice={mintPrice} lowestRentPrice={lowestRentPrice} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
@@ -729,7 +740,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               className={`w-full h-full object-contain ${showLockedOverlay || needsSession ? "blur-md" : ""}`}
             />
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} mintPrice={mintPrice} lowestRentPrice={lowestRentPrice} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
@@ -742,7 +753,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             </svg>
             <p className="text-amber-200 mt-2">{content.metadata?.title || content.metadata?.name || "Book"}</p>
           </div>
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} mintPrice={mintPrice} lowestRentPrice={lowestRentPrice} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
