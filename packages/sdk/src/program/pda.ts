@@ -16,6 +16,17 @@ import {
   MB_NFT_SEED,
   BUNDLE_SEED,
   BUNDLE_ITEM_SEED,
+  BUNDLE_MINT_CONFIG_SEED,
+  BUNDLE_RENT_CONFIG_SEED,
+  BUNDLE_COLLECTION_SEED,
+  BUNDLE_REWARD_POOL_SEED,
+  BUNDLE_WALLET_STATE_SEED,
+  BUNDLE_NFT_REWARD_STATE_SEED,
+  BUNDLE_NFT_RARITY_SEED,
+  BUNDLE_RENT_ENTRY_SEED,
+  BUNDLE_DIRECT_NFT_SEED,
+  MB_BUNDLE_MINT_REQUEST_SEED,
+  MB_BUNDLE_NFT_SEED,
   PRECISION,
   CREATOR_FEE_PRIMARY_BPS,
   PLATFORM_FEE_PRIMARY_BPS,
@@ -203,6 +214,153 @@ export function getBundlePda(creator: PublicKey, bundleId: string): [PublicKey, 
 export function getBundleItemPda(bundlePda: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BUNDLE_ITEM_SEED), bundlePda.toBuffer(), contentPda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+// ========== Bundle Mint/Rent PDAs ==========
+
+/**
+ * Get the BundleMintConfig PDA for a bundle
+ * @param bundlePda - The bundle's PDA
+ */
+export function getBundleMintConfigPda(bundlePda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_MINT_CONFIG_SEED), bundlePda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleRentConfig PDA for a bundle
+ * @param bundlePda - The bundle's PDA
+ */
+export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_RENT_CONFIG_SEED), bundlePda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleCollection PDA for a bundle
+ * @param bundlePda - The bundle's PDA
+ */
+export function getBundleCollectionPda(bundlePda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_COLLECTION_SEED), bundlePda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleRewardPool PDA for a bundle
+ * @param bundlePda - The bundle's PDA
+ */
+export function getBundleRewardPoolPda(bundlePda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_REWARD_POOL_SEED), bundlePda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleWalletState PDA for a wallet and bundle
+ * @param wallet - The wallet's public key
+ * @param bundlePda - The bundle's PDA
+ */
+export function getBundleWalletStatePda(wallet: PublicKey, bundlePda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_WALLET_STATE_SEED), wallet.toBuffer(), bundlePda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleNftRewardState PDA for an NFT
+ * @param nftAsset - The NFT asset's public key
+ */
+export function getBundleNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_NFT_REWARD_STATE_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleNftRarity PDA for an NFT
+ * @param nftAsset - The NFT asset's public key
+ */
+export function getBundleNftRarityPda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_NFT_RARITY_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the BundleRentEntry PDA for an NFT
+ * @param nftAsset - The rental NFT asset's public key
+ */
+export function getBundleRentEntryPda(nftAsset: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_RENT_ENTRY_SEED), nftAsset.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Bundle Direct NFT PDA for a buyer and bundle
+ * @param buyer - The buyer's public key
+ * @param bundlePda - The bundle's PDA
+ * @param edition - The edition number
+ */
+export function getBundleDirectNftPda(buyer: PublicKey, bundlePda: PublicKey, edition: bigint): [PublicKey, number] {
+  // Convert edition to little-endian u64 bytes
+  const editionBytes = new Uint8Array(8);
+  let value = edition;
+  for (let i = 0; i < 8; i++) {
+    editionBytes[i] = Number(value & BigInt(0xff));
+    value = value >> BigInt(8);
+  }
+
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BUNDLE_DIRECT_NFT_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
+    PROGRAM_ID
+  );
+}
+
+// ========== MagicBlock VRF Bundle PDAs ==========
+
+/**
+ * Get the MagicBlock bundle mint request PDA for a buyer, bundle, and edition
+ * This is used for the 2-step VRF bundle minting flow
+ * @param buyer - The buyer's public key
+ * @param bundlePda - The bundle PDA
+ * @param edition - The edition number (minted_count + pending_count + 1)
+ */
+export function getMbBundleMintRequestPda(buyer: PublicKey, bundlePda: PublicKey, edition: bigint): [PublicKey, number] {
+  // Convert edition to little-endian u64 bytes (cross-platform)
+  const editionBytes = new Uint8Array(8);
+  let value = edition;
+  for (let i = 0; i < 8; i++) {
+    editionBytes[i] = Number(value & BigInt(0xff));
+    value = value >> BigInt(8);
+  }
+
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(MB_BUNDLE_MINT_REQUEST_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
+    PROGRAM_ID
+  );
+}
+
+/**
+ * Get the MagicBlock Bundle NFT asset PDA derived from the mint request
+ * This allows the VRF oracle to create the NFT without user signature
+ */
+export function getMbBundleNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(MB_BUNDLE_NFT_SEED), mintRequestPda.toBuffer()],
     PROGRAM_ID
   );
 }

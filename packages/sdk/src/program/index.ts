@@ -33,6 +33,7 @@ import {
   RentEntry,
   PendingMint,
   MbMintRequest,
+  MbBundleMintRequest,
   NftRarity,
   Rarity,
   parseAnchorRarity,
@@ -40,6 +41,14 @@ import {
   BundleItem,
   BundleType,
   BundleWithItems,
+  BundleMintConfig,
+  BundleRentConfig,
+  BundleCollection,
+  BundleRewardPool,
+  BundleWalletState,
+  BundleNftRarity,
+  BundleNftRewardState,
+  WalletBundleNftMetadata,
 } from "./types";
 
 import {
@@ -58,8 +67,19 @@ import {
   getNftRarityPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
+  getMbBundleMintRequestPda,
+  getMbBundleNftAssetPda,
   getBundlePda,
   getBundleItemPda,
+  getBundleMintConfigPda,
+  getBundleRentConfigPda,
+  getBundleCollectionPda,
+  getBundleRewardPoolPda,
+  getBundleWalletStatePda,
+  getBundleNftRewardStatePda,
+  getBundleNftRarityPda,
+  getBundleRentEntryPda,
+  getBundleDirectNftPda,
   calculatePendingRewardForNft,
   calculateWeightedPendingReward,
 } from "./pda";
@@ -1224,6 +1244,213 @@ export async function fetchAllContentCollections(
 }
 
 /**
+ * Batch fetch all bundle collections in a single RPC call.
+ * Returns a Map keyed by bundle PDA base58 string.
+ */
+export async function fetchAllBundleCollections(
+  connection: Connection
+): Promise<Map<string, BundleCollection>> {
+  const collections = new Map<string, BundleCollection>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allCollections = await (program.account as any).bundleCollection.all();
+
+    for (const { account } of allCollections) {
+      const bundleKey = account.bundle.toBase58();
+      collections.set(bundleKey, {
+        bundle: account.bundle,
+        collectionAsset: account.collectionAsset,
+        creator: account.creator,
+        createdAt: BigInt(account.createdAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllBundleCollections] Error:", err);
+  }
+  return collections;
+}
+
+/**
+ * Batch fetch all bundle reward pools in a single RPC call.
+ * Returns a Map keyed by bundle PDA base58 string.
+ */
+export async function fetchAllBundleRewardPools(
+  connection: Connection
+): Promise<Map<string, BundleRewardPool>> {
+  const pools = new Map<string, BundleRewardPool>();
+  try {
+    const program = createProgram(connection);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allPools = await (program.account as any).bundleRewardPool.all();
+
+    for (const { account } of allPools) {
+      const bundleKey = account.bundle.toBase58();
+      pools.set(bundleKey, {
+        bundle: account.bundle,
+        rewardPerShare: BigInt(account.rewardPerShare.toString()),
+        totalNfts: BigInt(account.totalNfts.toString()),
+        totalWeight: BigInt(account.totalWeight?.toString() || "0"),
+        totalDeposited: BigInt(account.totalDeposited.toString()),
+        totalClaimed: BigInt(account.totalClaimed.toString()),
+        createdAt: BigInt(account.createdAt.toString()),
+      });
+    }
+  } catch (err) {
+    console.error("[fetchAllBundleRewardPools] Error:", err);
+  }
+  return pools;
+}
+
+/**
+ * Batch fetch bundle NFT reward states for multiple NFT assets using getMultipleAccountsInfo.
+ * Returns a Map keyed by NFT asset base58 string.
+ */
+export async function fetchBundleNftRewardStatesBatch(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Map<string, BundleNftRewardState>> {
+  const states = new Map<string, BundleNftRewardState>();
+  if (nftAssets.length === 0) return states;
+
+  try {
+    const program = createProgram(connection);
+    const nftRewardStatePdas = nftAssets.map(nft => getBundleNftRewardStatePda(nft)[0]);
+
+    // Batch fetch all accounts in a single RPC call
+    const accounts = await connection.getMultipleAccountsInfo(nftRewardStatePdas);
+
+    for (let i = 0; i < nftAssets.length; i++) {
+      const accountInfo = accounts[i];
+      if (accountInfo) {
+        try {
+          // Decode the account data using Anchor
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const decoded = (program.account as any).bundleNftRewardState.coder.accounts.decode(
+            "bundleNftRewardState",
+            accountInfo.data
+          );
+
+          states.set(nftAssets[i].toBase58(), {
+            nftAsset: decoded.nftAsset,
+            bundle: decoded.bundle,
+            rewardDebt: BigInt(decoded.rewardDebt.toString()),
+            weight: decoded.weight || 100,
+            createdAt: BigInt(decoded.createdAt.toString()),
+          });
+        } catch {
+          // Skip invalid account data
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[fetchBundleNftRewardStatesBatch] Error:", err);
+  }
+  return states;
+}
+
+/**
+ * Bundle pending reward info
+ */
+export interface BundlePendingReward {
+  bundleId: string;
+  creator: PublicKey;
+  pending: bigint;
+  nftCount: bigint;
+  nftRewards: Array<{
+    nftAsset: PublicKey;
+    pending: bigint;
+    rewardDebt: bigint;
+    weight: number;
+    createdAt: bigint;
+  }>;
+}
+
+/**
+ * Optimized pending rewards calculation for bundles.
+ * Similar to getPendingRewardsOptimized but for bundle NFTs.
+ */
+export async function getBundlePendingRewardsOptimized(
+  connection: Connection,
+  wallet: PublicKey,
+  walletBundleNfts: WalletBundleNftMetadata[],
+  bundleRewardPools: Map<string, BundleRewardPool>,
+  bundleCollections: Map<string, BundleCollection>
+): Promise<BundlePendingReward[]> {
+  const results: BundlePendingReward[] = [];
+
+  // Group NFTs by bundleId + creator
+  const nftsByBundle = new Map<string, { bundleId: string; creator: PublicKey; nfts: WalletBundleNftMetadata[] }>();
+  for (const nft of walletBundleNfts) {
+    if (nft.bundleId && nft.creator) {
+      const key = `${nft.creator.toBase58()}-${nft.bundleId}`;
+      const existing = nftsByBundle.get(key) || { bundleId: nft.bundleId, creator: nft.creator, nfts: [] };
+      existing.nfts.push(nft);
+      nftsByBundle.set(key, existing);
+    }
+  }
+
+  // Get all NFT assets that need reward state lookup
+  const allNftAssets: PublicKey[] = [];
+  for (const { nfts } of nftsByBundle.values()) {
+    for (const nft of nfts) {
+      allNftAssets.push(nft.nftAsset);
+    }
+  }
+
+  // Batch fetch all bundle NFT reward states in a single call
+  const nftRewardStates = await fetchBundleNftRewardStatesBatch(connection, allNftAssets);
+
+  // Calculate pending rewards for each bundle
+  for (const [, { bundleId, creator, nfts }] of nftsByBundle) {
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const bundleKey = bundlePda.toBase58();
+
+    const rewardPool = bundleRewardPools.get(bundleKey);
+    if (!rewardPool) {
+      results.push({ bundleId, creator, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: [] });
+      continue;
+    }
+
+    let totalPending = BigInt(0);
+    const nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> = [];
+
+    for (const nft of nfts) {
+      const nftRewardState = nftRewardStates.get(nft.nftAsset.toBase58());
+      if (nftRewardState) {
+        // pending = (weight * rewardPerShare - nftRewardDebt) / PRECISION
+        const pending = calculateWeightedPendingReward(
+          nftRewardState.weight,
+          rewardPool.rewardPerShare,
+          nftRewardState.rewardDebt
+        );
+        totalPending += pending;
+        nftRewards.push({
+          nftAsset: nft.nftAsset,
+          pending,
+          rewardDebt: nftRewardState.rewardDebt,
+          weight: nftRewardState.weight,
+          createdAt: nftRewardState.createdAt,
+        });
+      }
+    }
+
+    // Sort by createdAt (mint sequence)
+    nftRewards.sort((a, b) => Number(a.createdAt - b.createdAt));
+
+    results.push({
+      bundleId,
+      creator,
+      pending: totalPending,
+      nftCount: BigInt(nfts.length),
+      nftRewards,
+    });
+  }
+
+  return results;
+}
+
+/**
  * Batch fetch all content reward pools in a single RPC call.
  * Returns a Map keyed by content PDA base58 string.
  */
@@ -1632,6 +1859,82 @@ export async function fetchMbMintRequest(
 }
 
 /**
+ * Fetch MagicBlock bundle mint request by PDA
+ */
+export async function fetchMbBundleMintRequest(
+  connection: Connection,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  edition: bigint
+): Promise<MbBundleMintRequest | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).magicBlockBundleMintRequest.fetch(mintRequestPda);
+
+    return {
+      buyer: decoded.buyer,
+      bundle: decoded.bundle,
+      creator: decoded.creator,
+      amountPaid: BigInt(decoded.amountPaid.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      hadExistingNfts: decoded.hadExistingNfts ?? false,
+      bump: decoded.bump,
+      nftBump: decoded.nftBump,
+      isFulfilled: decoded.isFulfilled ?? false,
+      collectionAsset: decoded.collectionAsset,
+      treasury: decoded.treasury,
+      platform: decoded.platform,
+      bundleCollectionBump: decoded.bundleCollectionBump,
+      metadataCid: decoded.metadataCid,
+      mintedCount: BigInt(decoded.mintedCount.toString()),
+      edition: BigInt(decoded.edition?.toString() ?? "0"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Find all unfulfilled MagicBlock bundle mint requests for a wallet and bundle
+ * Searches through possible editions to find pending requests
+ */
+export async function findPendingBundleMintRequests(
+  connection: Connection,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  maxEditionToCheck: bigint
+): Promise<Array<{ edition: bigint; mintRequest: MbBundleMintRequest; mintRequestPda: PublicKey; nftAssetPda: PublicKey }>> {
+  const results: Array<{ edition: bigint; mintRequest: MbBundleMintRequest; mintRequestPda: PublicKey; nftAssetPda: PublicKey }> = [];
+  const [bundlePda] = getBundlePda(creator, bundleId);
+
+  for (let i = BigInt(1); i <= maxEditionToCheck; i++) {
+    try {
+      const mintRequest = await fetchMbBundleMintRequest(connection, buyer, bundleId, creator, i);
+      if (mintRequest && !mintRequest.isFulfilled) {
+        const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, i);
+        const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
+        results.push({
+          edition: i,
+          mintRequest,
+          mintRequestPda,
+          nftAssetPda,
+        });
+      }
+    } catch {
+      // No mint request for this edition, continue
+    }
+  }
+
+  return results;
+}
+
+/**
  * Fetch all pending mints for a wallet across all content
  * This is useful for recovery - finding any mints that were started but not completed
  */
@@ -2009,6 +2312,133 @@ export async function fetchWalletNftMetadataWithCollections(
   }
 }
 
+/**
+ * Fetch all bundle NFTs owned by a wallet.
+ * Similar to fetchWalletNftMetadata but for bundles.
+ */
+export async function fetchWalletBundleNftMetadata(
+  connection: Connection,
+  wallet: PublicKey
+): Promise<WalletBundleNftMetadata[]> {
+  // Fetch bundle collections and bundle entries once upfront
+  const bundleCollections = await fetchAllBundleCollections(connection);
+  const program = createProgram(connection);
+
+  // Fetch bundle entries using getProgramAccounts with manual decoding
+  const bundleAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+    filters: [
+      // Filter by Bundle discriminator (sha256("account:Bundle")[0..8])
+      { memcmp: { offset: 0, bytes: "3ZemDneRrKh" } }, // base58 of Bundle discriminator
+    ],
+  });
+
+  const allBundleEntries: Array<{ bundleId: string; creator: PublicKey; bundlePda: PublicKey }> = [];
+  for (const { pubkey, account } of bundleAccounts) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const decoded = (program.account as any).bundle.coder.accounts.decode(
+        "bundle",
+        account.data
+      );
+      allBundleEntries.push({
+        bundleId: decoded.bundleId,
+        creator: decoded.creator,
+        bundlePda: pubkey,
+      });
+    } catch {
+      // Skip accounts that fail to decode
+    }
+  }
+
+  // Build a map from collectionAsset -> { bundleId, creator } for quick lookup
+  const collectionToBundleInfo = new Map<string, { bundleId: string; creator: PublicKey }>();
+  for (const collection of bundleCollections.values()) {
+    // Find the bundle entry for this collection
+    for (const entry of allBundleEntries) {
+      if (collection.bundle.equals(entry.bundlePda)) {
+        collectionToBundleInfo.set(collection.collectionAsset.toBase58(), {
+          bundleId: entry.bundleId,
+          creator: entry.creator,
+        });
+        break;
+      }
+    }
+  }
+
+  return fetchWalletBundleNftMetadataWithCollections(connection, wallet, collectionToBundleInfo);
+}
+
+/**
+ * Optimized version that accepts pre-built collection->bundleInfo map.
+ * This avoids re-fetching collections for each NFT.
+ */
+export async function fetchWalletBundleNftMetadataWithCollections(
+  connection: Connection,
+  wallet: PublicKey,
+  collectionToBundleInfo: Map<string, { bundleId: string; creator: PublicKey }>
+): Promise<WalletBundleNftMetadata[]> {
+  try {
+    const accounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 1, bytes: wallet.toBase58() } },
+      ],
+    });
+
+    const results: WalletBundleNftMetadata[] = [];
+
+    for (const { pubkey, account } of accounts) {
+      try {
+        const data = account.data;
+        if (data.length < 66 || data[0] !== 1) continue;
+
+        let name = "NFT";
+        let collectionAsset: PublicKey | null = null;
+
+        const updateAuthorityType = data[33];
+        if (updateAuthorityType === 2) {
+          const collectionBytes = data.slice(34, 66);
+          collectionAsset = new PublicKey(collectionBytes);
+        }
+
+        try {
+          let offset = 66;
+          if (data.length > offset + 4) {
+            const nameLen = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+            offset += 4;
+            if (data.length >= offset + nameLen) {
+              name = Buffer.from(data.slice(offset, offset + nameLen)).toString("utf8");
+            }
+          }
+        } catch {
+          // Use default name
+        }
+
+        // Use pre-fetched collection map instead of fetching for each NFT
+        const bundleInfo = collectionAsset
+          ? collectionToBundleInfo.get(collectionAsset.toBase58()) || null
+          : null;
+
+        // Only include NFTs that belong to Handcraft bundle collections
+        if (bundleInfo) {
+          results.push({
+            nftAsset: pubkey,
+            bundleId: bundleInfo.bundleId,
+            creator: bundleInfo.creator,
+            collectionAsset,
+            name,
+          });
+        }
+      } catch {
+        // Skip invalid account
+      }
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export async function countNftsOwned(
   connection: Connection,
   wallet: PublicKey,
@@ -2238,6 +2668,70 @@ export async function createBundleInstruction(
     .instruction();
 }
 
+export interface CreateBundleWithMintAndRentResult {
+  instruction: TransactionInstruction;
+  collectionAsset: PublicKey;
+  collectionAssetKeypair: Keypair;
+}
+
+/**
+ * Create a bundle with mint and rent configuration in a single transaction
+ * This is the recommended way to create bundles - single signature flow
+ */
+export async function createBundleWithMintAndRentInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  metadataCid: string,
+  bundleType: BundleType,
+  mintPrice: bigint,
+  mintMaxSupply: bigint | null,
+  creatorRoyaltyBps: number,
+  rentFee6h: bigint,
+  rentFee1d: bigint,
+  rentFee7d: bigint,
+  platform: PublicKey
+): Promise<CreateBundleWithMintAndRentResult> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+  const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const collectionAsset = Keypair.generate();
+
+  const instruction = await program.methods
+    .createBundleWithMintAndRent(
+      bundleId,
+      metadataCid,
+      bundleTypeToAnchor(bundleType),
+      new BN(mintPrice.toString()),
+      mintMaxSupply !== null ? new BN(mintMaxSupply.toString()) : null,
+      creatorRoyaltyBps,
+      new BN(rentFee6h.toString()),
+      new BN(rentFee1d.toString()),
+      new BN(rentFee7d.toString())
+    )
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+      rentConfig: rentConfigPda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset: collectionAsset.publicKey,
+      ecosystemConfig: ecosystemConfigPda,
+      platform,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    collectionAsset: collectionAsset.publicKey,
+    collectionAssetKeypair: collectionAsset,
+  };
+}
+
 /**
  * Add content to a bundle
  */
@@ -2351,6 +2845,9 @@ export async function fetchBundle(
       isActive: decoded.isActive,
       createdAt: BigInt(decoded.createdAt.toString()),
       updatedAt: BigInt(decoded.updatedAt.toString()),
+      mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+      isLocked: decoded.isLocked ?? false,
     };
   } catch {
     return null;
@@ -2379,9 +2876,49 @@ export async function fetchBundleByPda(
       isActive: decoded.isActive,
       createdAt: BigInt(decoded.createdAt.toString()),
       updatedAt: BigInt(decoded.updatedAt.toString()),
+      mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+      pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+      isLocked: decoded.isLocked ?? false,
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch all bundles (global feed)
+ */
+export async function fetchAllBundles(
+  connection: Connection
+): Promise<Bundle[]> {
+  try {
+    const program = createProgram(connection);
+
+    // Fetch all bundle accounts (no filter - we filter in JS)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accounts = await (program.account as any).bundle.all();
+
+    // Filter to only active bundles and sort by createdAt descending
+    const bundles = accounts
+      .map((acc: { account: Record<string, unknown> }) => ({
+        creator: acc.account.creator as PublicKey,
+        bundleId: acc.account.bundleId as string,
+        metadataCid: acc.account.metadataCid as string,
+        bundleType: anchorToBundleType(acc.account.bundleType as object),
+        itemCount: acc.account.itemCount as number,
+        isActive: acc.account.isActive as boolean,
+        createdAt: BigInt((acc.account.createdAt as { toString(): string }).toString()),
+        updatedAt: BigInt((acc.account.updatedAt as { toString(): string }).toString()),
+        mintedCount: BigInt((acc.account.mintedCount as { toString(): string })?.toString() || "0"),
+        pendingCount: BigInt((acc.account.pendingCount as { toString(): string })?.toString() || "0"),
+        isLocked: (acc.account.isLocked as boolean) ?? false,
+      }))
+      .filter((b: Bundle) => b.isActive)
+      .sort((a: Bundle, b: Bundle) => Number(b.createdAt - a.createdAt));
+
+    return bundles;
+  } catch {
+    return [];
   }
 }
 
@@ -2414,6 +2951,9 @@ export async function fetchBundlesByCreator(
       isActive: acc.account.isActive as boolean,
       createdAt: BigInt((acc.account.createdAt as { toString(): string }).toString()),
       updatedAt: BigInt((acc.account.updatedAt as { toString(): string }).toString()),
+      mintedCount: BigInt((acc.account.mintedCount as { toString(): string })?.toString() || "0"),
+      pendingCount: BigInt((acc.account.pendingCount as { toString(): string })?.toString() || "0"),
+      isLocked: (acc.account.isLocked as boolean) ?? false,
     }));
   } catch {
     return [];
@@ -2456,6 +2996,160 @@ export async function fetchBundleItems(
 }
 
 /**
+ * Find all bundles that contain a specific content
+ * Returns bundle info with metadata for each bundle containing this content
+ */
+export async function findBundlesForContent(
+  connection: Connection,
+  contentCid: string
+): Promise<Array<{ bundle: Bundle; bundleId: string; creator: PublicKey; position: number }>> {
+  try {
+    const program = createProgram(connection);
+    const [contentPda] = getContentPda(contentCid);
+
+    // Fetch all bundle items that reference this content
+    // BundleItem layout: discriminator (8) + bundle (32) + content (32) + position (2) + addedAt (8)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bundleItemAccounts = await (program.account as any).bundleItem.all([
+      {
+        memcmp: {
+          offset: 8 + 32, // After discriminator + bundle pubkey
+          bytes: contentPda.toBase58(),
+        },
+      },
+    ]);
+
+    if (bundleItemAccounts.length === 0) return [];
+
+    // Fetch bundle details for each bundle item
+    const results: Array<{ bundle: Bundle; bundleId: string; creator: PublicKey; position: number }> = [];
+
+    for (const { account } of bundleItemAccounts) {
+      const bundlePda = account.bundle as PublicKey;
+      const position = account.position as number;
+
+      try {
+        const bundle = await fetchBundleByPda(connection, bundlePda);
+        if (bundle) {
+          results.push({
+            bundle,
+            bundleId: bundle.bundleId,
+            creator: bundle.creator,
+            position,
+          });
+        }
+      } catch {
+        // Skip if bundle fetch fails
+      }
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Batch find bundles for multiple content CIDs
+ * Only fetches the specific bundles referenced by content items (scalable)
+ */
+export async function findBundlesForContentBatch(
+  connection: Connection,
+  contentCids: string[]
+): Promise<Map<string, Array<{ bundleId: string; creator: PublicKey; bundleName?: string }>>> {
+  const result = new Map<string, Array<{ bundleId: string; creator: PublicKey; bundleName?: string }>>();
+  if (contentCids.length === 0) return result;
+
+  try {
+    const program = createProgram(connection);
+
+    // Fetch ALL bundle items at once (this scales with number of bundle items, not bundles)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allBundleItems = await (program.account as any).bundleItem.all();
+
+    // Build content PDA -> CID map for quick lookup
+    const contentPdaToCid = new Map<string, string>();
+    for (const cid of contentCids) {
+      const [contentPda] = getContentPda(cid);
+      contentPdaToCid.set(contentPda.toBase58(), cid);
+    }
+
+    // Group bundle items by content and collect unique bundle PDAs
+    const contentToBundlePdas = new Map<string, PublicKey[]>();
+    const uniqueBundlePdas = new Set<string>();
+
+    for (const { account } of allBundleItems) {
+      const contentKey = (account.content as PublicKey).toBase58();
+      const cid = contentPdaToCid.get(contentKey);
+      if (cid) {
+        const bundlePda = account.bundle as PublicKey;
+        const existing = contentToBundlePdas.get(cid) || [];
+        existing.push(bundlePda);
+        contentToBundlePdas.set(cid, existing);
+        uniqueBundlePdas.add(bundlePda.toBase58());
+      }
+    }
+
+    // Only fetch the bundles we actually need (not all bundles!)
+    if (uniqueBundlePdas.size === 0) return result;
+
+    const bundlePdasToFetch = Array.from(uniqueBundlePdas).map(s => new PublicKey(s));
+    const bundleAccounts = await connection.getMultipleAccountsInfo(bundlePdasToFetch);
+
+    // Decode bundle accounts
+    const bundlePdaToBundle = new Map<string, Bundle>();
+    for (let i = 0; i < bundlePdasToFetch.length; i++) {
+      const accountInfo = bundleAccounts[i];
+      if (!accountInfo) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const decoded = (program.account as any).bundle.coder.accounts.decode(
+          "bundle",
+          accountInfo.data
+        );
+        bundlePdaToBundle.set(bundlePdasToFetch[i].toBase58(), {
+          creator: decoded.creator,
+          bundleId: decoded.bundleId,
+          metadataCid: decoded.metadataCid,
+          bundleType: decoded.bundleType,
+          itemCount: decoded.itemCount,
+          isActive: decoded.isActive,
+          createdAt: BigInt(decoded.createdAt.toString()),
+          updatedAt: BigInt(decoded.updatedAt.toString()),
+          mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
+          pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
+          isLocked: decoded.isLocked ?? false,
+        });
+      } catch {
+        // Skip invalid accounts
+      }
+    }
+
+    // Build result map
+    for (const [cid, bundlePdas] of contentToBundlePdas) {
+      const bundles: Array<{ bundleId: string; creator: PublicKey; bundleName?: string }> = [];
+      for (const bundlePda of bundlePdas) {
+        const bundle = bundlePdaToBundle.get(bundlePda.toBase58());
+        if (bundle) {
+          bundles.push({
+            bundleId: bundle.bundleId,
+            creator: bundle.creator,
+          });
+        }
+      }
+      if (bundles.length > 0) {
+        result.set(cid, bundles);
+      }
+    }
+
+    return result;
+  } catch {
+    return result;
+  }
+}
+
+/**
  * Fetch bundle with all items and their content details
  */
 export async function fetchBundleWithItems(
@@ -2489,6 +3183,764 @@ export async function fetchBundleWithItems(
   } catch {
     return null;
   }
+}
+
+// ============================================
+// BUNDLE MINT/RENT INSTRUCTIONS & TYPES
+// ============================================
+
+export interface DirectMintBundleResult {
+  instruction: TransactionInstruction;
+  nftAsset: PublicKey;
+  edition: bigint;
+}
+
+export interface RentBundleResult {
+  instruction: TransactionInstruction;
+  nftAsset: PublicKey;
+  nftAssetKeypair: Keypair;
+  rentEntryPda: PublicKey;
+}
+
+export interface ConfigureBundleMintResult {
+  instruction: TransactionInstruction;
+  collectionAsset: PublicKey;
+  collectionAssetKeypair: Keypair;
+}
+
+/**
+ * Configure minting for a bundle (creates collection)
+ */
+export async function configureBundleMintInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  price: bigint,
+  maxSupply: bigint | null,
+  creatorRoyaltyBps: number,
+  platform: PublicKey
+): Promise<ConfigureBundleMintResult> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const collectionAsset = Keypair.generate();
+
+  const instruction = await program.methods
+    .configureBundleMint(
+      new BN(price.toString()),
+      maxSupply !== null ? new BN(maxSupply.toString()) : null,
+      creatorRoyaltyBps
+    )
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset: collectionAsset.publicKey,
+      ecosystemConfig: ecosystemConfigPda,
+      platform,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    collectionAsset: collectionAsset.publicKey,
+    collectionAssetKeypair: collectionAsset,
+  };
+}
+
+/**
+ * Update bundle mint settings
+ */
+export async function updateBundleMintSettingsInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  price: bigint | null,
+  maxSupply: bigint | null | undefined,
+  creatorRoyaltyBps: number | null,
+  isActive: boolean | null
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+
+  // For Option<Option<u64>> in Anchor:
+  // - undefined/null → None (don't change the field)
+  // - explicitly pass null wrapped → Some(None) (set to unlimited)
+  // - BN value → Some(Some(value)) (set to specific value)
+  // Since we're using null to mean "don't change", we pass null directly
+  const maxSupplyArg = maxSupply === undefined || maxSupply === null
+    ? null  // Don't change
+    : new BN(maxSupply.toString());  // Set to specific value
+
+  return await program.methods
+    .updateBundleMintSettings(
+      price !== null ? new BN(price.toString()) : null,
+      maxSupplyArg,
+      creatorRoyaltyBps,
+      isActive
+    )
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+    })
+    .instruction();
+}
+
+/**
+ * Direct mint bundle NFT (slot hash randomness)
+ */
+export async function directMintBundleInstruction(
+  program: Program,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey,
+  collectionAsset: PublicKey
+): Promise<DirectMintBundleResult> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [buyerWalletStatePda] = getBundleWalletStatePda(buyer, bundlePda);
+
+  // Fetch current minted count to calculate edition
+  const connection = program.provider.connection;
+  const bundleAccount = await (program.account as any).bundle.fetch(bundlePda);
+  const currentMinted = BigInt(bundleAccount.mintedCount?.toString() || "0");
+  const edition = currentMinted + BigInt(1);
+
+  const [nftAssetPda] = getBundleDirectNftPda(buyer, bundlePda, edition);
+  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
+
+  const instruction = await program.methods
+    .directMintBundle()
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+      bundleRewardPool: bundleRewardPoolPda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset,
+      creator,
+      treasury,
+      platform,
+      buyerWalletState: buyerWalletStatePda,
+      nftAsset: nftAssetPda,
+      nftRewardState: nftRewardStatePda,
+      nftRarity: nftRarityPda,
+      payer: buyer,
+      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return { instruction, nftAsset: nftAssetPda, edition };
+}
+
+// ============================================
+// MAGICBLOCK VRF BUNDLE MINT (2-step with fallback)
+// ============================================
+
+export interface MbRequestBundleMintResult {
+  instruction: TransactionInstruction;
+  mintRequestPda: PublicKey;
+  nftAssetPda: PublicKey;
+  programIdentityPda: PublicKey;
+}
+
+/**
+ * Request a bundle mint with MagicBlock VRF
+ * This is a 2-step process:
+ * 1. User calls this to start the mint request
+ * 2. MagicBlock oracle fulfills the request (or user claims fallback after timeout)
+ *
+ * @param program Anchor program instance
+ * @param buyer The buyer's public key
+ * @param bundleId The bundle ID
+ * @param creator The bundle creator's public key
+ * @param treasury Ecosystem treasury
+ * @param platform Platform wallet for commission (optional)
+ * @param collectionAsset The Metaplex Core collection asset
+ * @param oracleQueue The MagicBlock oracle queue (use MAGICBLOCK_DEFAULT_QUEUE)
+ * @param edition The edition number for this mint (minted_count + pending_count + 1)
+ */
+export async function mbRequestBundleMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey | null,
+  collectionAsset: PublicKey,
+  oracleQueue: PublicKey,
+  edition: bigint
+): Promise<MbRequestBundleMintResult> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
+  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
+  const [buyerWalletStatePda] = getBundleWalletStatePda(buyer, bundlePda);
+  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
+
+  // Program identity PDA (required by #[vrf] macro)
+  const [programIdentityPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("identity")],
+    PROGRAM_ID
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const instruction = await (program.methods as any)
+    .magicblockRequestBundleMint(new BN(edition.toString()))
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+      mintRequest: mintRequestPda,
+      bundleRewardPool: bundleRewardPoolPda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset: collectionAsset,
+      creator: creator,
+      treasury: treasury,
+      platform: platform, // Optional account, can be null
+      buyerWalletState: buyerWalletStatePda,
+      nftAsset: nftAssetPda,
+      nftRewardState: nftRewardStatePda,
+      nftRarity: nftRarityPda,
+      payer: buyer,
+      oracleQueue: oracleQueue,
+      programIdentity: programIdentityPda,
+      vrfProgram: MAGICBLOCK_VRF_PROGRAM_ID,
+      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return {
+    instruction,
+    mintRequestPda,
+    nftAssetPda,
+    programIdentityPda,
+  };
+}
+
+/**
+ * Claim fallback bundle mint after VRF timeout (5 seconds)
+ * This mints the NFT using slot hash randomness when the oracle doesn't respond
+ */
+export async function mbBundleClaimFallbackInstruction(
+  program: Program,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  edition: bigint
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
+  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+
+  // Fetch mint request to get stored values
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mintRequestData = await (program.account as any).magicBlockBundleMintRequest.fetch(mintRequestPda);
+  const { treasury, platform, collectionAsset } = mintRequestData;
+
+  return await program.methods
+    .magicblockBundleClaimFallback()
+    .accounts({
+      mintRequest: mintRequestPda,
+      bundle: bundlePda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset: collectionAsset,
+      nftAsset: nftAssetPda,
+      nftRarity: nftRarityPda,
+      nftRewardState: nftRewardStatePda,
+      buyer: buyer,
+      creator: creator,
+      treasury: treasury,
+      platform: platform,
+      bundleRewardPool: bundleRewardPoolPda,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      slotHashes: SYSVAR_SLOT_HASHES_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Cancel a pending MagicBlock bundle mint request
+ * Returns escrowed funds to buyer
+ */
+export async function mbCancelBundleMintInstruction(
+  program: Program,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  edition: bigint
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
+  const [nftAssetPda] = getMbBundleNftAssetPda(mintRequestPda);
+  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAssetPda);
+  const [nftRarityPda] = getBundleNftRarityPda(nftAssetPda);
+
+  return await program.methods
+    .magicblockCancelBundleMint(new BN(edition.toString()))
+    .accounts({
+      bundle: bundlePda,
+      mintRequest: mintRequestPda,
+      nftAsset: nftAssetPda,
+      nftRarity: nftRarityPda,
+      nftRewardState: nftRewardStatePda,
+      buyer: buyer,
+    })
+    .instruction();
+}
+
+/**
+ * Close a fulfilled MagicBlock bundle mint request
+ * This reclaims rent and allows a new mint request
+ */
+export async function mbCloseFulfilledBundleInstruction(
+  program: Program,
+  buyer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  edition: bigint
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintRequestPda] = getMbBundleMintRequestPda(buyer, bundlePda, edition);
+
+  return await program.methods
+    .magicblockCloseFulfilledBundle()
+    .accounts({
+      mintRequest: mintRequestPda,
+      buyer: buyer,
+    })
+    .instruction();
+}
+
+/**
+ * Configure rental for a bundle
+ */
+export async function configureBundleRentInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  rentFee6h: bigint,
+  rentFee1d: bigint,
+  rentFee7d: bigint
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
+
+  return await program.methods
+    .configureBundleRent(
+      new BN(rentFee6h.toString()),
+      new BN(rentFee1d.toString()),
+      new BN(rentFee7d.toString())
+    )
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      rentConfig: rentConfigPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Update bundle rent config
+ */
+export async function updateBundleRentConfigInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  rentFee6h: bigint | null,
+  rentFee1d: bigint | null,
+  rentFee7d: bigint | null,
+  isActive: boolean | null
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
+
+  return await program.methods
+    .updateBundleRentConfig(
+      rentFee6h !== null ? new BN(rentFee6h.toString()) : null,
+      rentFee1d !== null ? new BN(rentFee1d.toString()) : null,
+      rentFee7d !== null ? new BN(rentFee7d.toString()) : null,
+      isActive
+    )
+    .accounts({
+      creator,
+      bundle: bundlePda,
+      rentConfig: rentConfigPda,
+    })
+    .instruction();
+}
+
+/**
+ * Rent a bundle with SOL
+ */
+export async function rentBundleSolInstruction(
+  program: Program,
+  renter: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  treasury: PublicKey,
+  platform: PublicKey,
+  collectionAsset: PublicKey,
+  tier: RentTier
+): Promise<RentBundleResult> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+
+  const nftAsset = Keypair.generate();
+  const [rentEntryPda] = getBundleRentEntryPda(nftAsset.publicKey);
+
+  // Convert tier to Anchor format
+  const anchorTier = tier === RentTier.SixHours ? { sixHours: {} }
+    : tier === RentTier.OneDay ? { oneDay: {} }
+    : { sevenDays: {} };
+
+  const instruction = await program.methods
+    .rentBundleSol(anchorTier)
+    .accounts({
+      ecosystemConfig: ecosystemConfigPda,
+      bundle: bundlePda,
+      rentConfig: rentConfigPda,
+      bundleRewardPool: bundleRewardPoolPda,
+      bundleCollection: bundleCollectionPda,
+      collectionAsset,
+      creator,
+      treasury,
+      platform,
+      nftAsset: nftAsset.publicKey,
+      rentEntry: rentEntryPda,
+      renter,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  return { instruction, nftAsset: nftAsset.publicKey, nftAssetKeypair: nftAsset, rentEntryPda };
+}
+
+/**
+ * Claim holder rewards for a bundle NFT (single NFT)
+ */
+export async function claimBundleRewardsInstruction(
+  program: Program,
+  claimer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  nftAsset: PublicKey
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+  const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAsset);
+
+  return await program.methods
+    .claimBundleRewards()
+    .accounts({
+      claimer,
+      bundle: bundlePda,
+      bundleRewardPool: bundleRewardPoolPda,
+      nftAsset,
+      nftRewardState: nftRewardStatePda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Batch claim holder rewards for multiple bundle NFTs in one instruction
+ * All NFTs must be from the same bundle
+ */
+export async function batchClaimBundleRewardsInstruction(
+  program: Program,
+  claimer: PublicKey,
+  bundleId: string,
+  creator: PublicKey,
+  nftAssets: PublicKey[]
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+
+  // Build remaining accounts: pairs of (nft_asset, nft_reward_state)
+  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
+  for (const nftAsset of nftAssets) {
+    const [nftRewardStatePda] = getBundleNftRewardStatePda(nftAsset);
+    remainingAccounts.push(
+      { pubkey: nftAsset, isSigner: false, isWritable: false },
+      { pubkey: nftRewardStatePda, isSigner: false, isWritable: true }
+    );
+  }
+
+  return await program.methods
+    .batchClaimBundleRewards()
+    .accounts({
+      claimer,
+      bundle: bundlePda,
+      bundleRewardPool: bundleRewardPoolPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+}
+
+/**
+ * Fetch bundle mint config
+ */
+export async function fetchBundleMintConfig(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleMintConfig | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleMintConfig.fetch(mintConfigPda);
+
+    return {
+      bundle: decoded.bundle,
+      creator: decoded.creator,
+      price: BigInt(decoded.price.toString()),
+      maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
+      creatorRoyaltyBps: decoded.creatorRoyaltyBps,
+      isActive: decoded.isActive,
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch bundle rent config
+ */
+export async function fetchBundleRentConfig(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleRentConfig | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
+
+    console.log("[fetchBundleRentConfig] Fetching rent config for:", {
+      creator: creator.toBase58(),
+      bundleId,
+      bundlePda: bundlePda.toBase58(),
+      rentConfigPda: rentConfigPda.toBase58(),
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleRentConfig.fetch(rentConfigPda);
+
+    console.log("[fetchBundleRentConfig] Found rent config:", decoded);
+
+    return {
+      bundle: decoded.bundle,
+      creator: decoded.creator,
+      rentFee6h: BigInt(decoded.rentFee6H.toString()),
+      rentFee1d: BigInt(decoded.rentFee1D.toString()),
+      rentFee7d: BigInt(decoded.rentFee7D.toString()),
+      isActive: decoded.isActive,
+      totalRentals: BigInt(decoded.totalRentals.toString()),
+      totalFeesCollected: BigInt(decoded.totalFeesCollected.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch (error) {
+    console.error("[fetchBundleRentConfig] Error fetching rent config:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch bundle collection
+ */
+export async function fetchBundleCollection(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleCollection | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleCollection.fetch(bundleCollectionPda);
+
+    return {
+      bundle: decoded.bundle,
+      collectionAsset: decoded.collectionAsset,
+      creator: decoded.creator,
+      createdAt: BigInt(decoded.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch bundle reward pool
+ */
+export async function fetchBundleRewardPool(
+  connection: Connection,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleRewardPool | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleRewardPool.fetch(bundleRewardPoolPda);
+
+    return {
+      bundle: decoded.bundle,
+      rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
+      totalNfts: BigInt(decoded.totalNfts.toString()),
+      totalWeight: BigInt(decoded.totalWeight.toString()),
+      totalDeposited: BigInt(decoded.totalDeposited.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch bundle wallet state (NFT ownership for a wallet)
+ */
+export async function fetchBundleWalletState(
+  connection: Connection,
+  wallet: PublicKey,
+  creator: PublicKey,
+  bundleId: string
+): Promise<BundleWalletState | null> {
+  try {
+    const program = createProgram(connection);
+    const [bundlePda] = getBundlePda(creator, bundleId);
+    const [walletStatePda] = getBundleWalletStatePda(wallet, bundlePda);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleWalletState.fetch(walletStatePda);
+
+    return {
+      wallet: decoded.wallet,
+      bundle: decoded.bundle,
+      nftCount: BigInt(decoded.nftCount.toString()),
+      rewardDebt: BigInt(decoded.rewardDebt?.toString() || "0"),
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch bundle NFT rarity
+ */
+export async function fetchBundleNftRarity(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<BundleNftRarity | null> {
+  try {
+    const program = createProgram(connection);
+    const [nftRarityPda] = getBundleNftRarityPda(nftAsset);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).bundleNftRarity.fetch(nftRarityPda);
+
+    return {
+      nftAsset: decoded.nftAsset,
+      bundle: decoded.bundle,
+      rarity: parseAnchorRarity(decoded.rarity),
+      weight: decoded.weight,
+      revealedAt: BigInt(decoded.revealedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch all bundle NFT rarities for a list of NFT assets
+ * Returns all rarity accounts that can be decoded (the NFT assets passed in are already owned)
+ */
+export async function fetchBundleNftRarities(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Map<string, BundleNftRarity>> {
+  const result = new Map<string, BundleNftRarity>();
+  if (nftAssets.length === 0) return result;
+
+  try {
+    const program = createProgram(connection);
+
+    // Batch fetch all rarity accounts
+    const rarityPdas = nftAssets.map(nft => getBundleNftRarityPda(nft)[0]);
+
+    const accounts = await connection.getMultipleAccountsInfo(rarityPdas);
+
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+      if (!account) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const decoded = (program.coder.accounts as any).decode("bundleNftRarity", account.data);
+        const revealedAt = BigInt(decoded.revealedAt?.toString() || "0");
+
+        // Include all rarity accounts - the NFT assets passed in are already verified owned
+        // Old accounts may have revealedAt = 0 but still have valid rarity
+        result.set(nftAssets[i].toBase58(), {
+          nftAsset: decoded.nftAsset,
+          bundle: decoded.bundle,
+          rarity: parseAnchorRarity(decoded.rarity),
+          weight: decoded.weight,
+          revealedAt,
+        });
+      } catch (err) {
+        // Skip accounts that fail to decode (schema mismatch)
+        console.log(`[fetchBundleNftRarities] Failed to decode rarity for ${nftAssets[i].toBase58()}:`, err);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching bundle NFT rarities:", error);
+  }
+
+  return result;
 }
 
 // ============================================
@@ -2644,6 +4096,24 @@ export function createContentRegistryClient(connection: Connection) {
     createBundleInstruction: (creator: PublicKey, bundleId: string, metadataCid: string, bundleType: BundleType) =>
       createBundleInstruction(program, creator, bundleId, metadataCid, bundleType),
 
+    createBundleWithMintAndRentInstruction: (
+      creator: PublicKey,
+      bundleId: string,
+      metadataCid: string,
+      bundleType: BundleType,
+      mintPrice: bigint,
+      mintMaxSupply: bigint | null,
+      creatorRoyaltyBps: number,
+      rentFee6h: bigint,
+      rentFee1d: bigint,
+      rentFee7d: bigint,
+      platform: PublicKey
+    ) => createBundleWithMintAndRentInstruction(
+      program, creator, bundleId, metadataCid, bundleType,
+      mintPrice, mintMaxSupply, creatorRoyaltyBps,
+      rentFee6h, rentFee1d, rentFee7d, platform
+    ),
+
     addBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string, position?: number) =>
       addBundleItemInstruction(program, creator, bundleId, contentCid, position),
 
@@ -2663,9 +4133,133 @@ export function createContentRegistryClient(connection: Connection) {
     // Bundle fetching
     fetchBundle: (creator: PublicKey, bundleId: string) => fetchBundle(connection, creator, bundleId),
     fetchBundleByPda: (bundlePda: PublicKey) => fetchBundleByPda(connection, bundlePda),
+    fetchAllBundles: () => fetchAllBundles(connection),
     fetchBundlesByCreator: (creator: PublicKey) => fetchBundlesByCreator(connection, creator),
     fetchBundleItems: (creator: PublicKey, bundleId: string) => fetchBundleItems(connection, creator, bundleId),
     fetchBundleWithItems: (creator: PublicKey, bundleId: string) => fetchBundleWithItems(connection, creator, bundleId),
+    findBundlesForContent: (contentCid: string) => findBundlesForContent(connection, contentCid),
+    findBundlesForContentBatch: (contentCids: string[]) => findBundlesForContentBatch(connection, contentCids),
+
+    // Bundle mint/rent configuration
+    configureBundleMintInstruction: (
+      creator: PublicKey,
+      bundleId: string,
+      price: bigint,
+      maxSupply: bigint | null,
+      creatorRoyaltyBps: number,
+      platform: PublicKey
+    ) => configureBundleMintInstruction(program, creator, bundleId, price, maxSupply, creatorRoyaltyBps, platform),
+
+    updateBundleMintSettingsInstruction: (
+      creator: PublicKey,
+      bundleId: string,
+      price: bigint | null,
+      maxSupply: bigint | null | undefined,
+      creatorRoyaltyBps: number | null,
+      isActive: boolean | null
+    ) => updateBundleMintSettingsInstruction(program, creator, bundleId, price, maxSupply, creatorRoyaltyBps, isActive),
+
+    directMintBundleInstruction: (
+      buyer: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey,
+      collectionAsset: PublicKey
+    ): Promise<DirectMintBundleResult> => directMintBundleInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset),
+
+    // MagicBlock VRF bundle mint (2-step with fallback)
+    mbRequestBundleMintInstruction: (
+      buyer: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey | null,
+      collectionAsset: PublicKey,
+      oracleQueue: PublicKey,
+      edition: bigint
+    ): Promise<MbRequestBundleMintResult> =>
+      mbRequestBundleMintInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset, oracleQueue, edition),
+
+    mbBundleClaimFallbackInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
+      mbBundleClaimFallbackInstruction(program, buyer, bundleId, creator, edition),
+
+    mbCancelBundleMintInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
+      mbCancelBundleMintInstruction(program, buyer, bundleId, creator, edition),
+
+    mbCloseFulfilledBundleInstruction: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint): Promise<TransactionInstruction> =>
+      mbCloseFulfilledBundleInstruction(program, buyer, bundleId, creator, edition),
+
+    // MagicBlock bundle PDA helpers
+    getMbBundleMintRequestPda,
+    getMbBundleNftAssetPda,
+
+    configureBundleRentInstruction: (
+      creator: PublicKey,
+      bundleId: string,
+      rentFee6h: bigint,
+      rentFee1d: bigint,
+      rentFee7d: bigint
+    ) => configureBundleRentInstruction(program, creator, bundleId, rentFee6h, rentFee1d, rentFee7d),
+
+    updateBundleRentConfigInstruction: (
+      creator: PublicKey,
+      bundleId: string,
+      rentFee6h: bigint | null,
+      rentFee1d: bigint | null,
+      rentFee7d: bigint | null,
+      isActive: boolean | null
+    ) => updateBundleRentConfigInstruction(program, creator, bundleId, rentFee6h, rentFee1d, rentFee7d, isActive),
+
+    rentBundleSolInstruction: (
+      renter: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      treasury: PublicKey,
+      platform: PublicKey,
+      collectionAsset: PublicKey,
+      tier: RentTier
+    ): Promise<RentBundleResult> => rentBundleSolInstruction(program, renter, bundleId, creator, treasury, platform, collectionAsset, tier),
+
+    claimBundleRewardsInstruction: (
+      claimer: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      nftAsset: PublicKey
+    ) => claimBundleRewardsInstruction(program, claimer, bundleId, creator, nftAsset),
+
+    batchClaimBundleRewardsInstruction: (
+      claimer: PublicKey,
+      bundleId: string,
+      creator: PublicKey,
+      nftAssets: PublicKey[]
+    ) => batchClaimBundleRewardsInstruction(program, claimer, bundleId, creator, nftAssets),
+
+    // Bundle mint/rent PDA helpers
+    getBundleMintConfigPda,
+    getBundleRentConfigPda,
+    getBundleCollectionPda,
+    getBundleRewardPoolPda,
+    getBundleWalletStatePda,
+    getBundleNftRewardStatePda,
+    getBundleNftRarityPda,
+    getBundleRentEntryPda,
+    getBundleDirectNftPda,
+
+    // Bundle mint/rent fetching
+    fetchBundleMintConfig: (creator: PublicKey, bundleId: string) => fetchBundleMintConfig(connection, creator, bundleId),
+    fetchBundleRentConfig: (creator: PublicKey, bundleId: string) => fetchBundleRentConfig(connection, creator, bundleId),
+    fetchBundleCollection: (creator: PublicKey, bundleId: string) => fetchBundleCollection(connection, creator, bundleId),
+    fetchBundleRewardPool: (creator: PublicKey, bundleId: string) => fetchBundleRewardPool(connection, creator, bundleId),
+    fetchBundleWalletState: (wallet: PublicKey, creator: PublicKey, bundleId: string) => fetchBundleWalletState(connection, wallet, creator, bundleId),
+    fetchBundleNftRarity: (nftAsset: PublicKey) => fetchBundleNftRarity(connection, nftAsset),
+    fetchBundleNftRarities: (nftAssets: PublicKey[]) => fetchBundleNftRarities(connection, nftAssets),
+
+    // MagicBlock bundle mint request fetching
+    fetchMbBundleMintRequest: (buyer: PublicKey, bundleId: string, creator: PublicKey, edition: bigint) =>
+      fetchMbBundleMintRequest(connection, buyer, bundleId, creator, edition),
+    findPendingBundleMintRequests: (buyer: PublicKey, bundleId: string, creator: PublicKey, maxEditionToCheck: bigint) =>
+      findPendingBundleMintRequests(connection, buyer, bundleId, creator, maxEditionToCheck),
 
     // Fetching
     fetchContent: (contentCid: string) => fetchContent(connection, contentCid),
@@ -2721,6 +4315,22 @@ export function createContentRegistryClient(connection: Connection) {
       fetchWalletNftMetadataWithCollections(connection, wallet, collectionToContentCid),
     getContentNftHolders: (contentCid: string) => getContentNftHolders(connection, contentCid),
     fetchWalletNftsForCollection: (wallet: PublicKey, collectionAsset: PublicKey) => fetchWalletNftsForCollection(connection, wallet, collectionAsset),
+
+    // Bundle NFT ownership
+    fetchAllBundleCollections: () => fetchAllBundleCollections(connection),
+    fetchAllBundleRewardPools: () => fetchAllBundleRewardPools(connection),
+    fetchBundleNftRewardStatesBatch: (nftAssets: PublicKey[]) => fetchBundleNftRewardStatesBatch(connection, nftAssets),
+    fetchWalletBundleNftMetadata: (wallet: PublicKey) => fetchWalletBundleNftMetadata(connection, wallet),
+    fetchWalletBundleNftMetadataWithCollections: (
+      wallet: PublicKey,
+      collectionToBundleInfo: Map<string, { bundleId: string; creator: PublicKey }>
+    ) => fetchWalletBundleNftMetadataWithCollections(connection, wallet, collectionToBundleInfo),
+    getBundlePendingRewardsOptimized: (
+      wallet: PublicKey,
+      walletBundleNfts: WalletBundleNftMetadata[],
+      bundleRewardPools: Map<string, BundleRewardPool>,
+      bundleCollections: Map<string, BundleCollection>
+    ) => getBundlePendingRewardsOptimized(connection, wallet, walletBundleNfts, bundleRewardPools, bundleCollections),
 
     // Fetch all content
     async fetchGlobalContent(): Promise<ContentEntry[]> {

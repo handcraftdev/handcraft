@@ -1,5 +1,5 @@
 {
-  "address": "3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn",
+  "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7",
   "metadata": {
     "name": "content_registry",
     "version": "0.1.0",
@@ -87,6 +87,81 @@
           }
         }
       ]
+    },
+    {
+      "name": "batch_claim_bundle_rewards",
+      "docs": [
+        "Batch claim bundle rewards for multiple NFTs"
+      ],
+      "discriminator": [
+        134,
+        0,
+        157,
+        225,
+        6,
+        88,
+        90,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "claimer",
+          "docs": [
+            "The claimer (must own all NFTs)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "The bundle"
+          ]
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "burn_nft",
@@ -324,6 +399,59 @@
       "args": []
     },
     {
+      "name": "check_bundle_rent_expiry",
+      "docs": [
+        "Check if a bundle rental has expired"
+      ],
+      "discriminator": [
+        193,
+        115,
+        159,
+        240,
+        255,
+        246,
+        155,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "rent_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rent_entry.nft_asset",
+                "account": "BundleRentEntry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "check_rent_expiry",
       "docs": [
         "Check if a rental has expired",
@@ -397,6 +525,122 @@
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_bundle_rewards",
+      "docs": [
+        "Claim holder rewards for a bundle NFT"
+      ],
+      "discriminator": [
+        18,
+        225,
+        196,
+        162,
+        31,
+        176,
+        2,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "claimer",
+          "docs": [
+            "The claimer (must own the NFT)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "The bundle the NFT belongs to"
+          ]
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle reward pool to claim from"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset"
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state for the specific NFT",
+            "This PDA proves the NFT is valid for this bundle (created only during minting)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -852,6 +1096,261 @@
       "args": []
     },
     {
+      "name": "configure_bundle_mint",
+      "docs": [
+        "Configure NFT minting for a bundle (creator only)",
+        "Creates mint config and Metaplex Core collection"
+      ],
+      "discriminator": [
+        175,
+        147,
+        86,
+        54,
+        207,
+        205,
+        229,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "The bundle to configure minting for"
+          ],
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "docs": [
+            "Mint config PDA for the bundle"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "Bundle collection PDA (tracks the Metaplex collection)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "ecosystem_config",
+          "docs": [
+            "Ecosystem config for treasury address"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform"
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "configure_bundle_rent",
+      "docs": [
+        "Configure rental for a bundle (creator only)",
+        "Sets the rent fees for 3 tiers: 6h, 1d, 7d"
+      ],
+      "discriminator": [
+        55,
+        16,
+        115,
+        81,
+        90,
+        215,
+        87,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle"
+          ]
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "The bundle to configure renting for",
+            "Can be done before publishing (is_active=false)"
+          ]
+        },
+        {
+          "name": "rent_config",
+          "docs": [
+            "Rent config PDA for the bundle"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "rent_fee_6h",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_1d",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_7d",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "configure_mint",
       "docs": [
         "Configure NFT minting for content (creator only, SOL only)"
@@ -1080,6 +1579,257 @@
       ]
     },
     {
+      "name": "create_bundle_with_mint_and_rent",
+      "docs": [
+        "Create a bundle with mint and rent configuration in a single transaction",
+        "Bundle is created as published with mint and rent enabled by default"
+      ],
+      "discriminator": [
+        136,
+        227,
+        48,
+        79,
+        20,
+        170,
+        48,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "The bundle to create"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "bundle_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint_config",
+          "docs": [
+            "Mint config PDA for the bundle"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_config",
+          "docs": [
+            "Rent config PDA for the bundle"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "Bundle collection PDA (tracks the Metaplex collection)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "ecosystem_config",
+          "docs": [
+            "Ecosystem config for treasury address"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform"
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bundle_id",
+          "type": "string"
+        },
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
+        {
+          "name": "bundle_type",
+          "type": {
+            "defined": {
+              "name": "BundleType"
+            }
+          }
+        },
+        {
+          "name": "mint_price",
+          "type": "u64"
+        },
+        {
+          "name": "mint_max_supply",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": "u16"
+        },
+        {
+          "name": "rent_fee_6h",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_1d",
+          "type": "u64"
+        },
+        {
+          "name": "rent_fee_7d",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "delete_bundle",
       "docs": [
         "Delete an empty bundle",
@@ -1206,6 +1956,594 @@
             "content",
             "mint_config"
           ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "direct_mint",
+      "docs": [
+        "Direct mint NFT with slot hash randomness",
+        "Single transaction - no VRF dependency, immediate mint"
+      ],
+      "discriminator": [
+        10,
+        47,
+        237,
+        240,
+        86,
+        73,
+        168,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_reward_pool",
+          "docs": [
+            "Content-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "content_collection",
+          "docs": [
+            "ContentCollection tracker PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "buyer_wallet_state",
+          "docs": [
+            "Buyer's wallet state for tracking NFT ownership"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset",
+          "writable": true
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity state"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "direct_mint_bundle",
+      "docs": [
+        "Direct mint bundle NFT with slot hash randomness",
+        "Single transaction - grants access to all content in the bundle"
+      ],
+      "discriminator": [
+        160,
+        191,
+        188,
+        133,
+        4,
+        180,
+        41,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "BundleCollection tracker PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "buyer_wallet_state",
+          "docs": [
+            "Buyer's wallet state for tracking NFT ownership"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset",
+          "writable": true
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity state"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1374,66 +2712,6 @@
       "args": []
     },
     {
-      "name": "init_vrf_client",
-      "docs": [
-        "Initialize VRF client state (one-time setup by upgrade authority)"
-      ],
-      "discriminator": [
-        4,
-        73,
-        63,
-        122,
-        161,
-        36,
-        223,
-        68
-      ],
-      "accounts": [
-        {
-          "name": "vrf_client_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  114,
-                  102,
-                  95,
-                  99,
-                  108,
-                  105,
-                  101,
-                  110,
-                  116,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "authority",
-          "docs": [
-            "Must be the program's upgrade authority"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "initialize_ecosystem",
       "docs": [
         "Initialize the ecosystem config (admin only, once)"
@@ -1488,6 +2766,475 @@
         {
           "name": "usdc_mint",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "magicblock_bundle_claim_fallback",
+      "docs": [
+        "Claim bundle NFT with random rarity if VRF oracle doesn't respond",
+        "User can call this after timeout to get their NFT with slot hash randomness"
+      ],
+      "discriminator": [
+        8,
+        66,
+        51,
+        74,
+        195,
+        180,
+        105,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "mint_request",
+          "docs": [
+            "Mint request (must exist and not be fulfilled) - closed after completion"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  113
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.buyer",
+                "account": "MagicBlockBundleMintRequest"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.edition",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "Bundle entry (writable for minted_count update)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "BundleCollection tracker (for signing NFT creation)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "nft_asset",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity (writable)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state (writable)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "docs": [
+            "Buyer who initiated the mint"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle reward pool - for holder rewards"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "magicblock_cancel_bundle_mint",
+      "docs": [
+        "Cancel pending MagicBlock bundle mint request",
+        "Returns escrowed funds to buyer"
+      ],
+      "discriminator": [
+        135,
+        157,
+        136,
+        230,
+        214,
+        253,
+        110,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "bundle",
+          "writable": true
+        },
+        {
+          "name": "mint_request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  113
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              },
+              {
+                "kind": "arg",
+                "path": "edition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state to close"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "edition",
+          "type": "u64"
         }
       ]
     },
@@ -1992,6 +3739,349 @@
       "args": []
     },
     {
+      "name": "magicblock_close_fulfilled_bundle",
+      "docs": [
+        "Close a fulfilled MagicBlock bundle mint request",
+        "Reclaims rent and allows a new mint request"
+      ],
+      "discriminator": [
+        137,
+        221,
+        184,
+        83,
+        77,
+        38,
+        208,
+        248
+      ],
+      "accounts": [
+        {
+          "name": "mint_request",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  113
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.edition",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "magicblock_fulfill_bundle_mint",
+      "docs": [
+        "MagicBlock VRF callback - oracle calls this with randomness to mint bundle NFT",
+        "No user signature required - called automatically by VRF oracle"
+      ],
+      "discriminator": [
+        15,
+        181,
+        219,
+        37,
+        235,
+        6,
+        127,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "signer": true,
+          "address": "9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw"
+        },
+        {
+          "name": "mint_request",
+          "docs": [
+            "Mint request (writable)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  113
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.buyer",
+                "account": "MagicBlockBundleMintRequest"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.edition",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle",
+          "docs": [
+            "Bundle entry (writable)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "BundleCollection tracker (for signing)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "nft_asset",
+          "writable": true
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity (writable)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state (writable)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle reward pool (writable) - for holder rewards"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request.bundle",
+                "account": "MagicBlockBundleMintRequest"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "magicblock_fulfill_mint",
       "docs": [
         "MagicBlock VRF callback - oracle calls this with randomness to mint NFT",
@@ -2246,6 +4336,411 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "magicblock_request_bundle_mint",
+      "docs": [
+        "Request a bundle mint using MagicBlock VRF",
+        "User pays mint price, VRF is requested, callback mints NFT with random rarity"
+      ],
+      "discriminator": [
+        182,
+        139,
+        246,
+        124,
+        5,
+        207,
+        100,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle",
+          "writable": true
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint_request",
+          "docs": [
+            "Mint request PDA - stores all info needed for callback",
+            "Uses edition number in seeds to allow multiple mints per buyer+bundle"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  113
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              },
+              {
+                "kind": "arg",
+                "path": "edition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "BundleCollection tracker PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "buyer_wallet_state",
+          "docs": [
+            "Buyer's wallet state for tracking NFT ownership"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_asset",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  98,
+                  95,
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint_request"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_reward_state",
+          "docs": [
+            "NFT reward state - created now so callback doesn't need to init"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_rarity",
+          "docs": [
+            "NFT rarity state - created now so callback doesn't need to init"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  110,
+                  102,
+                  116,
+                  95,
+                  114,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "edition",
+          "type": "u64"
         }
       ]
     },
@@ -2894,1153 +5389,6 @@
       "args": []
     },
     {
-      "name": "orao_cancel_mint",
-      "docs": [
-        "Cancel unfulfilled ORAO mint request and get refund",
-        "Can only be called after 10 minutes if oracle fails"
-      ],
-      "discriminator": [
-        148,
-        145,
-        206,
-        158,
-        127,
-        192,
-        48,
-        129
-      ],
-      "accounts": [
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_request",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "NFT reward state - close and refund"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state - close and refund"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "buyer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "orao_complete_mint",
-      "docs": [
-        "Complete ORAO mint after VRF randomness is fulfilled",
-        "This is the two-phase approach: user/cranker calls this after VRF is ready",
-        "Can be called by anyone (buyer, keeper, etc.) once randomness is available"
-      ],
-      "discriminator": [
-        82,
-        95,
-        103,
-        234,
-        15,
-        123,
-        128,
-        112
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "docs": [
-            "Payer for any remaining fees (usually the buyer)"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "ecosystem_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  99,
-                  111,
-                  115,
-                  121,
-                  115,
-                  116,
-                  101,
-                  109
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint_request",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.buyer",
-                "account": "OraoMintRequest"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_reward_pool",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_collection",
-          "docs": [
-            "ContentCollection - needed for signing NFT creation"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "collection_asset",
-          "writable": true
-        },
-        {
-          "name": "buyer_wallet_state",
-          "docs": [
-            "Buyer's wallet state PDA (pre-created in request)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.buyer",
-                "account": "OraoMintRequest"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "NFT reward state (pre-created in request)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state (pre-created in request)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator",
-          "writable": true
-        },
-        {
-          "name": "buyer",
-          "writable": true
-        },
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "platform",
-          "writable": true
-        },
-        {
-          "name": "vrf_request",
-          "docs": [
-            "Seeds: [CB_REQUEST_ACCOUNT_SEED, orao_client, vrf_seed]"
-          ]
-        },
-        {
-          "name": "mpl_core_program",
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "orao_fulfill_mint",
-      "docs": [
-        "Oracle callback: Fulfill mint with randomness and create NFT",
-        "Called BY THE ORAO ORACLE, not by user - creates NFT automatically"
-      ],
-      "discriminator": [
-        37,
-        155,
-        247,
-        234,
-        231,
-        10,
-        43,
-        227
-      ],
-      "accounts": [
-        {
-          "name": "orao_client",
-          "signer": true
-        },
-        {
-          "name": "vrf_client_state",
-          "docs": [
-            "Our VRF client state PDA (writable)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  114,
-                  102,
-                  95,
-                  99,
-                  108,
-                  105,
-                  101,
-                  110,
-                  116,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "orao_network_state"
-        },
-        {
-          "name": "vrf_request"
-        },
-        {
-          "name": "mint_request",
-          "docs": [
-            "Mint request (writable PDA) - mark fulfilled, payer for NFT"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.buyer",
-                "account": "OraoMintRequest"
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.content",
-                "account": "OraoMintRequest"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_collection",
-          "docs": [
-            "ContentCollection - authority for signing NFT creation"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.content",
-                "account": "OraoMintRequest"
-              }
-            ]
-          }
-        },
-        {
-          "name": "collection_asset",
-          "writable": true
-        },
-        {
-          "name": "nft_asset",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state (pre-created in request)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "buyer",
-          "writable": true
-        },
-        {
-          "name": "creator",
-          "writable": true
-        },
-        {
-          "name": "mpl_core_program",
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "orao_request_mint",
-      "docs": [
-        "Request mint with ORAO VRF - SINGLE USER TRANSACTION",
-        "Creates escrow, requests randomness via CPI to ORAO",
-        "Oracle callback will complete the mint automatically"
-      ],
-      "discriminator": [
-        124,
-        216,
-        174,
-        23,
-        229,
-        136,
-        178,
-        181
-      ],
-      "accounts": [
-        {
-          "name": "ecosystem_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  99,
-                  111,
-                  115,
-                  121,
-                  115,
-                  116,
-                  101,
-                  109
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint_request",
-          "docs": [
-            "Mint request PDA - stores all info needed for callback"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_reward_pool",
-          "docs": [
-            "Content-specific reward pool"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_collection",
-          "docs": [
-            "ContentCollection tracker PDA"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "collection_asset",
-          "docs": [
-            "Must be mutable to authorize as arbitrary writable for ORAO callback"
-          ],
-          "writable": true
-        },
-        {
-          "name": "creator",
-          "docs": [
-            "Must be mutable to authorize as arbitrary writable for ORAO callback"
-          ],
-          "writable": true
-        },
-        {
-          "name": "treasury",
-          "docs": [
-            "Must be mutable to authorize as arbitrary writable for ORAO callback"
-          ],
-          "writable": true
-        },
-        {
-          "name": "platform",
-          "docs": [
-            "Must be mutable to authorize as arbitrary writable for ORAO callback"
-          ],
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "buyer_wallet_state",
-          "docs": [
-            "Buyer's wallet state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "docs": [
-            "Will be created by Metaplex Core in callback"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  111,
-                  114,
-                  97,
-                  111,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "Per-NFT reward state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vrf_client_state",
-          "docs": [
-            "Our VRF client state PDA - authorizes CPI calls (must be signer for CPI)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  114,
-                  102,
-                  95,
-                  99,
-                  108,
-                  105,
-                  101,
-                  110,
-                  116,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "orao_client",
-          "docs": [
-            "Validated by ORAO VRF program via CPI"
-          ],
-          "writable": true
-        },
-        {
-          "name": "orao_network_state",
-          "docs": [
-            "Validated by ORAO VRF program via CPI"
-          ],
-          "writable": true
-        },
-        {
-          "name": "orao_treasury",
-          "writable": true
-        },
-        {
-          "name": "vrf_request",
-          "writable": true
-        },
-        {
-          "name": "orao_vrf_program",
-          "address": "VRFCBePmGTpZ234BhbzNNzmyg39Rgdd6VgdfhHwKypU"
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "vrf_seed",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "register_content",
       "docs": [
         "Register new content with CID uniqueness enforcement"
@@ -4380,89 +5728,6 @@
       ]
     },
     {
-      "name": "register_vrf_client",
-      "docs": [
-        "Register our program with ORAO Callback VRF (one-time setup)",
-        "Must be called after init_vrf_client and before first mint"
-      ],
-      "discriminator": [
-        58,
-        219,
-        160,
-        243,
-        188,
-        64,
-        49,
-        126
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "docs": [
-            "Payer for the registration - MUST be the program's upgrade authority"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "program",
-          "address": "3kLBPNtsBwqwb9xZRims2HC5uCeT6rUG9AqpKQfq2Vdn"
-        },
-        {
-          "name": "program_data"
-        },
-        {
-          "name": "vrf_client_state",
-          "docs": [
-            "Our VRF client state PDA - signs the registration"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  114,
-                  102,
-                  95,
-                  99,
-                  108,
-                  105,
-                  101,
-                  110,
-                  116,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "orao_client",
-          "writable": true
-        },
-        {
-          "name": "orao_network_state",
-          "writable": true
-        },
-        {
-          "name": "orao_vrf_program",
-          "address": "VRFCBePmGTpZ234BhbzNNzmyg39Rgdd6VgdfhHwKypU"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "remove_bundle_item",
       "docs": [
         "Remove content from a bundle",
@@ -4500,6 +5765,240 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "rent_bundle_sol",
+      "docs": [
+        "Rent a bundle with SOL payment",
+        "Creates a frozen rental NFT granting access to all bundle content"
+      ],
+      "discriminator": [
+        230,
+        173,
+        12,
+        128,
+        88,
+        132,
+        112,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle"
+        },
+        {
+          "name": "rent_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_reward_pool",
+          "docs": [
+            "Bundle-specific reward pool"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bundle_collection",
+          "docs": [
+            "BundleCollection tracker PDA (must exist from configure_bundle_mint)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  99,
+                  111,
+                  108,
+                  108,
+                  101,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "platform",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "nft_asset",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rent_entry",
+          "docs": [
+            "Rent entry PDA to track this rental"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "nft_asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "renter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tier",
+          "type": {
+            "defined": {
+              "name": "RentTier"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "rent_content_sol",
@@ -5045,1079 +6544,6 @@
       "args": []
     },
     {
-      "name": "srs_cancel_mint",
-      "docs": [
-        "Cancel unfulfilled SRS mint request and get refund",
-        "Can only be called after 10 minutes if oracle fails"
-      ],
-      "discriminator": [
-        58,
-        130,
-        248,
-        76,
-        64,
-        181,
-        157,
-        16
-      ],
-      "accounts": [
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_request",
-          "docs": [
-            "Mint request to cancel (must be expired)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "Per-NFT reward state - close and refund to buyer"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state - close and refund to buyer"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "buyer",
-          "docs": [
-            "Buyer who gets the refund"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "srs_cleanup_orphaned",
-      "docs": [
-        "Cleanup orphaned SRS mint accounts when mint_request was already closed",
-        "Use when a cancel left orphaned nft_reward_state and nft_rarity accounts"
-      ],
-      "discriminator": [
-        131,
-        137,
-        209,
-        10,
-        10,
-        112,
-        227,
-        1
-      ],
-      "accounts": [
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_request_pda",
-          "docs": [
-            "This proves the mint was cancelled and accounts are orphaned"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "buyer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset"
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "Per-NFT reward state - close and refund to buyer"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state - close and refund to buyer"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "buyer",
-          "docs": [
-            "Buyer who gets the refund (must be the original creator of these accounts)"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "srs_fulfill_mint",
-      "docs": [
-        "Oracle callback: Fulfill mint with randomness and create NFT",
-        "Called BY THE ORACLE, not by user - creates NFT automatically"
-      ],
-      "discriminator": [
-        112,
-        223,
-        18,
-        216,
-        91,
-        60,
-        75,
-        196
-      ],
-      "accounts": [
-        {
-          "name": "ecosystem_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  99,
-                  111,
-                  115,
-                  121,
-                  115,
-                  116,
-                  101,
-                  109
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint_request",
-          "docs": [
-            "Mint request being fulfilled"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.buyer",
-                "account": "SrsMintRequest"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_collection",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "collection_asset",
-          "writable": true
-        },
-        {
-          "name": "content_reward_pool",
-          "docs": [
-            "Content-specific reward pool"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "buyer_wallet_state",
-          "docs": [
-            "Buyer's wallet state for this content (created in SrsRequestMint)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request.buyer",
-                "account": "SrsMintRequest"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "docs": [
-            "NFT asset - PDA derived from mint_request (no signer needed!)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "Per-NFT reward state with weight (created in SrsRequestMint)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state (created in SrsRequestMint)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator",
-          "writable": true
-        },
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "platform",
-          "writable": true
-        },
-        {
-          "name": "buyer",
-          "writable": true
-        },
-        {
-          "name": "mpl_core_program",
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
-        },
-        {
-          "name": "srs_state",
-          "docs": [
-            "The SRS service signs with this PDA, not a separate oracle account.",
-            "Safety: Verified by seeds constraint matching the SRS program's state PDA."
-          ],
-          "signer": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  83,
-                  84,
-                  65,
-                  84,
-                  69
-                ]
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                6,
-                48,
-                135,
-                127,
-                255,
-                195,
-                49,
-                96,
-                99,
-                244,
-                247,
-                53,
-                32,
-                9,
-                136,
-                188,
-                116,
-                103,
-                28,
-                43,
-                234,
-                186,
-                130,
-                156,
-                29,
-                69,
-                234,
-                27,
-                27,
-                10,
-                74,
-                248
-              ]
-            }
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "randomness",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "srs_request_mint",
-      "docs": [
-        "Request mint with SRS randomness - SINGLE USER TRANSACTION!",
-        "User signs once. Oracle callback automatically:",
-        "- Generates randomness",
-        "- Determines rarity",
-        "- Creates NFT",
-        "- Distributes payment"
-      ],
-      "discriminator": [
-        74,
-        59,
-        64,
-        190,
-        135,
-        202,
-        160,
-        170
-      ],
-      "accounts": [
-        {
-          "name": "ecosystem_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  99,
-                  111,
-                  115,
-                  121,
-                  115,
-                  116,
-                  101,
-                  109
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "content",
-          "writable": true
-        },
-        {
-          "name": "mint_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint_request",
-          "docs": [
-            "Mint request PDA - stores all info needed for callback"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  113,
-                  117,
-                  101,
-                  115,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_reward_pool",
-          "docs": [
-            "Content-specific reward pool"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100,
-                  95,
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "content_collection",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "collection_asset"
-        },
-        {
-          "name": "creator"
-        },
-        {
-          "name": "treasury"
-        },
-        {
-          "name": "platform",
-          "optional": true
-        },
-        {
-          "name": "buyer_wallet_state",
-          "docs": [
-            "Buyer's wallet state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  97,
-                  108,
-                  108,
-                  101,
-                  116,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "payer"
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_asset",
-          "docs": [
-            "Will be created by Metaplex Core in callback"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  114,
-                  115,
-                  95,
-                  110,
-                  102,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint_request"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_reward_state",
-          "docs": [
-            "Per-NFT reward state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  101,
-                  119,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_rarity",
-          "docs": [
-            "NFT rarity state - created now so callback doesn't need to init"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  110,
-                  102,
-                  116,
-                  95,
-                  114,
-                  97,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
-        {
-          "name": "srs_program",
-          "address": "RANDMo5gFnqnXJW5Z52KNmd24sAo95KAd5VbiCtq5Rh"
-        },
-        {
-          "name": "randomness_request",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "randomness_escrow",
-          "writable": true
-        },
-        {
-          "name": "srs_state"
-        },
-        {
-          "name": "native_mint",
-          "docs": [
-            "Native SOL mint (for wrapped SOL)"
-          ]
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "sync_nft_transfer",
       "docs": [
         "Handle NFT transfer - called by Metaplex Core lifecycle hook",
@@ -6435,71 +6861,6 @@
       ]
     },
     {
-      "name": "test_orao_callback",
-      "docs": [
-        "TEST 2: Simple callback - just logs a message",
-        "Used to verify the callback mechanism works"
-      ],
-      "discriminator": [
-        49,
-        252,
-        76,
-        151,
-        4,
-        136,
-        107,
-        125
-      ],
-      "accounts": [
-        {
-          "name": "orao_client",
-          "docs": [
-            "ORAO Client PDA (signer) - ORAO signs this for us"
-          ],
-          "signer": true
-        },
-        {
-          "name": "vrf_client_state",
-          "docs": [
-            "Our VRF client state (writable)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  114,
-                  102,
-                  95,
-                  99,
-                  108,
-                  105,
-                  101,
-                  110,
-                  116,
-                  95,
-                  115,
-                  116,
-                  97,
-                  116,
-                  101
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "orao_network_state"
-        },
-        {
-          "name": "vrf_request"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "tip_content",
       "docs": [
         "Tip a creator for their content"
@@ -6574,6 +6935,190 @@
           "name": "metadata_cid",
           "type": {
             "option": "string"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_bundle_mint_settings",
+      "docs": [
+        "Update bundle mint settings (creator only)"
+      ],
+      "discriminator": [
+        251,
+        185,
+        121,
+        7,
+        65,
+        203,
+        82,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle",
+            "mint_config"
+          ]
+        },
+        {
+          "name": "bundle"
+        },
+        {
+          "name": "mint_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "max_supply",
+          "type": {
+            "option": {
+              "option": "u64"
+            }
+          }
+        },
+        {
+          "name": "creator_royalty_bps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "is_active",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_bundle_rent_config",
+      "docs": [
+        "Update bundle rent settings (creator only)"
+      ],
+      "discriminator": [
+        144,
+        15,
+        144,
+        52,
+        114,
+        217,
+        210,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "bundle",
+            "rent_config"
+          ]
+        },
+        {
+          "name": "bundle"
+        },
+        {
+          "name": "rent_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  110,
+                  100,
+                  108,
+                  101,
+                  95,
+                  114,
+                  101,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "rent_fee_6h",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "rent_fee_1d",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "rent_fee_7d",
+          "type": {
+            "option": "u64"
           }
         },
         {
@@ -6870,6 +7415,19 @@
       ]
     },
     {
+      "name": "BundleCollection",
+      "discriminator": [
+        34,
+        10,
+        246,
+        93,
+        155,
+        31,
+        219,
+        70
+      ]
+    },
+    {
       "name": "BundleItem",
       "discriminator": [
         114,
@@ -6880,6 +7438,97 @@
         71,
         81,
         93
+      ]
+    },
+    {
+      "name": "BundleMintConfig",
+      "discriminator": [
+        120,
+        150,
+        46,
+        164,
+        194,
+        53,
+        30,
+        122
+      ]
+    },
+    {
+      "name": "BundleNftRarity",
+      "discriminator": [
+        19,
+        197,
+        158,
+        86,
+        188,
+        9,
+        227,
+        194
+      ]
+    },
+    {
+      "name": "BundleNftRewardState",
+      "discriminator": [
+        38,
+        107,
+        105,
+        68,
+        182,
+        7,
+        183,
+        254
+      ]
+    },
+    {
+      "name": "BundleRentConfig",
+      "discriminator": [
+        16,
+        201,
+        128,
+        109,
+        49,
+        208,
+        238,
+        157
+      ]
+    },
+    {
+      "name": "BundleRentEntry",
+      "discriminator": [
+        245,
+        222,
+        77,
+        30,
+        149,
+        5,
+        161,
+        182
+      ]
+    },
+    {
+      "name": "BundleRewardPool",
+      "discriminator": [
+        184,
+        26,
+        80,
+        212,
+        177,
+        117,
+        148,
+        241
+      ]
+    },
+    {
+      "name": "BundleWalletState",
+      "discriminator": [
+        129,
+        187,
+        27,
+        88,
+        92,
+        27,
+        214,
+        46
       ]
     },
     {
@@ -6948,6 +7597,19 @@
       ]
     },
     {
+      "name": "MagicBlockBundleMintRequest",
+      "discriminator": [
+        11,
+        43,
+        246,
+        241,
+        7,
+        68,
+        219,
+        74
+      ]
+    },
+    {
       "name": "MagicBlockMintRequest",
       "discriminator": [
         42,
@@ -7000,19 +7662,6 @@
       ]
     },
     {
-      "name": "OraoMintRequest",
-      "discriminator": [
-        255,
-        207,
-        75,
-        147,
-        208,
-        73,
-        201,
-        159
-      ]
-    },
-    {
       "name": "PendingMint",
       "discriminator": [
         49,
@@ -7049,32 +7698,6 @@
         179,
         219,
         202
-      ]
-    },
-    {
-      "name": "SrsMintRequest",
-      "discriminator": [
-        59,
-        30,
-        122,
-        231,
-        196,
-        175,
-        64,
-        102
-      ]
-    },
-    {
-      "name": "VrfClientState",
-      "discriminator": [
-        173,
-        240,
-        159,
-        11,
-        226,
-        117,
-        124,
-        97
       ]
     },
     {
@@ -7420,81 +8043,126 @@
     },
     {
       "code": 6044,
+      "name": "BundleLocked",
+      "msg": "Bundle is locked after first NFT mint"
+    },
+    {
+      "code": 6045,
+      "name": "BundleMintConfigExists",
+      "msg": "Bundle mint configuration already exists"
+    },
+    {
+      "code": 6046,
+      "name": "BundleMintConfigNotFound",
+      "msg": "Bundle mint configuration not found"
+    },
+    {
+      "code": 6047,
+      "name": "BundleRentConfigExists",
+      "msg": "Bundle rent configuration already exists"
+    },
+    {
+      "code": 6048,
+      "name": "InvalidBundleCollection",
+      "msg": "Invalid BundleCollection PDA"
+    },
+    {
+      "code": 6049,
+      "name": "InvalidBundleRewardPool",
+      "msg": "Invalid BundleRewardPool PDA"
+    },
+    {
+      "code": 6050,
+      "name": "InvalidBundleNftRewardState",
+      "msg": "Invalid BundleNftRewardState PDA"
+    },
+    {
+      "code": 6051,
+      "name": "InvalidBundleRentEntry",
+      "msg": "Invalid BundleRentEntry PDA"
+    },
+    {
+      "code": 6052,
+      "name": "BundleMismatch",
+      "msg": "Bundle does not match"
+    },
+    {
+      "code": 6053,
       "name": "RandomnessAlreadyRevealed",
       "msg": "Randomness has already been revealed"
     },
     {
-      "code": 6045,
+      "code": 6054,
       "name": "RandomnessNotResolved",
       "msg": "Randomness not yet resolved"
     },
     {
-      "code": 6046,
+      "code": 6055,
       "name": "InvalidRandomnessAccount",
       "msg": "Invalid randomness account"
     },
     {
-      "code": 6047,
+      "code": 6056,
       "name": "RarityAlreadyRevealed",
       "msg": "NFT rarity already revealed"
     },
     {
-      "code": 6048,
+      "code": 6057,
       "name": "PendingMintNotFound",
       "msg": "Pending mint request not found"
     },
     {
-      "code": 6049,
+      "code": 6058,
       "name": "InvalidNftRarity",
       "msg": "Invalid NftRarity PDA"
     },
     {
-      "code": 6050,
+      "code": 6059,
       "name": "CancelTooEarly",
       "msg": "Cannot cancel pending mint yet - must wait at least 10 minutes"
     },
     {
-      "code": 6051,
+      "code": 6060,
       "name": "AlreadyFulfilled",
       "msg": "Randomness already fulfilled for this request"
     },
     {
-      "code": 6052,
+      "code": 6061,
       "name": "RandomnessNotAvailable",
       "msg": "Randomness not yet available - wait for oracle callback"
     },
     {
-      "code": 6053,
+      "code": 6062,
       "name": "VrfRequestFailed",
       "msg": "VRF request failed"
     },
     {
-      "code": 6054,
+      "code": 6063,
       "name": "InvalidOraoClient",
       "msg": "Invalid ORAO client account"
     },
     {
-      "code": 6055,
+      "code": 6064,
       "name": "FallbackTooEarly",
       "msg": "Fallback claim too early - must wait for timeout"
     },
     {
-      "code": 6056,
+      "code": 6065,
       "name": "NotFulfilled",
       "msg": "Mint request not yet fulfilled"
     },
     {
-      "code": 6057,
+      "code": 6066,
       "name": "NotCreator",
       "msg": "Only the content creator can perform this action"
     },
     {
-      "code": 6058,
+      "code": 6067,
       "name": "NotAdmin",
       "msg": "Only the ecosystem admin can perform this action"
     },
     {
-      "code": 6059,
+      "code": 6068,
       "name": "InvalidState",
       "msg": "Invalid state - account should not exist or has wrong data"
     }
@@ -7591,6 +8259,68 @@
               "Timestamp of last update"
             ],
             "type": "i64"
+          },
+          {
+            "name": "minted_count",
+            "docs": [
+              "Number of NFTs successfully minted for this bundle"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pending_count",
+            "docs": [
+              "Number of pending VRF mints (for max_supply checking)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_locked",
+            "docs": [
+              "Whether bundle is locked (becomes true after first mint)"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleCollection",
+      "docs": [
+        "Bundle collection (mirrors ContentCollection)",
+        "Tracks the Metaplex Core Collection for bundle NFTs",
+        "PDA seeds: [\"bundle_collection\", bundle_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle PDA this collection belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "collection_asset",
+            "docs": [
+              "The Metaplex Core collection asset address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "The creator of the bundle/collection"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when collection was created"
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -7636,6 +8366,382 @@
       }
     },
     {
+      "name": "BundleMintConfig",
+      "docs": [
+        "Bundle mint configuration (mirrors MintConfig for content)",
+        "PDA seeds: [\"bundle_mint_config\", bundle_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this config belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator who owns this config"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Price per NFT in lamports (0 = free mint)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_supply",
+            "docs": [
+              "Maximum supply (None = unlimited)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creator_royalty_bps",
+            "docs": [
+              "Creator royalty on secondary sales (basis points, e.g., 500 = 5%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether minting is currently enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleNftRarity",
+      "docs": [
+        "Bundle NFT rarity (mirrors NftRarity)",
+        "Stores rarity information for bundle NFTs",
+        "PDA seeds: [\"bundle_nft_rarity\", nft_asset]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The NFT asset"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this NFT belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rarity",
+            "docs": [
+              "Rarity tier"
+            ],
+            "type": {
+              "defined": {
+                "name": "Rarity"
+              }
+            }
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Weight based on rarity"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "revealed_at",
+            "docs": [
+              "Timestamp when rarity was revealed (0 = not revealed yet)"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleNftRewardState",
+      "docs": [
+        "Bundle NFT reward state (mirrors NftRewardState)",
+        "Per-NFT reward tracking for bundle NFTs",
+        "PDA seeds: [\"bundle_nft_reward\", nft_asset]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The NFT asset this state belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this NFT belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "Reward debt for this specific NFT (scaled by PRECISION)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "Weight of this NFT based on rarity"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when this state was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleRentConfig",
+      "docs": [
+        "Bundle rent configuration (mirrors RentConfig for content)",
+        "PDA seeds: [\"bundle_rent_config\", bundle_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this rent config belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator who can update rent settings"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_fee_6h",
+            "docs": [
+              "Rent fee for 6-hour access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rent_fee_1d",
+            "docs": [
+              "Rent fee for 1-day access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "rent_fee_7d",
+            "docs": [
+              "Rent fee for 7-day access (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether renting is currently enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "total_rentals",
+            "docs": [
+              "Total number of times this bundle has been rented"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_fees_collected",
+            "docs": [
+              "Total fees collected from rentals (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleRentEntry",
+      "docs": [
+        "Bundle rent entry (mirrors RentEntry)",
+        "Active rental tracking for bundle rentals",
+        "PDA seeds: [\"bundle_rent_entry\", nft_asset]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "renter",
+            "docs": [
+              "The renter's wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle being rented"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_asset",
+            "docs": [
+              "The rental NFT asset (Metaplex Core)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "rented_at",
+            "docs": [
+              "Timestamp when rental started"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Timestamp when rental expires"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether this rental is still active"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "fee_paid",
+            "docs": [
+              "Rent fee paid (for record keeping)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleRewardPool",
+      "docs": [
+        "Bundle reward pool (mirrors ContentRewardPool)",
+        "Per-bundle reward pool with rarity-weighted distribution",
+        "PDA seeds: [\"bundle_reward_pool\", bundle_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this pool belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_per_share",
+            "docs": [
+              "Accumulated reward per weight unit (scaled by PRECISION)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "total_nfts",
+            "docs": [
+              "Total NFTs minted for this bundle"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_weight",
+            "docs": [
+              "Total weight of all NFTs (sum of individual rarity weights)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_deposited",
+            "docs": [
+              "Total rewards ever deposited to this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "docs": [
+              "Total rewards claimed from this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when pool was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "BundleType",
       "docs": [
         "Bundle types - defines the semantics of the collection"
@@ -7663,6 +8769,61 @@
           },
           {
             "name": "ProductPack"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BundleWalletState",
+      "docs": [
+        "Bundle wallet state (mirrors WalletContentState)",
+        "Tracks a wallet's NFT holdings for a specific bundle",
+        "PDA seeds: [\"bundle_wallet\", wallet, bundle_pda]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "docs": [
+              "The wallet this state belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle",
+            "docs": [
+              "The bundle this state tracks"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_count",
+            "docs": [
+              "Number of NFTs this wallet owns for this bundle"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "Cumulative reward debt"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when first NFT was acquired"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp of last update"
+            ],
+            "type": "i64"
           }
         ]
       }
@@ -8082,6 +9243,129 @@
       }
     },
     {
+      "name": "MagicBlockBundleMintRequest",
+      "docs": [
+        "MagicBlock Bundle Mint request - tracks state until oracle callback completes"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "docs": [
+              "Buyer who initiated the mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle",
+            "docs": [
+              "Bundle being minted"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator to receive payment on completion"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_paid",
+            "docs": [
+              "Amount paid (held in escrow in this account's lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp of request"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "had_existing_nfts",
+            "docs": [
+              "Whether there were existing NFTs at request time"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump for MintRequest PDA derivation"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "nft_bump",
+            "docs": [
+              "Bump for NFT asset PDA derivation"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "is_fulfilled",
+            "docs": [
+              "Whether oracle has fulfilled (minted the NFT)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "collection_asset",
+            "docs": [
+              "Collection asset address (stored for callback)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Treasury address (stored for callback)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "platform",
+            "docs": [
+              "Platform wallet for commission"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bundle_collection_bump",
+            "docs": [
+              "Bundle collection bump for signing"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "metadata_cid",
+            "docs": [
+              "Metadata CID for NFT URI"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "minted_count",
+            "docs": [
+              "Current minted count at request time (for edition number)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "edition",
+            "docs": [
+              "Edition number used in PDA derivation (allows multiple mints per buyer+bundle)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "MagicBlockMintRequest",
       "docs": [
         "MagicBlock Mint request - tracks state until oracle callback completes"
@@ -8423,7 +9707,7 @@
           {
             "name": "weight",
             "docs": [
-              "Weight of this NFT based on rarity (100=Common, 150=Uncommon, 200=Rare, 300=Epic, 500=Legendary)"
+              "Weight of this NFT based on rarity (1=Common, 5=Uncommon, 20=Rare, 60=Epic, 120=Legendary)"
             ],
             "type": "u16"
           },
@@ -8461,134 +9745,6 @@
           {
             "name": "timestamp",
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "OraoMintRequest",
-      "docs": [
-        "ORAO Mint request - tracks state until oracle callback completes"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "buyer",
-            "docs": [
-              "Buyer who initiated the mint"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "content",
-            "docs": [
-              "Content being minted"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "Creator to receive payment on completion"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "amount_paid",
-            "docs": [
-              "Amount paid (held in escrow in this account's lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp of request"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "had_existing_nfts",
-            "docs": [
-              "Whether there were existing NFTs at request time"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "Bump for MintRequest PDA derivation"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "nft_bump",
-            "docs": [
-              "Bump for NFT asset PDA derivation"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "is_fulfilled",
-            "docs": [
-              "Whether oracle has fulfilled (minted the NFT)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "platform",
-            "docs": [
-              "Platform wallet to receive commission"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "collection_asset",
-            "docs": [
-              "Collection asset address (stored for callback)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "treasury",
-            "docs": [
-              "Treasury address (stored for callback)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "vrf_seed",
-            "docs": [
-              "The VRF request seed used"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "content_collection_bump",
-            "docs": [
-              "Content collection bump for signing"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "metadata_cid",
-            "docs": [
-              "Metadata CID for NFT URI (stored for callback to avoid needing content account)"
-            ],
-            "type": "string"
-          },
-          {
-            "name": "minted_count",
-            "docs": [
-              "Current minted count at request time (for edition number)"
-            ],
-            "type": "u64"
           }
         ]
       }
@@ -8911,102 +10067,6 @@
       }
     },
     {
-      "name": "SrsMintRequest",
-      "docs": [
-        "Mint request - tracks state until oracle callback completes the mint",
-        "Payment is held in escrow until fulfillment or cancellation"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "buyer",
-            "docs": [
-              "Buyer who initiated the mint"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "content",
-            "docs": [
-              "Content being minted"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "Creator to receive payment on completion"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "amount_paid",
-            "docs": [
-              "Amount paid (held in escrow in this account's lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp of request"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "had_existing_nfts",
-            "docs": [
-              "Whether there were existing NFTs at request time"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "bump",
-            "docs": [
-              "Bump for MintRequest PDA derivation"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "nft_bump",
-            "docs": [
-              "Bump for NFT asset PDA derivation"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "is_fulfilled",
-            "docs": [
-              "Whether oracle has fulfilled (minted the NFT)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "platform",
-            "docs": [
-              "Platform wallet to receive commission"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "collection_asset",
-            "docs": [
-              "Collection asset address (stored for callback)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "treasury",
-            "docs": [
-              "Treasury address (stored for callback)"
-            ],
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
-    {
       "name": "TipEvent",
       "type": {
         "kind": "struct",
@@ -9062,31 +10122,6 @@
           {
             "name": "timestamp",
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "VrfClientState",
-      "docs": [
-        "VRF Client State - authorizes CPI calls to ORAO"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "docs": [
-              "Bump for PDA derivation"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "total_requests",
-            "docs": [
-              "Total requests made"
-            ],
-            "type": "u64"
           }
         ]
       }

@@ -204,6 +204,18 @@ export { Rarity, getRarityWeight, getRarityName, getRarityFromWeight } from "./t
 export const BUNDLE_SEED = "bundle";
 export const BUNDLE_ITEM_SEED = "bundle_item";
 
+// Bundle mint/rent seeds
+export const BUNDLE_MINT_CONFIG_SEED = "bundle_mint_config";
+export const BUNDLE_RENT_CONFIG_SEED = "bundle_rent_config";
+export const BUNDLE_COLLECTION_SEED = "bundle_collection";
+export const BUNDLE_REWARD_POOL_SEED = "bundle_reward_pool";
+export const BUNDLE_WALLET_STATE_SEED = "bundle_wallet";
+export const BUNDLE_NFT_REWARD_STATE_SEED = "bundle_nft_reward";
+export const BUNDLE_NFT_RARITY_SEED = "bundle_nft_rarity";
+export const BUNDLE_RENT_ENTRY_SEED = "bundle_rent_entry";
+export const BUNDLE_DIRECT_NFT_SEED = "bundle_direct_nft";
+export const BUNDLE_RENTAL_NFT_SEED = "bundle_rental_nft";
+
 // ========== MAGICBLOCK VRF CONSTANTS ==========
 
 // MagicBlock VRF Program ID
@@ -217,6 +229,10 @@ export const MAGICBLOCK_DEFAULT_QUEUE = new PublicKey(MAGICBLOCK_DEFAULT_QUEUE_S
 // MagicBlock seeds for PDA derivation
 export const MB_MINT_REQUEST_SEED = "mb_mint_request";
 export const MB_NFT_SEED = "mb_nft";
+
+// MagicBlock bundle mint seeds
+export const MB_BUNDLE_MINT_REQUEST_SEED = "mb_bundle_mint_req";
+export const MB_BUNDLE_NFT_SEED = "mb_bundle_nft";
 
 // MagicBlock fallback timeout (5 seconds - uses slot hash randomness)
 export const MB_FALLBACK_TIMEOUT_SECONDS = 5;

@@ -157,6 +157,9 @@ export interface Bundle {
   isActive: boolean;
   createdAt: bigint;
   updatedAt: bigint;
+  mintedCount: bigint;       // Number of NFTs minted for this bundle
+  pendingCount: bigint;      // Number of pending VRF mints
+  isLocked: boolean;         // Locked after first mint
 }
 
 /**
@@ -359,6 +362,26 @@ export interface MbMintRequest {
   edition: bigint;
 }
 
+/** MagicBlock VRF bundle mint request - 2-step flow with fallback */
+export interface MbBundleMintRequest {
+  buyer: PublicKey;
+  bundle: PublicKey;
+  creator: PublicKey;
+  amountPaid: bigint;
+  createdAt: bigint;
+  hadExistingNfts: boolean;
+  bump: number;
+  nftBump: number;
+  isFulfilled: boolean;
+  collectionAsset: PublicKey;
+  treasury: PublicKey;
+  platform: PublicKey;
+  bundleCollectionBump: number;
+  metadataCid: string;
+  mintedCount: bigint;
+  edition: bigint;
+}
+
 /** Minimum time (in seconds) before a pending mint can be cancelled */
 export const MIN_CANCEL_DELAY_SECONDS = 600;  // 10 minutes
 
@@ -385,4 +408,144 @@ export interface RarityStats {
   epic: number;
   legendary: number;
   totalWeight: bigint;
+}
+
+// ========== BUNDLE MINT/RENT TYPES ==========
+
+/**
+ * Bundle mint configuration
+ */
+export interface BundleMintConfig {
+  bundle: PublicKey;
+  creator: PublicKey;
+  price: bigint;
+  maxSupply: bigint | null;
+  creatorRoyaltyBps: number;
+  isActive: boolean;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+/**
+ * Bundle rent configuration
+ */
+export interface BundleRentConfig {
+  bundle: PublicKey;
+  creator: PublicKey;
+  rentFee6h: bigint;
+  rentFee1d: bigint;
+  rentFee7d: bigint;
+  isActive: boolean;
+  totalRentals: bigint;
+  totalFeesCollected: bigint;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+/**
+ * Bundle collection (Metaplex Core collection for bundle NFTs)
+ */
+export interface BundleCollection {
+  bundle: PublicKey;
+  collectionAsset: PublicKey;
+  creator: PublicKey;
+  createdAt: bigint;
+}
+
+/**
+ * Bundle reward pool for holder rewards
+ */
+export interface BundleRewardPool {
+  bundle: PublicKey;
+  rewardPerShare: bigint;
+  totalNfts: bigint;
+  totalWeight: bigint;
+  totalDeposited: bigint;
+  totalClaimed: bigint;
+  createdAt: bigint;
+}
+
+/**
+ * Bundle wallet state (tracks NFT ownership per wallet)
+ */
+export interface BundleWalletState {
+  wallet: PublicKey;
+  bundle: PublicKey;
+  nftCount: bigint;
+  rewardDebt: bigint;
+  createdAt: bigint;
+  updatedAt: bigint;
+}
+
+/**
+ * Bundle NFT reward state (per-NFT reward tracking)
+ */
+export interface BundleNftRewardState {
+  nftAsset: PublicKey;
+  bundle: PublicKey;
+  rewardDebt: bigint;
+  weight: number;
+  createdAt: bigint;
+}
+
+/**
+ * Bundle NFT rarity
+ */
+export interface BundleNftRarity {
+  nftAsset: PublicKey;
+  bundle: PublicKey;
+  rarity: Rarity;
+  weight: number;
+  revealedAt: bigint;
+}
+
+/**
+ * Bundle rent entry (active rental)
+ */
+export interface BundleRentEntry {
+  renter: PublicKey;
+  bundle: PublicKey;
+  nftAsset: PublicKey;
+  rentedAt: bigint;
+  expiresAt: bigint;
+  isActive: boolean;
+  feePaid: bigint;
+}
+
+/**
+ * Bundle NFT with rarity information (for UI display)
+ */
+export interface BundleNftWithRarity {
+  nftAsset: PublicKey;
+  bundle: PublicKey;
+  rarity: Rarity;
+  rarityName: string;
+  weight: number;
+  rewardDebt: bigint;
+  pendingReward: bigint;
+}
+
+/**
+ * Bundle pending reward details
+ */
+export interface BundlePendingRewardDetails {
+  bundleId: string;
+  pending: bigint;
+  nftCount: bigint;
+  nftRewards: Array<{
+    nftAsset: PublicKey;
+    pending: bigint;
+    weight: number;
+  }>;
+}
+
+/**
+ * Wallet bundle NFT metadata - used for displaying owned bundle NFTs
+ */
+export interface WalletBundleNftMetadata {
+  nftAsset: PublicKey;
+  bundleId: string | null;
+  creator: PublicKey | null;
+  collectionAsset: PublicKey | null;
+  name: string;
 }
