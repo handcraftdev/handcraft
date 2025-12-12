@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry, ContentType } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentDomain } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType } from "@handcraft/sdk";
 import { BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
@@ -15,21 +15,29 @@ import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
-type DomainFilter = "all" | ContentDomain;
+type ContentTypeFilter = "all" | SDKContentType;
 
-const DOMAIN_FILTERS: { value: DomainFilter; label: string }[] = [
+const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "video", label: "Video" },
-  { value: "audio", label: "Audio" },
-  { value: "image", label: "Image" },
-  { value: "document", label: "Docs" },
-  { value: "file", label: "Files" },
-  { value: "text", label: "Text" },
+  // Video
+  { value: SDKContentType.Video, label: "Video" },
+  { value: SDKContentType.Movie, label: "Movie" },
+  { value: SDKContentType.Short, label: "Short" },
+  // Audio
+  { value: SDKContentType.Music, label: "Music" },
+  { value: SDKContentType.Podcast, label: "Podcast" },
+  // Image
+  { value: SDKContentType.Photo, label: "Photo" },
+  { value: SDKContentType.Artwork, label: "Art" },
+  // Other
+  { value: SDKContentType.Game, label: "Game" },
+  { value: SDKContentType.Software, label: "Software" },
+  { value: SDKContentType.Post, label: "Post" },
 ];
 
 export function Feed() {
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
-  const [domainFilter, setDomainFilter] = useState<DomainFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<ContentTypeFilter>("all");
   const { publicKey, connected } = useWallet();
   const { content: userContent, globalContent: rawGlobalContent, isLoadingGlobalContent, client } = useContentRegistry();
   const { isValid: hasValidSession } = useSession();
@@ -135,10 +143,10 @@ export function Feed() {
 
   const baseContent = activeTab === "foryou" ? globalContent : enrichedUserContent;
 
-  // Apply domain filter
-  const displayContent = domainFilter === "all"
+  // Apply content type filter
+  const displayContent = typeFilter === "all"
     ? baseContent
-    : baseContent.filter(item => getContentDomain(item.contentType) === domainFilter);
+    : baseContent.filter(item => item.contentType === typeFilter);
 
   return (
     <div className="pb-20">
@@ -170,14 +178,14 @@ export function Feed() {
             )}
           </div>
 
-          {/* Domain Filter */}
+          {/* Content Type Filter */}
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
-            {DOMAIN_FILTERS.map((filter) => (
+            {CONTENT_TYPE_FILTERS.map((filter) => (
               <button
-                key={filter.value}
-                onClick={() => setDomainFilter(filter.value)}
+                key={String(filter.value)}
+                onClick={() => setTypeFilter(filter.value)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                  domainFilter === filter.value
+                  typeFilter === filter.value
                     ? "bg-primary-500 text-white"
                     : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white"
                 }`}
@@ -213,8 +221,8 @@ export function Feed() {
         ) : (
           <EmptyState
             showExplore={activeTab === "foryou"}
-            hasFilter={domainFilter !== "all"}
-            onClearFilter={() => setDomainFilter("all")}
+            hasFilter={typeFilter !== "all"}
+            onClearFilter={() => setTypeFilter("all")}
           />
         )}
       </div>
