@@ -1,3 +1,3 @@
 export { MintConfigModal } from "./MintConfigModal";
-export { BuyNftModal } from "./BuyNftModal";
+export { BuyContentModal } from "./BuyContentModal";
 export { SellNftModal } from "./SellNftModal";

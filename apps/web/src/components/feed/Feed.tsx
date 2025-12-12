@@ -5,8 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda } from "@handcraft/sdk";
-import { BuyNftModal, SellNftModal } from "@/components/mint";
+import { getIpfsUrl, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda } from "@handcraft/sdk";
+import { BuyContentModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
 import { RarityBadge } from "@/components/rarity";
@@ -401,7 +401,7 @@ export function Feed() {
 }
 
 function ContentCard({ content }: { content: EnrichedContent }) {
-  const [showBuyNftModal, setShowBuyNftModal] = useState(false);
+  const [showBuyContentModal, setShowBuyContentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRentModal, setShowRentModal] = useState(false);
@@ -664,7 +664,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       </div>
 
       {/* Content Preview */}
-      {getContentCategory(content.contentType) === "video" && (
+      {getContentDomain(content.contentType) === "video" && (
         <div className="relative aspect-video bg-gray-800">
           {showPlaceholder ? (
             <div className="w-full h-full flex items-center justify-center">
@@ -686,12 +686,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               {formatDuration(duration)}
             </div>
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
-      {getContentCategory(content.contentType) === "audio" && (
+      {getContentDomain(content.contentType) === "audio" && (
         <div className="relative aspect-video bg-gradient-to-br from-primary-900/50 to-secondary-900/50 flex items-center justify-center">
           <div className={`text-center ${showLockedOverlay || needsSession ? "blur-sm" : ""}`}>
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary-500/20 flex items-center justify-center">
@@ -709,12 +709,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               {formatDuration(duration)}
             </div>
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
-      {getContentCategory(content.contentType) === "image" && (
+      {getContentDomain(content.contentType) === "image" && (
         <div className="relative aspect-video bg-gray-800">
           {showPlaceholder ? (
             <div className="w-full h-full flex items-center justify-center">
@@ -729,12 +729,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               className={`w-full h-full object-contain ${showLockedOverlay || needsSession ? "blur-md" : ""}`}
             />
           )}
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
 
-      {(getContentCategory(content.contentType) === "document" || getContentCategory(content.contentType) === "text" || getContentCategory(content.contentType) === "file") && (
+      {(getContentDomain(content.contentType) === "document" || getContentDomain(content.contentType) === "text" || getContentDomain(content.contentType) === "file") && (
         <div className="relative aspect-video bg-gradient-to-br from-amber-900/30 to-orange-900/30 flex items-center justify-center">
           <div className={`text-center ${showLockedOverlay || needsSession ? "blur-sm" : ""}`}>
             <svg className="w-20 h-20 mx-auto text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -742,7 +742,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             </svg>
             <p className="text-amber-200 mt-2">{content.metadata?.title || content.metadata?.name || "Book"}</p>
           </div>
-          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyNftModal(true)} onRentClick={() => setShowRentModal(true)} />}
+          {showLockedOverlay && <LockedOverlay hasMintConfig={!!hasMintConfig} hasRentConfig={!!hasRentConfig} onBuyClick={() => setShowBuyContentModal(true)} onRentClick={() => setShowRentModal(true)} />}
           {needsSession && <NeedsSessionOverlay onSignIn={createSession} isSigningIn={isCreatingSession} />}
         </div>
       )}
@@ -880,7 +880,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           {/* Buy NFT Button - for non-creators when mint config exists */}
           {!isCreator && hasMintConfig && (
             <button
-              onClick={() => setShowBuyNftModal(true)}
+              onClick={() => setShowBuyContentModal(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 rounded-full transition-colors text-sm font-medium"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -956,11 +956,11 @@ function ContentCard({ content }: { content: EnrichedContent }) {
         </div>
       )}
 
-      {/* Buy NFT Modal - for buyers */}
-      {showBuyNftModal && mintConfig && (
-        <BuyNftModal
-          isOpen={showBuyNftModal}
-          onClose={() => setShowBuyNftModal(false)}
+      {/* Buy Content Modal - for buyers */}
+      {showBuyContentModal && mintConfig && (
+        <BuyContentModal
+          isOpen={showBuyContentModal}
+          onClose={() => setShowBuyContentModal(false)}
           contentCid={content.contentCid}
           contentTitle={content.metadata?.title || content.metadata?.name}
           creator={content.creator}
@@ -1012,7 +1012,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             refetchOwnership();
             refetchActiveRental();
           }}
-          onBuyClick={mintConfig ? () => setShowBuyNftModal(true) : undefined}
+          onBuyClick={mintConfig ? () => setShowBuyContentModal(true) : undefined}
         />
       )}
 
