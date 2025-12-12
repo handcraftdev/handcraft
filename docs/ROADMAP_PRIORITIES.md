@@ -20,9 +20,9 @@ Features are prioritized based on:
 
 ---
 
-# Part A: Core Features (No Backend Required)
+# Part A: On-Chain Only (No Backend Required)
 
-These features can be built using on-chain data and client-side storage only.
+These features use only on-chain data + IPFS metadata + client-side storage.
 
 ## A1. Search & Discovery
 
@@ -30,39 +30,42 @@ These features can be built using on-chain data and client-side storage only.
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Basic Search | Medium | Full-text search on title, description, tags |
+| Basic Search | Medium | Search title, description, tags from IPFS metadata |
 | Search Results Page | Low | Display matching content with cards |
-| Search History | Low | Recent searches stored locally |
-| Advanced Filters | Low | Filter by price range, rarity, date |
+| Search History | Low | Recent searches in localStorage |
+| Advanced Filters | Low | Filter by price range, rarity, creator |
 
 **Implementation:**
 - Query IPFS metadata (already cached in React Query)
 - Client-side filtering and sorting
 - localStorage for search history
 
-## A2. Trending & Discovery
+## A2. Sorting Options
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Trending Page | Medium | Sort by recent mints/tips (on-chain data) |
-| New Releases | Low | Sort by creation date |
-| Top Creators | Medium | Rank by total sales/tips |
+| Sort by Date | Low | Newest/oldest first (on-chain createdAt) |
+| Sort by Price | Low | Highest/lowest price (on-chain mintConfig) |
+| Sort by Mints | Low | Most minted (on-chain mintedCount) |
 
-**Implementation:**
-- Use existing on-chain data (mintedCount, tips)
-- Simple scoring algorithm
-- No backend needed
-
-## A3. Creator Tools
+## A3. UI/UX Improvements
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Revenue Charts | Medium | Visualize on-chain earnings |
-| Top Content | Low | Sort creator's content by performance |
+| Copy Share Link | Low | Copy content/bundle URL button |
+| Content Duration | Low | Show video/audio length from metadata |
+| Better Loading States | Low | Skeleton loaders, progress indicators |
+| Keyboard Shortcuts | Low | Navigate feed with keys |
+
+## A4. Creator Dashboard Enhancements
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Content List Sorting | Low | Sort by date, mints, revenue |
+| Bundle Management | Low | Reorder items, edit metadata |
 | Draft Saving | Low | localStorage for incomplete uploads |
-| Batch Upload | Medium | Upload multiple files at once |
 
-## A4. Advanced Minting (On-Chain)
+## A5. Advanced Minting (On-Chain Program Changes)
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -71,7 +74,7 @@ These features can be built using on-chain data and client-side storage only.
 | Auction Minting | High | Time-limited bidding |
 | Bonding Curve | High | Price increases with supply |
 
-## A5. Marketplace (On-Chain)
+## A6. Marketplace (On-Chain Program Changes)
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -79,37 +82,76 @@ These features can be built using on-chain data and client-side storage only.
 | Buy Listed NFTs | High | Purchase from listings |
 | Marketplace Page | Medium | Browse all listings |
 
-## A6. UI/UX Improvements
+---
+
+# Part B: Requires Indexer/Analytics Backend
+
+These features need historical data, aggregations, or high-frequency writes that aren't practical with direct RPC calls.
+
+## Backend Options for Indexing
+
+| Option | Pros | Cons | Cost |
+|--------|------|------|------|
+| **Helius Webhooks** | Easy setup, reliable | Limited customization | $49/mo+ |
+| **Custom Geyser** | Full control, real-time | Complex setup | $100+/mo |
+| **Shyft/Helius DAS** | Managed, GraphQL | Vendor lock-in | Varies |
+
+## B1. Trending & Rankings
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| Copy Share Link | Low | Copy content URL button |
-| Content Duration | Low | Show video/audio length |
-| Better Video Player | Medium | Chapters, quality, speed controls |
-| Audio Player | Medium | Playlist, queue, shuffle |
+| Trending Content | Medium | Score by recent mints + tips over time window |
+| Top Creators | Medium | Rank by total sales/tips |
+| Hot Bundles | Medium | Trending bundles |
+
+**Why Backend:** Need to track activity over time windows (24h, 7d) and compute scores efficiently.
+
+## B2. Analytics Dashboard
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| View Counts | Medium | Track content views |
+| Revenue Over Time | Medium | Historical earnings charts |
+| Mint History | Medium | When NFTs were minted |
+| Audience Insights | High | Geographic, referral data |
+
+**Why Backend:** High-frequency writes (views), time-series data, aggregations.
+
+## B3. Activity Feeds
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Global Activity | Medium | Recent mints, tips across platform |
+| Creator Activity | Medium | Activity on creator's content |
+| User Activity | Medium | User's own transaction history |
+
+**Why Backend:** Need to index and query program events efficiently.
+
+## B4. Recommendations
+
+| Feature | Complexity | Description |
+|---------|------------|-------------|
+| Similar Content | High | Content-based recommendations |
+| Personalized Feed | High | Based on user behavior |
+
+**Why Backend:** Requires ML/algorithms on historical data.
 
 ---
 
-# Part B: Social Features (Requires Backend Service)
+# Part C: Requires Social Backend
 
-These features require a backend service for efficient storage and real-time updates.
+These features need user-generated data storage and real-time updates.
 
-## Backend Architecture
-
-**Recommended: Supabase**
-- Built-in auth (wallet signature verification)
-- Real-time subscriptions for notifications
-- Row-level security for user data
-- Easy integration with Next.js
+## Backend Options for Social
 
 | Option | Pros | Cons | Cost |
 |--------|------|------|------|
 | **Supabase** | Fast setup, real-time, auth | Vendor lock-in | $25/mo+ |
-| **Railway + PostgreSQL** | Flexible, cheap | More setup | $5-20/mo |
-| **PlanetScale + Vercel** | Serverless, scalable | MySQL not Postgres | $0-29/mo |
-| **Self-hosted** | Full control | Maintenance burden | VPS cost |
+| **Railway + Postgres** | Flexible, cheap | More setup | $5-20/mo |
+| **PlanetScale** | Serverless, scalable | MySQL not Postgres | $0-29/mo |
 
-**Database Schema:**
+## Database Schema
+
 ```sql
 -- Users (wallet-based)
 users (wallet_address PK, display_name, avatar_cid, bio, created_at)
@@ -120,7 +162,6 @@ follows (follower, following, created_at)
 -- Engagement
 comments (id, content_cid, user, text, parent_id, created_at)
 reactions (id, content_cid, user, emoji, created_at)
-views (content_cid, user, viewed_at)
 
 -- Library
 bookmarks (user, content_cid, list_type, created_at)  -- watch_later, liked
@@ -129,7 +170,7 @@ bookmarks (user, content_cid, list_type, created_at)  -- watch_later, liked
 notifications (id, user, type, data, read, created_at)
 ```
 
-## B1. Following System
+## C1. Following System
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -138,7 +179,7 @@ notifications (id, user, type, data, read, created_at)
 | Follower Count | Low | Display on profiles |
 | Following List | Low | View who user follows |
 
-## B2. Comments & Reactions
+## C2. Comments & Reactions
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -147,12 +188,12 @@ notifications (id, user, type, data, read, created_at)
 | Reply Threading | Medium | Nested comment replies |
 | Comment Moderation | Medium | Delete, report, hide |
 
-## B3. Notifications
+## C3. Notifications
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
 | In-App Notifications | Medium | Bell icon with dropdown |
-| Real-time Updates | Medium | Supabase real-time subscriptions |
+| Real-time Updates | Medium | WebSocket/Supabase real-time |
 | Email Notifications | Medium | Optional email alerts |
 | Push Notifications | High | Browser/mobile push |
 
@@ -164,7 +205,7 @@ notifications (id, user, type, data, read, created_at)
 - Rewards available to claim
 - New content from followed creator
 
-## B4. Library Features
+## C4. Library Features
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -173,16 +214,16 @@ notifications (id, user, type, data, read, created_at)
 | View History | Low | Recently viewed content |
 | Custom Playlists | Medium | User-created playlists |
 
-## B5. Analytics (Backend Required)
+## C5. User Profiles
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
-| View Counts | Medium | Track content views |
-| Audience Demographics | High | Geographic, device data |
-| Referral Tracking | Medium | Traffic sources |
-| Engagement Metrics | Medium | Watch time, completion rate |
+| Display Name | Low | Custom username |
+| Avatar | Low | Profile picture (IPFS) |
+| Bio | Low | User description |
+| Social Links | Low | Twitter, Discord, etc. |
 
-## B6. Communities
+## C6. Communities
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -193,11 +234,11 @@ notifications (id, user, type, data, read, created_at)
 
 ---
 
-# Part C: Platform Expansion
+# Part D: Platform Expansion
 
 Long-term features for scale.
 
-## C1. Mobile App
+## D1. Mobile App
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -205,20 +246,7 @@ Long-term features for scale.
 | TikTok-style Feed | High | Vertical swipe navigation |
 | Background Audio | Medium | Play audio while browsing |
 
-## C2. Indexer Service
-
-| Feature | Complexity | Description |
-|---------|------------|-------------|
-| Event Indexing | High | Index all program events |
-| GraphQL API | High | Query indexed data |
-| Historical Analytics | Medium | Track metrics over time |
-
-**Options:**
-- Helius Webhooks → PostgreSQL
-- Custom Geyser plugin
-- Managed service (Shyft, Helius DAS)
-
-## C3. Token Integration
+## D2. Token Integration
 
 | Feature | Complexity | Description |
 |---------|------------|-------------|
@@ -230,58 +258,73 @@ Long-term features for scale.
 
 ## Implementation Order
 
-### Phase 1: No Backend Required
+### Phase 1: On-Chain Only (Part A)
 ```
 1. Search & Discovery
-2. Trending Page
+2. Sorting Options
 3. UI/UX Improvements (share link, duration)
-4. Creator Revenue Charts
+4. Creator Dashboard Enhancements
 ```
 
-### Phase 2: Set Up Social Backend (Supabase)
+### Phase 2: Indexer Backend (Part B)
 ```
-1. User profiles
-2. Following system
-3. View counts
+1. Set up Helius Webhooks → PostgreSQL
+2. Trending algorithm
+3. Activity feeds
+4. Analytics dashboard
+```
+
+### Phase 3: Social Backend (Part C)
+```
+1. Set up Supabase
+2. User profiles
+3. Following system
 4. Library (watch later, liked)
+5. Comments & reactions
+6. Notifications
 ```
 
-### Phase 3: Social Engagement
-```
-1. Comments & reactions
-2. Notifications
-3. Activity feed
-```
-
-### Phase 4: Advanced Features
+### Phase 4: Advanced On-Chain (Part A continued)
 ```
 1. Advanced minting options
 2. Marketplace
-3. Communities
 ```
 
-### Phase 5: Scale
+### Phase 5: Scale (Part D)
 ```
-1. Indexer service
-2. Mobile app
-3. Token integration
+1. Mobile app
+2. Token integration
 ```
 
 ---
 
 ## Quick Wins (< 1 day each)
 
-**No Backend:**
+**Part A - On-Chain Only:**
 - Copy Share Link button
 - Content Duration display
-- Search History (localStorage)
+- Search with client-side filtering
+- Sort by date/price/mints
 - Better loading states
 
-**With Backend:**
-- View Count display
+**Part B - Needs Indexer:**
+- Trending score display
+- Activity feed
+
+**Part C - Needs Social Backend:**
 - Follow button
 - Like button
+- View count display
 
 ---
 
-*Start with Part A features, then set up Supabase for Part B.*
+## Summary
+
+| Part | Backend Required | Examples |
+|------|------------------|----------|
+| **A** | None (on-chain + IPFS) | Search, sort, share, UI |
+| **B** | Indexer (Helius/Geyser) | Trending, analytics, activity |
+| **C** | Social DB (Supabase) | Follow, comment, notify, library |
+| **D** | All of the above | Mobile, token |
+
+*Start with Part A, then decide between Part B (indexer) or Part C (social) based on priority.*
