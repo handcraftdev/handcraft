@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, Bundle, BundleWithItems, ContentEntry } from "@/hooks/useContentRegistry";
 import { getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
+import { ManageBundleModal } from "@/components/bundle/ManageBundleModal";
 
 export default function BundlePage() {
   const params = useParams();
@@ -15,18 +16,58 @@ export default function BundlePage() {
   const creatorAddress = params.creator as string;
   const bundleId = params.id as string;
 
-  const { client } = useContentRegistry();
+  const { client, content: userContent, isLoadingContent, updateBundle, isUpdatingBundle, useBundleMintConfig, useBundleRentConfig } = useContentRegistry();
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [bundleWithItems, setBundleWithItems] = useState<BundleWithItems | null>(null);
   const [metadata, setMetadata] = useState<BundleMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Check if the current user is the bundle creator
   const isOwner = useMemo(() => {
     if (!publicKey || !bundle) return false;
     return bundle.creator.toBase58() === publicKey.toBase58();
   }, [publicKey, bundle]);
+
+  // Parse creator address from URL for fetching configs
+  const creatorPubkey = useMemo(() => {
+    try {
+      return new PublicKey(creatorAddress);
+    } catch {
+      return null;
+    }
+  }, [creatorAddress]);
+
+  // Fetch mint/rent configs to check if monetization is configured
+  // Use creator from URL, not the connected wallet
+  const mintConfigQuery = useBundleMintConfig(creatorPubkey, bundleId);
+  const rentConfigQuery = useBundleRentConfig(creatorPubkey, bundleId);
+  const mintConfig = mintConfigQuery.data;
+  const rentConfig = rentConfigQuery.data;
+
+  // Check if bundle is a draft (unpublished)
+  const isDraft = bundle && !bundle.isActive;
+
+  // Handle publishing the bundle
+  const handlePublish = async () => {
+    if (!bundle) return;
+    setIsPublishing(true);
+    try {
+      await updateBundle.mutateAsync({
+        bundleId: bundle.bundleId,
+        isActive: true,
+      });
+      // Update local state
+      setBundle(prev => prev ? { ...prev, isActive: true } : null);
+    } catch (err) {
+      console.error("Failed to publish bundle:", err);
+      setError(err instanceof Error ? err.message : "Failed to publish bundle");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   // Fetch bundle data
   useEffect(() => {
@@ -128,6 +169,41 @@ export default function BundlePage() {
               </div>
             ) : bundle ? (
               <>
+                {/* Draft Notice for Owners */}
+                {isOwner && isDraft && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-yellow-400">Draft Bundle</h3>
+                        <p className="text-sm text-gray-400 mt-1">
+                          This bundle is not yet published. Add content, configure pricing, and publish when ready.
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <button
+                            onClick={() => setIsManageModalOpen(true)}
+                            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Manage Bundle
+                          </button>
+                          <button
+                            onClick={handlePublish}
+                            disabled={isPublishing || bundle.itemCount === 0}
+                            className="px-4 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            {isPublishing ? "Publishing..." : "Publish Bundle"}
+                          </button>
+                        </div>
+                        {bundle.itemCount === 0 && (
+                          <p className="text-xs text-yellow-500 mt-2">Add at least one content item before publishing</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Bundle Header */}
                 <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 mb-6">
                   <div className="flex items-start gap-6">
@@ -157,10 +233,15 @@ export default function BundlePage() {
                         <span className={`text-xs px-2 py-1 rounded ${
                           bundle.isActive
                             ? "bg-green-500/20 text-green-400"
-                            : "bg-gray-600/20 text-gray-400"
+                            : "bg-yellow-500/20 text-yellow-400"
                         }`}>
-                          {bundle.isActive ? "Active" : "Inactive"}
+                          {bundle.isActive ? "Published" : "Draft"}
                         </span>
+                        {bundle.isLocked && (
+                          <span className="text-xs px-2 py-1 bg-gray-600/20 text-gray-400 rounded">
+                            Locked
+                          </span>
+                        )}
                         {isOwner && (
                           <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded">
                             Your Bundle
@@ -176,7 +257,24 @@ export default function BundlePage() {
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>{bundle.itemCount} items</span>
                         <span>Created {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}</span>
+                        {mintConfig && (
+                          <span className="text-primary-400">
+                            {(Number(mintConfig.price) / LAMPORTS_PER_SOL).toFixed(2)} SOL
+                          </span>
+                        )}
                       </div>
+
+                      {/* Owner Actions (for published bundles) */}
+                      {isOwner && !isDraft && (
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            onClick={() => setIsManageModalOpen(true)}
+                            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Manage Bundle
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -256,6 +354,24 @@ export default function BundlePage() {
                     {creatorAddress.slice(0, 8)}...{creatorAddress.slice(-8)}
                   </a>
                 </div>
+
+                {/* Manage Bundle Modal */}
+                {isOwner && bundle && (
+                  <ManageBundleModal
+                    isOpen={isManageModalOpen}
+                    onClose={() => {
+                      setIsManageModalOpen(false);
+                      // Refetch bundle data after closing modal
+                      if (client && creatorAddress && bundleId) {
+                        const creatorPubkey = new PublicKey(creatorAddress);
+                        client.fetchBundle(creatorPubkey, bundleId).then(setBundle);
+                        client.fetchBundleWithItems(creatorPubkey, bundleId).then(setBundleWithItems);
+                      }
+                    }}
+                    bundle={bundle}
+                    availableContent={userContent || []}
+                  />
+                )}
               </>
             ) : null}
           </div>

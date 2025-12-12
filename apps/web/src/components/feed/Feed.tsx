@@ -5,10 +5,9 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry, ContentType } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
 import { getIpfsUrl, getContentCategory, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel } from "@handcraft/sdk";
-import { MintConfigModal, BuyNftModal, SellNftModal } from "@/components/mint";
+import { BuyNftModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
-import { ClaimRewardsModal } from "@/components/claim";
-import { ConfigureRentModal, RentContentModal } from "@/components/rent";
+import { RentContentModal } from "@/components/rent";
 import { RarityBadge } from "@/components/rarity";
 import { Rarity } from "@handcraft/sdk";
 import { type FeedTab, type EnrichedContent } from "./types";
@@ -123,9 +122,9 @@ export function Feed() {
   const displayContent = activeTab === "foryou" ? globalContent : enrichedUserContent;
 
   return (
-    <div className="pt-16 pb-20">
+    <div className="pb-20">
       {/* Tab Navigation */}
-      <div className="sticky top-16 z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
+      <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
         <div className="flex gap-1 px-4 py-2">
           <button
             onClick={() => setActiveTab("foryou")}
@@ -135,7 +134,7 @@ export function Feed() {
                 : "text-gray-400 hover:bg-gray-900 hover:text-white"
             }`}
           >
-            For You
+            Discover
           </button>
           {publicKey && (
             <button
@@ -182,12 +181,9 @@ export function Feed() {
 }
 
 function ContentCard({ content }: { content: EnrichedContent }) {
-  const [showMintConfigModal, setShowMintConfigModal] = useState(false);
   const [showBuyNftModal, setShowBuyNftModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showClaimModal, setShowClaimModal] = useState(false);
-  const [showConfigureRentModal, setShowConfigureRentModal] = useState(false);
   const [showRentModal, setShowRentModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
@@ -195,7 +191,7 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, getPendingRewardForContent, pendingRewardsQuery, walletNfts, nftRarities } = useContentRegistry();
+  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent } = useContentRegistry();
 
   const { data: mintConfig, isLoading: isLoadingMintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: rentConfig, isLoading: isLoadingRentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
@@ -205,10 +201,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   // Unified loading state - wait for all data before showing actions
   const isLoadingCardData = isLoadingMintConfig || isLoadingRentConfig || isLoadingOwnership || isLoadingActiveRental;
 
-  // Get pending reward for this content (per-content pool model)
-  const pendingReward = getPendingRewardForContent(content.contentCid);
-  const refetchPending = pendingRewardsQuery.refetch;
-
   // User owns NFT if count > 0
   const ownsNft = ownedNftCount > 0;
 
@@ -217,10 +209,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const ownedRarities: Rarity[] = ownedNftsForContent
     .map(nft => nftRarities.get(nft.nftAsset.toBase58()))
     .filter((r): r is Rarity => r !== undefined);
-
-  // Get total pending rewards for this content
-  const totalPendingRewards = pendingReward?.pending || BigInt(0);
-  const hasPendingRewards = pendingReward && totalPendingRewards > BigInt(0);
 
   // Determine content URL based on encryption and access
   // Use strict boolean check - content is encrypted only if explicitly true
@@ -242,6 +230,9 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const episode = contextData.episode;
   const bundleInfo = content.metadata?.bundle;
 
+  // Get on-chain bundle memberships for this content
+  const contentBundles = getBundlesForContent(content.contentCid);
+
   const shortAddress = content.creatorAddress
     ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}`
     : "Unknown";
@@ -255,7 +246,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
   const isLocked = content.isLocked || actualMintedCount > 0;
   const canEdit = isCreator && !isLocked;
   const canDelete = isCreator && !isLocked;
-  const canConfigureRent = isCreator && hasMintConfig; // Need mint config first
 
   // For encrypted content, only show full content if decrypted
   // Creators and NFT owners need a valid session to decrypt
@@ -376,6 +366,22 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-1 rounded-full">
               {genre}
             </span>
+          )}
+          {/* Bundle membership badges */}
+          {contentBundles.length > 0 && (
+            contentBundles.map((bundle, idx) => (
+              <a
+                key={idx}
+                href={`/bundle/${bundle.creator.toBase58()}/${bundle.bundleId}`}
+                className="text-xs text-secondary-400 bg-secondary-500/10 hover:bg-secondary-500/20 px-2 py-1 rounded-full flex items-center gap-1 transition-colors"
+                title={`Part of bundle: ${bundle.bundleId}`}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                {bundle.bundleId.length > 12 ? bundle.bundleId.slice(0, 12) + '...' : bundle.bundleId}
+              </a>
+            ))
           )}
           {isCreator && isLocked && (
             <span className="text-xs text-amber-500 bg-amber-500/20 px-2 py-1 rounded-full flex items-center gap-1">
@@ -629,20 +635,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
               </div>
             )}
 
-            {/* Claim Rewards Button - show if user has pending rewards */}
-            {hasPendingRewards && (
-          <button
-            onClick={() => setShowClaimModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-full transition-colors text-sm font-medium animate-pulse hover:animate-none group relative"
-            title="Rewards accumulated from holder share"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {(Number(totalPendingRewards) / 1_000_000_000).toFixed(4)} SOL
-          </button>
-        )}
-
         <div className="ml-auto flex items-center gap-2">
           {/* Buy NFT Button - for non-creators when mint config exists */}
           {!isCreator && hasMintConfig && (
@@ -683,58 +675,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             </button>
           )}
 
-          {/* Set Up NFT Button - for creators without mint config */}
-          {isCreator && !hasMintConfig && (
-            <button
-              onClick={() => setShowMintConfigModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-full transition-colors text-sm font-medium"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Set Up NFT
-            </button>
-          )}
-
-          {/* Edit Mint Settings - for creators with mint config */}
-          {isCreator && hasMintConfig && (
-            <button
-              onClick={() => setShowMintConfigModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-full transition-colors text-sm font-medium"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              NFT Settings
-            </button>
-          )}
-
-          {/* Set Up Rental Button - for creators with mint config but no rent config */}
-          {canConfigureRent && !hasRentConfig && (
-            <button
-              onClick={() => setShowConfigureRentModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-full transition-colors text-sm font-medium"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Set Up Rental
-            </button>
-          )}
-
-          {/* Edit Rental Settings - for creators with rent config */}
-          {isCreator && hasRentConfig && (
-            <button
-              onClick={() => setShowConfigureRentModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-full transition-colors text-sm font-medium"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Rental Settings
-            </button>
-          )}
           </div>
           </>
         )}
@@ -750,20 +690,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             <span>Rental expires {new Date(Number(activeRental.expiresAt) * 1000).toLocaleString()}</span>
           </div>
         </div>
-      )}
-
-      {/* Mint Config Modal - for creators */}
-      {showMintConfigModal && (
-        <MintConfigModal
-          isOpen={showMintConfigModal}
-          onClose={() => setShowMintConfigModal(false)}
-          contentCid={content.contentCid}
-          contentTitle={content.metadata?.title || content.metadata?.name}
-          isLocked={!!isLocked}
-          onSuccess={() => {
-            refetchMintConfig();
-          }}
-        />
       )}
 
       {/* Buy NFT Modal - for buyers */}
@@ -804,30 +730,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
           contentCid={content.contentCid}
           contentTitle={content.metadata?.title || content.metadata?.name}
           hasMintConfig={!!mintConfig}
-        />
-      )}
-
-      {/* Claim Rewards Modal - for NFT holders (global pool) */}
-      {showClaimModal && (
-        <ClaimRewardsModal
-          isOpen={showClaimModal}
-          onClose={() => setShowClaimModal(false)}
-          onSuccess={() => {
-            refetchPending();
-          }}
-        />
-      )}
-
-      {/* Configure Rent Modal - for creators */}
-      {showConfigureRentModal && (
-        <ConfigureRentModal
-          isOpen={showConfigureRentModal}
-          onClose={() => setShowConfigureRentModal(false)}
-          contentCid={content.contentCid}
-          contentTitle={content.metadata?.title || content.metadata?.name}
-          onSuccess={() => {
-            refetchRentConfig();
-          }}
         />
       )}
 

@@ -3,3 +3,4 @@ export * from "./cache";
 export * from "./helpers";
 export * from "./Overlays";
 export { Feed } from "./Feed";
+export { BundleFeed } from "./BundleFeed";
