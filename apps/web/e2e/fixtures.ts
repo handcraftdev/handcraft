@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, Page } from "@playwright/test";
 
 /**
  * Custom test fixtures for Handcraft E2E tests
@@ -25,7 +25,7 @@ export { expect };
 /**
  * Wait for the app to be fully loaded
  */
-export async function waitForAppReady(page: ReturnType<typeof base["page"]>) {
+export async function waitForAppReady(page: Page) {
   // Wait for hydration to complete
   await page.waitForLoadState("networkidle");
 
@@ -36,7 +36,7 @@ export async function waitForAppReady(page: ReturnType<typeof base["page"]>) {
 /**
  * Check if wallet connect button exists
  */
-export async function hasWalletButton(page: ReturnType<typeof base["page"]>) {
+export async function hasWalletButton(page: Page) {
   const button = page.getByRole("button", { name: /connect|wallet/i }).first();
   return await button.isVisible();
 }
@@ -44,7 +44,7 @@ export async function hasWalletButton(page: ReturnType<typeof base["page"]>) {
 /**
  * Click wallet connect button
  */
-export async function clickWalletConnect(page: ReturnType<typeof base["page"]>) {
+export async function clickWalletConnect(page: Page) {
   const button = page.getByRole("button", { name: /connect|wallet/i }).first();
   await button.click();
 }
@@ -52,7 +52,7 @@ export async function clickWalletConnect(page: ReturnType<typeof base["page"]>) 
 /**
  * Navigate to explore page and wait for load
  */
-export async function goToExplore(page: ReturnType<typeof base["page"]>) {
+export async function goToExplore(page: Page) {
   await page.goto("/explore");
   await waitForAppReady(page);
 }
@@ -60,7 +60,7 @@ export async function goToExplore(page: ReturnType<typeof base["page"]>) {
 /**
  * Navigate to search page and wait for load
  */
-export async function goToSearch(page: ReturnType<typeof base["page"]>) {
+export async function goToSearch(page: Page) {
   await page.goto("/search");
   await waitForAppReady(page);
 }
@@ -68,7 +68,7 @@ export async function goToSearch(page: ReturnType<typeof base["page"]>) {
 /**
  * Navigate to dashboard page and wait for load
  */
-export async function goToDashboard(page: ReturnType<typeof base["page"]>) {
+export async function goToDashboard(page: Page) {
   await page.goto("/dashboard");
   await waitForAppReady(page);
 }
@@ -76,7 +76,7 @@ export async function goToDashboard(page: ReturnType<typeof base["page"]>) {
 /**
  * Search for content
  */
-export async function searchFor(page: ReturnType<typeof base["page"]>, query: string) {
+export async function searchFor(page: Page, query: string) {
   await goToSearch(page);
 
   const searchInput = page.getByRole("searchbox").or(
@@ -98,7 +98,7 @@ export async function searchFor(page: ReturnType<typeof base["page"]>, query: st
  * Take a screenshot with a descriptive name
  */
 export async function takeScreenshot(
-  page: ReturnType<typeof base["page"]>,
+  page: Page,
   name: string
 ) {
   await page.screenshot({
