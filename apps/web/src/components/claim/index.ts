@@ -1,1 +1,0 @@
-export { ClaimRewardsModal } from "./ClaimRewardsModal";
