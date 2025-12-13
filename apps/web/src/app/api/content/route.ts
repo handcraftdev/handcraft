@@ -9,6 +9,9 @@ import {
   getBundlePda,
   findBundlesForContent,
   fetchAllBundleCollections,
+  getEcosystemSubscriptionPda,
+  getCreatorPatronSubscriptionPda,
+  isSubscriptionValid,
 } from "@handcraft/sdk";
 import { verifySessionToken } from "@/lib/session";
 
@@ -194,6 +197,91 @@ function parseVisibilityLevel(data: Buffer): number {
 }
 
 /**
+ * Check if wallet has valid ecosystem subscription
+ */
+async function checkEcosystemSubscription(
+  connection: Connection,
+  wallet: string
+): Promise<boolean> {
+  try {
+    const walletPubkey = new PublicKey(wallet);
+    const [subscriptionPda] = getEcosystemSubscriptionPda(walletPubkey);
+
+    const accountInfo = await connection.getAccountInfo(subscriptionPda);
+    if (!accountInfo || !accountInfo.data) {
+      return false;
+    }
+
+    // EcosystemSubscription layout:
+    // - discriminator: 8 bytes
+    // - subscriber: 32 bytes (offset 8)
+    // - stream_id: 32 bytes (offset 40)
+    // - started_at: 8 bytes (offset 72)
+    // - is_active: 1 byte (offset 80)
+    const data = accountInfo.data;
+    if (data.length < 81) {
+      return false;
+    }
+
+    const isActive = data[80] === 1;
+    if (!isActive) {
+      return false;
+    }
+
+    // Read started_at (i64 at offset 72)
+    const startedAt = data.readBigInt64LE(72);
+    return isSubscriptionValid(startedAt);
+  } catch (error) {
+    console.error("Ecosystem subscription check error:", error);
+    return false;
+  }
+}
+
+/**
+ * Check if wallet has valid patron subscription to a specific creator
+ */
+async function checkPatronSubscription(
+  connection: Connection,
+  wallet: string,
+  creator: PublicKey
+): Promise<boolean> {
+  try {
+    const walletPubkey = new PublicKey(wallet);
+    const [subscriptionPda] = getCreatorPatronSubscriptionPda(walletPubkey, creator);
+
+    const accountInfo = await connection.getAccountInfo(subscriptionPda);
+    if (!accountInfo || !accountInfo.data) {
+      return false;
+    }
+
+    // CreatorPatronSubscription layout:
+    // - discriminator: 8 bytes
+    // - subscriber: 32 bytes (offset 8)
+    // - creator: 32 bytes (offset 40)
+    // - tier: 1 byte (offset 72)
+    // - stream_id: 32 bytes (offset 73)
+    // - started_at: 8 bytes (offset 105)
+    // - is_active: 1 byte (offset 113)
+    const data = accountInfo.data;
+    if (data.length < 114) {
+      return false;
+    }
+
+    const isActive = data[113] === 1;
+    if (!isActive) {
+      return false;
+    }
+
+    // Read started_at (i64 at offset 105)
+    const startedAt = data.readBigInt64LE(105);
+    return isSubscriptionValid(startedAt);
+  } catch (error) {
+    console.error("Patron subscription check error:", error);
+    return false;
+  }
+}
+
+/**
  * Check if wallet is authorized to access content
  * Implements 4-tier visibility model:
  * - Level 0: Public - anyone can access
@@ -264,11 +352,21 @@ async function checkAuthorization(
     // Levels 1-2: Check subscription access
     // Level 1: Ecosystem subscription OR creator subscription
     // Level 2: Creator subscription only
-    // TODO: Implement subscription checks when subscription system is fully deployed
-    // For now, return false if NFT access not found for levels 1-2
-    // This will be updated to check:
-    // - EcosystemSubState for level 1
-    // - PatronSubState for levels 1-2
+
+    // Check patron subscription (works for both level 1 and 2)
+    const hasPatronSub = await checkPatronSubscription(connection, wallet, creator);
+    if (hasPatronSub) {
+      return true;
+    }
+
+    // Level 1 only: Check ecosystem subscription
+    if (visibilityLevel === 1) {
+      const hasEcosystemSub = await checkEcosystemSubscription(connection, wallet);
+      if (hasEcosystemSub) {
+        return true;
+      }
+    }
+
     return false;
   } catch (error) {
     console.error("Authorization check error:", error);
