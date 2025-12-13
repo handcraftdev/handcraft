@@ -105,144 +105,170 @@ export function RentBundleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-gray-900 rounded-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Rent Bundle</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none rounded-2xl" />
 
-        {bundleName && (
-          <p className="text-gray-400 mb-4 text-sm">
-            Renting access to: <span className="text-white">{bundleName}</span>
-          </p>
-        )}
-
-        <div className="space-y-4">
-          {/* Tier Selection */}
-          <div>
-            <label className="block text-sm font-medium mb-3">Select Duration</label>
-            <div className="grid grid-cols-3 gap-2">
-              {TIER_OPTIONS.map(({ tier, label }) => {
-                const fee = getFeeForTier(tier);
-                const feeInSol = Number(fee) / LAMPORTS_PER_SOL;
-                return (
-                  <button
-                    key={tier}
-                    type="button"
-                    onClick={() => setSelectedTier(tier)}
-                    className={`p-3 rounded-lg text-center transition-colors ${
-                      selectedTier === tier
-                        ? "bg-primary-500 text-white"
-                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                    }`}
-                  >
-                    <div className="text-sm font-medium">{label}</div>
-                    <div className={`text-xs mt-1 ${selectedTier === tier ? "text-primary-100" : "text-gray-400"}`}>
-                      {feeInSol.toFixed(4)} SOL
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="relative">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-medium text-white/90">Rent Bundle</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          {/* Selected Details */}
-          <div className="bg-gray-800 rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Rental Fee</span>
-              <span className="text-xl font-bold text-white">
-                {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Access Period</span>
-              <span className="text-white font-medium">
-                {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Expires</span>
-              <span className="text-amber-400 text-sm">
-                {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
-              </span>
-            </div>
-          </div>
-
-          {/* What you get */}
-          <div className="bg-primary-900/30 border border-primary-700/50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-primary-400 mb-2">What you get</h3>
-            <ul className="text-sm text-gray-300 space-y-2">
-              <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Temporary NFT granting access to all bundle contents</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Access for {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Limitations */}
-          <div className="bg-amber-900/30 border border-amber-700/50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-amber-400 mb-2">Please note</h3>
-            <ul className="text-sm text-amber-200/80 space-y-1">
-              <li>Rental NFTs cannot be transferred or sold</li>
-              <li>Access expires automatically after the rental period</li>
-              <li>Rental NFTs do not accumulate holder rewards</li>
-            </ul>
-          </div>
-
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handleRent}
-            disabled={isRentingBundle || isLoadingCollection || !bundleCollection}
-            className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            {isLoadingCollection ? (
-              <>Loading...</>
-            ) : isRentingBundle ? (
-              <>
-                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Processing...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Rent for {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL
-              </>
-            )}
-          </button>
-
-          {/* Buy NFT suggestion */}
-          {onBuyClick && (
-            <p className="text-center text-xs text-gray-500">
-              Want permanent access? <button className="text-primary-400 hover:underline" onClick={() => { onClose(); onBuyClick(); }}>Buy the NFT instead</button>
+          {bundleName && (
+            <p className="text-white/40 mb-5 text-sm">
+              Renting access to: <span className="text-white/80">{bundleName}</span>
             </p>
           )}
+
+          <div className="space-y-5">
+            {/* Tier Selection */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Select Duration</label>
+              <div className="grid grid-cols-3 gap-2">
+                {TIER_OPTIONS.map(({ tier, label }) => {
+                  const fee = getFeeForTier(tier);
+                  const feeInSol = Number(fee) / LAMPORTS_PER_SOL;
+                  return (
+                    <button
+                      key={tier}
+                      type="button"
+                      onClick={() => setSelectedTier(tier)}
+                      className={`relative p-3 rounded-xl text-center transition-all duration-300 overflow-hidden ${
+                        selectedTier === tier
+                          ? "bg-amber-500/20 border border-amber-500/50 text-white/90"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5 hover:border-white/20"
+                      }`}
+                    >
+                      {selectedTier === tier && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent pointer-events-none" />
+                      )}
+                      <div className="relative">
+                        <div className="text-sm font-medium">{label}</div>
+                        <div className={`text-xs mt-1 ${selectedTier === tier ? "text-amber-300" : "text-white/40"}`}>
+                          {feeInSol.toFixed(4)} SOL
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Selected Details */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-white/40 text-sm">Rental Fee</span>
+                <span className="text-xl font-bold text-white/90">
+                  {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-white/40 text-sm">Access Period</span>
+                <span className="text-white/80 font-medium">
+                  {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-white/40 text-sm">Expires</span>
+                <span className="text-amber-400 text-sm">
+                  {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+
+            {/* What you get */}
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-[0.15em] text-emerald-400 mb-3">What you get</h3>
+              <ul className="text-sm text-white/60 space-y-2">
+                <li className="flex items-start gap-2">
+                  <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Temporary NFT granting access to all bundle contents</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Access for {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Limitations */}
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-[0.15em] text-amber-300 mb-3">Please note</h3>
+              <ul className="text-sm text-amber-200/60 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Rental NFTs cannot be transferred or sold
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Access expires automatically after the rental period
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Rental NFTs do not accumulate holder rewards
+                </li>
+              </ul>
+            </div>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleRent}
+              disabled={isRentingBundle || isLoadingCollection || !bundleCollection}
+              className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+            >
+              {isLoadingCollection ? (
+                <span>Loading...</span>
+              ) : isRentingBundle ? (
+                <>
+                  <svg className="animate-spin w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Rent for {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>
+                </>
+              )}
+            </button>
+
+            {/* Buy NFT suggestion */}
+            {onBuyClick && (
+              <p className="text-center text-xs text-white/30">
+                Want permanent access?{" "}
+                <button
+                  className="text-cyan-400 hover:text-cyan-300 transition-colors duration-300"
+                  onClick={() => { onClose(); onBuyClick(); }}
+                >
+                  Buy the NFT instead
+                </button>
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

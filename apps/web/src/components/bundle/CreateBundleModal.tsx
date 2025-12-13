@@ -327,20 +327,29 @@ export function CreateBundleModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-gray-900 rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-gray-800 max-h-[90vh] flex flex-col">
+      <div className="relative bg-black rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+        <div className="relative flex items-center justify-between px-6 py-4 border-b border-white/5">
           <div className="flex items-center gap-3">
             {(step === "content" || step === "monetization") && (
-              <button onClick={goBack} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+              <button
+                onClick={goBack}
+                className="p-1.5 hover:bg-white/5 rounded-lg transition-all duration-300 text-white/40 hover:text-white/70"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
             )}
-            <h2 className="text-xl font-semibold">{getStepTitle()}</h2>
+            <h2 className="text-lg font-medium text-white/90">{getStepTitle()}</h2>
           </div>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+          <button
+            onClick={handleClose}
+            className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -348,32 +357,35 @@ export function CreateBundleModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="relative p-6 overflow-y-auto flex-1">
           {/* Step 1: Details */}
           {step === "details" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-2">Bundle Type</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Bundle Type</label>
                 <div className="grid grid-cols-2 gap-2">
                   {suggestedTypes.map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => setBundleType(type)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      className={`relative px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 overflow-hidden ${
                         bundleType === type
-                          ? "bg-primary-500 text-white"
-                          : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                          ? "bg-cyan-500/20 border border-cyan-500/50 text-white/90"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5 hover:border-white/20"
                       }`}
                     >
-                      {getBundleTypeLabel(type)}
+                      {bundleType === type && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent pointer-events-none" />
+                      )}
+                      <span className="relative">{getBundleTypeLabel(type)}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-gray-300">
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
                   Title <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -381,33 +393,35 @@ export function CreateBundleModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={`Enter ${getBundleTypeLabel(bundleType).toLowerCase()} title`}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-gray-300">Description</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe your bundle..."
                   rows={3}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 resize-none text-sm"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] resize-none text-white/90 placeholder:text-white/20 transition-all duration-300"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-gray-300">Cover Image (Optional)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setCoverImage(e.target.files?.[0] || null)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-primary-500 file:text-white file:text-sm"
-                />
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Cover Image (Optional)</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setCoverImage(e.target.files?.[0] || null)}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/90 transition-all duration-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:text-cyan-300 file:text-sm file:font-medium hover:file:bg-cyan-500/30 file:transition-all file:duration-300 file:cursor-pointer"
+                  />
+                </div>
               </div>
 
               {error && (
-                <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -416,7 +430,7 @@ export function CreateBundleModal({
                 type="button"
                 onClick={handleContinueToContent}
                 disabled={!title.trim()}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Continue to Content
               </button>
@@ -426,23 +440,25 @@ export function CreateBundleModal({
           {/* Step 2: Content Selection */}
           {step === "content" && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-white/40">
                 Select content to include in your bundle. Order is based on selection.
               </p>
 
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                 {isLoadingUserContent || isLoadingMetadata ? (
-                  <div className="py-8 text-center text-gray-500">
-                    <div className="w-8 h-8 mx-auto mb-2 border-2 border-gray-600 border-t-primary-500 rounded-full animate-spin" />
-                    Loading your content...
+                  <div className="py-12 text-center text-white/40">
+                    <div className="w-8 h-8 mx-auto mb-3 border-2 border-white/10 border-t-cyan-500 rounded-full animate-spin" />
+                    <span className="text-sm">Loading your content...</span>
                   </div>
                 ) : userContent.length === 0 ? (
-                  <div className="py-8 text-center text-gray-500">
-                    <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p>No content yet</p>
-                    <p className="text-xs mt-1">Upload some content first to create a bundle</p>
+                  <div className="py-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-white/50 font-medium">No content yet</p>
+                    <p className="text-xs text-white/30 mt-1">Upload some content first to create a bundle</p>
                   </div>
                 ) : (
                   userContent.map((content) => {
@@ -455,25 +471,29 @@ export function CreateBundleModal({
                         key={content.contentCid}
                         type="button"
                         onClick={() => toggleContentSelection(content.contentCid)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                        className={`relative w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 overflow-hidden ${
                           isSelected
-                            ? "bg-primary-500/10 border-primary-500"
-                            : "bg-gray-800 border-gray-700 hover:border-gray-600"
+                            ? "bg-cyan-500/10 border-cyan-500/50"
+                            : "bg-white/[0.02] border-white/10 hover:border-white/20 hover:bg-white/5"
                         }`}
                       >
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          isSelected ? "bg-primary-500 text-white" : "bg-gray-700"
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
+                        )}
+
+                        <div className={`relative w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                          isSelected ? "bg-cyan-500 text-white" : "bg-white/10 text-white/30"
                         }`}>
                           {isSelected ? (
                             <span className="text-xs font-medium">{selectionIndex + 1}</span>
                           ) : (
-                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                             </svg>
                           )}
                         </div>
 
-                        <div className="w-12 h-12 bg-gray-700 rounded overflow-hidden flex-shrink-0">
+                        <div className="relative w-12 h-12 bg-white/5 rounded-lg overflow-hidden flex-shrink-0">
                           {meta?.image ? (
                             <img
                               src={getIpfsUrl(meta.image.replace("https://ipfs.io/ipfs/", ""))}
@@ -482,19 +502,19 @@ export function CreateBundleModal({
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-5 h-5 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                             </div>
                           )}
                         </div>
 
-                        <div className="flex-1 text-left min-w-0">
-                          <p className="font-medium truncate">
+                        <div className="relative flex-1 text-left min-w-0">
+                          <p className="font-medium text-white/80 truncate text-sm">
                             {meta?.name || content.contentCid.slice(0, 16) + "..."}
                           </p>
                           {meta?.description && (
-                            <p className="text-xs text-gray-500 truncate">{meta.description}</p>
+                            <p className="text-xs text-white/40 truncate">{meta.description}</p>
                           )}
                         </div>
                       </button>
@@ -504,13 +524,13 @@ export function CreateBundleModal({
               </div>
 
               {selectedContentCids.length > 0 && (
-                <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 text-sm">
-                  <span className="text-primary-400 font-medium">{selectedContentCids.length} items selected</span>
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-3 text-sm">
+                  <span className="text-cyan-300 font-medium">{selectedContentCids.length} items selected</span>
                 </div>
               )}
 
               {error && (
-                <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -518,7 +538,7 @@ export function CreateBundleModal({
               <button
                 type="button"
                 onClick={handleContinueToMonetization}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Continue to Monetization
               </button>
@@ -527,52 +547,50 @@ export function CreateBundleModal({
 
           {/* Step 3: Monetization */}
           {step === "monetization" && publicKey && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Tabs */}
-              <div className="flex border-b border-gray-700">
+              <div className="flex rounded-xl bg-white/[0.02] p-1 border border-white/5">
                 <button
                   onClick={() => setMonetizationTab("minting")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    monetizationTab === "minting" ? "text-primary-400" : "text-gray-400 hover:text-gray-300"
+                  className={`flex-1 py-2.5 text-center font-medium transition-all duration-300 rounded-lg text-sm ${
+                    monetizationTab === "minting"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                      : "text-white/40 hover:text-white/60 border border-transparent"
                   }`}
                 >
                   <div className="flex items-center justify-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     NFT Minting
                   </div>
-                  {monetizationTab === "minting" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
-                  )}
                 </button>
                 <button
                   onClick={() => setMonetizationTab("renting")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    monetizationTab === "renting" ? "text-amber-400" : "text-gray-400 hover:text-gray-300"
+                  className={`flex-1 py-2.5 text-center font-medium transition-all duration-300 rounded-lg text-sm ${
+                    monetizationTab === "renting"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      : "text-white/40 hover:text-white/60 border border-transparent"
                   }`}
                 >
                   <div className="flex items-center justify-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     Rentals
                   </div>
-                  {monetizationTab === "renting" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
-                  )}
                 </button>
               </div>
 
               {/* Minting Tab Content */}
               {monetizationTab === "minting" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-white/40">
                     Configure how others can mint editions to permanently own your bundle.
                   </p>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Mint Price (SOL)</label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Mint Price (SOL)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -581,34 +599,48 @@ export function CreateBundleModal({
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
                         placeholder="Min 0.001"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Minimum price is 0.001 SOL (free minting not allowed)</p>
+                    <p className="text-xs text-white/30 mt-2">Minimum price is 0.001 SOL (free minting not allowed)</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Supply</label>
-                    <div className="flex gap-4 mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={nftSupplyType === "unlimited"}
-                          onChange={() => setNftSupplyType("unlimited")}
-                          className="text-primary-500"
-                        />
-                        <span>Unlimited</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={nftSupplyType === "limited"}
-                          onChange={() => setNftSupplyType("limited")}
-                          className="text-primary-500"
-                        />
-                        <span>Limited Edition</span>
-                      </label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Supply</label>
+                    <div className="flex gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setNftSupplyType("unlimited")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                          nftSupplyType === "unlimited"
+                            ? "bg-cyan-500/20 border border-cyan-500/50 text-cyan-300"
+                            : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          nftSupplyType === "unlimited" ? "border-cyan-400" : "border-white/30"
+                        }`}>
+                          {nftSupplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
+                        </div>
+                        Unlimited
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNftSupplyType("limited")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                          nftSupplyType === "limited"
+                            ? "bg-cyan-500/20 border border-cyan-500/50 text-cyan-300"
+                            : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          nftSupplyType === "limited" ? "border-cyan-400" : "border-white/30"
+                        }`}>
+                          {nftSupplyType === "limited" && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
+                        </div>
+                        Limited Edition
+                      </button>
                     </div>
                     {nftSupplyType === "limited" && (
                       <input
@@ -617,58 +649,58 @@ export function CreateBundleModal({
                         value={nftMaxSupply}
                         onChange={(e) => setNftMaxSupply(e.target.value)}
                         placeholder="Max editions (e.g., 100)"
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     {/* Primary Sale Split */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-sm font-medium mb-3">Primary Sale</p>
-                      <div className="space-y-1.5 text-sm">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
+                      <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-400">You (Creator)</span>
-                          <span className="text-green-400 font-medium">80%</span>
+                          <span className="text-white/40">You (Creator)</span>
+                          <span className="text-emerald-400 font-medium">80%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Holders</span>
+                          <span className="text-white/40">Holders</span>
                           <span className="text-blue-400 font-medium">12%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Platform</span>
-                          <span className="text-gray-500">5%</span>
+                          <span className="text-white/30">Platform</span>
+                          <span className="text-white/30">5%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Ecosystem</span>
-                          <span className="text-gray-500">3%</span>
+                          <span className="text-white/30">Ecosystem</span>
+                          <span className="text-white/30">3%</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Secondary Sale Split */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-sm font-medium mb-3">Secondary Sale</p>
-                      <div className="space-y-1.5 text-sm">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
+                      <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Seller</span>
-                          <span className="text-green-400 font-medium">90%</span>
+                          <span className="text-white/40">Seller</span>
+                          <span className="text-emerald-400 font-medium">90%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">You (Royalty)</span>
+                          <span className="text-white/40">You (Royalty)</span>
                           <span className="text-purple-400 font-medium">4%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Holders</span>
+                          <span className="text-white/40">Holders</span>
                           <span className="text-blue-400 font-medium">4%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Platform</span>
-                          <span className="text-gray-500">1%</span>
+                          <span className="text-white/30">Platform</span>
+                          <span className="text-white/30">1%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Ecosystem</span>
-                          <span className="text-gray-500">1%</span>
+                          <span className="text-white/30">Ecosystem</span>
+                          <span className="text-white/30">1%</span>
                         </div>
                       </div>
                     </div>
@@ -679,64 +711,75 @@ export function CreateBundleModal({
               {/* Renting Tab Content */}
               {monetizationTab === "renting" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-white/40">
                     Set rental prices for each duration tier. Leave empty to disable rentals.
                   </p>
 
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">6 Hours</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee6h}
-                        onChange={(e) => setRentFee6h(e.target.value)}
-                        placeholder="0.01"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-4">
+                      <label className="w-20 text-sm text-white/40">6 Hours</label>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee6h}
+                          onChange={(e) => setRentFee6h(e.target.value)}
+                          placeholder="0.01"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        />
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="w-20 text-sm text-white/40">1 Day</label>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee1d}
+                          onChange={(e) => setRentFee1d(e.target.value)}
+                          placeholder="0.02"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        />
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="w-20 text-sm text-white/40">7 Days</label>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee7d}
+                          onChange={(e) => setRentFee7d(e.target.value)}
+                          placeholder="0.05"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        />
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">1 Day</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee1d}
-                        onChange={(e) => setRentFee1d(e.target.value)}
-                        placeholder="0.02"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">7 Days</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee7d}
-                        onChange={(e) => setRentFee7d(e.target.value)}
-                        placeholder="0.05"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 text-sm">
-                    <p className="text-amber-400 font-medium mb-2">About Rentals</p>
-                    <ul className="text-amber-200/80 space-y-1">
-                      <li>• Temporary access via non-transferable NFTs</li>
-                      <li>• Access expires automatically after rental period</li>
-                      <li>• Same revenue split as minting (80% to creator)</li>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
+                    <p className="text-amber-300 font-medium mb-2">About Rentals</p>
+                    <ul className="text-amber-200/60 space-y-1.5">
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400/60 mt-0.5">-</span>
+                        Temporary access via non-transferable NFTs
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400/60 mt-0.5">-</span>
+                        Access expires automatically after rental period
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-amber-400/60 mt-0.5">-</span>
+                        Same revenue split as minting (80% to creator)
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -748,14 +791,14 @@ export function CreateBundleModal({
                 const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
                 const hasPartialRent = hasAnyRent && !hasAllRent;
                 return hasPartialRent ? (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-400">
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-400">
                     Please set all three rental tiers or leave them all empty.
                   </div>
                 ) : null;
               })()}
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
                   {error}
                 </div>
               )}
@@ -766,7 +809,7 @@ export function CreateBundleModal({
                   isLoading ||
                   Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
                 }
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Create Bundle
               </button>
@@ -777,34 +820,34 @@ export function CreateBundleModal({
           {step === "creating" && (
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4">
-                <svg className="animate-spin w-full h-full text-primary-500" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin w-full h-full text-cyan-500" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">
+              <p className="text-lg font-medium text-white/90 mb-2">
                 {isCreatingBundleWithMintAndRent && "Creating bundle..."}
                 {isAddingBundleItem && `Adding content (${selectedContentCids.length} items)...`}
               </p>
-              <p className="text-sm text-gray-500">Please confirm the transaction(s) in your wallet</p>
+              <p className="text-sm text-white/40">Please confirm the transaction(s) in your wallet</p>
             </div>
           )}
 
           {/* Step 5: Done */}
           {step === "done" && (
             <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">Bundle Created!</p>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-lg font-medium text-white/90 mb-2">Bundle Created!</p>
+              <p className="text-sm text-white/40 mb-6">
                 Your bundle is now published and ready for sales.
               </p>
               <button
                 onClick={handleClose}
-                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+                className="px-8 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Done
               </button>

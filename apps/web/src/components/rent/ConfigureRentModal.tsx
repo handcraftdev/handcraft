@@ -139,196 +139,217 @@ export function ConfigureRentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-gray-900 rounded-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Rental Pricing</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none rounded-2xl" />
 
-        {contentTitle && (
-          <p className="text-gray-400 mb-4 text-sm">
-            {existingConfig ? "Editing" : "Setting up"} rental for: <span className="text-white">{contentTitle}</span>
-          </p>
-        )}
-
-        {isLoadingConfig ? (
-          <div className="flex items-center justify-center py-8">
-            <svg className="animate-spin w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          </div>
-        ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 3-Tier Pricing */}
-          <div>
-            <label className="block text-sm font-medium mb-3">Rental Fees (SOL)</label>
-            <p className="text-xs text-gray-500 mb-3">
-              Set prices for all three rental tiers. Users will choose which duration suits them.
-            </p>
-
-            <div className="space-y-3">
-              {/* 6 Hours */}
-              <div className="flex items-center gap-3">
-                <label className="w-20 text-sm text-gray-400">6 Hours</label>
-                <div className="flex-1 flex gap-2">
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={rentFee6h}
-                    onChange={(e) => setRentFee6h(e.target.value)}
-                    placeholder="0.01"
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
-                  />
-                  <span className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-sm">
-                    SOL
-                  </span>
-                </div>
-              </div>
-
-              {/* 1 Day */}
-              <div className="flex items-center gap-3">
-                <label className="w-20 text-sm text-gray-400">1 Day</label>
-                <div className="flex-1 flex gap-2">
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={rentFee1d}
-                    onChange={(e) => setRentFee1d(e.target.value)}
-                    placeholder="0.02"
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
-                  />
-                  <span className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-sm">
-                    SOL
-                  </span>
-                </div>
-              </div>
-
-              {/* 7 Days */}
-              <div className="flex items-center gap-3">
-                <label className="w-20 text-sm text-gray-400">7 Days</label>
-                <div className="flex-1 flex gap-2">
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={rentFee7d}
-                    onChange={(e) => setRentFee7d(e.target.value)}
-                    placeholder="0.05"
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
-                  />
-                  <span className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400 text-sm">
-                    SOL
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Active Toggle - only show for existing configs */}
-          {existingConfig && (
-            <div>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-5 h-5 text-primary-500 rounded focus:ring-primary-500"
-                />
-                <div>
-                  <span className="font-medium">Rental Active</span>
-                  <p className="text-xs text-gray-500">
-                    {isActive ? "Users can rent this content" : "Rental is paused"}
-                  </p>
-                </div>
-              </label>
-            </div>
-          )}
-
-          {/* Stats - only show for existing configs */}
-          {existingConfig && (
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="text-sm font-medium mb-2">Rental Stats</h3>
-              <div className="space-y-1 text-sm text-gray-400">
-                <div className="flex justify-between">
-                  <span>Total Rentals</span>
-                  <span className="text-white">{Number(existingConfig.totalRentals)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Fees Collected</span>
-                  <span className="text-green-400">
-                    {(Number(existingConfig.totalFeesCollected) / LAMPORTS_PER_SOL).toFixed(4)} SOL
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Revenue Split Info */}
-          <div className="bg-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium mb-2">Rental Fee Split</h3>
-            <div className="space-y-1 text-sm text-gray-400">
-              <div className="flex justify-between">
-                <span>Creator (you)</span>
-                <span className="text-green-400">80%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>NFT Holders</span>
-                <span className="text-blue-400">12%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Platform</span>
-                <span>5%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ecosystem</span>
-                <span>3%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Rental NFT Info */}
-          <div className="bg-amber-900/30 border border-amber-700/50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-amber-400 mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div className="relative">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-medium text-white/90">Rental Pricing</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              About Rental NFTs
-            </h3>
-            <ul className="text-xs text-amber-200/80 space-y-1">
-              <li>Rental NFTs are non-transferable (frozen)</li>
-              <li>Access expires automatically after the rental period</li>
-              <li>Rental NFTs do not receive holder rewards</li>
-              <li>Users can rent again to extend access</li>
-            </ul>
+            </button>
           </div>
 
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
-              {error}
-            </div>
+          {contentTitle && (
+            <p className="text-white/40 mb-5 text-sm">
+              {existingConfig ? "Editing" : "Setting up"} rental for: <span className="text-white/80">{contentTitle}</span>
+            </p>
           )}
 
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-          >
-            {isSaving ? "Saving..." : existingConfig ? "Update Pricing" : "Enable Rentals"}
-          </button>
-        </form>
-        )}
+          {isLoadingConfig ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* 3-Tier Pricing */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Rental Fees (SOL)</label>
+              <p className="text-xs text-white/30 mb-4">
+                Set prices for all three rental tiers. Users will choose which duration suits them.
+              </p>
+
+              <div className="space-y-3">
+                {/* 6 Hours */}
+                <div className="flex items-center gap-3">
+                  <label className="w-20 text-sm text-white/40">6 Hours</label>
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      value={rentFee6h}
+                      onChange={(e) => setRentFee6h(e.target.value)}
+                      placeholder="0.01"
+                      className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                    />
+                    <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">
+                      SOL
+                    </span>
+                  </div>
+                </div>
+
+                {/* 1 Day */}
+                <div className="flex items-center gap-3">
+                  <label className="w-20 text-sm text-white/40">1 Day</label>
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      value={rentFee1d}
+                      onChange={(e) => setRentFee1d(e.target.value)}
+                      placeholder="0.02"
+                      className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                    />
+                    <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">
+                      SOL
+                    </span>
+                  </div>
+                </div>
+
+                {/* 7 Days */}
+                <div className="flex items-center gap-3">
+                  <label className="w-20 text-sm text-white/40">7 Days</label>
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      value={rentFee7d}
+                      onChange={(e) => setRentFee7d(e.target.value)}
+                      placeholder="0.05"
+                      className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                    />
+                    <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">
+                      SOL
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Toggle - only show for existing configs */}
+            {existingConfig && (
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${isActive ? "bg-amber-500/30" : "bg-white/10"}`}>
+                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-all duration-300 ${isActive ? "translate-x-5 bg-amber-400" : "translate-x-0 bg-white/40"}`} />
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      className="sr-only"
+                    />
+                  </div>
+                  <div>
+                    <span className="font-medium text-white/80">Rental Active</span>
+                    <p className="text-xs text-white/30 mt-0.5">
+                      {isActive ? "Users can rent this content" : "Rental is paused"}
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Stats - only show for existing configs */}
+            {existingConfig && (
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Rental Stats</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Total Rentals</span>
+                    <span className="text-white/80">{Number(existingConfig.totalRentals)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/40">Total Fees Collected</span>
+                    <span className="text-emerald-400">
+                      {(Number(existingConfig.totalFeesCollected) / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Revenue Split Info */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Rental Fee Split</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-white/40">Creator (you)</span>
+                  <span className="text-emerald-400 font-medium">80%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/40">NFT Holders</span>
+                  <span className="text-blue-400 font-medium">12%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/30">Platform</span>
+                  <span className="text-white/30">5%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/30">Ecosystem</span>
+                  <span className="text-white/30">3%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Rental NFT Info */}
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-[0.15em] text-amber-300 mb-3 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                About Rental NFTs
+              </h3>
+              <ul className="text-sm text-amber-200/60 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Rental NFTs are non-transferable (frozen)
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Access expires automatically after the rental period
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Rental NFTs do not receive holder rewards
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-amber-400/60 mt-0.5">-</span>
+                  Users can rent again to extend access
+                </li>
+              </ul>
+            </div>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+            >
+              {isSaving ? "Saving..." : existingConfig ? "Update Pricing" : "Enable Rentals"}
+            </button>
+          </form>
+          )}
+        </div>
       </div>
     </div>
   );

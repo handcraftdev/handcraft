@@ -418,503 +418,598 @@ export function ManageBundleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-gray-900 rounded-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold">{metadata?.name || currentBundle.bundleId}</h2>
-            <p className="text-sm text-gray-400">{getBundleTypeLabel(currentBundle.bundleType)} - {orderedItems.length} items</p>
+      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-2xl p-6 m-4 max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none rounded-2xl" />
+
+        <div className="relative flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-medium text-white/90">{metadata?.name || currentBundle.bundleId}</h2>
+              <p className="text-sm text-white/40">{getBundleTypeLabel(currentBundle.bundleType)} - {orderedItems.length} items</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        {/* Main Tabs */}
-        <div className="flex gap-1 mb-4 bg-gray-800 rounded-lg p-1">
-          <button
-            onClick={() => setMainTab("content")}
-            className={`flex-1 py-2 px-4 rounded text-sm font-medium transition-colors ${
-              mainTab === "content" ? "bg-primary-500 text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Content
-          </button>
-          <button
-            onClick={() => setMainTab("settings")}
-            className={`flex-1 py-2 px-4 rounded text-sm font-medium transition-colors ${
-              mainTab === "settings" ? "bg-primary-500 text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Settings
-          </button>
-        </div>
+          {/* Main Tabs */}
+          <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl mb-5 border border-white/5">
+            <button
+              onClick={() => setMainTab("content")}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-300 ${
+                mainTab === "content"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              Content
+            </button>
+            <button
+              onClick={() => setMainTab("settings")}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-300 ${
+                mainTab === "settings"
+                  ? "bg-white/10 text-white/90"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              Settings
+            </button>
+          </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm mb-4">
-              {error}
-            </div>
-          )}
-
-          {/* Content Tab */}
-          {mainTab === "content" && (
-            <div className="space-y-4">
-              {/* Bundle Items */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Bundle Items ({orderedItems.length})</h3>
-                {bundleWithItemsQuery.isLoading ? (
-                  <div className="text-center py-8 text-gray-500">Loading items...</div>
-                ) : orderedItems.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 bg-gray-800/50 rounded-lg">
-                    <p>No items in this bundle yet.</p>
-                    <p className="text-sm mt-1">Add content below to get started.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {orderedItems.map((item, index) => {
-                      const content = getContentForCid(item.contentCid);
-                      return (
-                        <div
-                          key={item.contentCid}
-                          draggable={!currentBundle.isLocked}
-                          onDragStart={() => handleDragStart(index)}
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDrop(e, index)}
-                          onDragEnd={handleDragEnd}
-                          className={`flex items-center gap-3 p-3 bg-gray-800 rounded-lg transition-all ${
-                            !currentBundle.isLocked ? "cursor-move" : ""
-                          } ${draggedIndex === index ? "opacity-50 scale-95" : ""} ${
-                            dragOverIndex === index ? "ring-2 ring-primary-500" : ""
-                          }`}
-                        >
-                          {!currentBundle.isLocked && (
-                            <div className="text-gray-500">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                              </svg>
-                            </div>
-                          )}
-                          <div className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded text-sm font-medium">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">
-                              {item.title || (content?.contentCid ? `${content.contentCid.slice(0, 12)}...` : "Unknown")}
-                            </p>
-                          </div>
-                          {!currentBundle.isLocked && (
-                            <button
-                              onClick={() => handleRemoveItem(item.contentCid)}
-                              disabled={isLoading}
-                              className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {hasOrderChanges && (
-                  <button
-                    onClick={handleSaveOrder}
-                    disabled={isSavingOrder}
-                    className="w-full mt-4 py-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    {isSavingOrder ? "Saving Order..." : "Save Order"}
-                  </button>
-                )}
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm mb-4">
+                {error}
               </div>
+            )}
 
-              {/* Add Content */}
-              {!currentBundle.isLocked && addableContent.length > 0 && (
+            {/* Content Tab */}
+            {mainTab === "content" && (
+              <div className="space-y-4">
+                {/* Bundle Items */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">Add Content</h3>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {addableContent.map((content) => (
-                      <div key={content.contentCid} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{content.contentCid.slice(0, 16)}...</p>
-                        </div>
-                        <button
-                          onClick={() => handleAddItem(content.contentCid)}
-                          disabled={isLoading}
-                          className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded text-sm font-medium transition-colors"
-                        >
-                          Add
-                        </button>
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">
+                    Bundle Items ({orderedItems.length})
+                  </h3>
+                  {bundleWithItemsQuery.isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <svg className="animate-spin w-8 h-8 text-cyan-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    </div>
+                  ) : orderedItems.length === 0 ? (
+                    <div className="text-center py-12 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <p className="text-white/40 text-sm">No items in this bundle yet.</p>
+                      <p className="text-white/30 text-xs mt-1">Add content below to get started.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {orderedItems.map((item, index) => {
+                        const content = getContentForCid(item.contentCid);
+                        return (
+                          <div
+                            key={item.contentCid}
+                            draggable={!currentBundle.isLocked}
+                            onDragStart={() => handleDragStart(index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnd={handleDragEnd}
+                            className={`flex items-center gap-3 p-3 bg-white/[0.02] border rounded-xl transition-all duration-300 ${
+                              !currentBundle.isLocked ? "cursor-move hover:bg-white/5" : ""
+                            } ${draggedIndex === index ? "opacity-50 scale-95" : ""} ${
+                              dragOverIndex === index ? "border-cyan-500/50 bg-cyan-500/5" : "border-white/5"
+                            }`}
+                          >
+                            {!currentBundle.isLocked && (
+                              <div className="text-white/30">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                                </svg>
+                              </div>
+                            )}
+                            <div className="w-8 h-8 flex items-center justify-center bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-sm font-medium text-cyan-400">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-white/80 truncate">
+                                {item.title || (content?.contentCid ? `${content.contentCid.slice(0, 12)}...` : "Unknown")}
+                              </p>
+                            </div>
+                            {!currentBundle.isLocked && (
+                              <button
+                                onClick={() => handleRemoveItem(item.contentCid)}
+                                disabled={isLoading}
+                                className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-300 disabled:opacity-30"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-              {currentBundle.isLocked && (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-400">
-                  This bundle is locked. Content cannot be added or removed after the first mint.
+                  {hasOrderChanges && (
+                    <button
+                      onClick={handleSaveOrder}
+                      disabled={isSavingOrder}
+                      className="w-full mt-4 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                    >
+                      {isSavingOrder ? "Saving Order..." : "Save Order"}
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Settings Tab */}
-          {mainTab === "settings" && (
-            <div className="space-y-4">
-              {/* Settings Sub-tabs */}
-              <div className="flex border-b border-gray-700">
-                <button
-                  onClick={() => setSettingsTab("details")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    settingsTab === "details" ? "text-white" : "text-gray-400 hover:text-gray-300"
-                  }`}
-                >
-                  Details
-                  {settingsTab === "details" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
-                </button>
-                <button
-                  onClick={() => setSettingsTab("mint")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    settingsTab === "mint" ? "text-primary-400" : "text-gray-400 hover:text-gray-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    Mint
-                    {mintConfig && <span className={`w-2 h-2 rounded-full ${mintConfig.isActive ? "bg-green-500" : "bg-gray-500"}`} />}
+                {/* Add Content */}
+                {!currentBundle.isLocked && addableContent.length > 0 && (
+                  <div>
+                    <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Add Content</h3>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {addableContent.map((content) => (
+                        <div
+                          key={content.contentCid}
+                          className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 hover:border-white/10 transition-all duration-300"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white/70 truncate">{content.contentCid.slice(0, 16)}...</p>
+                          </div>
+                          <button
+                            onClick={() => handleAddItem(content.contentCid)}
+                            disabled={isLoading}
+                            className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  {settingsTab === "mint" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
-                </button>
-                <button
-                  onClick={() => setSettingsTab("rent")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    settingsTab === "rent" ? "text-amber-400" : "text-gray-400 hover:text-gray-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    Rent
-                    {rentConfig && <span className={`w-2 h-2 rounded-full ${rentConfig.isActive ? "bg-green-500" : "bg-gray-500"}`} />}
+                )}
+
+                {currentBundle.isLocked && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-400/80">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span>This bundle is locked. Content cannot be added or removed after the first mint.</span>
+                    </div>
                   </div>
-                  {settingsTab === "rent" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />}
-                </button>
+                )}
               </div>
+            )}
 
-              {/* Details Sub-tab */}
-              {settingsTab === "details" && (
-                <div className="space-y-4 pt-2">
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <h3 className="font-medium mb-2">Bundle Status</h3>
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-400">
-                        {currentBundle.isActive ? "Published - visible to everyone" : "Draft - only visible to you"}
-                      </p>
+            {/* Settings Tab */}
+            {mainTab === "settings" && (
+              <div className="space-y-4">
+                {/* Settings Sub-tabs */}
+                <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl border border-white/5">
+                  <button
+                    onClick={() => setSettingsTab("details")}
+                    className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                      settingsTab === "details"
+                        ? "bg-white/10 text-white/90"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                    }`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    onClick={() => setSettingsTab("mint")}
+                    className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                      settingsTab === "mint"
+                        ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      Mint
+                      {mintConfig && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${mintConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setSettingsTab("rent")}
+                    className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                      settingsTab === "rent"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        : "text-white/40 hover:text-white/60 hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      Rent
+                      {rentConfig && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${rentConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
+                      )}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Details Sub-tab */}
+                {settingsTab === "details" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">Bundle Status</p>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          {currentBundle.isActive ? "Published - visible to everyone" : "Draft - only visible to you"}
+                        </p>
+                      </div>
                       <button
                         onClick={handleToggleBundleActive}
                         disabled={isUpdatingBundle}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                           currentBundle.isActive
-                            ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                            : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                        } disabled:opacity-50`}
+                            ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
+                            : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
+                        } disabled:opacity-30`}
                       >
                         {currentBundle.isActive ? "Unpublish" : "Publish"}
                       </button>
                     </div>
-                  </div>
 
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <h3 className="font-medium mb-1">Bundle ID</h3>
-                    <p className="text-sm text-gray-400 font-mono">{currentBundle.bundleId}</p>
-                  </div>
-
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <h3 className="font-medium mb-1">Bundle Type</h3>
-                    <p className="text-sm text-gray-400">{getBundleTypeLabel(currentBundle.bundleType)}</p>
-                  </div>
-
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <h3 className="font-medium mb-1">Lock Status</h3>
-                    <p className="text-sm text-gray-400">
-                      {isLocked ? "Locked - content cannot be modified" : "Unlocked - content can be modified"}
-                    </p>
-                  </div>
-
-                  {actualMintedCount > 0 && (
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <h3 className="font-medium mb-1">Minted</h3>
-                      <p className="text-sm text-gray-400">{actualMintedCount} NFTs</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Bundle ID</h3>
+                      <p className="text-sm text-white/60 font-mono">{currentBundle.bundleId}</p>
                     </div>
-                  )}
-                </div>
-              )}
 
-              {/* Mint Sub-tab */}
-              {settingsTab === "mint" && (
-                <div className="space-y-4 pt-2">
-                  {mintConfig ? (
-                    <>
-                      {/* Mint Status */}
-                      <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <p className="font-medium">Minting Status</p>
-                          <p className="text-sm text-gray-400">
-                            {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
-                          </p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Bundle Type</h3>
+                      <p className="text-sm text-white/60">{getBundleTypeLabel(currentBundle.bundleType)}</p>
+                    </div>
+
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${isLocked ? "bg-amber-400" : "bg-emerald-400"}`} />
+                        <p className="text-sm text-white/60">
+                          {isLocked ? "Locked - content cannot be modified" : "Unlocked - content can be modified"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {actualMintedCount > 0 && (
+                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
+                        <p className="text-sm text-cyan-400 font-medium">{actualMintedCount} NFTs</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Mint Sub-tab */}
+                {settingsTab === "mint" && (
+                  <div className="space-y-4">
+                    {mintConfig ? (
+                      <>
+                        {/* Mint Status */}
+                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                          <div>
+                            <p className="text-sm font-medium text-white/80">Minting Status</p>
+                            <p className="text-xs text-white/40 mt-0.5">
+                              {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleToggleMintActive}
+                            disabled={isLoading}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                              mintConfig.isActive
+                                ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
+                                : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
+                            } disabled:opacity-30`}
+                          >
+                            {mintConfig.isActive ? "Pause" : "Enable"}
+                          </button>
                         </div>
-                        <button
-                          onClick={handleToggleMintActive}
-                          disabled={isLoading}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            mintConfig.isActive
-                              ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                              : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                          } disabled:opacity-50`}
-                        >
-                          {mintConfig.isActive ? "Pause Minting" : "Enable Minting"}
-                        </button>
-                      </div>
 
-                      {/* Mint Price */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Price (SOL)</label>
-                        <input
-                          type="number"
-                          value={mintPrice}
-                          onChange={(e) => setMintPrice(e.target.value)}
-                          min="0.001"
-                          step="0.001"
-                          placeholder="Min 0.001"
-                          className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Minimum 0.001 SOL (free minting not allowed)</p>
-                      </div>
-
-                      {/* Max Supply */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Max Supply</label>
-                        {mintConfig.maxSupply !== null ? (
+                        {/* Mint Price */}
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                            Price (SOL)
+                          </label>
                           <input
                             type="number"
-                            value={mintMaxSupply}
-                            onChange={(e) => setMintMaxSupply(e.target.value)}
-                            min="1"
-                            className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
+                            value={mintPrice}
+                            onChange={(e) => setMintPrice(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            placeholder="Min 0.001"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                           />
-                        ) : (
-                          <>
-                            <div className="flex gap-4 mb-2">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  checked={mintSupplyType === "unlimited"}
-                                  onChange={() => setMintSupplyType("unlimited")}
-                                  className="text-primary-500"
-                                />
-                                <span>Unlimited</span>
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  checked={mintSupplyType === "limited"}
-                                  onChange={() => setMintSupplyType("limited")}
-                                  className="text-primary-500"
-                                />
-                                <span>Limited</span>
-                              </label>
-                            </div>
-                            {mintSupplyType === "limited" && (
+                          <p className="text-xs text-white/30 mt-2">Minimum 0.001 SOL (free minting not allowed)</p>
+                        </div>
+
+                        {/* Max Supply */}
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                            Max Supply
+                          </label>
+                          {mintConfig.maxSupply !== null ? (
+                            <>
                               <input
                                 type="number"
                                 value={mintMaxSupply}
                                 onChange={(e) => setMintMaxSupply(e.target.value)}
                                 min="1"
-                                placeholder="Max supply (e.g., 100)"
-                                className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
+                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                               />
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Royalty Slider */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">
-                          Secondary Sale Royalty: {mintRoyaltyPercent}%
-                        </label>
-                        <input
-                          type="range"
-                          min="2"
-                          max="10"
-                          step="0.5"
-                          value={mintRoyaltyPercent}
-                          onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                          disabled={isLocked}
-                          className={`w-full ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-                        />
-                        <div className="flex justify-between text-xs text-gray-500">
-                          <span>2%</span>
-                          <span>10%</span>
+                              <p className="text-xs text-white/30 mt-2">
+                                Limited supply cannot be changed to unlimited
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex gap-3 mb-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setMintSupplyType("unlimited")}
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                    mintSupplyType === "unlimited"
+                                      ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                                      : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                                  }`}
+                                >
+                                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                    mintSupplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                                  }`}>
+                                    {mintSupplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                                  </div>
+                                  Unlimited
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMintSupplyType("limited")}
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                    mintSupplyType === "limited"
+                                      ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                                      : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                                  }`}
+                                >
+                                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                    mintSupplyType === "limited" ? "border-purple-400" : "border-white/30"
+                                  }`}>
+                                    {mintSupplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                                  </div>
+                                  Limited
+                                </button>
+                              </div>
+                              {mintSupplyType === "limited" && (
+                                <input
+                                  type="number"
+                                  value={mintMaxSupply}
+                                  onChange={(e) => setMintMaxSupply(e.target.value)}
+                                  min="1"
+                                  placeholder="Max supply (e.g., 100)"
+                                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                                />
+                              )}
+                            </>
+                          )}
                         </div>
-                        {isLocked && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Royalty cannot be changed after NFTs have been minted
-                          </p>
-                        )}
-                      </div>
 
-                      {/* Stats */}
-                      <div className="p-4 bg-gray-800/50 rounded-lg">
-                        <p className="text-sm text-gray-400">
-                          Minted: {actualMintedCount}
-                          {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={handleUpdateMintSettings}
-                        disabled={isLoading}
-                        className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                      >
-                        {isUpdatingBundleMintSettings ? "Saving..." : "Update Mint Settings"}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p>Minting not configured for this bundle.</p>
-                      <p className="text-sm mt-1">This bundle was created without mint settings.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Rent Sub-tab */}
-              {settingsTab === "rent" && (
-                <div className="space-y-4 pt-2">
-                  {(rentConfigQuery.isLoading || rentConfigQuery.isFetching) ? (
-                    <div className="flex items-center justify-center py-8">
-                      <svg className="animate-spin w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    </div>
-                  ) : rentConfig ? (
-                    <>
-                      {/* Rent Status */}
-                      <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                        {/* Royalty Slider */}
                         <div>
-                          <p className="font-medium">Rental Status</p>
-                          <p className="text-sm text-gray-400">
-                            {rentConfig.isActive ? "Active - users can rent access" : "Paused - rentals are disabled"}
+                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                            Secondary Sale Royalty
+                          </label>
+                          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
+                              {isLocked && (
+                                <span className="text-xs text-amber-400/70">Locked</span>
+                              )}
+                            </div>
+                            <input
+                              type="range"
+                              min="2"
+                              max="10"
+                              step="0.5"
+                              value={mintRoyaltyPercent}
+                              onChange={(e) => setMintRoyaltyPercent(e.target.value)}
+                              disabled={isLocked}
+                              className={`w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
+                                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
+                                [&::-webkit-slider-thumb]:hover:bg-purple-300 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
+                            />
+                            <div className="flex justify-between text-xs text-white/30 mt-2">
+                              <span>2%</span>
+                              <span>10%</span>
+                            </div>
+                          </div>
+                          {isLocked && (
+                            <p className="text-xs text-white/30 mt-2">
+                              Royalty cannot be changed after NFTs have been minted
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Stats */}
+                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                          <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Minted</h3>
+                          <p className="text-sm text-purple-400 font-medium">
+                            {actualMintedCount}
+                            {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
                           </p>
                         </div>
+
                         <button
-                          onClick={handleToggleRentActive}
+                          onClick={handleUpdateMintSettings}
                           disabled={isLoading}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            rentConfig.isActive
-                              ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                              : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                          } disabled:opacity-50`}
+                          className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                         >
-                          {rentConfig.isActive ? "Pause Rentals" : "Enable Rentals"}
+                          {isUpdatingBundleMintSettings ? "Saving..." : "Update Mint Settings"}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        </div>
+                        <p className="text-white/40 text-sm">Minting not configured for this bundle.</p>
+                        <p className="text-white/30 text-xs mt-1">This bundle was created without mint settings.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Rent Sub-tab */}
+                {settingsTab === "rent" && (
+                  <div className="space-y-4">
+                    {(rentConfigQuery.isLoading || rentConfigQuery.isFetching) ? (
+                      <div className="flex items-center justify-center py-12">
+                        <svg className="animate-spin w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      </div>
+                    ) : rentConfig ? (
+                      <>
+                        {/* Rent Status */}
+                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                          <div>
+                            <p className="text-sm font-medium text-white/80">Rental Status</p>
+                            <p className="text-xs text-white/40 mt-0.5">
+                              {rentConfig.isActive ? "Active - users can rent access" : "Paused - rentals are disabled"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleToggleRentActive}
+                            disabled={isLoading}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                              rentConfig.isActive
+                                ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
+                                : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
+                            } disabled:opacity-30`}
+                          >
+                            {rentConfig.isActive ? "Pause" : "Enable"}
+                          </button>
+                        </div>
+
+                        {/* Rent Fees */}
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                            Rental Pricing (SOL)
+                          </label>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs text-white/40 mb-2">6 Hours</label>
+                              <input
+                                type="number"
+                                value={rentFee6h}
+                                onChange={(e) => setRentFee6h(e.target.value)}
+                                min="0.001"
+                                step="0.001"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-white/40 mb-2">1 Day</label>
+                              <input
+                                type="number"
+                                value={rentFee1d}
+                                onChange={(e) => setRentFee1d(e.target.value)}
+                                min="0.001"
+                                step="0.001"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-white/40 mb-2">7 Days</label>
+                              <input
+                                type="number"
+                                value={rentFee7d}
+                                onChange={(e) => setRentFee7d(e.target.value)}
+                                min="0.001"
+                                step="0.001"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-xs text-white/40">Total Rentals</span>
+                            <span className="text-sm text-amber-400 font-medium">{rentConfig.totalRentals?.toString() || "0"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-xs text-white/40">Fees Collected</span>
+                            <span className="text-sm text-amber-400 font-medium">{(Number(rentConfig.totalFeesCollected || 0) / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleUpdateRentConfig}
+                          disabled={isLoading}
+                          className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+                        >
+                          {isUpdatingBundleRentConfig ? "Saving..." : "Update Rent Pricing"}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <p className="text-white/40 text-sm">Unable to load rent configuration.</p>
+                        {rentConfigQuery.error && (
+                          <p className="text-red-400/70 text-xs mt-2">
+                            Error: {rentConfigQuery.error instanceof Error ? rentConfigQuery.error.message : "Unknown error"}
+                          </p>
+                        )}
+                        <p className="text-white/30 text-xs mt-2">Bundle ID: {bundle.bundleId}</p>
+                        <button
+                          onClick={() => rentConfigQuery.refetch()}
+                          className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 rounded-xl text-sm font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-amber-300"
+                        >
+                          Retry
                         </button>
                       </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-                      {/* Rent Fees */}
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-2">6 Hours</label>
-                          <input
-                            type="number"
-                            value={rentFee6h}
-                            onChange={(e) => setRentFee6h(e.target.value)}
-                            min="0.001"
-                            step="0.001"
-                            className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-2">1 Day</label>
-                          <input
-                            type="number"
-                            value={rentFee1d}
-                            onChange={(e) => setRentFee1d(e.target.value)}
-                            min="0.001"
-                            step="0.001"
-                            className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-2">7 Days</label>
-                          <input
-                            type="number"
-                            value={rentFee7d}
-                            onChange={(e) => setRentFee7d(e.target.value)}
-                            min="0.001"
-                            step="0.001"
-                            className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="p-4 bg-gray-800/50 rounded-lg">
-                        <p className="text-sm text-gray-400">
-                          Total Rentals: {rentConfig.totalRentals?.toString() || "0"}
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          Fees Collected: {(Number(rentConfig.totalFeesCollected || 0) / LAMPORTS_PER_SOL).toFixed(4)} SOL
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={handleUpdateRentConfig}
-                        disabled={isLoading}
-                        className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                      >
-                        {isUpdatingBundleRentConfig ? "Saving..." : "Update Rent Pricing"}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-400">Unable to load rent configuration.</p>
-                      {rentConfigQuery.error && (
-                        <p className="text-red-400 text-sm mt-2">
-                          Error: {rentConfigQuery.error instanceof Error ? rentConfigQuery.error.message : "Unknown error"}
-                        </p>
-                      )}
-                      <p className="text-gray-500 text-xs mt-2">Bundle ID: {bundle.bundleId}</p>
-                      <button
-                        onClick={() => rentConfigQuery.refetch()}
-                        className="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg font-medium transition-colors"
-          >
-            Close
-          </button>
+          {/* Footer */}
+          <div className="flex justify-end mt-5 pt-4 border-t border-white/5">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70 hover:text-white/90"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

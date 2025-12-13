@@ -155,202 +155,236 @@ export function MintConfigModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-gray-900 rounded-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Content Settings</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none rounded-2xl" />
 
-        {contentTitle && (
-          <p className="text-gray-400 mb-4 text-sm">
-            {existingConfig ? "Editing" : "Setting up"} minting for: <span className="text-white">{contentTitle}</span>
-          </p>
-        )}
-
-        {isLoadingConfig ? (
-          <div className="flex items-center justify-center py-8">
-            <svg className="animate-spin w-8 h-8 text-primary-500" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+        <div className="relative">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-medium text-white/90">Content Settings</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Price */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Price (SOL)</label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="Min 0.001"
-                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-              />
-              <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">
-                SOL
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Minimum price is 0.001 SOL (free minting not allowed)
+
+          {contentTitle && (
+            <p className="text-white/40 mb-5 text-sm">
+              {existingConfig ? "Editing" : "Setting up"} minting for: <span className="text-white/80">{contentTitle}</span>
             </p>
-          </div>
-
-          {/* Supply */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Supply</label>
-            {/* When editing existing config with limited supply, can only change the number, not switch to unlimited */}
-            {existingConfig && existingConfig.maxSupply !== null ? (
-              <>
-                <input
-                  type="number"
-                  min="1"
-                  value={maxSupply}
-                  onChange={(e) => setMaxSupply(e.target.value)}
-                  placeholder="Max supply (e.g., 100)"
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Limited supply cannot be changed to unlimited after creation
-                </p>
-              </>
-            ) : existingConfig && existingConfig.maxSupply === null ? (
-              <>
-                <div className="flex gap-4 mb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={supplyType === "unlimited"}
-                      onChange={() => setSupplyType("unlimited")}
-                      className="text-primary-500"
-                    />
-                    <span>Unlimited</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={supplyType === "limited"}
-                      onChange={() => setSupplyType("limited")}
-                      className="text-primary-500"
-                    />
-                    <span>Limited</span>
-                  </label>
-                </div>
-                {supplyType === "limited" && (
-                  <input
-                    type="number"
-                    min="1"
-                    value={maxSupply}
-                    onChange={(e) => setMaxSupply(e.target.value)}
-                    placeholder="Max supply (e.g., 100)"
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                  />
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  You can set a cap on unlimited supply
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex gap-4 mb-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={supplyType === "unlimited"}
-                      onChange={() => setSupplyType("unlimited")}
-                      className="text-primary-500"
-                    />
-                    <span>Unlimited</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={supplyType === "limited"}
-                      onChange={() => setSupplyType("limited")}
-                      className="text-primary-500"
-                    />
-                    <span>Limited</span>
-                  </label>
-                </div>
-                {supplyType === "limited" && (
-                  <input
-                    type="number"
-                    min="1"
-                    value={maxSupply}
-                    onChange={(e) => setMaxSupply(e.target.value)}
-                    placeholder="Max supply (e.g., 100)"
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Royalty - Fixed at 4% */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Secondary Sale Royalty
-            </label>
-            <div className="bg-gray-800 rounded px-3 py-2 text-white">
-              {royaltyPercent}% (fixed)
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Creator royalty is fixed at 4% on all secondary sales
-            </p>
-          </div>
-
-          {/* Revenue Split Info */}
-          <div className="bg-gray-800 rounded-lg p-4">
-            <h3 className="text-sm font-medium mb-2">Primary Sale Split</h3>
-            <div className="space-y-1 text-sm text-gray-400">
-              <div className="flex justify-between">
-                <span>Creator (you)</span>
-                <span className="text-green-400">80%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Existing Holders</span>
-                <span className="text-blue-400">12%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Platform</span>
-                <span>5%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ecosystem</span>
-                <span>3%</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              First mint: 12% holder reward goes to creator
-            </p>
-          </div>
-
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm">
-              {error}
-            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-          >
-            {isSaving ? "Saving..." : "Save Settings"}
-          </button>
-        </form>
-        )}
+          {isLoadingConfig ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Price */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Price (SOL)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Min 0.001"
+                  className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                />
+                <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40">
+                  SOL
+                </span>
+              </div>
+              <p className="text-xs text-white/30 mt-2">
+                Minimum price is 0.001 SOL (free minting not allowed)
+              </p>
+            </div>
+
+            {/* Supply */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Supply</label>
+              {/* When editing existing config with limited supply, can only change the number, not switch to unlimited */}
+              {existingConfig && existingConfig.maxSupply !== null ? (
+                <>
+                  <input
+                    type="number"
+                    min="1"
+                    value={maxSupply}
+                    onChange={(e) => setMaxSupply(e.target.value)}
+                    placeholder="Max supply (e.g., 100)"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                  />
+                  <p className="text-xs text-white/30 mt-2">
+                    Limited supply cannot be changed to unlimited after creation
+                  </p>
+                </>
+              ) : existingConfig && existingConfig.maxSupply === null ? (
+                <>
+                  <div className="flex gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSupplyType("unlimited")}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        supplyType === "unlimited"
+                          ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        supplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                      }`}>
+                        {supplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                      </div>
+                      Unlimited
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupplyType("limited")}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        supplyType === "limited"
+                          ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        supplyType === "limited" ? "border-purple-400" : "border-white/30"
+                      }`}>
+                        {supplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                      </div>
+                      Limited
+                    </button>
+                  </div>
+                  {supplyType === "limited" && (
+                    <input
+                      type="number"
+                      min="1"
+                      value={maxSupply}
+                      onChange={(e) => setMaxSupply(e.target.value)}
+                      placeholder="Max supply (e.g., 100)"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                    />
+                  )}
+                  <p className="text-xs text-white/30 mt-2">
+                    You can set a cap on unlimited supply
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-3 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSupplyType("unlimited")}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        supplyType === "unlimited"
+                          ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        supplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                      }`}>
+                        {supplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                      </div>
+                      Unlimited
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupplyType("limited")}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        supplyType === "limited"
+                          ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        supplyType === "limited" ? "border-purple-400" : "border-white/30"
+                      }`}>
+                        {supplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                      </div>
+                      Limited
+                    </button>
+                  </div>
+                  {supplyType === "limited" && (
+                    <input
+                      type="number"
+                      min="1"
+                      value={maxSupply}
+                      onChange={(e) => setMaxSupply(e.target.value)}
+                      placeholder="Max supply (e.g., 100)"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Royalty - Fixed at 4% */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                Secondary Sale Royalty
+              </label>
+              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
+                {royaltyPercent}% (fixed)
+              </div>
+              <p className="text-xs text-white/30 mt-2">
+                Creator royalty is fixed at 4% on all secondary sales
+              </p>
+            </div>
+
+            {/* Revenue Split Info */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+              <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale Split</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-white/40">Creator (you)</span>
+                  <span className="text-emerald-400 font-medium">80%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/40">Existing Holders</span>
+                  <span className="text-blue-400 font-medium">12%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/30">Platform</span>
+                  <span className="text-white/30">5%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/30">Ecosystem</span>
+                  <span className="text-white/30">3%</span>
+                </div>
+              </div>
+              <p className="text-xs text-white/30 mt-3">
+                First mint: 12% holder reward goes to creator
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+            >
+              {isSaving ? "Saving..." : "Save Settings"}
+            </button>
+          </form>
+          )}
+        </div>
       </div>
     </div>
   );

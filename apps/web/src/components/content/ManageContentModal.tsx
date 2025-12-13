@@ -247,472 +247,570 @@ export function ManageContentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-gray-900 rounded-xl w-full max-w-lg p-6 m-4 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold">{contentTitle}</h2>
-            <p className="text-sm text-gray-400">{contentTypeLabel}</p>
+      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-lg p-6 m-4 max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none rounded-2xl" />
+
+        <div className="relative flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-medium text-white/90">{contentTitle}</h2>
+              <p className="text-sm text-white/40">{contentTypeLabel}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        {/* Settings Sub-tabs */}
-        <div className="flex border-b border-gray-700 mb-4">
-          <button
-            onClick={() => setSettingsTab("details")}
-            className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-              settingsTab === "details" ? "text-white" : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            Details
-            {settingsTab === "details" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
-          </button>
-          <button
-            onClick={() => setSettingsTab("mint")}
-            className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-              settingsTab === "mint" ? "text-primary-400" : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              Mint
-              {mintConfig && <span className={`w-2 h-2 rounded-full ${mintConfig.isActive ? "bg-green-500" : "bg-gray-500"}`} />}
-            </div>
-            {settingsTab === "mint" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
-          </button>
-          <button
-            onClick={() => setSettingsTab("rent")}
-            className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-              settingsTab === "rent" ? "text-amber-400" : "text-gray-400 hover:text-gray-300"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              Rent
-              {rentConfig && <span className={`w-2 h-2 rounded-full ${rentConfig.isActive ? "bg-green-500" : "bg-gray-500"}`} />}
-            </div>
-            {settingsTab === "rent" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />}
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {error && (
-            <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-red-400 text-sm mb-4">
-              {error}
-            </div>
-          )}
-
-          {/* Details Tab */}
-          {settingsTab === "details" && (
-            <div className="space-y-4">
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h3 className="font-medium mb-1">Content CID</h3>
-                <p className="text-sm text-gray-400 font-mono break-all">{content.contentCid}</p>
+          {/* Settings Sub-tabs */}
+          <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl mb-5 border border-white/5">
+            <button
+              onClick={() => setSettingsTab("details")}
+              className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                settingsTab === "details"
+                  ? "bg-white/10 text-white/90"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => setSettingsTab("mint")}
+              className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                settingsTab === "mint"
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                Mint
+                {mintConfig && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${mintConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
+                )}
               </div>
-
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h3 className="font-medium mb-1">Content Type</h3>
-                <p className="text-sm text-gray-400">{contentTypeLabel}</p>
+            </button>
+            <button
+              onClick={() => setSettingsTab("rent")}
+              className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                settingsTab === "rent"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                Rent
+                {rentConfig && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${rentConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
+                )}
               </div>
+            </button>
+          </div>
 
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h3 className="font-medium mb-1">Encryption</h3>
-                <p className="text-sm text-gray-400">
-                  {content.isEncrypted ? "Encrypted - requires NFT ownership or rental" : "Public - accessible to everyone"}
-                </p>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm mb-4">
+                {error}
               </div>
+            )}
 
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h3 className="font-medium mb-1">Lock Status</h3>
-                <p className="text-sm text-gray-400">
-                  {isLocked ? "Locked - content cannot be modified" : "Unlocked - content can be modified"}
-                </p>
-              </div>
-
-              {actualMintedCount > 0 && (
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <h3 className="font-medium mb-1">Minted</h3>
-                  <p className="text-sm text-gray-400">{actualMintedCount} NFTs</p>
+            {/* Details Tab */}
+            {settingsTab === "details" && (
+              <div className="space-y-3">
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content CID</h3>
+                  <p className="text-sm text-white/60 font-mono break-all">{content.contentCid}</p>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Mint Tab */}
-          {settingsTab === "mint" && (
-            <div className="space-y-4">
-              {mintConfig ? (
-                <>
-                  {/* Mint Status */}
-                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Minting Status</p>
-                      <p className="text-sm text-gray-400">
-                        {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
-                      </p>
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content Type</h3>
+                  <p className="text-sm text-white/60">{contentTypeLabel}</p>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Encryption</h3>
+                  <p className="text-sm text-white/60">
+                    {content.isEncrypted ? "Encrypted - requires NFT ownership or rental" : "Public - accessible to everyone"}
+                  </p>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${isLocked ? "bg-amber-400" : "bg-emerald-400"}`} />
+                    <p className="text-sm text-white/60">
+                      {isLocked ? "Locked - content cannot be modified" : "Unlocked - content can be modified"}
+                    </p>
+                  </div>
+                </div>
+
+                {actualMintedCount > 0 && (
+                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                    <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
+                    <p className="text-sm text-purple-400 font-medium">{actualMintedCount} NFTs</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mint Tab */}
+            {settingsTab === "mint" && (
+              <div className="space-y-4">
+                {mintConfig ? (
+                  <>
+                    {/* Mint Status */}
+                    <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">Minting Status</p>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleToggleMintActive}
+                        disabled={isLoading}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                          mintConfig.isActive
+                            ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
+                            : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
+                        } disabled:opacity-30`}
+                      >
+                        {mintConfig.isActive ? "Pause" : "Enable"}
+                      </button>
                     </div>
-                    <button
-                      onClick={handleToggleMintActive}
-                      disabled={isLoading}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        mintConfig.isActive
-                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                          : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                      } disabled:opacity-50`}
-                    >
-                      {mintConfig.isActive ? "Pause Minting" : "Enable Minting"}
-                    </button>
-                  </div>
 
-                  {/* Mint Price */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Price (SOL)</label>
-                    <input
-                      type="number"
-                      value={mintPrice}
-                      onChange={(e) => setMintPrice(e.target.value)}
-                      min="0"
-                      step="0.01"
-                      className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Max Supply */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Max Supply</label>
-                    {mintConfig.maxSupply !== null ? (
+                    {/* Mint Price */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Price (SOL)
+                      </label>
                       <input
                         type="number"
-                        value={mintMaxSupply}
-                        onChange={(e) => setMintMaxSupply(e.target.value)}
-                        min="1"
-                        className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
+                        value={mintPrice}
+                        onChange={(e) => setMintPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                    ) : (
-                      <>
-                        <div className="flex gap-4 mb-2">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={mintSupplyType === "unlimited"}
-                              onChange={() => setMintSupplyType("unlimited")}
-                              className="text-primary-500"
-                            />
-                            <span>Unlimited</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={mintSupplyType === "limited"}
-                              onChange={() => setMintSupplyType("limited")}
-                              className="text-primary-500"
-                            />
-                            <span>Limited</span>
-                          </label>
-                        </div>
-                        {mintSupplyType === "limited" && (
+                    </div>
+
+                    {/* Max Supply */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Max Supply
+                      </label>
+                      {mintConfig.maxSupply !== null ? (
+                        <>
                           <input
                             type="number"
                             value={mintMaxSupply}
                             onChange={(e) => setMintMaxSupply(e.target.value)}
                             min="1"
-                            placeholder="Max supply (e.g., 100)"
-                            className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                           />
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Royalty Slider */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Secondary Sale Royalty: {mintRoyaltyPercent}%
-                    </label>
-                    <input
-                      type="range"
-                      min="2"
-                      max="10"
-                      step="0.5"
-                      value={mintRoyaltyPercent}
-                      onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                      disabled={isLocked}
-                      className={`w-full ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>2%</span>
-                      <span>10%</span>
+                          <p className="text-xs text-white/30 mt-2">
+                            Limited supply cannot be changed to unlimited
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex gap-3 mb-3">
+                            <button
+                              type="button"
+                              onClick={() => setMintSupplyType("unlimited")}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                mintSupplyType === "unlimited"
+                                  ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                                  : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                              }`}
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                mintSupplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                              }`}>
+                                {mintSupplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                              </div>
+                              Unlimited
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMintSupplyType("limited")}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                mintSupplyType === "limited"
+                                  ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                                  : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                              }`}
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                mintSupplyType === "limited" ? "border-purple-400" : "border-white/30"
+                              }`}>
+                                {mintSupplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                              </div>
+                              Limited
+                            </button>
+                          </div>
+                          {mintSupplyType === "limited" && (
+                            <input
+                              type="number"
+                              value={mintMaxSupply}
+                              onChange={(e) => setMintMaxSupply(e.target.value)}
+                              min="1"
+                              placeholder="Max supply (e.g., 100)"
+                              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                            />
+                          )}
+                        </>
+                      )}
                     </div>
-                    {isLocked && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Royalty cannot be changed after NFTs have been minted
+
+                    {/* Royalty Slider */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Secondary Sale Royalty
+                      </label>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
+                          {isLocked && (
+                            <span className="text-xs text-amber-400/70">Locked</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="2"
+                          max="10"
+                          step="0.5"
+                          value={mintRoyaltyPercent}
+                          onChange={(e) => setMintRoyaltyPercent(e.target.value)}
+                          disabled={isLocked}
+                          className={`w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
+                            [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
+                            [&::-webkit-slider-thumb]:hover:bg-purple-300 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
+                        />
+                        <div className="flex justify-between text-xs text-white/30 mt-2">
+                          <span>2%</span>
+                          <span>10%</span>
+                        </div>
+                      </div>
+                      {isLocked && (
+                        <p className="text-xs text-white/30 mt-2">
+                          Royalty cannot be changed after NFTs have been minted
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Stats */}
+                    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Minted</h3>
+                      <p className="text-sm text-purple-400 font-medium">
+                        {actualMintedCount}
+                        {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
                       </p>
-                    )}
-                  </div>
-
-                  {/* Stats */}
-                  <div className="p-4 bg-gray-800/50 rounded-lg">
-                    <p className="text-sm text-gray-400">
-                      Minted: {actualMintedCount}
-                      {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleSaveMintSettings}
-                    disabled={isLoading}
-                    className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    {isUpdatingMintSettings ? "Saving..." : "Update Mint Settings"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-gray-400 mb-4">Set up NFT minting for this content.</p>
-
-                  {/* Mint Price */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Price (SOL)</label>
-                    <input
-                      type="number"
-                      value={mintPrice}
-                      onChange={(e) => setMintPrice(e.target.value)}
-                      min="0"
-                      step="0.01"
-                      placeholder="0 for free"
-                      className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Supply */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Supply</label>
-                    <div className="flex gap-4 mb-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={mintSupplyType === "unlimited"}
-                          onChange={() => setMintSupplyType("unlimited")}
-                          className="text-primary-500"
-                        />
-                        <span>Unlimited</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={mintSupplyType === "limited"}
-                          onChange={() => setMintSupplyType("limited")}
-                          className="text-primary-500"
-                        />
-                        <span>Limited</span>
-                      </label>
                     </div>
-                    {mintSupplyType === "limited" && (
+
+                    <button
+                      onClick={handleSaveMintSettings}
+                      disabled={isLoading}
+                      className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+                    >
+                      {isUpdatingMintSettings ? "Saving..." : "Update Mint Settings"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white/40 mb-4 text-sm">Set up NFT minting for this content.</p>
+
+                    {/* Mint Price */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Price (SOL)
+                      </label>
                       <input
                         type="number"
-                        value={mintMaxSupply}
-                        onChange={(e) => setMintMaxSupply(e.target.value)}
-                        min="1"
-                        placeholder="Max supply (e.g., 100)"
-                        className="w-full px-4 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-primary-500 focus:outline-none"
+                        value={mintPrice}
+                        onChange={(e) => setMintPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        placeholder="0 for free"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                    )}
-                  </div>
-
-                  {/* Royalty */}
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Secondary Sale Royalty: {mintRoyaltyPercent}%
-                    </label>
-                    <input
-                      type="range"
-                      min="2"
-                      max="10"
-                      step="0.5"
-                      value={mintRoyaltyPercent}
-                      onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>2%</span>
-                      <span>10%</span>
                     </div>
-                  </div>
 
-                  <button
-                    onClick={handleSaveMintSettings}
-                    disabled={isLoading}
-                    className="w-full py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    {isConfiguringMint ? "Setting Up..." : "Enable Minting"}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Rent Tab */}
-          {settingsTab === "rent" && (
-            <div className="space-y-4">
-              {!mintConfig ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>Set up NFT minting first before enabling rentals.</p>
-                  <button
-                    onClick={() => setSettingsTab("mint")}
-                    className="mt-2 text-primary-400 hover:text-primary-300"
-                  >
-                    Go to Mint settings
-                  </button>
-                </div>
-              ) : rentConfig ? (
-                <>
-                  {/* Rent Status */}
-                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    {/* Supply */}
                     <div>
-                      <p className="font-medium">Rental Status</p>
-                      <p className="text-sm text-gray-400">
-                        {rentConfig.isActive ? "Active - users can rent access" : "Paused - rentals are disabled"}
-                      </p>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Supply
+                      </label>
+                      <div className="flex gap-3 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setMintSupplyType("unlimited")}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                            mintSupplyType === "unlimited"
+                              ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                              : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            mintSupplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                          }`}>
+                            {mintSupplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                          </div>
+                          Unlimited
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMintSupplyType("limited")}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                            mintSupplyType === "limited"
+                              ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                              : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            mintSupplyType === "limited" ? "border-purple-400" : "border-white/30"
+                          }`}>
+                            {mintSupplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                          </div>
+                          Limited
+                        </button>
+                      </div>
+                      {mintSupplyType === "limited" && (
+                        <input
+                          type="number"
+                          value={mintMaxSupply}
+                          onChange={(e) => setMintMaxSupply(e.target.value)}
+                          min="1"
+                          placeholder="Max supply (e.g., 100)"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        />
+                      )}
                     </div>
+
+                    {/* Royalty */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                        Secondary Sale Royalty
+                      </label>
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="2"
+                          max="10"
+                          step="0.5"
+                          value={mintRoyaltyPercent}
+                          onChange={(e) => setMintRoyaltyPercent(e.target.value)}
+                          className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
+                            [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
+                            [&::-webkit-slider-thumb]:hover:bg-purple-300"
+                        />
+                        <div className="flex justify-between text-xs text-white/30 mt-2">
+                          <span>2%</span>
+                          <span>10%</span>
+                        </div>
+                      </div>
+                    </div>
+
                     <button
-                      onClick={handleToggleRentActive}
+                      onClick={handleSaveMintSettings}
                       disabled={isLoading}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        rentConfig.isActive
-                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                          : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                      } disabled:opacity-50`}
+                      className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                     >
-                      {rentConfig.isActive ? "Pause Rentals" : "Enable Rentals"}
+                      {isConfiguringMint ? "Setting Up..." : "Enable Minting"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Rent Tab */}
+            {settingsTab === "rent" && (
+              <div className="space-y-4">
+                {!mintConfig ? (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <p className="text-white/40 text-sm">Set up NFT minting first before enabling rentals.</p>
+                    <button
+                      onClick={() => setSettingsTab("mint")}
+                      className="mt-4 px-4 py-2 text-sm text-purple-400 hover:text-purple-300 transition-colors duration-300"
+                    >
+                      Go to Mint settings
                     </button>
                   </div>
-
-                  {/* Rent Fees */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">6 Hours</label>
-                      <input
-                        type="number"
-                        value={rentFee6h}
-                        onChange={(e) => setRentFee6h(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
+                ) : rentConfig ? (
+                  <>
+                    {/* Rent Status */}
+                    <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">Rental Status</p>
+                        <p className="text-xs text-white/40 mt-0.5">
+                          {rentConfig.isActive ? "Active - users can rent access" : "Paused - rentals are disabled"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleToggleRentActive}
+                        disabled={isLoading}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                          rentConfig.isActive
+                            ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
+                            : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
+                        } disabled:opacity-30`}
+                      >
+                        {rentConfig.isActive ? "Pause" : "Enable"}
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">1 Day</label>
-                      <input
-                        type="number"
-                        value={rentFee1d}
-                        onChange={(e) => setRentFee1d(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">7 Days</label>
-                      <input
-                        type="number"
-                        value={rentFee7d}
-                        onChange={(e) => setRentFee7d(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
-                    </div>
-                  </div>
 
-                  {/* Stats */}
-                  <div className="p-4 bg-gray-800/50 rounded-lg">
-                    <p className="text-sm text-gray-400">
-                      Total Rentals: {rentConfig.totalRentals?.toString() || "0"}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      Fees Collected: {(Number(rentConfig.totalFeesCollected || 0) / LAMPORTS_PER_SOL).toFixed(4)} SOL
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleSaveRentConfig}
-                    disabled={isLoading}
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    {isUpdatingRentConfig ? "Saving..." : "Update Rent Pricing"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-gray-400 mb-4">Set up rental pricing for this content.</p>
-
-                  {/* Rent Fees */}
-                  <div className="grid grid-cols-3 gap-4">
+                    {/* Rent Fees */}
                     <div>
-                      <label className="block text-sm font-medium mb-2">6 Hours</label>
-                      <input
-                        type="number"
-                        value={rentFee6h}
-                        onChange={(e) => setRentFee6h(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        placeholder="0.01"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                        Rental Pricing (SOL)
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">6 Hours</label>
+                          <input
+                            type="number"
+                            value={rentFee6h}
+                            onChange={(e) => setRentFee6h(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">1 Day</label>
+                          <input
+                            type="number"
+                            value={rentFee1d}
+                            onChange={(e) => setRentFee1d(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">7 Days</label>
+                          <input
+                            type="number"
+                            value={rentFee7d}
+                            onChange={(e) => setRentFee7d(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">1 Day</label>
-                      <input
-                        type="number"
-                        value={rentFee1d}
-                        onChange={(e) => setRentFee1d(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        placeholder="0.03"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">7 Days</label>
-                      <input
-                        type="number"
-                        value={rentFee7d}
-                        onChange={(e) => setRentFee7d(e.target.value)}
-                        min="0.001"
-                        step="0.001"
-                        placeholder="0.15"
-                        className="w-full px-3 py-2 bg-gray-800 rounded-lg border border-gray-700 focus:border-amber-500 focus:outline-none text-sm"
-                      />
-                    </div>
-                  </div>
 
-                  <button
-                    onClick={handleSaveRentConfig}
-                    disabled={isLoading}
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-700 rounded-lg font-medium transition-colors"
-                  >
-                    {isConfiguringRent ? "Setting Up..." : "Enable Rentals"}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                    {/* Stats */}
+                    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-xs text-white/40">Total Rentals</span>
+                        <span className="text-sm text-amber-400 font-medium">{rentConfig.totalRentals?.toString() || "0"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-white/40">Fees Collected</span>
+                        <span className="text-sm text-amber-400 font-medium">{(Number(rentConfig.totalFeesCollected || 0) / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>
+                      </div>
+                    </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-800">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg font-medium transition-colors"
-          >
-            Close
-          </button>
+                    <button
+                      onClick={handleSaveRentConfig}
+                      disabled={isLoading}
+                      className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+                    >
+                      {isUpdatingRentConfig ? "Saving..." : "Update Rent Pricing"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white/40 mb-4 text-sm">Set up rental pricing for this content.</p>
+
+                    {/* Rent Fees */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                        Rental Pricing (SOL)
+                      </label>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">6 Hours</label>
+                          <input
+                            type="number"
+                            value={rentFee6h}
+                            onChange={(e) => setRentFee6h(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            placeholder="0.01"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">1 Day</label>
+                          <input
+                            type="number"
+                            value={rentFee1d}
+                            onChange={(e) => setRentFee1d(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            placeholder="0.03"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/40 mb-2">7 Days</label>
+                          <input
+                            type="number"
+                            value={rentFee7d}
+                            onChange={(e) => setRentFee7d(e.target.value)}
+                            min="0.001"
+                            step="0.001"
+                            placeholder="0.15"
+                            className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleSaveRentConfig}
+                      disabled={isLoading}
+                      className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+                    >
+                      {isConfiguringRent ? "Setting Up..." : "Enable Rentals"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end mt-5 pt-4 border-t border-white/5">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70 hover:text-white/90"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
