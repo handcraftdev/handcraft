@@ -18,6 +18,12 @@ import {
   PaymentCurrency,
   RentTier,
   getContentDomain,
+  // Streamflow constants for CPI-based membership
+  STREAMFLOW_PROGRAM_ID,
+  STREAMFLOW_TREASURY,
+  STREAMFLOW_WITHDRAWOR,
+  STREAMFLOW_FEE_ORACLE,
+  WSOL_MINT,
 } from "./constants";
 
 import {
@@ -109,6 +115,8 @@ import {
   getEcosystemSubscriptionPda,
   getSimpleNftPda,
   getSimpleBundleNftPda,
+  // Streamflow PDAs
+  getStreamflowEscrowTokensPda,
 } from "./pda";
 
 // Convert ContentType enum to Anchor format
@@ -3553,26 +3561,52 @@ export async function initPatronConfigInstruction(
 }
 
 /**
- * Subscribe to a creator's patron tier
+ * Update patron config for a creator
+ * Allows creators to update membership/subscription prices and active status
+ */
+export async function updatePatronConfigInstruction(
+  program: Program,
+  creator: PublicKey,
+  membershipPrice: bigint | null,
+  subscriptionPrice: bigint | null,
+  isActive: boolean | null
+): Promise<TransactionInstruction> {
+  const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+
+  return await program.methods
+    .updatePatronConfig(
+      membershipPrice !== null ? new BN(membershipPrice.toString()) : null,
+      subscriptionPrice !== null ? new BN(subscriptionPrice.toString()) : null,
+      isActive
+    )
+    .accounts({
+      patronConfig: patronConfigPda,
+      creator,
+    })
+    .instruction();
+}
+
+/**
+ * Subscribe to a creator's patron tier (Streamflow payment)
  * @param tier - 'membership' or 'subscription'
+ * @param streamId - Streamflow stream ID for payment
  */
 export async function subscribePatronInstruction(
   program: Program,
   subscriber: PublicKey,
   creator: PublicKey,
-  tier: 'membership' | 'subscription'
+  tier: 'membership' | 'subscription',
+  streamId: PublicKey
 ): Promise<TransactionInstruction> {
   const [patronConfigPda] = getCreatorPatronConfigPda(creator);
   const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
-  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
 
   const tierArg = tier === 'membership' ? { membership: {} } : { subscription: {} };
 
   return await program.methods
-    .subscribePatron(tierArg)
+    .subscribePatron(tierArg, streamId)
     .accounts({
       patronConfig: patronConfigPda,
-      creatorPatronTreasury: creatorPatronTreasuryPda,
       patronSubscription: patronSubscriptionPda,
       creator,
       subscriber,
@@ -3602,22 +3636,23 @@ export async function cancelPatronSubscriptionInstruction(
 }
 
 /**
- * Subscribe to ecosystem
+ * Subscribe to ecosystem (Streamflow payment)
+ * Creates subscription record - payment handled via Streamflow stream
+ * stream_id: The Streamflow stream ID for this subscription's payment
  */
 export async function subscribeEcosystemInstruction(
   program: Program,
-  subscriber: PublicKey
+  subscriber: PublicKey,
+  streamId: PublicKey
 ): Promise<TransactionInstruction> {
   const [ecosystemSubConfigPda] = getEcosystemSubConfigPda();
   const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
-  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
 
   return await program.methods
-    .subscribeEcosystem()
+    .subscribeEcosystem(streamId)
     .accounts({
       ecosystemSubConfig: ecosystemSubConfigPda,
       ecosystemSubscription: ecosystemSubscriptionPda,
-      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
       subscriber,
       systemProgram: SystemProgram.programId,
     })
@@ -3643,7 +3678,8 @@ export async function cancelEcosystemSubscriptionInstruction(
 }
 
 /**
- * Renew patron subscription (extends by 30 days)
+ * Renew patron subscription (Streamflow topup extends the stream)
+ * Updates subscription timestamp - stream_id stays the same
  */
 export async function renewPatronSubscriptionInstruction(
   program: Program,
@@ -3651,24 +3687,22 @@ export async function renewPatronSubscriptionInstruction(
   creator: PublicKey
 ): Promise<TransactionInstruction> {
   const [patronConfigPda] = getCreatorPatronConfigPda(creator);
-  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
   const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
 
   return await program.methods
     .renewPatronSubscription()
     .accounts({
       patronConfig: patronConfigPda,
-      creatorPatronTreasury: creatorPatronTreasuryPda,
       patronSubscription: patronSubscriptionPda,
       creator,
       subscriber,
-      systemProgram: SystemProgram.programId,
     })
     .instruction();
 }
 
 /**
- * Renew ecosystem subscription (extends by 30 days)
+ * Renew ecosystem subscription (Streamflow topup extends the stream)
+ * Updates subscription timestamp - stream_id stays the same
  */
 export async function renewEcosystemSubscriptionInstruction(
   program: Program,
@@ -3676,15 +3710,241 @@ export async function renewEcosystemSubscriptionInstruction(
 ): Promise<TransactionInstruction> {
   const [ecosystemSubConfigPda] = getEcosystemSubConfigPda();
   const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
-  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
 
   return await program.methods
     .renewEcosystemSubscription()
     .accounts({
       ecosystemSubConfig: ecosystemSubConfigPda,
       ecosystemSubscription: ecosystemSubscriptionPda,
-      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
       subscriber,
+    })
+    .instruction();
+}
+
+// ============================================
+// STREAMFLOW CPI MEMBERSHIP INSTRUCTIONS
+// ============================================
+
+/**
+ * Helper to derive WSOL ATA address
+ */
+function getWsolAta(owner: PublicKey): PublicKey {
+  const [ata] = PublicKey.findProgramAddressSync(
+    [
+      owner.toBuffer(),
+      TOKEN_PROGRAM_ID.toBuffer(),
+      WSOL_MINT.toBuffer(),
+    ],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return ata;
+}
+
+/**
+ * Join ecosystem membership via Streamflow CPI (secure on-chain stream creation)
+ * The program enforces the treasury PDA as recipient - no fund redirection possible
+ *
+ * @param program - The Anchor program instance
+ * @param subscriber - The wallet joining the membership
+ * @param streamMetadata - A new keypair for the stream (will be the stream ID)
+ * @param partner - Partner account for referrals (can be our program ID for 0 fee)
+ * @param durationType - 0 = monthly, 1 = yearly (10 months for 12 months access)
+ */
+export async function joinEcosystemMembershipInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  streamMetadata: Keypair,
+  partner: PublicKey,
+  durationType: number
+): Promise<TransactionInstruction> {
+  const [ecosystemConfigPda] = getEcosystemSubConfigPda();
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+  const [ecosystemTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata.publicKey);
+
+  // Derive all WSOL ATAs
+  const subscriberWsol = getWsolAta(subscriber);
+  const ecosystemTreasuryWsol = getWsolAta(ecosystemTreasuryPda);
+  const streamflowTreasuryWsol = getWsolAta(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAta(partner);
+
+  return await program.methods
+    .joinEcosystemMembership(durationType)
+    .accounts({
+      subscriber,
+      subscriberWsol,
+      ecosystemConfig: ecosystemConfigPda,
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      ecosystemTreasury: ecosystemTreasuryPda,
+      ecosystemTreasuryWsol,
+      streamMetadata: streamMetadata.publicKey,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      streamflowWithdrawor: STREAMFLOW_WITHDRAWOR,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      feeOracle: STREAMFLOW_FEE_ORACLE,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      rent: SYSVAR_RENT_PUBKEY,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Join creator membership via Streamflow CPI (secure on-chain stream creation)
+ * The program enforces the creator's treasury PDA as recipient
+ *
+ * @param program - The Anchor program instance
+ * @param subscriber - The wallet joining the membership
+ * @param creator - The creator being subscribed to
+ * @param streamMetadata - A new keypair for the stream (will be the stream ID)
+ * @param partner - Partner account for referrals (can be our program ID for 0 fee)
+ * @param tier - 0 = membership (support only), 1 = subscription (support + access)
+ * @param durationType - 0 = monthly, 1 = yearly (10 months for 12 months access)
+ */
+export async function joinCreatorMembershipInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  creator: PublicKey,
+  streamMetadata: Keypair,
+  partner: PublicKey,
+  tier: number,
+  durationType: number
+): Promise<TransactionInstruction> {
+  const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+  const [patronSubscriptionPda] = getCreatorPatronSubscriptionPda(subscriber, creator);
+  const [creatorTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata.publicKey);
+
+  // Derive all WSOL ATAs
+  const subscriberWsol = getWsolAta(subscriber);
+  const creatorTreasuryWsol = getWsolAta(creatorTreasuryPda);
+  const streamflowTreasuryWsol = getWsolAta(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAta(partner);
+
+  return await program.methods
+    .joinCreatorMembership(tier, durationType)
+    .accounts({
+      subscriber,
+      subscriberWsol,
+      creator,
+      patronConfig: patronConfigPda,
+      patronSubscription: patronSubscriptionPda,
+      creatorTreasury: creatorTreasuryPda,
+      creatorTreasuryWsol,
+      streamMetadata: streamMetadata.publicKey,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      streamflowWithdrawor: STREAMFLOW_WITHDRAWOR,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      feeOracle: STREAMFLOW_FEE_ORACLE,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      rent: SYSVAR_RENT_PUBKEY,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Cancel ecosystem membership stream via Streamflow CPI
+ * Returns remaining funds to subscriber
+ *
+ * @param program - The Anchor program instance
+ * @param subscriber - The wallet cancelling the membership
+ * @param streamMetadata - The stream ID (from the subscription record)
+ * @param partner - Partner account that was used at creation
+ */
+export async function cancelEcosystemMembershipStreamInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  streamMetadata: PublicKey,
+  partner: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+  const [ecosystemTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata);
+
+  // Derive all WSOL ATAs
+  const subscriberWsol = getWsolAta(subscriber);
+  const ecosystemTreasuryWsol = getWsolAta(ecosystemTreasuryPda);
+  const streamflowTreasuryWsol = getWsolAta(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAta(partner);
+
+  return await program.methods
+    .cancelEcosystemMembershipStream()
+    .accounts({
+      subscriber,
+      subscriberWsol,
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      ecosystemTreasury: ecosystemTreasuryPda,
+      ecosystemTreasuryWsol,
+      streamMetadata,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+/**
+ * Topup ecosystem membership stream via Streamflow CPI
+ * Extends the membership duration
+ *
+ * @param program - The Anchor program instance
+ * @param subscriber - The wallet extending the membership
+ * @param streamMetadata - The stream ID (from the subscription record)
+ * @param partner - Partner account that was used at creation
+ * @param durationType - 0 = add 1 month, 1 = add 1 year (at yearly price)
+ */
+export async function topupEcosystemMembershipInstruction(
+  program: Program,
+  subscriber: PublicKey,
+  streamMetadata: PublicKey,
+  partner: PublicKey,
+  durationType: number
+): Promise<TransactionInstruction> {
+  const [ecosystemConfigPda] = getEcosystemSubConfigPda();
+  const [ecosystemSubscriptionPda] = getEcosystemSubscriptionPda(subscriber);
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata);
+
+  // Derive all WSOL ATAs
+  const subscriberWsol = getWsolAta(subscriber);
+  const streamflowTreasuryWsol = getWsolAta(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAta(partner);
+
+  return await program.methods
+    .topupEcosystemMembership(durationType)
+    .accounts({
+      subscriber,
+      subscriberWsol,
+      ecosystemConfig: ecosystemConfigPda,
+      ecosystemSubscription: ecosystemSubscriptionPda,
+      streamMetadata,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      streamflowWithdrawor: STREAMFLOW_WITHDRAWOR,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
     .instruction();
@@ -4016,11 +4276,19 @@ export function createContentRegistryClient(connection: Connection) {
       subscriptionPrice: bigint
     ) => initPatronConfigInstruction(program, creator, membershipPrice, subscriptionPrice),
 
+    updatePatronConfigInstruction: (
+      creator: PublicKey,
+      membershipPrice: bigint | null,
+      subscriptionPrice: bigint | null,
+      isActive: boolean | null
+    ) => updatePatronConfigInstruction(program, creator, membershipPrice, subscriptionPrice, isActive),
+
     subscribePatronInstruction: (
       subscriber: PublicKey,
       creator: PublicKey,
-      tier: 'membership' | 'subscription'
-    ) => subscribePatronInstruction(program, subscriber, creator, tier),
+      tier: 'membership' | 'subscription',
+      streamId: PublicKey
+    ) => subscribePatronInstruction(program, subscriber, creator, tier, streamId),
 
     cancelPatronSubscriptionInstruction: (
       subscriber: PublicKey,
@@ -4028,8 +4296,9 @@ export function createContentRegistryClient(connection: Connection) {
     ) => cancelPatronSubscriptionInstruction(program, subscriber, creator),
 
     subscribeEcosystemInstruction: (
-      subscriber: PublicKey
-    ) => subscribeEcosystemInstruction(program, subscriber),
+      subscriber: PublicKey,
+      streamId: PublicKey
+    ) => subscribeEcosystemInstruction(program, subscriber, streamId),
 
     cancelEcosystemSubscriptionInstruction: (
       subscriber: PublicKey
@@ -4043,6 +4312,36 @@ export function createContentRegistryClient(connection: Connection) {
     renewEcosystemSubscriptionInstruction: (
       subscriber: PublicKey
     ) => renewEcosystemSubscriptionInstruction(program, subscriber),
+
+    // Streamflow CPI membership instructions (secure on-chain stream creation)
+    joinEcosystemMembershipInstruction: (
+      subscriber: PublicKey,
+      streamMetadata: Keypair,
+      partner: PublicKey,
+      durationType: number
+    ) => joinEcosystemMembershipInstruction(program, subscriber, streamMetadata, partner, durationType),
+
+    joinCreatorMembershipInstruction: (
+      subscriber: PublicKey,
+      creator: PublicKey,
+      streamMetadata: Keypair,
+      partner: PublicKey,
+      tier: number,
+      durationType: number
+    ) => joinCreatorMembershipInstruction(program, subscriber, creator, streamMetadata, partner, tier, durationType),
+
+    cancelEcosystemMembershipStreamInstruction: (
+      subscriber: PublicKey,
+      streamMetadata: PublicKey,
+      partner: PublicKey
+    ) => cancelEcosystemMembershipStreamInstruction(program, subscriber, streamMetadata, partner),
+
+    topupEcosystemMembershipInstruction: (
+      subscriber: PublicKey,
+      streamMetadata: PublicKey,
+      partner: PublicKey,
+      durationType: number
+    ) => topupEcosystemMembershipInstruction(program, subscriber, streamMetadata, partner, durationType),
 
     // Subscription claim instructions (use UnifiedNftRewardState)
     claimUnifiedContentRewardsInstruction: (

@@ -5,3 +5,4 @@ export * from "./utils";
 export * from "./ipfs";
 export * from "./program";
 export * from "./crypto";
+export * from "./streamflow";

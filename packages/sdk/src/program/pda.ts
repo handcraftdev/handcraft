@@ -42,6 +42,8 @@ import {
   ECOSYSTEM_SUB_CONFIG_SEED,
   ECOSYSTEM_SUB_SEED,
   SIMPLE_NFT_SEED,
+  // Streamflow constants
+  STREAMFLOW_PROGRAM_ID,
 } from "./constants";
 
 export function hashCid(cid: string): Uint8Array {
@@ -524,5 +526,19 @@ export function getSimpleBundleNftPda(buyer: PublicKey, bundlePda: PublicKey, ed
   return PublicKey.findProgramAddressSync(
     [Buffer.from(SIMPLE_NFT_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
     PROGRAM_ID
+  );
+}
+
+// ========== STREAMFLOW PDAs ==========
+
+/**
+ * Get the Streamflow escrow tokens PDA
+ * This is where streamed tokens are held until claimed
+ * @param streamMetadata - The stream metadata account (stream ID)
+ */
+export function getStreamflowEscrowTokensPda(streamMetadata: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("strm"), streamMetadata.toBuffer()],
+    STREAMFLOW_PROGRAM_ID
   );
 }

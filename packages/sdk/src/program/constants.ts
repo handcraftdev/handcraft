@@ -363,3 +363,39 @@ export const SUBSCRIPTION_RARITY_WEIGHT_UNCOMMON = 5;
 export const SUBSCRIPTION_RARITY_WEIGHT_RARE = 20;
 export const SUBSCRIPTION_RARITY_WEIGHT_EPIC = 60;
 export const SUBSCRIPTION_RARITY_WEIGHT_LEGENDARY = 120;
+
+// ========== STREAMFLOW CONSTANTS (for CPI-based membership) ==========
+
+// Streamflow Program ID (devnet - production uses same ID)
+export const STREAMFLOW_PROGRAM_ID_STRING = "HqDGZjaVRXJ9MGRQEw7qDc2rAr6iH1n1kAQdCZaCMfMZ";
+export const STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING);
+
+// Streamflow Treasury (for their 0.25% fee)
+export const STREAMFLOW_TREASURY_STRING = "5SEpbdjFK5FxwTvfsGMXVQTD2v4M2c5tyRTxhdsPkgDw";
+export const STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING);
+
+// Streamflow Withdrawor (for automatic withdrawals - not used by us)
+export const STREAMFLOW_WITHDRAWOR_STRING = "wdrwhnCv4pzW8beKsbPa4S2UDZrXenjg16KJdKSpb5u";
+export const STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING);
+
+// Streamflow Fee Oracle
+export const STREAMFLOW_FEE_ORACLE_STRING = "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT";
+export const STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING);
+
+// WSOL Mint (Native SOL wrapped)
+export const WSOL_MINT_STRING = "So11111111111111111111111111111111111111112";
+export const WSOL_MINT = new PublicKey(WSOL_MINT_STRING);
+
+// Note: SECONDS_PER_DAY, SECONDS_PER_MONTH, SECONDS_PER_YEAR are exported from ./streamflow
+
+// Duration type enum (matches program)
+export enum MembershipDurationType {
+  Monthly = 0,
+  Yearly = 1,
+}
+
+// Membership tier enum (matches program - for creator membership)
+export enum MembershipTier {
+  Membership = 0,   // Support only, no content access
+  Subscription = 1, // Support + Level 2 content access
+}

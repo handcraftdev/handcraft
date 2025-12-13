@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createHash } from "crypto";
 
 const FILEBASE_ENDPOINT = "https://s3.filebase.com";
@@ -102,6 +102,77 @@ export function createFilebaseClient(config: FilebaseConfig) {
     async uploadJSON(data: Record<string, unknown>, name: string): Promise<UploadResult> {
       const json = JSON.stringify(data);
       return this.upload(Buffer.from(json), `${name}.json`, "application/json");
+    },
+
+    /**
+     * Upload JSON with a fixed key (not content-based)
+     * Useful for data that needs to be looked up by a known key
+     */
+    async uploadJSONWithKey(data: Record<string, unknown>, key: string): Promise<UploadResult> {
+      const json = JSON.stringify(data);
+      const buffer = Buffer.from(json);
+
+      await client.send(new PutObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: "application/json",
+      }));
+
+      // Get CID from response headers
+      let cid = "";
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const head = await client.send(new HeadObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+          }));
+          cid = head.Metadata?.cid || "";
+          if (cid) break;
+        } catch (err) {
+          retries--;
+          if (retries === 0) throw err;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      return {
+        cid,
+        url: `${IPFS_GATEWAY}${cid}`,
+        size: buffer.length,
+      };
+    },
+
+    /**
+     * Get JSON by fixed key
+     * Returns null if not found
+     */
+    async getJSONByKey<T = Record<string, unknown>>(key: string): Promise<{ data: T; cid: string } | null> {
+      try {
+        const response = await client.send(new GetObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+        }));
+
+        const body = await response.Body?.transformToString();
+        if (!body) return null;
+
+        // Get CID from metadata
+        const head = await client.send(new HeadObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+        }));
+        const cid = head.Metadata?.cid || "";
+
+        return {
+          data: JSON.parse(body) as T,
+          cid,
+        };
+      } catch {
+        return null;
+      }
     },
 
     getUrl: (cid: string) => cid.startsWith("http") ? cid : `${IPFS_GATEWAY}${cid}`,
