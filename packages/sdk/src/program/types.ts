@@ -723,3 +723,16 @@ export function calculateSubscriptionPendingReward(
   if (weightedRps <= debt) return BigInt(0);
   return (weightedRps - debt) / precision;
 }
+
+// ========== USER PROFILE TYPES ==========
+
+/**
+ * User profile storing username and settings
+ * Required for content creators to set collection names
+ */
+export interface UserProfile {
+  owner: PublicKey;
+  username: string;
+  createdAt: bigint;
+  updatedAt: bigint;
+}

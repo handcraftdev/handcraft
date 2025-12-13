@@ -7,6 +7,7 @@ import {
   CONTENT_REWARD_POOL_SEED,
   WALLET_CONTENT_STATE_SEED,
   CONTENT_COLLECTION_SEED,
+  USER_PROFILE_SEED,
   RENT_CONFIG_SEED,
   RENT_ENTRY_SEED,
   PENDING_MINT_SEED,
@@ -98,6 +99,13 @@ export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKe
 export function getContentCollectionPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CONTENT_COLLECTION_SEED), contentPda.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+export function getUserProfilePda(owner: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(USER_PROFILE_SEED), owner.toBuffer()],
     PROGRAM_ID
   );
 }

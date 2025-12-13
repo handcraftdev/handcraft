@@ -71,6 +71,7 @@ import {
   EcosystemSubscription,
   isSubscriptionValid,
   calculateSubscriptionPendingReward,
+  UserProfile,
 } from "./types";
 
 import {
@@ -115,6 +116,7 @@ import {
   getEcosystemSubscriptionPda,
   getSimpleNftPda,
   getSimpleBundleNftPda,
+  getUserProfilePda,
   // Streamflow PDAs
   getStreamflowEscrowTokensPda,
 } from "./pda";
@@ -242,7 +244,8 @@ export async function registerContentWithMintInstruction(
   isEncrypted: boolean = false,
   previewCid: string = "",
   encryptionMetaCid: string = "",
-  visibilityLevel: number = 0
+  visibilityLevel: number = 0,
+  collectionName: string | null = null
 ): Promise<RegisterContentWithMintResult> {
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
@@ -250,6 +253,7 @@ export async function registerContentWithMintInstruction(
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentCollectionPda] = getContentCollectionPda(contentPda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [userProfilePda] = getUserProfilePda(authority);
 
   const collectionAssetKeypair = Keypair.generate();
 
@@ -265,7 +269,8 @@ export async function registerContentWithMintInstruction(
       isEncrypted,
       previewCid,
       encryptionMetaCid,
-      visibilityLevel
+      visibilityLevel,
+      collectionName
     )
     .accounts({
       content: contentPda,
@@ -276,6 +281,7 @@ export async function registerContentWithMintInstruction(
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
       ecosystemConfig: ecosystemConfigPda,
       platform: platform,
+      userProfile: userProfilePda,
       authority: authority,
       systemProgram: SystemProgram.programId,
     })
@@ -2392,13 +2398,15 @@ export async function createBundleWithMintAndRentInstruction(
   rentFee6h: bigint,
   rentFee1d: bigint,
   rentFee7d: bigint,
-  platform: PublicKey
+  platform: PublicKey,
+  collectionName: string | null = null
 ): Promise<CreateBundleWithMintAndRentResult> {
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
   const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
   const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [userProfilePda] = getUserProfilePda(creator);
   const collectionAsset = Keypair.generate();
 
   const instruction = await program.methods
@@ -2411,7 +2419,8 @@ export async function createBundleWithMintAndRentInstruction(
       creatorRoyaltyBps,
       new BN(rentFee6h.toString()),
       new BN(rentFee1d.toString()),
-      new BN(rentFee7d.toString())
+      new BN(rentFee7d.toString()),
+      collectionName
     )
     .accounts({
       creator,
@@ -2422,6 +2431,7 @@ export async function createBundleWithMintAndRentInstruction(
       collectionAsset: collectionAsset.publicKey,
       ecosystemConfig: ecosystemConfigPda,
       platform,
+      userProfile: userProfilePda,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
@@ -3019,7 +3029,8 @@ export async function simpleMintInstruction(
   creator: PublicKey,
   treasury: PublicKey,
   platform: PublicKey,
-  collectionAsset: PublicKey
+  collectionAsset: PublicKey,
+  contentName: string
 ): Promise<SimpleMintResult> {
   const [contentPda] = getContentPda(contentCid);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
@@ -3046,7 +3057,7 @@ export async function simpleMintInstruction(
   const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
 
   const instruction = await program.methods
-    .simpleMint()
+    .simpleMint(contentName)
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       content: contentPda,
@@ -3097,6 +3108,7 @@ export async function simpleMintBundleInstruction(
   treasury: PublicKey,
   platform: PublicKey,
   collectionAsset: PublicKey,
+  bundleName: string,
   contentCids: string[] = []
 ): Promise<SimpleMintResult> {
   const [bundlePda] = getBundlePda(creator, bundleId);
@@ -3131,7 +3143,7 @@ export async function simpleMintBundleInstruction(
   });
 
   const instruction = await program.methods
-    .simpleMintBundle()
+    .simpleMintBundle(bundleName)
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       bundle: bundlePda,
@@ -3163,6 +3175,85 @@ export async function simpleMintBundleInstruction(
 }
 
 // NOTE: MAGICBLOCK VRF BUNDLE MINT functions removed - use simpleMintBundleInstruction instead
+
+// ========== USER PROFILE INSTRUCTIONS ==========
+
+/**
+ * Create a user profile with username
+ * Required before creating content/bundles with the new naming convention
+ * @param program Anchor program instance
+ * @param owner The profile owner's public key
+ * @param username Display name (max 20 chars)
+ */
+export async function createUserProfileInstruction(
+  program: Program,
+  owner: PublicKey,
+  username: string
+): Promise<TransactionInstruction> {
+  const [userProfilePda] = getUserProfilePda(owner);
+
+  return await program.methods
+    .createUserProfile(username)
+    .accounts({
+      userProfile: userProfilePda,
+      owner,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Update user profile username
+ * @param program Anchor program instance
+ * @param owner The profile owner's public key
+ * @param username New display name (max 20 chars)
+ */
+export async function updateUserProfileInstruction(
+  program: Program,
+  owner: PublicKey,
+  username: string
+): Promise<TransactionInstruction> {
+  const [userProfilePda] = getUserProfilePda(owner);
+
+  return await program.methods
+    .updateUserProfile(username)
+    .accounts({
+      userProfile: userProfilePda,
+      owner,
+    })
+    .instruction();
+}
+
+/**
+ * Fetch user profile by owner
+ * @param connection Solana connection
+ * @param owner Owner's public key
+ * @returns UserProfile or null if not found
+ */
+export async function fetchUserProfile(
+  connection: Connection,
+  owner: PublicKey
+): Promise<UserProfile | null> {
+  try {
+    const program = createProgram(connection);
+    const [userProfilePda] = getUserProfilePda(owner);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).userProfile.fetch(userProfilePda);
+
+    if (!decoded) return null;
+
+    return {
+      owner: decoded.owner,
+      username: decoded.username,
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    // Account doesn't exist
+    return null;
+  }
+}
 
 /**
  * Configure rental for a bundle
@@ -4072,9 +4163,10 @@ export function createContentRegistryClient(connection: Connection) {
       isEncrypted: boolean = false,
       previewCid: string = "",
       encryptionMetaCid: string = "",
-      visibilityLevel: number = 0
+      visibilityLevel: number = 0,
+      collectionName: string | null = null
     ) => registerContentWithMintInstruction(
-      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, platform, isEncrypted, previewCid, encryptionMetaCid, visibilityLevel
+      program, authority, contentCid, metadataCid, contentType, price, maxSupply, creatorRoyaltyBps, platform, isEncrypted, previewCid, encryptionMetaCid, visibilityLevel, collectionName
     ),
 
     updateContentInstruction: (creator: PublicKey, contentCid: string, metadataCid: string) =>
@@ -4158,11 +4250,12 @@ export function createContentRegistryClient(connection: Connection) {
       rentFee6h: bigint,
       rentFee1d: bigint,
       rentFee7d: bigint,
-      platform: PublicKey
+      platform: PublicKey,
+      collectionName: string | null = null
     ) => createBundleWithMintAndRentInstruction(
       program, creator, bundleId, metadataCid, bundleType,
       mintPrice, mintMaxSupply, creatorRoyaltyBps,
-      rentFee6h, rentFee1d, rentFee7d, platform
+      rentFee6h, rentFee1d, rentFee7d, platform, collectionName
     ),
 
     addBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string, position?: number) =>
@@ -4217,8 +4310,9 @@ export function createContentRegistryClient(connection: Connection) {
       creator: PublicKey,
       treasury: PublicKey,
       platform: PublicKey,
-      collectionAsset: PublicKey
-    ): Promise<SimpleMintResult> => simpleMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset),
+      collectionAsset: PublicKey,
+      contentName: string
+    ): Promise<SimpleMintResult> => simpleMintInstruction(program, buyer, contentCid, creator, treasury, platform, collectionAsset, contentName),
 
     simpleMintBundleInstruction: (
       buyer: PublicKey,
@@ -4227,8 +4321,18 @@ export function createContentRegistryClient(connection: Connection) {
       treasury: PublicKey,
       platform: PublicKey,
       collectionAsset: PublicKey,
+      bundleName: string,
       contentCids: string[] = []
-    ): Promise<SimpleMintResult> => simpleMintBundleInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset, contentCids),
+    ): Promise<SimpleMintResult> => simpleMintBundleInstruction(program, buyer, bundleId, creator, treasury, platform, collectionAsset, bundleName, contentCids),
+
+    // User profile management
+    fetchUserProfile: (owner: PublicKey) => fetchUserProfile(connection, owner),
+
+    createUserProfileInstruction: (owner: PublicKey, username: string) =>
+      createUserProfileInstruction(program, owner, username),
+
+    updateUserProfileInstruction: (owner: PublicKey, username: string) =>
+      updateUserProfileInstruction(program, owner, username),
 
     configureBundleRentInstruction: (
       creator: PublicKey,

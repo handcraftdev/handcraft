@@ -17,6 +17,7 @@ export const MINT_CONFIG_SEED = "mint_config";
 export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
 export const WALLET_CONTENT_STATE_SEED = "wallet_content";
 export const CONTENT_COLLECTION_SEED = "content_collection";
+export const USER_PROFILE_SEED = "user_profile";
 
 // Rent seeds
 export const RENT_CONFIG_SEED = "rent_config";

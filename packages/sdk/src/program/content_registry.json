@@ -3585,7 +3585,8 @@
       "name": "create_bundle_with_mint_and_rent",
       "docs": [
         "Create a bundle with mint and rent configuration in a single transaction",
-        "Bundle is created as published with mint and rent enabled by default"
+        "Bundle is created as published with mint and rent enabled by default",
+        "collection_name: Optional collection name - if provided, collection is named \"HC: <Username>: <CollectionName>\""
       ],
       "discriminator": [
         136,
@@ -3779,6 +3780,38 @@
           "name": "platform"
         },
         {
+          "name": "user_profile",
+          "docs": [
+            "User profile for collection naming",
+            "Collection name format: \"HC: <Username>\" or \"HC: <Username>: <CollectionName>\""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
           "name": "mpl_core_program",
           "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         },
@@ -3829,6 +3862,75 @@
         {
           "name": "rent_fee_7d",
           "type": "u64"
+        },
+        {
+          "name": "collection_name",
+          "type": {
+            "option": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_user_profile",
+      "docs": [
+        "Create a user profile with username",
+        "Used for NFT naming: \"HC: <Username>: <CollectionName>\""
+      ],
+      "discriminator": [
+        9,
+        214,
+        142,
+        184,
+        153,
+        65,
+        50,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "user_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type": "string"
         }
       ]
     },
@@ -6336,7 +6438,9 @@
     {
       "name": "register_content_with_mint",
       "docs": [
-        "Register new content with optional NFT mint configuration"
+        "Register new content with optional NFT mint configuration",
+        "collection_name: Optional collection name - if provided, collection is named \"HC: <Username>: <CollectionName>\"",
+        "If not provided, collection is named \"HC: <Username>\""
       ],
       "discriminator": [
         126,
@@ -6499,6 +6603,38 @@
           "name": "platform"
         },
         {
+          "name": "user_profile",
+          "docs": [
+            "User profile for collection naming",
+            "Collection name format: \"HC: <Username>\" or \"HC: <Username>: <CollectionName>\""
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
           "name": "authority",
           "writable": true,
           "signer": true
@@ -6563,6 +6699,12 @@
         {
           "name": "visibility_level",
           "type": "u8"
+        },
+        {
+          "name": "collection_name",
+          "type": {
+            "option": "string"
+          }
         }
       ]
     },
@@ -7690,7 +7832,8 @@
       "name": "simple_mint",
       "docs": [
         "Simple mint content NFT with slot hash randomness + full subscription pool tracking",
-        "Single transaction - no VRF, immediate mint, tracks all reward pools"
+        "Single transaction - no VRF, immediate mint, tracks all reward pools",
+        "content_name: Content title for NFT naming - format: \"<ContentName> (<R> #XXXXXX)\""
       ],
       "discriminator": [
         228,
@@ -8173,13 +8316,19 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "content_name",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "simple_mint_bundle",
       "docs": [
         "Simple mint bundle NFT with slot hash randomness + full subscription pool tracking",
-        "Single transaction - grants access to all bundle content"
+        "Single transaction - grants access to all bundle content",
+        "bundle_name: Bundle title for NFT naming - format: \"<BundleName> (<R> #XXXXXX)\""
       ],
       "discriminator": [
         244,
@@ -8667,7 +8816,12 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "bundle_name",
+          "type": "string"
+        }
+      ]
     },
     {
       "name": "subscribe_ecosystem",
@@ -10414,6 +10568,66 @@
           }
         }
       ]
+    },
+    {
+      "name": "update_user_profile",
+      "docs": [
+        "Update user profile username"
+      ],
+      "discriminator": [
+        79,
+        75,
+        114,
+        130,
+        68,
+        123,
+        180,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "user_profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  115,
+                  101,
+                  114,
+                  95,
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "user_profile"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "username",
+          "type": "string"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -10740,6 +10954,19 @@
         203,
         39,
         93
+      ]
+    },
+    {
+      "name": "UserProfile",
+      "discriminator": [
+        32,
+        37,
+        119,
+        205,
+        179,
+        180,
+        13,
+        194
       ]
     },
     {
@@ -11277,6 +11504,21 @@
       "code": 6082,
       "name": "InvalidTier",
       "msg": "Invalid tier - must be 0 (membership) or 1 (subscription)"
+    },
+    {
+      "code": 6083,
+      "name": "InvalidUsername",
+      "msg": "Invalid username - must be 1-20 characters"
+    },
+    {
+      "code": 6084,
+      "name": "ProfileNotFound",
+      "msg": "User profile not found"
+    },
+    {
+      "code": 6085,
+      "name": "InvalidContentName",
+      "msg": "Invalid content name - must be 1-32 characters"
     }
   ],
   "types": [
@@ -13195,6 +13437,46 @@
             "name": "created_at",
             "docs": [
               "Timestamp when this state was created (at mint time)"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserProfile",
+      "docs": [
+        "User profile storing username and settings",
+        "PDA seeds: [\"user_profile\", owner]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The wallet that owns this profile"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "username",
+            "docs": [
+              "User's display name (max 20 chars)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when profile was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when profile was last updated"
             ],
             "type": "i64"
           }
