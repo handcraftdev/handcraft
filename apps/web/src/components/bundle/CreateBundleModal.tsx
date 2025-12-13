@@ -59,7 +59,8 @@ export function CreateBundleModal({
   const [nftPrice, setNftPrice] = useState("");
   const [nftSupplyType, setNftSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [nftMaxSupply, setNftMaxSupply] = useState("");
-  const [nftRoyaltyPercent, setNftRoyaltyPercent] = useState("5");
+  // Fixed royalty at 4%
+  const FIXED_ROYALTY_PERCENT = 4;
 
   // Rental config
   const [rentFee6h, setRentFee6h] = useState("");
@@ -149,12 +150,6 @@ export function CreateBundleModal({
       setError("Minimum price is 0.001 SOL. Free minting is not allowed.");
       return;
     }
-    const royaltyNum = parseFloat(nftRoyaltyPercent);
-
-    if (isNaN(royaltyNum) || royaltyNum < 2 || royaltyNum > 10) {
-      setError("Royalty must be between 2% and 10%");
-      return;
-    }
 
     // If rent fees provided, validate them
     if (hasAllRent) {
@@ -232,7 +227,7 @@ export function CreateBundleModal({
 
       // Convert prices to lamports
       const mintPriceLamports = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
-      const royaltyBps = Math.floor(royaltyNum * 100);
+      const royaltyBps = FIXED_ROYALTY_PERCENT * 100; // 4% = 400 bps
 
       // Rent fees - use minimum values if not provided (program requires > 0)
       const rent6hLamports = hasAllRent
@@ -297,7 +292,6 @@ export function CreateBundleModal({
     setNftPrice("");
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
-    setNftRoyaltyPercent("5");
     setRentFee6h("");
     setRentFee1d("");
     setRentFee7d("");
@@ -628,43 +622,54 @@ export function CreateBundleModal({
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Secondary Sale Royalty: {nftRoyaltyPercent}%
-                    </label>
-                    <input
-                      type="range"
-                      min="2"
-                      max="10"
-                      step="0.5"
-                      value={nftRoyaltyPercent}
-                      onChange={(e) => setNftRoyaltyPercent(e.target.value)}
-                      className="w-full"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>2%</span>
-                      <span>10%</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Primary Sale Split */}
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-3">Primary Sale</p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">You (Creator)</span>
+                          <span className="text-green-400 font-medium">80%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Holders</span>
+                          <span className="text-blue-400 font-medium">12%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Platform</span>
+                          <span className="text-gray-500">5%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Ecosystem</span>
+                          <span className="text-gray-500">3%</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-sm font-medium mb-3">Primary Sale Split</p>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">You (Creator)</span>
-                        <span className="text-green-400 font-medium">80%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Existing Holders</span>
-                        <span className="text-blue-400 font-medium">12%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Platform</span>
-                        <span className="text-gray-500">5%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Ecosystem</span>
-                        <span className="text-gray-500">3%</span>
+                    {/* Secondary Sale Split */}
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-3">Secondary Sale</p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Seller</span>
+                          <span className="text-green-400 font-medium">90%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">You (Royalty)</span>
+                          <span className="text-purple-400 font-medium">4%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Holders</span>
+                          <span className="text-blue-400 font-medium">4%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Platform</span>
+                          <span className="text-gray-500">1%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Ecosystem</span>
+                          <span className="text-gray-500">1%</span>
+                        </div>
                       </div>
                     </div>
                   </div>

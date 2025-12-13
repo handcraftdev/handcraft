@@ -1249,24 +1249,15 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Secondary Sale Royalty
-                    </label>
-                    <div className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300">
-                      {FIXED_ROYALTY_PERCENT}% <span className="text-gray-500 text-sm">(fixed)</span>
-                    </div>
-                  </div>
-
                   {/* Visibility Level */}
                   <div>
                     <label className="block text-sm font-medium mb-2">Content Visibility</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { level: 0, label: "Public", desc: "Anyone can view", icon: "🌍" },
-                        { level: 1, label: "Ecosystem", desc: "Ecosystem members", icon: "🏠" },
-                        { level: 2, label: "Subscriber", desc: "Your subscribers", icon: "⭐" },
-                        { level: 3, label: "Edition Only", desc: "Edition holders only", icon: "🔒" },
+                        { level: 1, label: "Subscribers", desc: "Platform subscribers", icon: "🏠" },
+                        { level: 2, label: "Members", desc: "Your members", icon: "⭐" },
+                        { level: 3, label: "Buyers", desc: "Buyers only", icon: "🔒" },
                       ].map((opt) => (
                         <button
                           key={opt.level}
@@ -1288,24 +1279,54 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     </div>
                   </div>
 
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-sm font-medium mb-3">Primary Sale Split</p>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">You (Creator)</span>
-                        <span className="text-green-400 font-medium">80%</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Primary Sale Split */}
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-3">Primary Sale</p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">You (Creator)</span>
+                          <span className="text-green-400 font-medium">80%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Holders</span>
+                          <span className="text-blue-400 font-medium">12%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Platform</span>
+                          <span className="text-gray-500">5%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Ecosystem</span>
+                          <span className="text-gray-500">3%</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Existing Holders</span>
-                        <span className="text-blue-400 font-medium">12%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Platform</span>
-                        <span className="text-gray-500">5%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Ecosystem</span>
-                        <span className="text-gray-500">3%</span>
+                    </div>
+
+                    {/* Secondary Sale Split */}
+                    <div className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-3">Secondary Sale</p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Seller</span>
+                          <span className="text-green-400 font-medium">90%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">You (Royalty)</span>
+                          <span className="text-purple-400 font-medium">4%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Holders</span>
+                          <span className="text-blue-400 font-medium">4%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Platform</span>
+                          <span className="text-gray-500">1%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Ecosystem</span>
+                          <span className="text-gray-500">1%</span>
+                        </div>
                       </div>
                     </div>
                   </div>
