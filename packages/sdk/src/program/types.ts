@@ -234,26 +234,28 @@ export interface BundleWithItems {
 
 /**
  * NFT Rarity tiers with associated weights for reward distribution
+ * Must match on-chain enum in programs/content-registry/src/state/rarity.rs
  */
 export enum Rarity {
-  Common = 0,      // 55% probability, weight 100
-  Uncommon = 1,    // 27% probability, weight 150
-  Rare = 2,        // 13% probability, weight 200
-  Epic = 3,        //  4% probability, weight 300
-  Legendary = 4,   //  1% probability, weight 500
+  Common = 0,      // 55% probability, weight 1
+  Uncommon = 1,    // 27% probability, weight 5
+  Rare = 2,        // 13% probability, weight 20
+  Epic = 3,        //  4% probability, weight 60
+  Legendary = 4,   //  1% probability, weight 120
 }
 
 /**
  * Get the weight for a rarity tier
+ * Must match on-chain weights in programs/content-registry/src/state/rarity.rs
  */
 export function getRarityWeight(rarity: Rarity): number {
   switch (rarity) {
-    case Rarity.Common: return 100;
-    case Rarity.Uncommon: return 150;
-    case Rarity.Rare: return 200;
-    case Rarity.Epic: return 300;
-    case Rarity.Legendary: return 500;
-    default: return 100;
+    case Rarity.Common: return 1;
+    case Rarity.Uncommon: return 5;
+    case Rarity.Rare: return 20;
+    case Rarity.Epic: return 60;
+    case Rarity.Legendary: return 120;
+    default: return 1;
   }
 }
 
@@ -273,12 +275,13 @@ export function getRarityName(rarity: Rarity): string {
 
 /**
  * Get rarity from weight value
+ * Must match on-chain weights in programs/content-registry/src/state/rarity.rs
  */
 export function getRarityFromWeight(weight: number): Rarity {
-  if (weight >= 500) return Rarity.Legendary;
-  if (weight >= 300) return Rarity.Epic;
-  if (weight >= 200) return Rarity.Rare;
-  if (weight >= 150) return Rarity.Uncommon;
+  if (weight >= 120) return Rarity.Legendary;
+  if (weight >= 60) return Rarity.Epic;
+  if (weight >= 20) return Rarity.Rare;
+  if (weight >= 5) return Rarity.Uncommon;
   return Rarity.Common;
 }
 
