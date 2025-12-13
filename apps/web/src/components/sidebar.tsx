@@ -1,104 +1,49 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
+import { useState, useRef, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { EcosystemMembershipCard } from "@/components/membership";
 import { UploadModal } from "./upload";
-import { ClaimRewardsModal } from "./claim";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
 
-// Sidebar context for sharing collapsed state
-const SidebarContext = createContext<{ isCollapsed: boolean }>({ isCollapsed: false });
-export const useSidebar = () => useContext(SidebarContext);
+// Sidebar context for sharing state
+interface SidebarContextType {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
+const SidebarContext = createContext<SidebarContextType>({ isOpen: false, setIsOpen: () => {} });
+export const useSidebarContext = () => useContext(SidebarContext);
 
-const navItems = [
-  {
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-    label: "Home",
-    href: "/",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-    ),
-    label: "Explore",
-    href: "/explore",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-    ),
-    label: "Search",
-    href: "/search",
-  },
-  {
-    icon: (
-      <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
-    label: "Dashboard",
-    href: "/dashboard",
-  },
-];
-
-function SidebarContent() {
+// Slide-in sidebar component
+function SlideInSidebar({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const pathname = usePathname();
   const { publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
-  const { content, usePendingRewards, bundlePendingRewardsQuery } = useContentRegistry();
+  const { content, userProfile } = useContentRegistry();
   const { clearSession } = useSession();
 
-  // Initialize collapsed state synchronously from localStorage
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("sidebar-collapsed") === "true";
-    }
-    return false;
-  });
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [isClaimOpen, setIsClaimOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Get pending rewards
-  const { data: pendingRewards } = usePendingRewards();
-  const { data: bundlePendingRewards } = bundlePendingRewardsQuery;
-  const totalPending = useMemo(() => {
-    const contentTotal = pendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
-    const bundleTotal = bundlePendingRewards?.reduce((acc, r) => acc + r.pending, BigInt(0)) || BigInt(0);
-    return contentTotal + bundleTotal;
-  }, [pendingRewards, bundlePendingRewards]);
-  const hasPendingRewards = totalPending > BigInt(0);
-
-  // Set mounted state
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Save collapsed state
-  const toggleCollapsed = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem("sidebar-collapsed", String(newState));
-  };
 
   // Fetch SOL balance
   useEffect(() => {
@@ -126,197 +71,171 @@ function SidebarContent() {
     ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
     : "";
 
-  const collapsed = isCollapsed;
+  const navItems = [
+    { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>, label: "Home", href: "/" },
+    { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>, label: "Content", href: "/content" },
+    { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>, label: "Bundles", href: "/bundles" },
+    { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>, label: "Search", href: "/search" },
+    { icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: "Studio", href: "/dashboard" },
+  ];
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed: collapsed }}>
-      <aside className={`fixed left-0 top-0 bottom-0 bg-black border-r border-gray-800 flex flex-col hidden md:flex z-40 transition-all duration-300 ${collapsed ? "w-16" : "w-64"}`}>
-        {/* Logo - Top */}
-        <div className={`border-b border-gray-800 ${collapsed ? "p-3" : "p-4"}`}>
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center flex-shrink-0">
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        onClick={onClose}
+      />
+
+      {/* Slide-in Panel */}
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-black/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        {/* Header */}
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3" onClick={onClose}>
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
               </svg>
             </div>
-            {!collapsed && (
-              <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
-                Handcraft
-              </span>
-            )}
+            <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
+              Handcraft
+            </span>
           </Link>
+          <button onClick={onClose} className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* Navigation - Scrollable Middle */}
-        <nav className={`flex-1 overflow-y-auto ${collapsed ? "p-2" : "p-4"}`}>
-          {/* Main Navigation */}
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto p-4">
+          <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Navigate</p>
           <div className="space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                title={collapsed ? item.label : undefined}
-                className={`flex items-center gap-3 rounded-lg transition-colors ${
-                  collapsed ? "px-2.5 py-2.5 justify-center" : "px-3 py-2.5"
-                } ${
+                onClick={onClose}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   pathname === item.href
-                    ? "bg-gray-800 text-white"
-                    : "text-gray-400 hover:bg-gray-900 hover:text-white"
+                    ? "bg-white/10 text-white"
+                    : "text-white/60 hover:text-white hover:bg-white/10"
                 }`}
               >
                 {item.icon}
-                {!collapsed && <span className="font-medium">{item.label}</span>}
+                <span>{item.label}</span>
               </Link>
             ))}
+            {publicKey && (
+              <>
+                <Link
+                  href={`/profile/${publicKey.toBase58()}`}
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    pathname === `/profile/${publicKey.toBase58()}`
+                      ? "bg-white/10 text-white"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Profile</span>
+                </Link>
+                <Link
+                  href="/rewards"
+                  onClick={onClose}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                    pathname === "/rewards"
+                      ? "bg-white/10 text-white"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Rewards</span>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Upload Button */}
           {publicKey && (
             <>
-              <div className={`my-4 border-t border-gray-800 ${collapsed ? "mx-1" : ""}`} />
+              <div className="my-4 border-t border-white/10" />
               <button
                 onClick={() => setIsUploadOpen(true)}
-                title={collapsed ? "Upload Content" : undefined}
-                className={`w-full flex items-center gap-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium ${
-                  collapsed ? "px-2.5 py-2.5 justify-center" : "px-3 py-2.5"
-                }`}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium"
               >
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                {!collapsed && "Upload Content"}
+                Upload Content
               </button>
             </>
           )}
 
-          {/* Claim Rewards */}
-          {publicKey && hasPendingRewards && (
-            <button
-              onClick={() => setIsClaimOpen(true)}
-              title={collapsed ? `Claim ${(Number(totalPending) / LAMPORTS_PER_SOL).toFixed(4)} SOL` : undefined}
-              className={`w-full flex items-center gap-3 mt-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-colors font-medium border border-green-600/30 ${
-                collapsed ? "px-2.5 py-2.5 justify-center" : "px-3 py-2.5"
-              }`}
-            >
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {!collapsed && <span>Claim {(Number(totalPending) / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>}
-            </button>
-          )}
-
-          {/* Divider & Membership (hide when collapsed) */}
-          {!collapsed && (
-            <>
-              <div className="my-4 border-t border-gray-800" />
-              <EcosystemMembershipCard compact />
-            </>
-          )}
+          {/* Membership */}
+          <div className="my-4 border-t border-white/10" />
+          <EcosystemMembershipCard compact />
         </nav>
 
-        {/* Collapse Toggle */}
-        <button
-          onClick={toggleCollapsed}
-          className={`mx-auto mb-2 p-2 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors ${collapsed ? "" : "mr-4 ml-auto"}`}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <svg className={`w-5 h-5 transition-transform ${collapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-          </svg>
-        </button>
-
-        {/* User Banner - Fixed Bottom */}
-        <div className={`border-t border-gray-800 ${collapsed ? "p-2" : "p-4"}`} ref={userMenuRef}>
+        {/* User Section */}
+        <div className="border-t border-white/10 p-4" ref={userMenuRef}>
           {publicKey ? (
             <div className="relative">
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                title={collapsed ? shortAddress : undefined}
-                className={`w-full flex items-center gap-3 hover:bg-gray-900 rounded-lg transition-colors ${
-                  collapsed ? "p-1.5 justify-center" : "p-2"
-                }`}
+                className="w-full flex items-center gap-3 p-3 hover:bg-white/10 rounded-lg transition-colors"
               >
-                <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-sm text-white font-bold flex-shrink-0">
-                  {publicKey.toBase58().charAt(0).toUpperCase()}
+                <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-sm text-white font-bold">
+                  {userProfile?.username?.charAt(0)?.toUpperCase() || publicKey.toBase58().charAt(0).toUpperCase()}
                 </div>
-                {!collapsed && (
-                  <>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{shortAddress}</p>
-                      <p className="text-xs text-gray-500">
-                        {balance !== null ? `${balance.toFixed(2)} SOL` : "..."}
-                      </p>
-                    </div>
-                    <svg className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </>
-                )}
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {userProfile?.username || shortAddress}
+                  </p>
+                  <p className="text-xs text-white/50">
+                    {balance !== null ? `${balance.toFixed(2)} SOL` : "..."}
+                  </p>
+                </div>
+                <svg className={`w-4 h-4 text-white/50 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
               </button>
 
-              {/* User Menu Popup */}
               {isUserMenuOpen && (
-                <div className={`absolute bottom-full mb-2 bg-gray-900 rounded-xl border border-gray-800 shadow-xl overflow-hidden ${collapsed ? "left-full ml-2 w-56" : "left-0 right-0"}`}>
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 divide-x divide-gray-800 border-b border-gray-800">
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-900 rounded-xl border border-white/10 shadow-xl overflow-hidden">
+                  <div className="grid grid-cols-2 divide-x divide-white/10 border-b border-white/10">
                     <div className="p-3 text-center">
                       <p className="text-sm font-semibold text-white">{content.length}</p>
-                      <p className="text-xs text-gray-500">Content</p>
+                      <p className="text-xs text-white/50">Content</p>
                     </div>
                     <div className="p-3 text-center">
-                      <p className="text-sm font-semibold text-white">
-                        {balance !== null ? balance.toFixed(2) : "-"}
-                      </p>
-                      <p className="text-xs text-gray-500">SOL</p>
-                    </div>
-                    <div className="p-3 text-center">
-                      <p className={`text-sm font-semibold ${hasPendingRewards ? "text-green-400" : "text-white"}`}>
-                        {(Number(totalPending) / LAMPORTS_PER_SOL).toFixed(3)}
-                      </p>
-                      <p className="text-xs text-gray-500">Rewards</p>
+                      <p className="text-sm font-semibold text-white">{balance !== null ? balance.toFixed(2) : "-"}</p>
+                      <p className="text-xs text-white/50">SOL</p>
                     </div>
                   </div>
-
-                  {/* Network */}
-                  <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Network</span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
-                      Devnet
-                    </span>
+                  <div className="px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="text-xs text-white/50">Network</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">Devnet</span>
                   </div>
-
-                  {/* Actions */}
                   <div className="p-2">
-                    <Link
-                      href={`/profile/${publicKey.toBase58()}`}
-                      onClick={() => setIsUserMenuOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      View Profile
-                    </Link>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(publicKey.toBase58());
-                        setIsUserMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                      onClick={() => { navigator.clipboard.writeText(publicKey.toBase58()); setIsUserMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white/70 hover:bg-white/10 rounded-lg transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                       Copy Address
                     </button>
-                    <div className="border-t border-gray-800 my-1" />
+                    <div className="border-t border-white/10 my-1" />
                     <button
-                      onClick={() => {
-                        clearSession();
-                        disconnect();
-                        setIsUserMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-gray-800 rounded-lg transition-colors"
+                      onClick={() => { clearSession(); disconnect(); setIsUserMenuOpen(false); onClose(); }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:bg-white/10 rounded-lg transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -328,27 +247,12 @@ function SidebarContent() {
               )}
             </div>
           ) : mounted ? (
-            collapsed ? (
-              <button
-                onClick={() => document.querySelector<HTMLButtonElement>('.wallet-adapter-button')?.click()}
-                title="Connect Wallet"
-                className="w-full p-2 bg-primary-600 hover:bg-primary-700 rounded-lg flex items-center justify-center"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </button>
-            ) : (
-              <WalletMultiButton className="!w-full !bg-primary-600 hover:!bg-primary-700 !rounded-lg !py-3 !text-sm !font-medium !justify-center" />
-            )
+            <WalletMultiButton className="!w-full !bg-primary-600 hover:!bg-primary-700 !rounded-lg !py-3 !text-sm !font-medium !justify-center" />
           ) : (
-            <div className={`bg-primary-600 rounded-lg animate-pulse ${collapsed ? "w-10 h-10 mx-auto" : "h-12"}`} />
+            <div className="h-12 bg-primary-600/50 rounded-lg animate-pulse" />
           )}
         </div>
       </aside>
-
-      {/* Spacer for main content - dynamically adjusts */}
-      <div className={`hidden md:block flex-shrink-0 transition-all duration-300 ${collapsed ? "w-16" : "w-64"}`} />
 
       {/* Upload Modal */}
       <UploadModal
@@ -356,17 +260,31 @@ function SidebarContent() {
         onClose={() => setIsUploadOpen(false)}
         onSuccess={(result) => console.log("Upload successful:", result)}
       />
-
-      {/* Claim Rewards Modal */}
-      <ClaimRewardsModal
-        isOpen={isClaimOpen}
-        onClose={() => setIsClaimOpen(false)}
-      />
-    </SidebarContext.Provider>
+    </>
   );
 }
 
-// Export with SSR disabled to prevent hydration mismatch with localStorage
-export const Sidebar = dynamic(() => Promise.resolve(SidebarContent), {
-  ssr: false,
-});
+// Menu button to open sidebar
+export function MenuButton({ onClick, className = "" }: { onClick: () => void; className?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all group ${className}`}
+      title="Menu"
+    >
+      <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  );
+}
+
+// Legacy Sidebar export for backwards compatibility (empty - pages should use SlideInSidebar)
+function LegacySidebar() {
+  return null;
+}
+
+export const Sidebar = dynamic(() => Promise.resolve(LegacySidebar), { ssr: false });
+
+// New slide-in sidebar export
+export const SidebarPanel = dynamic(() => Promise.resolve(SlideInSidebar), { ssr: false });
