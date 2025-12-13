@@ -1011,20 +1011,23 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-gray-900 rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-gray-800 max-h-[90vh] flex flex-col">
+      <div className="relative bg-black rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+        <div className="relative flex items-center justify-between px-6 py-4 border-b border-white/5">
           <div className="flex items-center gap-3">
             {step !== "domain" && step !== "uploading" && step !== "registering" && step !== "done" && (
-              <button onClick={goBack} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+              <button onClick={goBack} className="p-1.5 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
             )}
-            <h2 className="text-xl font-semibold">{getStepTitle()}</h2>
+            <h2 className="text-xl font-medium text-white/90">{getStepTitle()}</h2>
           </div>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
+          <button onClick={handleClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -1033,19 +1036,19 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
         {/* Profile Gate */}
         {!isLoadingUserProfile && !userProfile && publicKey && (
-          <div className="p-6 flex flex-col items-center text-center">
+          <div className="relative p-6 flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold mb-2">Creator Profile Required</h3>
-            <p className="text-gray-400 mb-6 max-w-sm">
+            <h3 className="text-xl font-medium text-white/90 mb-2">Creator Profile Required</h3>
+            <p className="text-white/40 mb-6 max-w-sm">
               Set up your creator profile before uploading content. Your username will appear on your NFT collections as "HC: YourName".
             </p>
             <a
-              href="/dashboard"
-              className="px-6 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg font-medium transition-colors inline-flex items-center gap-2"
+              href="/studio"
+              className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl font-medium transition-all duration-300 inline-flex items-center gap-2 text-white/90"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -1057,7 +1060,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
         {/* Content - only show when profile exists */}
         {(userProfile || isLoadingUserProfile || !publicKey) && (
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="relative p-6 overflow-y-auto flex-1">
           {/* Step: Domain Selection */}
           {step === "domain" && (
             <div className="grid grid-cols-2 gap-3">
@@ -1065,13 +1068,16 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 <button
                   key={domain.key}
                   onClick={() => handleDomainSelect(domain.key)}
-                  className="p-5 rounded-xl border border-gray-700 hover:border-primary-500 hover:bg-gray-800/50 transition-all text-left group"
+                  className="relative p-5 rounded-xl border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group overflow-hidden"
                 >
-                  <div className="text-gray-400 group-hover:text-primary-400 transition-colors mb-3">
-                    {domain.icon}
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300 pointer-events-none" />
+                  <div className="relative">
+                    <div className="text-white/40 group-hover:text-purple-400 transition-colors mb-3">
+                      {domain.icon}
+                    </div>
+                    <p className="font-medium text-lg text-white/90">{domain.label}</p>
+                    <p className="text-sm text-white/40 mt-1">{domain.description}</p>
                   </div>
-                  <p className="font-medium text-lg">{domain.label}</p>
-                  <p className="text-sm text-gray-500 mt-1">{domain.description}</p>
                 </button>
               ))}
             </div>
@@ -1084,14 +1090,15 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 <button
                   key={type.key}
                   onClick={() => handleTypeSelect(type)}
-                  className="w-full p-4 rounded-xl border border-gray-700 hover:border-primary-500 hover:bg-gray-800/50 transition-all text-left group flex items-center gap-4"
+                  className="relative w-full p-4 rounded-xl border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group flex items-center gap-4 overflow-hidden"
                 >
-                  <div className="text-gray-400 group-hover:text-primary-400 transition-colors">
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300 pointer-events-none" />
+                  <div className="relative text-white/40 group-hover:text-purple-400 transition-colors">
                     {type.icon}
                   </div>
-                  <div>
-                    <p className="font-medium">{type.label}</p>
-                    <p className="text-sm text-gray-500">{type.description}</p>
+                  <div className="relative">
+                    <p className="font-medium text-white/90">{type.label}</p>
+                    <p className="text-sm text-white/40">{type.description}</p>
                   </div>
                 </button>
               ))}
@@ -1103,20 +1110,20 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all ${
+                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 ${
                   fileSizeError
-                    ? "border-red-500 bg-red-500/5"
-                    : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
+                    ? "border-red-500/50 bg-red-500/5"
+                    : "border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5"
                 }`}
               >
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center text-gray-400">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center text-white/40">
                   {contentType.icon}
                 </div>
-                <p className="text-lg font-medium mb-2">
+                <p className="text-lg font-medium text-white/90 mb-2">
                   Drop your {contentType.label.toLowerCase()} here
                 </p>
-                <p className="text-sm text-gray-500">or click to browse</p>
-                <p className="text-xs text-gray-600 mt-2">
+                <p className="text-sm text-white/40">or click to browse</p>
+                <p className="text-xs text-white/30 mt-2">
                   Max size: {formatFileSize(FILE_SIZE_LIMITS[contentType.domain])}
                 </p>
                 <input
@@ -1128,7 +1135,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 />
               </div>
               {fileSizeError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
                   {fileSizeError}
                 </div>
               )}

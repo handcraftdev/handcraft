@@ -189,31 +189,36 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
 
   if (!publicKey) {
     return (
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <p className="text-gray-400 text-center">Connect wallet to manage custom memberships</p>
+      <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 p-6 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
+        <p className="relative text-white/40 text-center">Connect wallet to manage custom memberships</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-      <div className="p-5 border-b border-gray-800">
+    <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
+
+      {/* Header */}
+      <div className="relative p-5 border-b border-white/5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center">
               <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
             <div>
-              <h2 className="text-xl font-semibold">Custom Memberships</h2>
-              <p className="text-sm text-gray-400">Create tiers with custom perks (Discord, early access, etc.)</p>
+              <h2 className="text-lg font-medium text-white/90">Custom Memberships</h2>
+              <p className="text-sm text-white/40">Create tiers with custom perks (Discord, early access, etc.)</p>
             </div>
           </div>
           {!editingTier && (
             <button
               onClick={handleAddTier}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 hover:border-orange-500/50 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 text-white/90"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -224,49 +229,50 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
         </div>
       </div>
 
-      <div className="p-5">
+      {/* Content */}
+      <div className="relative p-5">
         {/* Editing Form */}
         {editingTier && (
-          <div className="bg-gray-800 rounded-xl p-5 mb-5">
-            <h3 className="font-medium mb-4">{isAddingNew ? "New Tier" : "Edit Tier"}</h3>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-5 mb-5">
+            <h3 className="font-medium text-white/90 mb-4">{isAddingNew ? "New Tier" : "Edit Tier"}</h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Tier Name</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Tier Name</label>
                 <input
                   type="text"
                   value={editingTier.name}
                   onChange={(e) => setEditingTier({ ...editingTier, name: e.target.value })}
                   placeholder="e.g., Bronze Supporter, VIP Access"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-orange-500"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/90 focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.07] transition-all duration-300 placeholder:text-white/20"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Description</label>
                 <textarea
                   value={editingTier.description}
                   onChange={(e) => setEditingTier({ ...editingTier, description: e.target.value })}
                   placeholder="Describe what this tier offers..."
                   rows={2}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-orange-500 resize-none"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/90 focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.07] transition-all duration-300 placeholder:text-white/20 resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Monthly Price (SOL)</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Monthly Price (SOL)</label>
                 <input
                   type="number"
                   step="0.001"
                   min="0.001"
                   value={editingTier.monthlyPrice}
                   onChange={(e) => setEditingTier({ ...editingTier, monthlyPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-orange-500"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/90 focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.07] transition-all duration-300 placeholder:text-white/20"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Benefits</label>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Benefits</label>
                 <div className="space-y-2">
                   {editingTier.benefits.map((benefit, index) => (
                     <div key={index} className="flex gap-2">
@@ -275,11 +281,11 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                         value={benefit}
                         onChange={(e) => updateBenefit(index, e.target.value)}
                         placeholder="e.g., Discord access, Early updates"
-                        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-orange-500"
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/90 text-sm focus:outline-none focus:border-orange-500/50 focus:bg-white/[0.07] transition-all duration-300 placeholder:text-white/20"
                       />
                       <button
                         onClick={() => removeBenefit(index)}
-                        className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+                        className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-xl transition-all duration-300"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -289,7 +295,7 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                   ))}
                   <button
                     onClick={addBenefit}
-                    className="text-sm text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                    className="text-sm text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -300,7 +306,7 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                   <p className="text-sm text-red-400">{error}</p>
                 </div>
               )}
@@ -312,14 +318,14 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                     setIsAddingNew(false);
                     setError(null);
                   }}
-                  className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70 hover:text-white/90"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveTier}
                   disabled={saveTiers.isPending}
-                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-3 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 hover:border-orange-500/50 disabled:opacity-50 rounded-xl font-medium transition-all duration-300 text-white/90"
                 >
                   {saveTiers.isPending ? "Saving..." : "Save Tier"}
                 </button>
@@ -332,21 +338,21 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
         {isLoadingTiers ? (
           <div className="animate-pulse space-y-3">
             {[1, 2].map(i => (
-              <div key={i} className="h-24 bg-gray-800 rounded-lg"></div>
+              <div key={i} className="h-24 bg-white/5 rounded-xl"></div>
             ))}
           </div>
         ) : tiers.length === 0 && !editingTier ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium mb-2">No custom tiers yet</h3>
-            <p className="text-gray-400 mb-4">Create tiers for external perks like Discord access, shoutouts, etc.</p>
+            <h3 className="text-lg font-medium text-white/90 mb-2">No custom tiers yet</h3>
+            <p className="text-white/40 mb-4">Create tiers for external perks like Discord access, shoutouts, etc.</p>
             <button
               onClick={handleAddTier}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-2.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 hover:border-orange-500/50 rounded-xl text-sm font-medium transition-all duration-300 text-white/90"
             >
               Create Your First Tier
             </button>
@@ -356,24 +362,24 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
             {tiers.map((tier) => (
               <div
                 key={tier.id}
-                className={`bg-gray-800 rounded-lg p-4 border ${
-                  tier.isActive ? "border-gray-700" : "border-gray-700/50 opacity-60"
+                className={`relative bg-white/5 rounded-xl p-4 border transition-all duration-300 ${
+                  tier.isActive ? "border-white/10" : "border-white/5 opacity-60"
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium">{tier.name}</h4>
+                      <h4 className="font-medium text-white/90">{tier.name}</h4>
                       {!tier.isActive && (
-                        <span className="px-2 py-0.5 bg-gray-600 text-gray-300 text-xs rounded">Inactive</span>
+                        <span className="px-2 py-0.5 bg-white/10 text-white/50 text-xs rounded-lg">Inactive</span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-400 mb-2">{tier.description || "No description"}</p>
-                    <p className="text-lg font-bold text-orange-400">{tier.monthlyPrice} SOL<span className="text-sm text-gray-400 font-normal">/mo</span></p>
+                    <p className="text-sm text-white/40 mb-2">{tier.description || "No description"}</p>
+                    <p className="text-lg font-bold text-orange-400">{tier.monthlyPrice} SOL<span className="text-sm text-white/40 font-normal">/mo</span></p>
                     {tier.benefits.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {tier.benefits.slice(0, 3).map((benefit, i) => (
-                          <li key={i} className="text-xs text-gray-500 flex items-center gap-1">
+                          <li key={i} className="text-xs text-white/40 flex items-center gap-1">
                             <svg className="w-3 h-3 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
@@ -381,7 +387,7 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                           </li>
                         ))}
                         {tier.benefits.length > 3 && (
-                          <li className="text-xs text-gray-500">+{tier.benefits.length - 3} more</li>
+                          <li className="text-xs text-white/30">+{tier.benefits.length - 3} more</li>
                         )}
                       </ul>
                     )}
@@ -389,10 +395,10 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleToggleActive(tier.id)}
-                      className={`p-2 rounded-lg transition-colors ${
+                      className={`p-2 rounded-xl transition-all duration-300 ${
                         tier.isActive
-                          ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                          : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                          ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/20"
+                          : "bg-white/5 text-white/40 hover:bg-white/10 border border-white/10"
                       }`}
                       title={tier.isActive ? "Deactivate" : "Activate"}
                     >
@@ -406,16 +412,16 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
                     </button>
                     <button
                       onClick={() => handleEditTier(tier)}
-                      className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                      className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300"
                       title="Edit"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
                       onClick={() => handleDeleteTier(tier.id)}
-                      className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+                      className="p-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-xl transition-all duration-300"
                       title="Delete"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,8 +437,8 @@ export function CustomMembershipManager({ onSave }: CustomMembershipManagerProps
 
         {/* Info box */}
         {tiers.length > 0 && !editingTier && (
-          <div className="mt-4 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-            <p className="text-sm text-orange-300">
+          <div className="mt-4 bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+            <p className="text-sm text-orange-300/80">
               Custom memberships are for external perks only (Discord roles, early access, etc.).
               They do not grant access to gated content on the platform.
             </p>

@@ -56,7 +56,7 @@ export default function Home() {
                   </span>
                 </button>
               </Link>
-              <Link href="/dashboard">
+              <Link href="/studio">
                 <button className="group px-8 py-4 rounded-xl border border-white/20 hover:border-white/40 backdrop-blur-sm transition-all duration-300">
                   <span className="text-white/80 group-hover:text-white font-medium tracking-wide">
                     Start Creating
@@ -170,7 +170,7 @@ export default function Home() {
                     ))}
                   </ul>
 
-                  <Link href="/dashboard">
+                  <Link href="/studio">
                     <button className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-white/80 hover:text-white text-sm font-medium transition-all duration-300">
                       Start Creating
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

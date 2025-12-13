@@ -50,10 +50,10 @@ export async function clickWalletConnect(page: Page) {
 }
 
 /**
- * Navigate to explore page and wait for load
+ * Navigate to content page and wait for load
  */
-export async function goToExplore(page: Page) {
-  await page.goto("/explore");
+export async function goToContent(page: Page) {
+  await page.goto("/content");
   await waitForAppReady(page);
 }
 
@@ -66,10 +66,10 @@ export async function goToSearch(page: Page) {
 }
 
 /**
- * Navigate to dashboard page and wait for load
+ * Navigate to studio page and wait for load
  */
-export async function goToDashboard(page: Page) {
-  await page.goto("/dashboard");
+export async function goToStudio(page: Page) {
+  await page.goto("/studio");
   await waitForAppReady(page);
 }
 

@@ -33,18 +33,18 @@ test.describe("Homepage", () => {
   });
 
   test("should have Start Creating link", async ({ page }) => {
-    const dashboardLink = page.getByRole("link", { name: /Start Creating/i }).first();
-    await expect(dashboardLink).toBeVisible();
+    const studioLink = page.getByRole("link", { name: /Start Creating/i }).first();
+    await expect(studioLink).toBeVisible();
   });
 
-  test("should navigate to explore page", async ({ page }) => {
+  test("should navigate to content page", async ({ page }) => {
     await page.getByRole("link", { name: /Explore Content/i }).click();
-    await expect(page).toHaveURL(/\/explore/);
+    await expect(page).toHaveURL(/\/content/);
   });
 
-  test("should navigate to dashboard page", async ({ page }) => {
+  test("should navigate to studio page", async ({ page }) => {
     await page.getByRole("link", { name: /Start Creating/i }).first().click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/studio/);
   });
 
   test("should display wallet connect button", async ({ page }) => {

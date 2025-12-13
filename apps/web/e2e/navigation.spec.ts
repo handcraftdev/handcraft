@@ -1,16 +1,16 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Navigation", () => {
-  test("should navigate from home to explore via Explore Content link", async ({ page }) => {
+  test("should navigate from home to content via Explore Content link", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: /Explore Content/i }).click();
-    await expect(page).toHaveURL(/\/explore/);
+    await expect(page).toHaveURL(/\/content/);
   });
 
-  test("should navigate from home to dashboard via Start Creating link", async ({ page }) => {
+  test("should navigate from home to studio via Start Creating link", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: /Start Creating/i }).first().click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/studio/);
   });
 
   test("should navigate to search via header search", async ({ page }) => {
@@ -29,13 +29,13 @@ test.describe("Navigation", () => {
     await expect(page).toHaveURL(/\/search/);
   });
 
-  test("should navigate to dashboard page directly", async ({ page }) => {
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/dashboard/);
+  test("should navigate to studio page directly", async ({ page }) => {
+    await page.goto("/studio");
+    await expect(page).toHaveURL(/\/studio/);
   });
 
   test("should preserve scroll position on back navigation", async ({ page }) => {
-    await page.goto("/explore");
+    await page.goto("/content");
 
     // Wait for page load
     await page.waitForLoadState("networkidle");
@@ -46,12 +46,12 @@ test.describe("Navigation", () => {
 
     // Go back
     await page.goBack();
-    await expect(page).toHaveURL(/\/explore/);
+    await expect(page).toHaveURL(/\/content/);
   });
 
   test("should have working sidebar navigation on desktop", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/explore");
+    await page.goto("/content");
 
     // Check sidebar exists
     const sidebar = page.locator("aside");
@@ -62,15 +62,11 @@ test.describe("Navigation", () => {
     }
   });
 
-  test("should navigate between tabs on explore", async ({ page }) => {
-    await page.goto("/explore");
+  test("should navigate between content and bundles tabs", async ({ page }) => {
+    await page.goto("/content");
+    await expect(page).toHaveURL(/\/content/);
 
-    // Click Bundles tab
-    await page.getByRole("button", { name: /Bundles/i }).click();
-    await expect(page).toHaveURL(/tab=bundles/);
-
-    // Click Content tab
-    await page.getByRole("button", { name: /Content/i }).first().click();
-    await expect(page).toHaveURL(/tab=content/);
+    await page.goto("/bundles");
+    await expect(page).toHaveURL(/\/bundles/);
   });
 });

@@ -1,12 +1,12 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Dashboard Page", () => {
+test.describe("Studio Page", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("/studio");
   });
 
-  test("should load dashboard page", async ({ page }) => {
-    await expect(page).toHaveURL(/\/dashboard/);
+  test("should load studio page", async ({ page }) => {
+    await expect(page).toHaveURL(/\/studio/);
   });
 
   test("should display main content area", async ({ page }) => {
@@ -15,12 +15,12 @@ test.describe("Dashboard Page", () => {
   });
 
   test("should show connect wallet prompt when not connected", async ({ page }) => {
-    // Dashboard shows "Connect Wallet" heading when not connected
+    // Studio shows "Connect Wallet" heading when not connected
     const connectHeading = page.getByRole("heading", { name: /Connect Wallet/i });
     await expect(connectHeading).toBeVisible();
 
     // Also shows explanation text
-    const connectText = page.getByText("Please connect your wallet to view your dashboard");
+    const connectText = page.getByText("Please connect your wallet to view your studio");
     await expect(connectText).toBeVisible();
   });
 
