@@ -256,6 +256,7 @@ pub struct BundleCollection {
 
 /// Bundle reward pool (mirrors ContentRewardPool)
 /// Per-bundle reward pool with rarity-weighted distribution
+/// Secondary sale holder rewards split 50/50 between bundle holders and content holders
 /// PDA seeds: ["bundle_reward_pool", bundle_pda]
 #[account]
 #[derive(InitSpace)]
@@ -272,6 +273,11 @@ pub struct BundleRewardPool {
     pub total_deposited: u64,
     /// Total rewards claimed from this pool (lamports)
     pub total_claimed: u64,
+    /// Pending content share from secondary sales (50% of holder rewards)
+    /// Accumulated here until distributed to content pools via separate instruction
+    pub pending_content_share: u64,
+    /// Total content share distributed to content pools
+    pub total_content_distributed: u64,
     /// Timestamp when pool was created
     pub created_at: i64,
 }
@@ -303,21 +309,45 @@ impl BundleRewardPool {
         self.total_nfts > 0
     }
 
-    /// Sync secondary sale royalties (same as ContentRewardPool)
+    /// Sync secondary sale royalties with 50/50 split
+    /// 50% goes to bundle holders (added to reward_per_share)
+    /// 50% accumulated in pending_content_share for distribution to content pools
+    /// Returns total new royalties synced
     pub fn sync_secondary_royalties(&mut self, current_lamports: u64, rent_lamports: u64) -> u64 {
         let expected_balance = rent_lamports
             .saturating_add(self.total_deposited)
-            .saturating_sub(self.total_claimed);
+            .saturating_sub(self.total_claimed)
+            .saturating_add(self.pending_content_share);
 
         if current_lamports > expected_balance {
             let new_royalties = current_lamports - expected_balance;
-            if self.total_weight > 0 && new_royalties > 0 {
-                self.reward_per_share += (new_royalties as u128 * PRECISION) / self.total_weight as u128;
-                self.total_deposited += new_royalties;
+            if new_royalties > 0 {
+                // Split 50/50 between bundle holders and content holders
+                let bundle_share = new_royalties / 2;
+                let content_share = new_royalties - bundle_share; // Handles odd amounts
+
+                // Add bundle share to pool (if there are holders)
+                if self.total_weight > 0 && bundle_share > 0 {
+                    self.reward_per_share += (bundle_share as u128 * PRECISION) / self.total_weight as u128;
+                    self.total_deposited += bundle_share;
+                }
+
+                // Accumulate content share for later distribution
+                self.pending_content_share += content_share;
+
                 return new_royalties;
             }
         }
         0
+    }
+
+    /// Distribute pending content share to content pools
+    /// Returns the amount distributed (resets pending_content_share to 0)
+    pub fn take_pending_content_share(&mut self) -> u64 {
+        let amount = self.pending_content_share;
+        self.pending_content_share = 0;
+        self.total_content_distributed += amount;
+        amount
     }
 }
 

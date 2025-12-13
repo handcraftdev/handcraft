@@ -904,24 +904,40 @@ impl<'info> SimpleMintBundle<'info> {
                 }
 
                 // Distribute 50% to ContentRewardPools (passed as remaining_accounts)
-                // Each remaining_account should be a mutable ContentRewardPool PDA
+                // Distribution is by weight - pools with more holders get proportionally more
                 let content_pool_count = ctx.remaining_accounts.len();
                 if content_share > 0 && content_pool_count > 0 {
-                    let per_pool_share = content_share / content_pool_count as u64;
-                    let remainder = content_share % content_pool_count as u64;
+                    // First pass: calculate total weight across all content pools
+                    let mut total_combined_weight: u64 = 0;
+                    let mut pool_weights: Vec<u64> = Vec::with_capacity(content_pool_count);
 
-                    // Clone payer info once, outside the loop
-                    let payer_ai = ctx.accounts.payer.to_account_info();
-
-                    for i in 0..content_pool_count {
-                        let pool_share = if i == 0 {
-                            per_pool_share + remainder
+                    for pool_info in ctx.remaining_accounts.iter() {
+                        let pool_data = pool_info.try_borrow_data()?;
+                        if pool_data.len() >= 8 + 32 + 16 + 8 + 8 + 8 {
+                            let weight = u64::from_le_bytes(pool_data[64..72].try_into().unwrap());
+                            pool_weights.push(weight);
+                            total_combined_weight += weight;
                         } else {
-                            per_pool_share
-                        };
+                            pool_weights.push(0);
+                        }
+                    }
 
-                        if pool_share > 0 {
-                            let pool_info = ctx.remaining_accounts[i].clone();
+                    // Second pass: distribute by weight proportion
+                    if total_combined_weight > 0 {
+                        let payer_ai = ctx.accounts.payer.to_account_info();
+
+                        for (i, pool_info) in ctx.remaining_accounts.iter().enumerate() {
+                            let pool_weight = pool_weights[i];
+                            if pool_weight == 0 {
+                                continue;
+                            }
+
+                            // Calculate share based on weight proportion
+                            let pool_share = (content_share as u128 * pool_weight as u128 / total_combined_weight as u128) as u64;
+                            if pool_share == 0 {
+                                continue;
+                            }
+
                             let pool_key = *pool_info.key;
 
                             // Transfer SOL using system_program invoke
@@ -937,35 +953,21 @@ impl<'info> SimpleMintBundle<'info> {
                             )?;
 
                             // Update ContentRewardPool's reward_per_share
-                            // Layout: discriminator(8) + content(32) + reward_per_share(16) + total_nfts(8) + total_weight(8) + total_deposited(8) + ...
                             let mut pool_data = pool_info.try_borrow_mut_data()?;
-                            if pool_data.len() >= 8 + 32 + 16 + 8 + 8 + 8 {
-                                // Read total_weight at offset 8 + 32 + 16 + 8 = 64
-                                let total_weight = u64::from_le_bytes(
-                                    pool_data[64..72].try_into().unwrap()
-                                );
+                            // Read current reward_per_share at offset 40
+                            let current_rps = u128::from_le_bytes(pool_data[40..56].try_into().unwrap());
 
-                                if total_weight > 0 {
-                                    // Read current reward_per_share at offset 8 + 32 = 40
-                                    let current_rps = u128::from_le_bytes(
-                                        pool_data[40..56].try_into().unwrap()
-                                    );
+                            // Calculate and write new reward_per_share
+                            let rps_increment = (pool_share as u128 * PRECISION) / pool_weight as u128;
+                            let new_rps = current_rps + rps_increment;
+                            pool_data[40..56].copy_from_slice(&new_rps.to_le_bytes());
 
-                                    // Calculate and write new reward_per_share
-                                    let rps_increment = (pool_share as u128 * PRECISION) / total_weight as u128;
-                                    let new_rps = current_rps + rps_increment;
-                                    pool_data[40..56].copy_from_slice(&new_rps.to_le_bytes());
-
-                                    // Update total_deposited at offset 8 + 32 + 16 + 8 + 8 = 72
-                                    let current_deposited = u64::from_le_bytes(
-                                        pool_data[72..80].try_into().unwrap()
-                                    );
-                                    pool_data[72..80].copy_from_slice(&(current_deposited + pool_share).to_le_bytes());
-                                }
-                            }
+                            // Update total_deposited at offset 72
+                            let current_deposited = u64::from_le_bytes(pool_data[72..80].try_into().unwrap());
+                            pool_data[72..80].copy_from_slice(&(current_deposited + pool_share).to_le_bytes());
                         }
+                        msg!("Distributed {} lamports by weight to {} content pools", content_share, content_pool_count);
                     }
-                    msg!("Distributed {} lamports to {} content pools", content_share, content_pool_count);
                 }
             }
         }

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::state::*;
+use crate::state::reward_pool::PRECISION;
 use crate::errors::ContentRegistryError;
 
 // ============================================================================
@@ -244,6 +245,152 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
     } else {
         msg!("No bundle rewards available to claim");
     }
+
+    Ok(())
+}
+
+// ============================================================================
+// DISTRIBUTE BUNDLE SECONDARY TO CONTENT - Distribute 50% of secondary holder rewards to content pools
+// ============================================================================
+
+#[derive(Accounts)]
+pub struct DistributeBundleSecondaryToContent<'info> {
+    /// Anyone can call this to trigger distribution (permissionless)
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    /// The bundle
+    #[account()]
+    pub bundle: Account<'info, Bundle>,
+
+    /// Bundle reward pool - source of pending content share
+    #[account(
+        mut,
+        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        bump
+    )]
+    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+
+    pub system_program: Program<'info, System>,
+    // remaining_accounts: content_reward_pools for each content in bundle
+}
+
+pub fn handle_distribute_bundle_secondary_to_content(
+    ctx: Context<DistributeBundleSecondaryToContent>
+) -> Result<()> {
+    // First sync any pending secondary royalties
+    let pool_rent = Rent::get()?.minimum_balance(8 + BundleRewardPool::INIT_SPACE);
+    let pool_lamports = ctx.accounts.bundle_reward_pool.to_account_info().lamports();
+    let synced = ctx.accounts.bundle_reward_pool.sync_secondary_royalties(
+        pool_lamports,
+        pool_rent,
+    );
+    if synced > 0 {
+        msg!("Synced {} lamports from secondary sales", synced);
+    }
+
+    // Get pending content share
+    let pending = ctx.accounts.bundle_reward_pool.pending_content_share;
+    if pending == 0 {
+        msg!("No pending content share to distribute");
+        return Ok(());
+    }
+
+    let remaining = ctx.remaining_accounts;
+    if remaining.is_empty() {
+        msg!("No content reward pools provided");
+        return Ok(());
+    }
+
+    // First pass: calculate total weight across all content pools
+    let mut total_combined_weight: u64 = 0;
+    let mut pool_weights: Vec<u64> = Vec::with_capacity(remaining.len());
+
+    for content_pool_info in remaining.iter() {
+        if content_pool_info.owner != ctx.program_id {
+            pool_weights.push(0);
+            continue;
+        }
+
+        let pool_data = content_pool_info.try_borrow_data()?;
+        if pool_data.len() < 8 + ContentRewardPool::INIT_SPACE {
+            pool_weights.push(0);
+            continue;
+        }
+
+        // Read total_weight (u64 at offset 64)
+        let mut weight_bytes = [0u8; 8];
+        weight_bytes.copy_from_slice(&pool_data[64..72]);
+        let weight = u64::from_le_bytes(weight_bytes);
+
+        pool_weights.push(weight);
+        total_combined_weight += weight;
+    }
+
+    if total_combined_weight == 0 {
+        msg!("No content pools have holders, nothing to distribute");
+        return Ok(());
+    }
+
+    // Take the pending content share from bundle pool
+    let distributed = ctx.accounts.bundle_reward_pool.take_pending_content_share();
+
+    // Second pass: distribute proportionally by weight
+    let bundle_pool_info = ctx.accounts.bundle_reward_pool.to_account_info();
+    let mut total_actually_distributed: u64 = 0;
+
+    for (i, content_pool_info) in remaining.iter().enumerate() {
+        let pool_weight = pool_weights[i];
+        if pool_weight == 0 {
+            continue;
+        }
+
+        // Calculate share based on weight proportion
+        let share = (distributed as u128 * pool_weight as u128 / total_combined_weight as u128) as u64;
+        if share == 0 {
+            continue;
+        }
+
+        // Load content reward pool data and add rewards
+        let mut pool_data = content_pool_info.try_borrow_mut_data()?;
+
+        // ContentRewardPool layout:
+        // - discriminator: 8 bytes (0-7)
+        // - cid_hash: 32 bytes (8-39)
+        // - reward_per_share: 16 bytes (40-55)
+        // - total_nfts: 8 bytes (56-63)
+        // - total_weight: 8 bytes (64-71)
+        // - total_deposited: 8 bytes (72-79)
+        // - total_claimed: 8 bytes (80-87)
+        // - created_at: 8 bytes (88-95)
+
+        // Read reward_per_share (u128 at offset 40)
+        let mut rps_bytes = [0u8; 16];
+        rps_bytes.copy_from_slice(&pool_data[40..56]);
+        let reward_per_share = u128::from_le_bytes(rps_bytes);
+
+        // Calculate new reward_per_share for this pool's holders
+        let new_rps = reward_per_share + (share as u128 * PRECISION) / pool_weight as u128;
+        pool_data[40..56].copy_from_slice(&new_rps.to_le_bytes());
+
+        // Update total_deposited
+        let mut deposited_bytes = [0u8; 8];
+        deposited_bytes.copy_from_slice(&pool_data[72..80]);
+        let total_deposited = u64::from_le_bytes(deposited_bytes);
+        let new_deposited = total_deposited + share;
+        pool_data[72..80].copy_from_slice(&new_deposited.to_le_bytes());
+
+        drop(pool_data);
+
+        // Transfer lamports from bundle pool to content pool
+        **bundle_pool_info.try_borrow_mut_lamports()? -= share;
+        **content_pool_info.try_borrow_mut_lamports()? += share;
+
+        total_actually_distributed += share;
+        msg!("Distributed {} lamports to content pool {} (weight: {})", share, content_pool_info.key(), pool_weight);
+    }
+
+    msg!("Total distributed {} lamports by weight to {} content pools", total_actually_distributed, remaining.len());
 
     Ok(())
 }

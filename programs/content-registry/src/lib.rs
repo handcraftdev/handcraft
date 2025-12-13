@@ -1623,6 +1623,15 @@ pub mod content_registry {
         handle_batch_claim_bundle_rewards(ctx)
     }
 
+    /// Distribute 50% of bundle secondary sale holder rewards to content pools
+    /// This distributes the pending_content_share accumulated from secondary sales
+    /// to all content reward pools in the bundle equally
+    pub fn distribute_bundle_secondary_to_content(
+        ctx: Context<DistributeBundleSecondaryToContent>
+    ) -> Result<()> {
+        handle_distribute_bundle_secondary_to_content(ctx)
+    }
+
     // =========================================================================
     // SUBSCRIPTION SYSTEM - Pool Initialization (Phase 1)
     // =========================================================================
