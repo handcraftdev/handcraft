@@ -458,8 +458,8 @@ export default function ProfilePage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <h3 className="font-medium text-sm truncate">{title}</h3>
-                                <p className="text-xs text-gray-500 truncate">
-                                  {nft.nftAsset.toBase58().slice(0, 8)}...
+                                <p className="text-[10px] text-gray-500 font-mono break-all mt-1">
+                                  {nft.nftAsset.toBase58()}
                                 </p>
                               </div>
                               {isOwnProfile && nft.contentCid && (
