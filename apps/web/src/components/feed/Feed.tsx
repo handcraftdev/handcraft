@@ -759,9 +759,10 @@ function ContentCard({ content }: { content: EnrichedContent }) {
       )}
 
       {/* Title & Description */}
-      {content.metadata && (
-        <div className="px-4 py-3">
-          <h2 className="font-medium line-clamp-2">{content.metadata.title || content.metadata.name}</h2>
+      <div className="px-4 py-3">
+        <h2 className="font-medium line-clamp-2">
+          {content.metadata?.title || content.metadata?.name || `Content ${content.contentCid.slice(0, 12)}...`}
+        </h2>
 
           {/* Context info: artist, album, series info */}
           {(artist || album || showName) && (
@@ -805,12 +806,12 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             </div>
           )}
 
-          {content.metadata.description && (
+          {content.metadata?.description && (
             <p className="text-sm text-gray-400 mt-1 line-clamp-2">
               {content.metadata.description}
             </p>
           )}
-          {content.metadata.tags && content.metadata.tags.length > 0 && (
+          {content.metadata?.tags && content.metadata.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {content.metadata.tags.slice(0, 5).map((tag: string) => (
                 <span
@@ -823,7 +824,6 @@ function ContentCard({ content }: { content: EnrichedContent }) {
             </div>
           )}
         </div>
-      )}
 
       {/* Stats & Actions */}
       <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-800">
