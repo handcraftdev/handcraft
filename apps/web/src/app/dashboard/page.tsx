@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
+import { SidebarPanel } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { ManageContentModal } from "@/components/content";
@@ -13,274 +12,274 @@ import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
-function formatSol(lamports: number | bigint): string {
-  const num = typeof lamports === "bigint" ? Number(lamports) : lamports;
-  return (num / LAMPORTS_PER_SOL).toFixed(4);
-}
-
 export default function Dashboard() {
   const { publicKey } = useWallet();
-  const router = useRouter();
   const { content, myBundlesQuery, userProfile, isLoadingUserProfile } = useContentRegistry();
   const [showCreateBundleModal, setShowCreateBundleModal] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [selectedContent, setSelectedContent] = useState<ContentEntry | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
 
   const myBundles = myBundlesQuery.data ?? [];
 
-  // Filter to only user's content
   const myContent = useMemo(() => {
     if (!publicKey) return [];
     return content.filter(c => c.creator?.toBase58() === publicKey.toBase58());
   }, [content, publicKey]);
 
-  // Calculate total stats
   const stats = useMemo(() => {
     let totalMints = 0;
-
     for (const c of myContent) {
       totalMints += Number(c.mintedCount || 0);
     }
-
-    return {
-      totalMints,
-      contentCount: myContent.length,
-    };
+    return { totalMints, contentCount: myContent.length };
   }, [myContent]);
 
-  // Redirect if not connected
   if (!publicKey) {
     return (
-      <div className="min-h-screen bg-black text-white flex">
-        <Sidebar />
-        <main className="flex-1 min-w-0">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">Connect Wallet</h1>
-              <p className="text-gray-400">Please connect your wallet to view your dashboard</p>
+      <div className="min-h-screen bg-black text-white">
+        <SidebarPanel isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+        {/* Menu Button */}
+        <button
+          onClick={toggleSidebar}
+          className="fixed top-4 left-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all"
+        >
+          <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <div className="flex items-center justify-center min-h-screen px-6">
+          <div className="text-center">
+            <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
             </div>
+            <h1 className="text-2xl font-bold mb-3 tracking-tight">Connect Wallet</h1>
+            <p className="text-white/40 max-w-sm mx-auto">Please connect your wallet to access your creator studio</p>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
-      <Sidebar />
-      <main className="flex-1 min-w-0">
-          <div className="max-w-6xl mx-auto p-6">
-            {/* Page Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2">Studio</h1>
-              <p className="text-gray-400">Track your content performance and earnings</p>
-            </div>
+    <div className="min-h-screen bg-black text-white">
+      <SidebarPanel isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-            {/* Creator Profile - Required first */}
-            <div className="mb-8">
-              <UserProfileSettings highlight={!isLoadingUserProfile && !userProfile} />
-            </div>
+      {/* Menu Button */}
+      <button
+        onClick={toggleSidebar}
+        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[296px]' : 'left-4'}`}
+      >
+        <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">My Content</p>
-                    <p className="text-2xl font-bold">{stats.contentCount}</p>
-                  </div>
-                </div>
+      <main className="max-w-5xl mx-auto px-6 py-20">
+        {/* Page Header */}
+        <div className="mb-12">
+          <h1 className="text-4xl font-bold mb-3 tracking-tight">Studio</h1>
+          <p className="text-white/40">Track your content performance and earnings</p>
+        </div>
+
+        {/* Creator Profile */}
+        <div className="mb-10">
+          <UserProfileSettings highlight={!isLoadingUserProfile && !userProfile} />
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 mb-10">
+          <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
-
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">NFTs Minted</p>
-                    <p className="text-2xl font-bold">{stats.totalMints}</p>
-                  </div>
-                </div>
+              <div>
+                <p className="text-white/40 text-sm mb-0.5">My Content</p>
+                <p className="text-3xl font-bold tracking-tight">{stats.contentCount}</p>
               </div>
-
-            </div>
-
-            {/* Membership Settings */}
-            <div className="mb-8">
-              <CreatorMembershipSettings />
-            </div>
-
-            {/* Custom Membership Tiers */}
-            <div className="mb-8">
-              <CustomMembershipManager />
-            </div>
-
-            {/* My Content Table */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-              <div className="p-5 border-b border-gray-800">
-                <h2 className="text-xl font-semibold">My Content</h2>
-              </div>
-
-              {myContent.length === 0 ? (
-                <div className="p-8 text-center">
-                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No content yet</h3>
-                  <p className="text-gray-400 mb-4">Upload your first content to start earning</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-800/50">
-                      <tr>
-                        <th className="text-left py-3 px-5 text-sm font-medium text-gray-400">Content</th>
-                        <th className="text-right py-3 px-5 text-sm font-medium text-gray-400">Type</th>
-                        <th className="text-right py-3 px-5 text-sm font-medium text-gray-400">Mints</th>
-                        <th className="text-right py-3 px-5 text-sm font-medium text-gray-400">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800">
-                      {myContent.map((item) => {
-                        const metadata = (item as any).metadata;
-                        const title = metadata?.title || metadata?.name || "Untitled";
-                        const previewUrl = item.previewCid ? getIpfsUrl(item.previewCid) : null;
-                        const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
-
-                        return (
-                          <tr
-                            key={item.contentCid}
-                            onClick={() => setSelectedContent(item)}
-                            className="hover:bg-gray-800/30 transition-colors cursor-pointer"
-                          >
-                            <td className="py-4 px-5">
-                              <div className="flex items-center gap-3">
-                                {previewUrl ? (
-                                  <img
-                                    src={previewUrl}
-                                    alt={title}
-                                    className="w-12 h-12 rounded-lg object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="font-medium truncate max-w-xs">{title}</p>
-                                  <p className="text-xs text-gray-500 truncate max-w-xs">
-                                    {item.contentCid.slice(0, 20)}...
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-5 text-right">
-                              <span className="text-sm text-gray-400">{contentType}</span>
-                            </td>
-                            <td className="py-4 px-5 text-right">
-                              <span className="text-sm font-medium">{Number(item.mintedCount || 0)}</span>
-                            </td>
-                            <td className="py-4 px-5 text-right">
-                              {item.isLocked ? (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
-                                  Locked
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
-                                  Active
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* My Bundles Section */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden mt-8">
-              <div className="p-5 border-b border-gray-800 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">My Bundles</h2>
-                <button
-                  onClick={() => setShowCreateBundleModal(true)}
-                  className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Create Bundle
-                </button>
-              </div>
-
-              {myBundles.length === 0 ? (
-                <div className="p-8 text-center">
-                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No bundles yet</h3>
-                  <p className="text-gray-400 mb-4">Create a bundle to group your content together</p>
-                  <button
-                    onClick={() => setShowCreateBundleModal(true)}
-                    className="px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Create Your First Bundle
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
-                  {myBundles.map((bundle) => (
-                    <div
-                      key={bundle.bundleId}
-                      onClick={() => setSelectedBundle(bundle)}
-                      className="bg-gray-800 rounded-lg p-4 cursor-pointer hover:bg-gray-750 transition-colors border border-gray-700 hover:border-gray-600"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs px-2 py-1 bg-primary-500/20 text-primary-400 rounded">
-                          {getBundleTypeLabel(bundle.bundleType)}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          bundle.isActive
-                            ? "bg-green-500/20 text-green-400"
-                            : "bg-gray-600/20 text-gray-400"
-                        }`}>
-                          {bundle.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </div>
-                      <h3 className="font-medium truncate">{bundle.bundleId}</h3>
-                      <p className="text-sm text-gray-400 mt-1">{bundle.itemCount} items</p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Created {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
-        </main>
 
-      {/* Create Bundle Modal */}
+          <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-white/40 text-sm mb-0.5">NFTs Minted</p>
+                <p className="text-3xl font-bold tracking-tight">{stats.totalMints}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Membership Settings */}
+        <div className="mb-10">
+          <CreatorMembershipSettings />
+        </div>
+
+        {/* Custom Membership Tiers */}
+        <div className="mb-10">
+          <CustomMembershipManager />
+        </div>
+
+        {/* My Content */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold tracking-tight">My Content</h2>
+            <span className="text-white/30 text-sm">{myContent.length} items</span>
+          </div>
+
+          {myContent.length === 0 ? (
+            <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium mb-2">No content yet</h3>
+              <p className="text-white/40 text-sm">Upload your first content to start earning</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myContent.map((item) => {
+                const metadata = (item as any).metadata;
+                const title = metadata?.title || metadata?.name || "Untitled";
+                const previewUrl = item.previewCid ? getIpfsUrl(item.previewCid) : null;
+                const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
+
+                return (
+                  <div
+                    key={item.contentCid}
+                    onClick={() => setSelectedContent(item)}
+                    className="group relative flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
+                  >
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                    <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+                      {previewUrl ? (
+                        <img src={previewUrl} alt={title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="relative flex-1 min-w-0">
+                      <p className="font-medium truncate text-white/90">{title}</p>
+                      <p className="text-xs text-white/40 truncate mt-0.5">{item.contentCid.slice(0, 24)}...</p>
+                    </div>
+
+                    <div className="relative flex items-center gap-4 text-sm">
+                      <span className="text-white/30">{contentType}</span>
+                      <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} mints</span>
+                      {item.isLocked ? (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] bg-amber-500/10 text-amber-400/80 border border-amber-500/20">Locked</span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20">Active</span>
+                      )}
+                    </div>
+
+                    <svg className="relative w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* My Bundles */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold tracking-tight">My Bundles</h2>
+            <button
+              onClick={() => setShowCreateBundleModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Bundle
+            </button>
+          </div>
+
+          {myBundles.length === 0 ? (
+            <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium mb-2">No bundles yet</h3>
+              <p className="text-white/40 text-sm mb-6">Create a bundle to group your content together</p>
+              <button
+                onClick={() => setShowCreateBundleModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
+              >
+                Create Your First Bundle
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myBundles.map((bundle) => (
+                <div
+                  key={bundle.bundleId}
+                  onClick={() => setSelectedBundle(bundle)}
+                  className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-white/5 text-white/50 border border-white/10">
+                        {getBundleTypeLabel(bundle.bundleType)}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] ${
+                        bundle.isActive
+                          ? "bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20"
+                          : "bg-white/5 text-white/40 border border-white/10"
+                      }`}>
+                        {bundle.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <h3 className="font-medium truncate text-white/90 mb-1">{bundle.bundleId}</h3>
+                    <p className="text-sm text-white/40">{bundle.itemCount} items</p>
+                    <p className="text-xs text-white/25 mt-3">
+                      {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Modals */}
       <CreateBundleModal
         isOpen={showCreateBundleModal}
         onClose={() => setShowCreateBundleModal(false)}
         onSuccess={() => myBundlesQuery.refetch()}
       />
 
-      {/* Manage Bundle Modal */}
       {selectedBundle && (
         <ManageBundleModal
           isOpen={!!selectedBundle}
@@ -290,7 +289,6 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Manage Content Modal */}
       {selectedContent && (
         <ManageContentModal
           isOpen={!!selectedContent}

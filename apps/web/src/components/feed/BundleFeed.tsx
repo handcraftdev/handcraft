@@ -643,25 +643,34 @@ function PlaylistPanel({ bundle, bundleItems, itemMetadata, isLoading, selectedI
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        <div className="relative">
+          <div className="w-8 h-8 border border-white/20 rounded-full" />
+          <div className="absolute inset-0 w-8 h-8 border border-transparent border-t-white/60 rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   if (!bundleItems?.items || bundleItems.items.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-white/40 text-sm">
-        No items in this bundle
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
+        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
+        <p className="text-white/30 text-sm tracking-wide">No tracks yet</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto space-y-1" style={{ scrollbarWidth: "thin" }}>
+    <div className="flex-1 overflow-y-auto space-y-2 pr-1" style={{ scrollbarWidth: "none" }}>
+      <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
       {bundleItems.items.map((item: any, index: number) => {
         const content = item.content;
         const meta = itemMetadata.get(content?.contentCid);
-        const title = meta?.title || meta?.name || `Item ${index + 1}`;
+        const title = meta?.title || meta?.name || `Track ${index + 1}`;
         const thumbnailUrl = content?.previewCid ? getIpfsUrl(content.previewCid) : null;
         const isSelected = index === selectedIndex;
 
@@ -669,31 +678,42 @@ function PlaylistPanel({ bundle, bundleItems, itemMetadata, isLoading, selectedI
           <div
             key={item.contentCid || index}
             onClick={() => onSelectItem(index)}
-            className={`flex items-center gap-3 p-2 rounded-lg transition-all cursor-pointer ${
+            className={`group relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 cursor-pointer ${
               isSelected
-                ? "bg-white/20 border border-white/20"
-                : "bg-white/5 hover:bg-white/10 border border-transparent"
+                ? "bg-white/10 backdrop-blur-sm"
+                : "hover:bg-white/5"
             }`}
           >
+            {/* Selection indicator line */}
+            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-8 rounded-full transition-all duration-300 ${
+              isSelected ? "bg-white" : "bg-transparent group-hover:bg-white/20"
+            }`} />
+
             {/* Track number / Playing indicator */}
-            <div className={`w-6 text-center flex-shrink-0 ${isSelected ? "text-primary-400" : "text-white/30"}`}>
+            <div className={`w-5 text-center flex-shrink-0 transition-all duration-300 ${
+              isSelected ? "text-white" : "text-white/25 group-hover:text-white/40"
+            }`}>
               {isSelected ? (
-                <svg className="w-4 h-4 mx-auto" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+                <div className="flex items-center justify-center gap-0.5">
+                  <span className="w-0.5 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: "0ms" }} />
+                  <span className="w-0.5 h-4 bg-white rounded-full animate-pulse" style={{ animationDelay: "150ms" }} />
+                  <span className="w-0.5 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: "300ms" }} />
+                </div>
               ) : (
-                <span className="text-xs">{index + 1}</span>
+                <span className="text-[11px] font-light">{String(index + 1).padStart(2, '0')}</span>
               )}
             </div>
 
             {/* Thumbnail */}
-            <div className="w-10 h-10 rounded bg-white/10 flex-shrink-0 overflow-hidden">
+            <div className={`w-11 h-11 rounded-lg flex-shrink-0 overflow-hidden transition-all duration-300 ${
+              isSelected ? "ring-1 ring-white/30" : ""
+            }`}>
               {thumbnailUrl ? (
                 <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/20">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white/15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                   </svg>
                 </div>
               )}
@@ -701,10 +721,21 @@ function PlaylistPanel({ bundle, bundleItems, itemMetadata, isLoading, selectedI
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium truncate ${isSelected ? "text-white" : "text-white/80"}`}>{title}</p>
+              <p className={`text-[13px] font-medium truncate transition-colors duration-300 ${
+                isSelected ? "text-white" : "text-white/70 group-hover:text-white/90"
+              }`}>{title}</p>
               {meta?.artist && (
-                <p className="text-white/40 text-xs truncate">{meta.artist}</p>
+                <p className="text-white/30 text-[11px] truncate mt-0.5">{meta.artist}</p>
               )}
+            </div>
+
+            {/* Duration placeholder or play icon on hover */}
+            <div className={`flex-shrink-0 transition-all duration-300 ${
+              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}>
+              <svg className="w-4 h-4 text-white/40" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
             </div>
           </div>
         );
@@ -745,74 +776,108 @@ function BundleSidebarPanel({ bundle, bundleItems, itemMetadata, isLoadingItems,
     .map(nft => bundleNftRarities.get(nft.nftAsset.toBase58()))
     .filter((r): r is Rarity => r !== undefined);
 
-  const rarityColors: Record<Rarity, string> = {
-    [Rarity.Common]: "bg-gray-500/30 text-gray-300",
-    [Rarity.Uncommon]: "bg-green-500/30 text-green-400",
-    [Rarity.Rare]: "bg-blue-500/30 text-blue-400",
-    [Rarity.Epic]: "bg-purple-500/30 text-purple-400",
-    [Rarity.Legendary]: "bg-yellow-500/30 text-yellow-400",
+  const rarityGlow: Record<Rarity, string> = {
+    [Rarity.Common]: "from-gray-400/20 to-gray-500/10",
+    [Rarity.Uncommon]: "from-emerald-400/20 to-emerald-500/10",
+    [Rarity.Rare]: "from-blue-400/20 to-blue-500/10",
+    [Rarity.Epic]: "from-violet-400/20 to-violet-500/10",
+    [Rarity.Legendary]: "from-amber-400/20 to-amber-500/10",
+  };
+
+  const rarityText: Record<Rarity, string> = {
+    [Rarity.Common]: "text-gray-300",
+    [Rarity.Uncommon]: "text-emerald-400",
+    [Rarity.Rare]: "text-blue-400",
+    [Rarity.Epic]: "text-violet-400",
+    [Rarity.Legendary]: "text-amber-400",
   };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Hero Section with Cover */}
-      <div className="relative flex-shrink-0">
+      {/* Cinematic Hero Section */}
+      <div className="relative flex-shrink-0 overflow-hidden">
+        {/* Background atmosphere */}
         {bundle.metadata?.image && (
-          <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0">
             <img
               src={getIpfsUrl(bundle.metadata.image.replace("https://ipfs.io/ipfs/", ""))}
               alt=""
-              className="w-full h-full object-cover blur-3xl scale-150 opacity-30"
+              className="w-full h-full object-cover blur-3xl scale-150 opacity-40"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black" />
           </div>
         )}
 
         <div className="relative p-6 pt-16">
-          <div className="flex gap-4">
-            {bundle.metadata?.image ? (
-              <img
-                src={getIpfsUrl(bundle.metadata.image.replace("https://ipfs.io/ipfs/", ""))}
-                alt=""
-                className="w-24 h-24 object-cover rounded-xl shadow-2xl flex-shrink-0"
-              />
-            ) : (
-              <div className="w-24 h-24 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <svg className="w-10 h-10 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-            )}
+          {/* Album art + info */}
+          <div className="flex gap-5">
+            {/* Cover with glow */}
+            <div className="relative flex-shrink-0">
+              {bundle.metadata?.image ? (
+                <>
+                  <div className="absolute -inset-1 bg-white/10 rounded-2xl blur-xl opacity-50" />
+                  <img
+                    src={getIpfsUrl(bundle.metadata.image.replace("https://ipfs.io/ipfs/", ""))}
+                    alt=""
+                    className="relative w-28 h-28 object-cover rounded-xl shadow-2xl"
+                  />
+                </>
+              ) : (
+                <div className="w-28 h-28 bg-white/5 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/10">
+                  <svg className="w-12 h-12 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+              )}
+            </div>
 
-            <div className="flex-1 min-w-0">
-              <span className="inline-block px-2 py-0.5 rounded text-[10px] uppercase tracking-wider bg-white/10 text-white/60 mb-2">
+            <div className="flex-1 min-w-0 pt-1">
+              {/* Type badge */}
+              <span className="inline-block px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.15em] bg-white/5 backdrop-blur-sm text-white/50 border border-white/10 mb-2">
                 {getBundleTypeLabel(bundle.bundleType)}
               </span>
-              <h2 className="text-white font-bold text-lg mb-1 line-clamp-2 leading-tight">
+              {/* Title */}
+              <h2 className="text-white font-semibold text-xl mb-2 line-clamp-2 leading-snug tracking-tight">
                 {bundle.metadata?.name || bundle.bundleId}
               </h2>
-              <Link href={`/profile/${bundle.creatorAddress}`} className="text-white/50 text-sm hover:text-white/70 transition-colors">
-                {bundle.creatorAddress.slice(0, 6)}...{bundle.creatorAddress.slice(-4)}
+              {/* Creator */}
+              <Link
+                href={`/profile/${bundle.creatorAddress}`}
+                className="inline-flex items-center gap-1.5 text-white/40 text-sm hover:text-white/60 transition-colors"
+              >
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-white/20 to-white/5" />
+                <span>{bundle.creatorAddress.slice(0, 6)}...{bundle.creatorAddress.slice(-4)}</span>
               </Link>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-4 mt-4 text-sm">
-            <span className="text-white/60">
-              <span className="text-white font-medium">{bundle.itemCount}</span> tracks
-            </span>
+          {/* Stats row */}
+          <div className="flex items-center gap-5 mt-5">
+            <div className="flex items-center gap-1.5 text-white/40">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+              </svg>
+              <span className="text-white/70 text-sm font-medium">{bundle.itemCount}</span>
+              <span className="text-xs">tracks</span>
+            </div>
             {mintedCount > 0 && (
-              <span className="text-white/60">
-                <span className="text-white font-medium">{mintedCount}</span> minted
-              </span>
+              <div className="flex items-center gap-1.5 text-white/40">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2" />
+                </svg>
+                <span className="text-white/70 text-sm font-medium">{mintedCount}</span>
+                <span className="text-xs">minted</span>
+              </div>
             )}
             {!isCreator && ownedNftCount > 0 && (
-              <div className="flex items-center gap-1">
-                <span className="text-white/60 text-xs">Owned:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-white/40 text-xs">Owned</span>
                 {Object.entries(ownedRarities.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<Rarity, number>))
                   .map(([rarity, count]) => (
-                    <span key={rarity} className={`inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded text-[10px] font-medium ${rarityColors[Number(rarity) as Rarity]}`}>
+                    <span
+                      key={rarity}
+                      className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold bg-gradient-to-br ${rarityGlow[Number(rarity) as Rarity]} ${rarityText[Number(rarity) as Rarity]} border border-white/10`}
+                    >
                       {count}
                     </span>
                   ))}
@@ -820,38 +885,47 @@ function BundleSidebarPanel({ bundle, bundleItems, itemMetadata, isLoadingItems,
             )}
           </div>
 
+          {/* Description */}
           {bundle.metadata?.description && (
-            <p className="text-white/40 text-sm mt-3 line-clamp-2">{bundle.metadata.description}</p>
+            <p className="text-white/30 text-sm mt-4 line-clamp-2 leading-relaxed">{bundle.metadata.description}</p>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 mt-4">
+          {/* Glassmorphic Action Buttons */}
+          <div className="flex items-center gap-3 mt-6">
             {!isCreator && hasMintConfig && mintConfig && (
               <button
                 onClick={() => setShowBuyModal(true)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-full transition-colors text-sm font-medium"
+                className="group flex-1 relative overflow-hidden"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Buy · {(Number(mintConfig.price) / LAMPORTS_PER_SOL).toFixed(2)} SOL
+                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/5 rounded-xl" />
+                <div className="relative flex items-center justify-center gap-2 px-5 py-3 backdrop-blur-sm rounded-xl border border-white/20 hover:border-white/40 transition-all duration-300">
+                  <svg className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="text-white/90 text-sm font-medium">
+                    Collect · {(Number(mintConfig.price) / LAMPORTS_PER_SOL).toFixed(2)} SOL
+                  </span>
+                </div>
               </button>
             )}
             {!isCreator && hasRentConfig && (
               <button
                 onClick={() => setShowRentModal(true)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-full transition-colors text-sm font-medium border border-amber-500/30"
+                className="group relative overflow-hidden"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Rent
+                <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-amber-600/5 rounded-xl" />
+                <div className="relative flex items-center justify-center gap-2 px-5 py-3 backdrop-blur-sm rounded-xl border border-amber-500/30 hover:border-amber-400/50 transition-all duration-300">
+                  <svg className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-amber-400/90 text-sm font-medium">Rent</span>
+                </div>
               </button>
             )}
             <Link href={`/bundle/${bundle.creatorAddress}/${bundle.bundleId}`}>
-              <button className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <button className="group p-3 bg-white/5 hover:bg-white/10 backdrop-blur-sm rounded-xl border border-white/10 hover:border-white/20 transition-all duration-300">
+                <svg className="w-4 h-4 text-white/50 group-hover:text-white/80 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
               </button>
             </Link>
@@ -861,7 +935,10 @@ function BundleSidebarPanel({ bundle, bundleItems, itemMetadata, isLoadingItems,
 
       {/* Tracklist Section */}
       <div className="flex-1 flex flex-col min-h-0 px-6 pb-6">
-        <h3 className="text-white/40 text-xs uppercase tracking-[0.2em] mb-3 flex-shrink-0">Tracklist</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white/30 text-[11px] uppercase tracking-[0.2em] font-medium">Tracklist</h3>
+          <span className="text-white/20 text-[11px]">{bundleItems?.items?.length || 0} tracks</span>
+        </div>
         <PlaylistPanel
           bundle={bundle}
           bundleItems={bundleItems}
