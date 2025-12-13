@@ -1092,17 +1092,18 @@ export async function fetchBundleNftRewardStatesBatch(
       const accountInfo = accounts[i];
       if (accountInfo) {
         try {
-          // Decode the account data using Anchor
+          // Decode the account data using Anchor - now uses UnifiedNftRewardState (simple_mint)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const decoded = (program.account as any).bundleNftRewardState.coder.accounts.decode(
-            "bundleNftRewardState",
+          const decoded = (program.account as any).unifiedNftRewardState.coder.accounts.decode(
+            "unifiedNftRewardState",
             accountInfo.data
           );
 
+          // Map UnifiedNftRewardState to BundleNftRewardState format for backwards compatibility
           states.set(nftAssets[i].toBase58(), {
             nftAsset: decoded.nftAsset,
-            bundle: decoded.bundle,
-            rewardDebt: BigInt(decoded.rewardDebt.toString()),
+            bundle: decoded.contentOrBundle, // UnifiedNftRewardState uses contentOrBundle
+            rewardDebt: BigInt(decoded.contentOrBundleDebt?.toString() || "0"),
             weight: decoded.weight || 100,
             createdAt: BigInt(decoded.createdAt.toString()),
           });
@@ -1271,17 +1272,18 @@ export async function fetchNftRewardStatesBatch(
       const accountInfo = accounts[i];
       if (accountInfo) {
         try {
-          // Decode the account data using Anchor
+          // Decode the account data using Anchor - now uses UnifiedNftRewardState (simple_mint)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const decoded = (program.account as any).nftRewardState.coder.accounts.decode(
-            "nftRewardState",
+          const decoded = (program.account as any).unifiedNftRewardState.coder.accounts.decode(
+            "unifiedNftRewardState",
             accountInfo.data
           );
 
+          // Map UnifiedNftRewardState to NftRewardState format for backwards compatibility
           states.set(nftAssets[i].toBase58(), {
             nftAsset: decoded.nftAsset,
-            content: decoded.content,
-            rewardDebt: BigInt(decoded.rewardDebt.toString()),
+            content: decoded.contentOrBundle, // UnifiedNftRewardState uses contentOrBundle
+            rewardDebt: BigInt(decoded.contentOrBundleDebt?.toString() || "0"),
             weight: decoded.weight || 100,
             createdAt: BigInt(decoded.createdAt.toString()),
           });
@@ -1411,15 +1413,15 @@ export async function fetchNftRewardState(
     const program = createProgram(connection);
     const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
 
-    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
+    // Use program.account.<name>.fetch() - now uses UnifiedNftRewardState (simple_mint)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).nftRewardState.fetch(nftRewardStatePda);
+    const decoded = await (program.account as any).unifiedNftRewardState.fetch(nftRewardStatePda);
 
-    // Anchor auto-converts snake_case to camelCase in returned objects
+    // Map UnifiedNftRewardState to NftRewardState format for backwards compatibility
     return {
       nftAsset: decoded.nftAsset,
-      content: decoded.content,
-      rewardDebt: BigInt(decoded.rewardDebt.toString()),
+      content: decoded.contentOrBundle, // UnifiedNftRewardState uses contentOrBundle
+      rewardDebt: BigInt(decoded.contentOrBundleDebt?.toString() || "0"),
       weight: decoded.weight || 100,
       createdAt: BigInt(decoded.createdAt.toString()),
     };
