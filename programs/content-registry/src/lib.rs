@@ -1762,13 +1762,15 @@ pub mod content_registry {
         handle_update_patron_config(ctx, membership_price, subscription_price, is_active)
     }
 
-    /// Subscribe to a creator (one-time payment for 30 days)
-    /// Distribution: 80% creator, 5% platform, 3% ecosystem, 12% holder pool
+    /// Subscribe to a creator (Streamflow payment)
+    /// Creates subscription record - payment handled via Streamflow stream
+    /// stream_id: The Streamflow stream ID for this subscription's payment
     pub fn subscribe_patron(
         ctx: Context<SubscribePatron>,
         tier: PatronTier,
+        stream_id: Pubkey,
     ) -> Result<()> {
-        handle_subscribe_patron(ctx, tier)
+        handle_subscribe_patron(ctx, tier, stream_id)
     }
 
     /// Cancel patron subscription
@@ -1776,7 +1778,8 @@ pub mod content_registry {
         handle_cancel_patron_subscription(ctx)
     }
 
-    /// Renew patron subscription (another 30 days)
+    /// Renew patron subscription (Streamflow topup extends the stream)
+    /// Updates subscription timestamp - stream_id stays the same
     pub fn renew_patron_subscription(ctx: Context<RenewPatronSubscription>) -> Result<()> {
         handle_renew_patron_subscription(ctx)
     }
@@ -1785,10 +1788,11 @@ pub mod content_registry {
     // ECOSYSTEM SUBSCRIPTION SYSTEM (Phase 3)
     // =========================================================================
 
-    /// Subscribe to ecosystem (one-time payment for 30 days)
-    /// Distribution: 80% creator pool, 12% holder pool, 5% platform, 3% ecosystem
-    pub fn subscribe_ecosystem(ctx: Context<SubscribeEcosystem>) -> Result<()> {
-        handle_subscribe_ecosystem(ctx)
+    /// Subscribe to ecosystem (Streamflow payment)
+    /// Creates subscription record - payment handled via Streamflow stream
+    /// stream_id: The Streamflow stream ID for this subscription's payment
+    pub fn subscribe_ecosystem(ctx: Context<SubscribeEcosystem>, stream_id: Pubkey) -> Result<()> {
+        handle_subscribe_ecosystem(ctx, stream_id)
     }
 
     /// Cancel ecosystem subscription
@@ -1804,6 +1808,47 @@ pub mod content_registry {
     /// Check if user has valid subscription access for content
     pub fn check_subscription_access(ctx: Context<CheckSubscriptionAccess>) -> Result<()> {
         handle_check_subscription_access(ctx)
+    }
+
+    // =========================================================================
+    // STREAMFLOW MEMBERSHIP SYSTEM (Secure CPI-based stream creation)
+    // =========================================================================
+
+    /// Join ecosystem membership via Streamflow CPI
+    /// Program creates stream to treasury PDA - prevents fund redirection attacks
+    /// duration_type: 0 = monthly, 1 = yearly (10 months for 12 months access)
+    pub fn join_ecosystem_membership(
+        ctx: Context<JoinEcosystemMembership>,
+        duration_type: u8,
+    ) -> Result<()> {
+        handle_join_ecosystem_membership(ctx, duration_type)
+    }
+
+    /// Join creator membership via Streamflow CPI
+    /// tier: 0 = Membership (support only), 1 = Subscription (support + access)
+    /// duration_type: 0 = monthly, 1 = yearly
+    pub fn join_creator_membership(
+        ctx: Context<JoinCreatorMembership>,
+        tier: u8,
+        duration_type: u8,
+    ) -> Result<()> {
+        handle_join_creator_membership(ctx, tier, duration_type)
+    }
+
+    /// Cancel ecosystem membership - cancels Streamflow stream and returns remaining funds
+    pub fn cancel_ecosystem_membership_stream(
+        ctx: Context<CancelEcosystemMembershipStream>,
+    ) -> Result<()> {
+        handle_cancel_ecosystem_membership_stream(ctx)
+    }
+
+    /// Extend ecosystem membership by topping up existing stream
+    /// duration_type: 0 = monthly, 1 = yearly
+    pub fn topup_ecosystem_membership(
+        ctx: Context<TopupEcosystemMembership>,
+        duration_type: u8,
+    ) -> Result<()> {
+        handle_topup_ecosystem_membership(ctx, duration_type)
     }
 }
 

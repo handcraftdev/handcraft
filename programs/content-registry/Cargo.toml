@@ -24,3 +24,5 @@ mpl-core = "0.11.1"
 solana-sha256-hasher = "2.1"
 switchboard-on-demand = "0.11.3"
 ephemeral-vrf-sdk = { version = "0.2", features = ["anchor"] }
+# Streamflow SDK for CPI (program-controlled stream creation)
+streamflow-sdk = { version = "0.10", features = ["cpi", "devnet"] }

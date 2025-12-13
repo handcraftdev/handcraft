@@ -17,6 +17,7 @@ pub mod subscription_burn;
 pub mod patron_subscription;
 pub mod ecosystem_subscription;
 pub mod simple_mint;
+pub mod streamflow_membership;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -37,3 +38,4 @@ pub use subscription_burn::*;
 pub use patron_subscription::*;
 pub use ecosystem_subscription::*;
 pub use simple_mint::*;
+pub use streamflow_membership::*;

@@ -138,11 +138,11 @@ pub fn handle_update_patron_config(
 }
 
 // ============================================================================
-// SUBSCRIBE TO CREATOR (SOL direct payment - simplified version)
+// SUBSCRIBE TO CREATOR (Streamflow payment)
 // ============================================================================
 
-/// Subscribe to a creator (epoch-based lazy distribution)
-/// Payment goes to streaming treasury, distributed on epoch end (triggered by mint or claim)
+/// Subscribe to a creator (Streamflow handles payment)
+/// Creates subscription record - actual payment is via Streamflow stream to treasury
 #[derive(Accounts)]
 pub struct SubscribePatron<'info> {
     /// Creator's patron configuration
@@ -152,16 +152,6 @@ pub struct SubscribePatron<'info> {
         constraint = patron_config.is_active @ ContentRegistryError::PatronConfigInactive
     )]
     pub patron_config: Account<'info, CreatorPatronConfig>,
-
-    /// Creator's patron streaming treasury - receives 100% of subscription payment
-    /// Distributed on epoch end: 80% creator, 5% platform, 3% ecosystem, 12% holder pool
-    /// CHECK: PDA verified by seeds
-    #[account(
-        mut,
-        seeds = [CREATOR_PATRON_TREASURY_SEED, creator.key().as_ref()],
-        bump
-    )]
-    pub creator_patron_treasury: AccountInfo<'info>,
 
     /// User's subscription to this creator (to be created)
     #[account(
@@ -187,59 +177,41 @@ pub struct SubscribePatron<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Subscribe to creator (payment to streaming treasury for epoch-based distribution)
-/// Full payment goes to CreatorPatronStreamingTreasury, distributed on epoch end
+/// Subscribe to creator (Streamflow handles payment)
+/// Creates subscription record - payment is handled via Streamflow streams
+/// stream_id: The Streamflow stream ID for this subscription's payment
 pub fn handle_subscribe_patron(
     ctx: Context<SubscribePatron>,
     tier: PatronTier,
+    stream_id: Pubkey,
 ) -> Result<()> {
     let timestamp = Clock::get()?.unix_timestamp;
     let config = &ctx.accounts.patron_config;
 
-    // Get price based on tier
-    let price = match tier {
+    // Validate tier is available
+    match tier {
         PatronTier::Membership => {
             require!(config.membership_price > 0, ContentRegistryError::TierNotAvailable);
-            config.membership_price
         }
         PatronTier::Subscription => {
             require!(config.subscription_price > 0, ContentRegistryError::TierNotAvailable);
-            config.subscription_price
         }
     };
 
-    // Transfer FULL payment to streaming treasury
-    // Will be distributed on epoch end: 80% creator, 5% platform, 3% ecosystem, 12% pool
-    if price > 0 {
-        let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.subscriber.key(),
-            &ctx.accounts.creator_patron_treasury.key(),
-            price,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &transfer_ix,
-            &[
-                ctx.accounts.subscriber.to_account_info(),
-                ctx.accounts.creator_patron_treasury.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-    }
-
-    // Initialize subscription
+    // Initialize subscription record (payment handled by Streamflow)
     let subscription = &mut ctx.accounts.patron_subscription;
     subscription.subscriber = ctx.accounts.subscriber.key();
     subscription.creator = ctx.accounts.creator.key();
     subscription.tier = tier;
-    subscription.stream_id = Pubkey::default(); // No stream yet - direct payment
+    subscription.stream_id = stream_id;
     subscription.started_at = timestamp;
     subscription.is_active = true;
 
-    msg!("Patron subscription created (payment to streaming treasury)");
+    msg!("Patron subscription created (Streamflow payment)");
     msg!("  Subscriber: {}", ctx.accounts.subscriber.key());
     msg!("  Creator: {}", ctx.accounts.creator.key());
     msg!("  Tier: {:?}", tier);
-    msg!("  Price: {} lamports (to streaming treasury)", price);
+    msg!("  Stream ID: {}", stream_id);
 
     Ok(())
 }
@@ -295,15 +267,6 @@ pub struct RenewPatronSubscription<'info> {
     )]
     pub patron_config: Account<'info, CreatorPatronConfig>,
 
-    /// Creator's patron streaming treasury - receives 100% of renewal payment
-    /// CHECK: PDA verified by seeds
-    #[account(
-        mut,
-        seeds = [CREATOR_PATRON_TREASURY_SEED, creator.key().as_ref()],
-        bump
-    )]
-    pub creator_patron_treasury: AccountInfo<'info>,
-
     /// Existing subscription to renew
     #[account(
         mut,
@@ -320,58 +283,24 @@ pub struct RenewPatronSubscription<'info> {
     )]
     pub creator: AccountInfo<'info>,
 
-    /// The subscriber paying for renewal
-    #[account(mut)]
+    /// The subscriber
     pub subscriber: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
 }
 
-/// Renew patron subscription (payment to streaming treasury)
+/// Renew patron subscription (Streamflow topup extends the stream)
+/// Updates subscription timestamp - stream_id stays the same
 pub fn handle_renew_patron_subscription(ctx: Context<RenewPatronSubscription>) -> Result<()> {
     let timestamp = Clock::get()?.unix_timestamp;
-    let subscription = &ctx.accounts.patron_subscription;
-    let config = &ctx.accounts.patron_config;
 
-    // Get price based on current tier
-    let price = match subscription.tier {
-        PatronTier::Membership => {
-            require!(config.membership_price > 0, ContentRegistryError::TierNotAvailable);
-            config.membership_price
-        }
-        PatronTier::Subscription => {
-            require!(config.subscription_price > 0, ContentRegistryError::TierNotAvailable);
-            config.subscription_price
-        }
-    };
-
-    // Transfer FULL payment to streaming treasury
-    // Will be distributed on epoch end: 80% creator, 5% platform, 3% ecosystem, 12% pool
-    if price > 0 {
-        let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.subscriber.key(),
-            &ctx.accounts.creator_patron_treasury.key(),
-            price,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &transfer_ix,
-            &[
-                ctx.accounts.subscriber.to_account_info(),
-                ctx.accounts.creator_patron_treasury.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-    }
-
-    // Update subscription timestamp
+    // Update subscription timestamp (stream topup handled externally)
     let subscription = &mut ctx.accounts.patron_subscription;
     subscription.started_at = timestamp;
     subscription.is_active = true;
 
-    msg!("Patron subscription renewed (payment to streaming treasury)");
+    msg!("Patron subscription renewed (via Streamflow topup)");
     msg!("  Subscriber: {}", ctx.accounts.subscriber.key());
     msg!("  Creator: {}", ctx.accounts.creator.key());
-    msg!("  Price: {} lamports (to streaming treasury)", price);
+    msg!("  Stream ID (unchanged): {}", subscription.stream_id);
 
     Ok(())
 }

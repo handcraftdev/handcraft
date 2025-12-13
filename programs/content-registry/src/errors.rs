@@ -182,4 +182,12 @@ pub enum ContentRegistryError {
     InvalidInput,
     #[msg("Invalid visibility level - must be 0-3")]
     InvalidVisibilityLevel,
+
+    // Streamflow membership errors
+    #[msg("Invalid duration type - must be 0 (monthly) or 1 (yearly)")]
+    InvalidDurationType,
+    #[msg("Invalid stream ID - does not match subscription record")]
+    InvalidStreamId,
+    #[msg("Invalid tier - must be 0 (membership) or 1 (subscription)")]
+    InvalidTier,
 }

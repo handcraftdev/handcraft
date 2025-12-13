@@ -6,8 +6,8 @@ use crate::errors::ContentRegistryError;
 // SUBSCRIBE TO ECOSYSTEM (epoch-based lazy distribution)
 // ============================================================================
 
-/// Subscribe to ecosystem (epoch-based lazy distribution)
-/// Payment goes to streaming treasury, distributed on epoch end (triggered by mint or claim)
+/// Subscribe to ecosystem (Streamflow payment)
+/// Payment handled by Streamflow stream to treasury, distributed on epoch end
 #[derive(Accounts)]
 pub struct SubscribeEcosystem<'info> {
     /// Ecosystem subscription config
@@ -28,59 +28,29 @@ pub struct SubscribeEcosystem<'info> {
     )]
     pub ecosystem_subscription: Account<'info, EcosystemSubscription>,
 
-    /// Ecosystem streaming treasury - receives 100% of subscription payment
-    /// Distributed on epoch end: 80% creator pool, 5% platform, 3% ecosystem, 12% holder pool
-    /// CHECK: PDA verified by seeds
-    #[account(
-        mut,
-        seeds = [ECOSYSTEM_STREAMING_TREASURY_SEED],
-        bump
-    )]
-    pub ecosystem_streaming_treasury: AccountInfo<'info>,
-
-    /// The subscriber paying for ecosystem access
+    /// The subscriber creating the subscription
     #[account(mut)]
     pub subscriber: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
-/// Subscribe to ecosystem (payment to streaming treasury for epoch-based distribution)
-/// Full payment goes to EcosystemStreamingTreasury, distributed on epoch end
-pub fn handle_subscribe_ecosystem(ctx: Context<SubscribeEcosystem>) -> Result<()> {
+/// Subscribe to ecosystem (Streamflow handles payment)
+/// Creates subscription record - actual payment is via Streamflow stream to treasury
+/// stream_id: The Streamflow stream ID for this subscription's payment
+pub fn handle_subscribe_ecosystem(ctx: Context<SubscribeEcosystem>, stream_id: Pubkey) -> Result<()> {
     let timestamp = Clock::get()?.unix_timestamp;
-    let price = ctx.accounts.ecosystem_sub_config.price;
 
-    require!(price > 0, ContentRegistryError::InvalidEcosystemSubPrice);
-
-    // Transfer FULL payment to streaming treasury
-    // Will be distributed on epoch end: 80% creator pool, 12% holder pool, 5% platform, 3% ecosystem
-    if price > 0 {
-        let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.subscriber.key(),
-            &ctx.accounts.ecosystem_streaming_treasury.key(),
-            price,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &transfer_ix,
-            &[
-                ctx.accounts.subscriber.to_account_info(),
-                ctx.accounts.ecosystem_streaming_treasury.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-    }
-
-    // Initialize subscription
+    // Initialize subscription record (payment handled by Streamflow)
     let subscription = &mut ctx.accounts.ecosystem_subscription;
     subscription.subscriber = ctx.accounts.subscriber.key();
-    subscription.stream_id = Pubkey::default(); // No stream yet - direct payment
+    subscription.stream_id = stream_id;
     subscription.started_at = timestamp;
     subscription.is_active = true;
 
-    msg!("Ecosystem subscription created (payment to streaming treasury)");
+    msg!("Ecosystem subscription created (Streamflow payment)");
     msg!("  Subscriber: {}", ctx.accounts.subscriber.key());
-    msg!("  Price: {} lamports (to streaming treasury)", price);
+    msg!("  Stream ID: {}", stream_id);
 
     Ok(())
 }
@@ -140,57 +110,23 @@ pub struct RenewEcosystemSubscription<'info> {
     )]
     pub ecosystem_subscription: Account<'info, EcosystemSubscription>,
 
-    /// Ecosystem streaming treasury - receives 100% of renewal payment
-    /// Distributed on epoch end: 80% creator pool, 5% platform, 3% ecosystem, 12% holder pool
-    /// CHECK: PDA verified by seeds
-    #[account(
-        mut,
-        seeds = [ECOSYSTEM_STREAMING_TREASURY_SEED],
-        bump
-    )]
-    pub ecosystem_streaming_treasury: AccountInfo<'info>,
-
-    /// The subscriber paying for renewal
-    #[account(mut)]
+    /// The subscriber renewing
     pub subscriber: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
 }
 
-/// Renew ecosystem subscription (payment to streaming treasury for epoch-based distribution)
-/// Full payment goes to EcosystemStreamingTreasury, distributed on epoch end
+/// Renew ecosystem subscription (Streamflow topup extends the stream)
+/// Updates subscription timestamp - stream_id stays the same
 pub fn handle_renew_ecosystem_subscription(ctx: Context<RenewEcosystemSubscription>) -> Result<()> {
     let timestamp = Clock::get()?.unix_timestamp;
-    let price = ctx.accounts.ecosystem_sub_config.price;
 
-    require!(price > 0, ContentRegistryError::InvalidEcosystemSubPrice);
-
-    // Transfer FULL payment to streaming treasury
-    // Will be distributed on epoch end: 80% creator pool, 12% holder pool, 5% platform, 3% ecosystem
-    if price > 0 {
-        let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.subscriber.key(),
-            &ctx.accounts.ecosystem_streaming_treasury.key(),
-            price,
-        );
-        anchor_lang::solana_program::program::invoke(
-            &transfer_ix,
-            &[
-                ctx.accounts.subscriber.to_account_info(),
-                ctx.accounts.ecosystem_streaming_treasury.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-    }
-
-    // Update subscription timestamp
+    // Update subscription timestamp (stream topup handled externally)
     let subscription = &mut ctx.accounts.ecosystem_subscription;
     subscription.started_at = timestamp;
     subscription.is_active = true;
 
-    msg!("Ecosystem subscription renewed (payment to streaming treasury)");
+    msg!("Ecosystem subscription renewed (via Streamflow topup)");
     msg!("  Subscriber: {}", ctx.accounts.subscriber.key());
-    msg!("  Price: {} lamports (to streaming treasury)", price);
+    msg!("  Stream ID (unchanged): {}", subscription.stream_id);
 
     Ok(())
 }
