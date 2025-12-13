@@ -272,7 +272,7 @@ export function Feed() {
   return (
     <div className="pb-20">
       {/* Content Type Filter & Sort */}
-      <div className="sticky top-[105px] z-40 bg-black/90 backdrop-blur-md border-b border-gray-800">
+      <div className="sticky top-[57px] z-30 bg-black/95 backdrop-blur-sm border-b border-gray-800">
         <div className="flex flex-wrap justify-center items-center gap-1.5 px-4 py-3">
           {/* Sort Type Dropdown */}
           <div className="relative">
