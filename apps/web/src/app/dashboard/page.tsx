@@ -3,12 +3,12 @@
 import { useState, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
-import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { ManageContentModal } from "@/components/content";
+import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -59,29 +59,24 @@ export default function Dashboard() {
   // Redirect if not connected
   if (!publicKey) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <Header />
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 ml-0 md:ml-64 pt-16">
-            <div className="flex items-center justify-center min-h-[60vh]">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold mb-4">Connect Wallet</h1>
-                <p className="text-gray-400">Please connect your wallet to view your dashboard</p>
-              </div>
+      <div className="min-h-screen bg-black text-white flex">
+        <Sidebar />
+        <main className="flex-1 min-w-0">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-4">Connect Wallet</h1>
+              <p className="text-gray-400">Please connect your wallet to view your dashboard</p>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64 pt-16">
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0">
           <div className="max-w-6xl mx-auto p-6">
             {/* Page Header */}
             <div className="mb-8">
@@ -140,6 +135,16 @@ export default function Dashboard() {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Membership Settings */}
+            <div className="mb-8">
+              <CreatorMembershipSettings />
+            </div>
+
+            {/* Custom Membership Tiers */}
+            <div className="mb-8">
+              <CustomMembershipManager />
             </div>
 
             {/* My Content Table */}
@@ -291,7 +296,6 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
-      </div>
 
       {/* Claim Rewards Modal */}
       {showClaimModal && (

@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Header } from "@/components/header";
+import { Sidebar } from "@/components/sidebar";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
 
-      {/* Hero Section */}
-      <main className="pt-16">
-        <div className="max-w-6xl mx-auto px-4 py-20">
+      {/* Main Content */}
+      <main className="flex-1 min-w-0">
+        <div className="max-w-5xl mx-auto px-6 py-12">
           {/* Hero */}
           <div className="text-center mb-20">
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary-400 via-secondary-400 to-primary-400 bg-clip-text text-transparent">
@@ -222,7 +222,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="border-t border-gray-800 py-8 mt-20">
-          <div className="max-w-6xl mx-auto px-4 text-center text-gray-500 text-sm">
+          <div className="max-w-5xl mx-auto px-6 text-center text-gray-500 text-sm">
             <p>Built on Solana. Powered by IPFS.</p>
           </div>
         </footer>

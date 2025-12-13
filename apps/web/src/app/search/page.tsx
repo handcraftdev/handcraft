@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { getIpfsUrl, getContentTypeLabel, getBundleTypeLabel, ContentType, BundleType } from "@handcraft/sdk";
-import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 
 const SEARCH_HISTORY_KEY = "handcraft-search-history";
@@ -239,7 +238,7 @@ function SearchContent() {
   return (
     <>
       {/* Search Header */}
-      <div className="sticky top-16 z-40 bg-black border-b border-gray-800">
+      <div className="sticky top-0 z-40 bg-black border-b border-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-4">
           {/* Search Input */}
           <form onSubmit={handleSearch} className="mb-4">
@@ -420,7 +419,7 @@ function SearchContent() {
 function SearchLoadingFallback() {
   return (
     <>
-      <div className="sticky top-16 z-40 bg-black border-b border-gray-800">
+      <div className="sticky top-0 z-40 bg-black border-b border-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="h-12 bg-gray-900 rounded-full animate-pulse" />
         </div>
@@ -447,16 +446,13 @@ function SearchLoadingFallback() {
 
 export default function SearchPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <div className="flex pt-16">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64">
-          <Suspense fallback={<SearchLoadingFallback />}>
-            <SearchContent />
-          </Suspense>
-        </main>
-      </div>
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0">
+        <Suspense fallback={<SearchLoadingFallback />}>
+          <SearchContent />
+        </Suspense>
+      </main>
     </div>
   );
 }

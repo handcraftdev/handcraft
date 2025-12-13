@@ -6,12 +6,12 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { ClaimRewardsModal } from "@/components/claim";
 import { BurnNftModal } from "@/components/nft";
 import { RarityBadge } from "@/components/rarity";
+import { CreatorMembershipBanner, EcosystemMembershipCard, CustomMembershipCard } from "@/components/membership";
 import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -174,19 +174,16 @@ export default function ProfilePage() {
   // Invalid address
   if (!profileAddress) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <Header />
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 ml-0 md:ml-64 pt-16">
-            <div className="flex items-center justify-center min-h-[60vh]">
-              <div className="text-center">
-                <h1 className="text-2xl font-bold mb-4">Invalid Address</h1>
-                <p className="text-gray-400">The provided wallet address is not valid</p>
-              </div>
+      <div className="min-h-screen bg-black text-white flex">
+        <Sidebar />
+        <main className="flex-1 min-w-0">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-4">Invalid Address</h1>
+              <p className="text-gray-400">The provided wallet address is not valid</p>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -194,11 +191,9 @@ export default function ProfilePage() {
   const shortAddress = `${profileAddress.toBase58().slice(0, 4)}...${profileAddress.toBase58().slice(-4)}`;
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64 pt-16">
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0">
           <div className="max-w-6xl mx-auto p-6">
             {/* Profile Header */}
             <div className="bg-gradient-to-br from-primary-500/20 to-secondary-500/20 rounded-2xl p-8 mb-8 border border-gray-800">
@@ -218,15 +213,17 @@ export default function ProfilePage() {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(profileAddress.toBase58())}
-                    className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    <span className="font-mono">{profileAddress.toBase58().slice(0, 16)}...</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center justify-center sm:justify-start gap-3">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(profileAddress.toBase58())}
+                      className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+                    >
+                      <span className="font-mono">{profileAddress.toBase58().slice(0, 16)}...</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
 
                   {/* Stats Row */}
                   <div className="flex items-center justify-center sm:justify-start gap-6 mt-4">
@@ -263,6 +260,20 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+
+            {/* Membership Banners */}
+            {isOwnProfile ? (
+              /* Ecosystem Membership for own profile */
+              <div className="mb-8">
+                <EcosystemMembershipCard />
+              </div>
+            ) : (
+              /* Creator Membership for other profiles */
+              <div className="mb-8 space-y-4">
+                <CreatorMembershipBanner creator={profileAddress} />
+                <CustomMembershipCard creator={profileAddress} />
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="border-b border-gray-800 mb-6">
@@ -580,7 +591,6 @@ export default function ProfilePage() {
             )}
           </div>
         </main>
-      </div>
 
       {/* Claim Rewards Modal */}
       <ClaimRewardsModal

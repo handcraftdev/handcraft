@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Feed, BundleFeed } from "@/components/feed";
 import { Sidebar } from "@/components/sidebar";
-import { Header } from "@/components/header";
 
 type MainTab = "content" | "bundles";
 
@@ -59,7 +58,7 @@ function ExploreContent() {
   return (
     <>
       {/* Main Tab Navigation */}
-      <div className="sticky top-16 z-40 bg-black border-b border-gray-800">
+      <div className="sticky top-0 z-40 bg-black border-b border-gray-800">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex">
             <button
@@ -112,16 +111,13 @@ function ExploreContent() {
 
 export default function ExplorePage() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <div className="flex pt-16">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64">
-          <Suspense fallback={<FeedLoadingFallback />}>
-            <ExploreContent />
-          </Suspense>
-        </main>
-      </div>
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0">
+        <Suspense fallback={<FeedLoadingFallback />}>
+          <ExploreContent />
+        </Suspense>
+      </main>
     </div>
   );
 }

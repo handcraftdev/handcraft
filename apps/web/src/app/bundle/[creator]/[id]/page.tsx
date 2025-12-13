@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Header } from "@/components/header";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, Bundle, BundleWithItems, ContentEntry } from "@/hooks/useContentRegistry";
 import { getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
@@ -147,11 +146,9 @@ export default function BundlePage() {
   }, [bundleWithItems, metadata]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 ml-0 md:ml-64 pt-16">
+    <div className="min-h-screen bg-black text-white flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0">
           <div className="max-w-4xl mx-auto p-6">
             {isLoading ? (
               <div className="flex items-center justify-center min-h-[40vh]">
@@ -376,7 +373,6 @@ export default function BundlePage() {
             ) : null}
           </div>
         </main>
-      </div>
     </div>
   );
 }
