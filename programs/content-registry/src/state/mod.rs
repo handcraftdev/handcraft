@@ -8,6 +8,7 @@ pub mod rent;
 pub mod bundle;
 pub mod rarity;
 pub mod subscription;
+pub mod profile;
 
 pub use content::{ContentEntry, ContentType};
 pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
@@ -68,3 +69,4 @@ pub use subscription::{
     // Helper functions
     calculate_primary_split, calculate_ecosystem_split,
 };
+pub use profile::{UserProfile, USER_PROFILE_SEED, MAX_USERNAME_LENGTH};

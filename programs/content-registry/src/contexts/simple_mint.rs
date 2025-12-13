@@ -191,7 +191,13 @@ pub struct SimpleMint<'info> {
 }
 
 impl<'info> SimpleMint<'info> {
-    pub fn handler(ctx: Context<SimpleMint>) -> Result<()> {
+    pub fn handler(ctx: Context<SimpleMint>, content_name: String) -> Result<()> {
+        // Validate content name (1-32 chars for Metaplex Core)
+        require!(
+            !content_name.is_empty() && content_name.len() <= 32,
+            ContentRegistryError::InvalidContentName
+        );
+
         let clock = Clock::get()?;
         let timestamp = clock.unix_timestamp;
 
@@ -303,7 +309,8 @@ impl<'info> SimpleMint<'info> {
         // =====================================================================
 
         let edition = ctx.accounts.content.minted_count + 1;
-        let nft_name = format!("Handcraft #{}", edition);
+        // NFT name format: "<ContentName> (<R> #XXXXXX)" where R is single-letter rarity code
+        let nft_name = format!("{} ({} #{:06})", content_name, rarity.code(), edition);
         let nft_uri = format!("https://ipfs.io/ipfs/{}", metadata_cid);
 
         let content_collection_seeds = &[
@@ -698,7 +705,13 @@ pub struct SimpleMintBundle<'info> {
 }
 
 impl<'info> SimpleMintBundle<'info> {
-    pub fn handler<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>) -> Result<()> {
+    pub fn handler<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>, bundle_name: String) -> Result<()> {
+        // Validate bundle name (1-32 chars for Metaplex Core)
+        require!(
+            !bundle_name.is_empty() && bundle_name.len() <= 32,
+            ContentRegistryError::InvalidContentName
+        );
+
         let clock = Clock::get()?;
         let timestamp = clock.unix_timestamp;
 
@@ -781,7 +794,8 @@ impl<'info> SimpleMintBundle<'info> {
 
         // Create NFT
         let edition = ctx.accounts.bundle.minted_count + 1;
-        let nft_name = format!("Handcraft Bundle #{}", edition);
+        // NFT name format: "<BundleName> (<R> #XXXXXX)" where R is single-letter rarity code
+        let nft_name = format!("{} ({} #{:06})", bundle_name, rarity.code(), edition);
         let nft_uri = format!("https://ipfs.io/ipfs/{}", metadata_cid);
 
         let bundle_collection_seeds = &[

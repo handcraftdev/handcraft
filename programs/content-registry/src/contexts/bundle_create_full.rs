@@ -6,8 +6,9 @@ use mpl_core::types::{
 };
 
 use crate::state::*;
+use crate::state::profile::{UserProfile, USER_PROFILE_SEED};
 use crate::errors::ContentRegistryError;
-use crate::MPL_CORE_ID;
+use crate::{MPL_CORE_ID, DEFAULT_MAX_SUPPLY};
 
 // ============================================================================
 // CREATE BUNDLE WITH MINT AND RENT - All-in-one bundle creation
@@ -81,6 +82,15 @@ pub struct CreateBundleWithMintAndRent<'info> {
     #[account()]
     pub platform: AccountInfo<'info>,
 
+    /// User profile for collection naming
+    /// Collection name format: "HC: <Username>" or "HC: <Username>: <CollectionName>"
+    #[account(
+        seeds = [USER_PROFILE_SEED, creator.key().as_ref()],
+        bump,
+        constraint = user_profile.owner == creator.key() @ ContentRegistryError::Unauthorized
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+
     /// CHECK: MPL Core program
     #[account(address = MPL_CORE_ID)]
     pub mpl_core_program: AccountInfo<'info>,
@@ -101,6 +111,8 @@ pub fn handle_create_bundle_with_mint_and_rent(
     rent_fee_6h: u64,
     rent_fee_1d: u64,
     rent_fee_7d: u64,
+    // Collection naming
+    collection_name: Option<String>,
 ) -> Result<()> {
     // Validate mint price
     require!(
@@ -113,6 +125,11 @@ pub fn handle_create_bundle_with_mint_and_rent(
         BundleMintConfig::validate_royalty(creator_royalty_bps),
         ContentRegistryError::InvalidRoyalty
     );
+
+    // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+    if let Some(supply) = mint_max_supply {
+        require!(supply <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+    }
 
     // Validate rent fees
     require!(
@@ -150,7 +167,8 @@ pub fn handle_create_bundle_with_mint_and_rent(
     mint_config.bundle = bundle_key;
     mint_config.creator = ctx.accounts.creator.key();
     mint_config.price = mint_price;
-    mint_config.max_supply = mint_max_supply;
+    // Default to DEFAULT_MAX_SUPPLY if not specified
+    mint_config.max_supply = Some(mint_max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
     mint_config.creator_royalty_bps = creator_royalty_bps;
     mint_config.is_active = true;
     mint_config.created_at = clock.unix_timestamp;
@@ -184,7 +202,12 @@ pub fn handle_create_bundle_with_mint_and_rent(
     );
 
     // Create the Metaplex Core Collection with Royalties plugin
-    let collection_name = "Handcraft Bundle Collection".to_string();
+    // Collection name format: "HC: <Username>" or "HC: <Username>: <CollectionName>"
+    let username = &ctx.accounts.user_profile.username;
+    let collection_name_str = match &collection_name {
+        Some(name) => format!("HC: {}: {}", username, name),
+        None => format!("HC: {}", username),
+    };
     let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", metadata_cid);
 
     // Calculate royalty shares
@@ -223,7 +246,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
         .payer(&ctx.accounts.creator.to_account_info())
         .update_authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
         .system_program(&ctx.accounts.system_program.to_account_info())
-        .name(collection_name)
+        .name(collection_name_str)
         .uri(collection_uri)
         .plugins(vec![royalties_plugin])
         .invoke()?;

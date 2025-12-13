@@ -16,6 +16,9 @@ pub const MPL_CORE_ID: Pubkey = Pubkey::new_from_array([
     0xc9, 0x7e, 0xbe, 0x2d, 0x23, 0x5b, 0xa7, 0x48,
 ]);
 
+/// Default max supply for NFT mints - matches the 6-digit edition format #{:06}
+pub const DEFAULT_MAX_SUPPLY: u64 = 999_999;
+
 /// Create a Metaplex Core Collection with Royalties plugin
 /// NFTs minted into this collection inherit the royalty configuration
 /// This enforces secondary sale royalties on-chain
@@ -365,6 +368,8 @@ pub mod content_registry {
     }
 
     /// Register new content with optional NFT mint configuration
+    /// collection_name: Optional collection name - if provided, collection is named "HC: <Username>: <CollectionName>"
+    ///                  If not provided, collection is named "HC: <Username>"
     pub fn register_content_with_mint(
         ctx: Context<RegisterContentWithMint>,
         cid_hash: [u8; 32],
@@ -378,6 +383,7 @@ pub mod content_registry {
         preview_cid: String,
         encryption_meta_cid: String,
         visibility_level: u8,
+        collection_name: Option<String>,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
@@ -398,6 +404,10 @@ pub mod content_registry {
             MintConfig::validate_royalty(creator_royalty_bps),
             ContentRegistryError::InvalidRoyalty
         );
+        // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+        if let Some(supply) = max_supply {
+            require!(supply <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+        }
 
         let content = &mut ctx.accounts.content;
         let cid_registry = &mut ctx.accounts.cid_registry;
@@ -428,7 +438,8 @@ pub mod content_registry {
         mint_config.creator = ctx.accounts.authority.key();
         mint_config.price = price;
         mint_config.currency = PaymentCurrency::Sol;
-        mint_config.max_supply = max_supply;
+        // Default to DEFAULT_MAX_SUPPLY if not specified
+        mint_config.max_supply = Some(max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
         mint_config.creator_royalty_bps = creator_royalty_bps;
         mint_config.is_active = true;
         mint_config.created_at = timestamp;
@@ -444,7 +455,12 @@ pub mod content_registry {
         // Create Metaplex Core Collection for this content with Royalties plugin
         // NFT ownership is verified at claim time instead of using lifecycle hooks
         // Royalties are enforced on-chain via Metaplex Core plugin
-        let collection_name = format!("Handcraft Collection");
+        // Collection name format: "HC: <Username>" or "HC: <Username>: <CollectionName>"
+        let username = &ctx.accounts.user_profile.username;
+        let collection_name_str = match &collection_name {
+            Some(name) => format!("HC: {}: {}", username, name),
+            None => format!("HC: {}", username),
+        };
         let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
 
         // Derive ContentRewardPool PDA for holder royalties
@@ -460,7 +476,7 @@ pub mod content_registry {
             &ctx.accounts.authority.to_account_info(),
             &ctx.accounts.content_collection.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
-            collection_name,
+            collection_name_str,
             collection_uri,
             ctx.accounts.authority.key(),              // Creator receives creator royalties
             ctx.accounts.platform.key(),               // Platform receives 1%
@@ -542,6 +558,7 @@ pub mod content_registry {
     // ============================================
 
     /// Configure NFT minting for content (creator only, SOL only)
+    /// If max_supply is None, defaults to DEFAULT_MAX_SUPPLY (999,999)
     pub fn configure_mint(
         ctx: Context<ConfigureMint>,
         price: u64,
@@ -560,6 +577,11 @@ pub mod content_registry {
             ContentRegistryError::InvalidRoyalty
         );
 
+        // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+        if let Some(supply) = max_supply {
+            require!(supply <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+        }
+
         let mint_config = &mut ctx.accounts.mint_config;
         let timestamp = Clock::get()?.unix_timestamp;
 
@@ -567,7 +589,8 @@ pub mod content_registry {
         mint_config.creator = ctx.accounts.creator.key();
         mint_config.price = price;
         mint_config.currency = PaymentCurrency::Sol;
-        mint_config.max_supply = max_supply;
+        // Default to DEFAULT_MAX_SUPPLY if not specified
+        mint_config.max_supply = Some(max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
         mint_config.creator_royalty_bps = creator_royalty_bps;
         mint_config.is_active = true;
         mint_config.created_at = timestamp;
@@ -599,6 +622,11 @@ pub mod content_registry {
 
         // Max supply restrictions after minting starts
         if let Some(new_max_supply) = max_supply {
+            // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+            if let Some(new_max) = new_max_supply {
+                require!(new_max <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+            }
+
             if content.minted_count > 0 {
                 // After first mint: can only decrease, not increase or set unlimited
                 if let Some(new_max) = new_max_supply {
@@ -619,7 +647,8 @@ pub mod content_registry {
                     return Err(ContentRegistryError::CannotIncreaseSupply.into());
                 }
             }
-            mint_config.max_supply = new_max_supply;
+            // Default to DEFAULT_MAX_SUPPLY if None passed
+            mint_config.max_supply = Some(new_max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
         }
 
         // Royalty cannot change after first mint
@@ -1471,6 +1500,7 @@ pub mod content_registry {
 
     /// Create a bundle with mint and rent configuration in a single transaction
     /// Bundle is created as published with mint and rent enabled by default
+    /// collection_name: Optional collection name - if provided, collection is named "HC: <Username>: <CollectionName>"
     pub fn create_bundle_with_mint_and_rent(
         ctx: Context<CreateBundleWithMintAndRent>,
         bundle_id: String,
@@ -1482,6 +1512,7 @@ pub mod content_registry {
         rent_fee_6h: u64,
         rent_fee_1d: u64,
         rent_fee_7d: u64,
+        collection_name: Option<String>,
     ) -> Result<()> {
         handle_create_bundle_with_mint_and_rent(
             ctx,
@@ -1494,6 +1525,7 @@ pub mod content_registry {
             rent_fee_6h,
             rent_fee_1d,
             rent_fee_7d,
+            collection_name,
         )
     }
 
@@ -1544,14 +1576,16 @@ pub mod content_registry {
 
     /// Simple mint content NFT with slot hash randomness + full subscription pool tracking
     /// Single transaction - no VRF, immediate mint, tracks all reward pools
-    pub fn simple_mint(ctx: Context<SimpleMint>) -> Result<()> {
-        SimpleMint::handler(ctx)
+    /// content_name: Content title for NFT naming - format: "<ContentName> (<R> #XXXXXX)"
+    pub fn simple_mint(ctx: Context<SimpleMint>, content_name: String) -> Result<()> {
+        SimpleMint::handler(ctx, content_name)
     }
 
     /// Simple mint bundle NFT with slot hash randomness + full subscription pool tracking
     /// Single transaction - grants access to all bundle content
-    pub fn simple_mint_bundle<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>) -> Result<()> {
-        SimpleMintBundle::handler(ctx)
+    /// bundle_name: Bundle title for NFT naming - format: "<BundleName> (<R> #XXXXXX)"
+    pub fn simple_mint_bundle<'a>(ctx: Context<'_, '_, 'a, 'a, SimpleMintBundle<'a>>, bundle_name: String) -> Result<()> {
+        SimpleMintBundle::handler(ctx, bundle_name)
     }
 
     // =========================================================================
@@ -1849,6 +1883,21 @@ pub mod content_registry {
         duration_type: u8,
     ) -> Result<()> {
         handle_topup_ecosystem_membership(ctx, duration_type)
+    }
+
+    // =========================================================================
+    // USER PROFILE SYSTEM
+    // =========================================================================
+
+    /// Create a user profile with username
+    /// Used for NFT naming: "HC: <Username>: <CollectionName>"
+    pub fn create_user_profile(ctx: Context<CreateUserProfile>, username: String) -> Result<()> {
+        profile::create_user_profile(ctx, username)
+    }
+
+    /// Update user profile username
+    pub fn update_user_profile(ctx: Context<UpdateUserProfile>, username: String) -> Result<()> {
+        profile::update_user_profile(ctx, username)
     }
 }
 

@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::state::*;
+use crate::state::profile::{UserProfile, USER_PROFILE_SEED};
 use crate::errors::ContentRegistryError;
 use crate::MPL_CORE_ID;
 
@@ -87,6 +88,15 @@ pub struct RegisterContentWithMint<'info> {
 
     /// CHECK: Platform wallet for royalties
     pub platform: AccountInfo<'info>,
+
+    /// User profile for collection naming
+    /// Collection name format: "HC: <Username>" or "HC: <Username>: <CollectionName>"
+    #[account(
+        seeds = [USER_PROFILE_SEED, authority.key().as_ref()],
+        bump,
+        constraint = user_profile.owner == authority.key() @ ContentRegistryError::Unauthorized
+    )]
+    pub user_profile: Box<Account<'info, UserProfile>>,
 
     #[account(mut)]
     pub authority: Signer<'info>,

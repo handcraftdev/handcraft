@@ -24,6 +24,8 @@ pub enum ContentRegistryError {
     MintingNotActive,
     #[msg("Maximum supply reached")]
     MaxSupplyReached,
+    #[msg("Max supply cannot exceed 999,999 (6-digit edition limit)")]
+    MaxSupplyTooHigh,
     #[msg("Price below minimum allowed")]
     PriceTooLow,
     #[msg("Free minting is not allowed - price must be greater than 0")]
@@ -190,4 +192,12 @@ pub enum ContentRegistryError {
     InvalidStreamId,
     #[msg("Invalid tier - must be 0 (membership) or 1 (subscription)")]
     InvalidTier,
+
+    // Profile errors
+    #[msg("Invalid username - must be 1-20 characters")]
+    InvalidUsername,
+    #[msg("User profile not found")]
+    ProfileNotFound,
+    #[msg("Invalid content name - must be 1-32 characters")]
+    InvalidContentName,
 }

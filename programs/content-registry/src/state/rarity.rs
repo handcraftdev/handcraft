@@ -37,6 +37,18 @@ impl Rarity {
         }
     }
 
+    /// Get single-letter rarity code for NFT names
+    /// C=Common, U=Uncommon, R=Rare, E=Epic, L=Legendary
+    pub fn code(&self) -> &'static str {
+        match self {
+            Rarity::Common => "C",
+            Rarity::Uncommon => "U",
+            Rarity::Rare => "R",
+            Rarity::Epic => "E",
+            Rarity::Legendary => "L",
+        }
+    }
+
     /// Determine rarity from a random u128 value
     /// Uses the full range of u128 for maximum precision
     ///

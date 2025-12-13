@@ -7,7 +7,7 @@ use mpl_core::types::{
 
 use crate::state::*;
 use crate::errors::ContentRegistryError;
-use crate::MPL_CORE_ID;
+use crate::{MPL_CORE_ID, DEFAULT_MAX_SUPPLY};
 
 // ============================================================================
 // CONFIGURE BUNDLE MINT - Set up minting for a bundle
@@ -89,6 +89,11 @@ pub fn handle_configure_bundle_mint(
         ContentRegistryError::InvalidRoyalty
     );
 
+    // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+    if let Some(supply) = max_supply {
+        require!(supply <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+    }
+
     let clock = Clock::get()?;
     let bundle_key = ctx.accounts.bundle.key();
 
@@ -97,7 +102,8 @@ pub fn handle_configure_bundle_mint(
     mint_config.bundle = bundle_key;
     mint_config.creator = ctx.accounts.creator.key();
     mint_config.price = price;
-    mint_config.max_supply = max_supply;
+    // Default to DEFAULT_MAX_SUPPLY if not specified
+    mint_config.max_supply = Some(max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
     mint_config.creator_royalty_bps = creator_royalty_bps;
     mint_config.is_active = true;
     mint_config.created_at = clock.unix_timestamp;
@@ -212,6 +218,11 @@ pub fn handle_update_bundle_mint_settings(
 
     // Max supply restrictions after minting starts
     if let Some(new_max_supply) = max_supply {
+        // Validate max_supply doesn't exceed limit (for 6-digit edition format)
+        if let Some(new_max) = new_max_supply {
+            require!(new_max <= DEFAULT_MAX_SUPPLY, ContentRegistryError::MaxSupplyTooHigh);
+        }
+
         if bundle.minted_count > 0 {
             if let Some(new_max) = new_max_supply {
                 require!(
@@ -228,7 +239,8 @@ pub fn handle_update_bundle_mint_settings(
                 return Err(ContentRegistryError::CannotIncreaseSupply.into());
             }
         }
-        mint_config.max_supply = new_max_supply;
+        // Default to DEFAULT_MAX_SUPPLY if None passed
+        mint_config.max_supply = Some(new_max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
     }
 
     // Royalty cannot change after first mint
