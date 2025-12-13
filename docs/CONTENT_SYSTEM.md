@@ -731,6 +731,24 @@ The 12% holder share is split 50/50:
 
 This prevents bundle sales from cannibalizing individual content sales.
 
+#### Bundle Secondary Sale Split
+
+When a bundle edition is resold:
+
+| Recipient | Share | Destination |
+|-----------|-------|-------------|
+| Seller | 90% | Seller wallet |
+| Creator | 4% | Creator wallet (fixed royalty) |
+| Platform | 1% | Platform treasury |
+| Ecosystem | 1% | Ecosystem treasury |
+| **Holders** | **4%** | **Split: 2% Bundle + 2% Content** |
+
+The 4% holder share is also split 50/50:
+- 50% (2%) → BundleRewardPool (bundle edition holders)
+- 50% (2%) → ContentRewardPools (distributed by weight to content in bundle)
+
+The content share is accumulated in `pending_content_share` on the BundleRewardPool and distributed via `distribute_bundle_secondary_to_content` instruction.
+
 ### Bundle Access
 
 Bundle edition owners can access ALL encrypted content within the bundle, regardless of individual content visibility levels.
