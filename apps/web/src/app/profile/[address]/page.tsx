@@ -188,7 +188,7 @@ export default function ProfilePage() {
     );
   }
 
-  const shortAddress = `${profileAddress.toBase58().slice(0, 4)}...${profileAddress.toBase58().slice(-4)}`;
+  const fullAddress = profileAddress.toBase58();
 
   return (
     <div className="min-h-screen bg-black text-white flex">
@@ -200,25 +200,25 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 {/* Avatar */}
                 <div className="w-24 h-24 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-4xl font-bold">
-                  {profileAddress.toBase58().charAt(0).toUpperCase()}
+                  {fullAddress.charAt(0).toUpperCase()}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
-                    <h1 className="text-2xl font-bold">{shortAddress}</h1>
+                    <h1 className="text-lg font-bold font-mono break-all">{fullAddress}</h1>
                     {isOwnProfile && (
-                      <span className="px-2 py-0.5 bg-primary-500/20 text-primary-400 text-xs rounded-full">
+                      <span className="px-2 py-0.5 bg-primary-500/20 text-primary-400 text-xs rounded-full flex-shrink-0">
                         You
                       </span>
                     )}
                   </div>
                   <div className="flex items-center justify-center sm:justify-start gap-3">
                     <button
-                      onClick={() => navigator.clipboard.writeText(profileAddress.toBase58())}
+                      onClick={() => navigator.clipboard.writeText(fullAddress)}
                       className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
                     >
-                      <span className="font-mono">{profileAddress.toBase58().slice(0, 16)}...</span>
+                      <span>Copy address</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
@@ -419,7 +419,7 @@ export default function ProfilePage() {
                       // Find content metadata from globalContent
                       const contentData = globalContent.find(c => c.contentCid === nft.contentCid);
                       const metadata = (contentData as any)?.metadata;
-                      const title = metadata?.title || metadata?.name || "NFT";
+                      const title = metadata?.title || metadata?.name || nft.name || "Untitled";
                       const previewUrl = contentData?.previewCid
                         ? getIpfsUrl(contentData.previewCid)
                         : null;
