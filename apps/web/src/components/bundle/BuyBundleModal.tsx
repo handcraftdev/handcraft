@@ -192,6 +192,8 @@ export function BuyBundleModal({
         setMintStep("committing");
 
         // Use simple mint (slot hash randomness) - single transaction, immediate completion
+        // Use bundle name from props for NFT naming
+        const bundleNameForNft = bundleName || bundleId;
         const { instruction, nftAsset, edition } = await client.simpleMintBundleInstruction(
           publicKey,
           bundleId,
@@ -199,6 +201,7 @@ export function BuyBundleModal({
           ecosystemConfig.treasury,
           ecosystemConfig.treasury, // Use treasury as platform for now
           bundleCollection.collectionAsset,
+          bundleNameForNft.slice(0, 32), // Limit to 32 chars for Metaplex Core
           [] // contentCids - leave empty for now
         );
 

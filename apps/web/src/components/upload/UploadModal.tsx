@@ -406,6 +406,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
   // Type-specific metadata state
   const [metadata, setMetadata] = useState<Record<string, string>>({
+    collection_name: "",
     title: "",
     description: "",
     tags: "",
@@ -441,7 +442,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { registerContentWithMintAndRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig } = useContentRegistry();
+  const { registerContentWithMintAndRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig, userProfile, isLoadingUserProfile } = useContentRegistry();
 
   const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -644,7 +645,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview(null);
-    setMetadata({ title: "", description: "", tags: "" });
+    setMetadata({ collection_name: "", title: "", description: "", tags: "" });
     setSelectedDomain(null);
     setContentType(null);
     setStep("domain");
@@ -751,6 +752,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
     const commonFields = (
       <>
+        <InputField label="Collection Name" field="collection_name" placeholder="e.g., Summer Photos 2024" />
         <InputField label="Title" field="title" placeholder="Enter title" required />
         <TextAreaField label="Description" field="description" placeholder="Brief description..." rows={2} />
         <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
@@ -1029,7 +1031,32 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           </button>
         </div>
 
-        {/* Content */}
+        {/* Profile Gate */}
+        {!isLoadingUserProfile && !userProfile && publicKey && (
+          <div className="p-6 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">Creator Profile Required</h3>
+            <p className="text-gray-400 mb-6 max-w-sm">
+              Set up your creator profile before uploading content. Your username will appear on your NFT collections as "HC: YourName".
+            </p>
+            <a
+              href="/dashboard"
+              className="px-6 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg font-medium transition-colors inline-flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Go to Studio
+            </a>
+          </div>
+        )}
+
+        {/* Content - only show when profile exists */}
+        {(userProfile || isLoadingUserProfile || !publicKey) && (
         <div className="p-6 overflow-y-auto flex-1">
           {/* Step: Domain Selection */}
           {step === "domain" && (
@@ -1540,6 +1567,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

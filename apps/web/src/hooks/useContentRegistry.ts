@@ -30,9 +30,11 @@ import {
   getBundleRentConfigPda,
   getBundleCollectionPda,
   getBundleRewardPoolPda,
+  getUserProfilePda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   ContentRewardPool,
+  UserProfile,
   WalletContentState,
   MintConfig,
   EcosystemConfig,
@@ -79,6 +81,7 @@ export {
   getBundleRentConfigPda,
   getBundleCollectionPda,
   getBundleRewardPoolPda,
+  getUserProfilePda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   FIXED_CREATOR_ROYALTY_BPS,
@@ -89,7 +92,7 @@ export {
   MIN_RENT_FEE_LAMPORTS,
 };
 export type { MbMintRequest } from "@handcraft/sdk";
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool, UserProfile };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -126,6 +129,58 @@ export function useContentRegistry() {
   }, [publicKey, globalContentQuery.data]);
 
   const isLoadingUserContent = globalContentQuery.isLoading;
+
+  // Fetch user profile for the connected wallet
+  const userProfileQuery = useQuery({
+    queryKey: ["userProfile", publicKey?.toBase58()],
+    queryFn: () => {
+      if (!client || !publicKey) return null;
+      return client.fetchUserProfile(publicKey);
+    },
+    enabled: !!client && !!publicKey,
+    staleTime: 300000, // Cache for 5 minutes
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Create user profile mutation
+  const createUserProfile = useMutation({
+    mutationFn: async ({ username }: { username: string }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      const ix = await client.createUserProfileInstruction(publicKey, username);
+      const tx = new Transaction().add(ix);
+      await simulateTransaction(connection, tx, publicKey);
+
+      const signature = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+      return signature;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["userProfile", publicKey?.toBase58()] });
+    },
+  });
+
+  // Update user profile mutation
+  const updateUserProfile = useMutation({
+    mutationFn: async ({ username }: { username: string }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+
+      const ix = await client.updateUserProfileInstruction(publicKey, username);
+      const tx = new Transaction().add(ix);
+      await simulateTransaction(connection, tx, publicKey);
+
+      const signature = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+      return signature;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["userProfile", publicKey?.toBase58()] });
+    },
+  });
 
   // Register content mutation (without NFT config)
   const registerContent = useMutation({
@@ -1678,12 +1733,14 @@ export function useContentRegistry() {
   const directMintBundle = useMutation({
     mutationFn: async ({
       bundleId,
+      bundleName,
       creator,
       treasury,
       platform,
       collectionAsset,
     }: {
       bundleId: string;
+      bundleName: string;
       creator: PublicKey;
       treasury: PublicKey;
       platform: PublicKey;
@@ -1698,6 +1755,7 @@ export function useContentRegistry() {
         treasury,
         platform,
         collectionAsset,
+        bundleName.slice(0, 32), // Limit to 32 chars for Metaplex Core
         []  // contentCids for 50/50 distribution
       );
 
@@ -2675,6 +2733,15 @@ export function useContentRegistry() {
     ecosystemConfigError: ecosystemConfigQuery.error,
     isEcosystemConfigError: ecosystemConfigQuery.isError,
     refetchEcosystemConfig: ecosystemConfigQuery.refetch,
+
+    // User Profile
+    userProfile: userProfileQuery.data,
+    isLoadingUserProfile: userProfileQuery.isLoading,
+    refetchUserProfile: userProfileQuery.refetch,
+    createUserProfile: createUserProfile.mutateAsync,
+    updateUserProfile: updateUserProfile.mutateAsync,
+    isCreatingUserProfile: createUserProfile.isPending,
+    isUpdatingUserProfile: updateUserProfile.isPending,
 
     // Actions
     registerContent: registerContent.mutateAsync,

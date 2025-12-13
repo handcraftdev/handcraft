@@ -101,13 +101,16 @@ export function BuyContentModal({
         setMintStep("committing");
 
         // Use simple mint instruction (slot hash randomness)
+        // Get content name from metadata for NFT naming
+        const contentName = contentTitle || `Content ${contentCid.slice(0, 8)}`;
         const { instruction, nftAsset, edition } = await client.simpleMintInstruction(
           publicKey,
           contentCid,
           creator,
           ecosystemConfig.treasury,
           platformWallet,
-          contentCollection.collectionAsset
+          contentCollection.collectionAsset,
+          contentName.slice(0, 32) // Limit to 32 chars for Metaplex Core
         );
 
         console.log("Simple mint params:", {

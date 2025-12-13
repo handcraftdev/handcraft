@@ -5,10 +5,10 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
-import { ClaimRewardsModal } from "@/components/claim";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { ManageContentModal } from "@/components/content";
 import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
+import { UserProfileSettings } from "@/components/profile";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -21,13 +21,11 @@ function formatSol(lamports: number | bigint): string {
 export default function Dashboard() {
   const { publicKey } = useWallet();
   const router = useRouter();
-  const { content, usePendingRewards, pendingRewardsQuery, myBundlesQuery } = useContentRegistry();
-  const [showClaimModal, setShowClaimModal] = useState(false);
+  const { content, myBundlesQuery, userProfile, isLoadingUserProfile } = useContentRegistry();
   const [showCreateBundleModal, setShowCreateBundleModal] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [selectedContent, setSelectedContent] = useState<ContentEntry | null>(null);
 
-  const { data: pendingRewards } = usePendingRewards();
   const myBundles = myBundlesQuery.data ?? [];
 
   // Filter to only user's content
@@ -44,17 +42,11 @@ export default function Dashboard() {
       totalMints += Number(c.mintedCount || 0);
     }
 
-    const totalPendingRewards = pendingRewards?.reduce(
-      (acc, r) => acc + r.pending,
-      BigInt(0)
-    ) || BigInt(0);
-
     return {
       totalMints,
-      totalPendingRewards,
       contentCount: myContent.length,
     };
-  }, [myContent, pendingRewards]);
+  }, [myContent]);
 
   // Redirect if not connected
   if (!publicKey) {
@@ -80,8 +72,13 @@ export default function Dashboard() {
           <div className="max-w-6xl mx-auto p-6">
             {/* Page Header */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2">Creator Dashboard</h1>
+              <h1 className="text-3xl font-bold mb-2">Studio</h1>
               <p className="text-gray-400">Track your content performance and earnings</p>
+            </div>
+
+            {/* Creator Profile - Required first */}
+            <div className="mb-8">
+              <UserProfileSettings highlight={!isLoadingUserProfile && !userProfile} />
             </div>
 
             {/* Stats Cards */}
@@ -114,27 +111,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">Claimable Rewards</p>
-                    <p className="text-2xl font-bold text-green-400">{formatSol(stats.totalPendingRewards)} SOL</p>
-                  </div>
-                </div>
-                {stats.totalPendingRewards > BigInt(0) && (
-                  <button
-                    onClick={() => setShowClaimModal(true)}
-                    className="w-full mt-2 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Claim Rewards
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Membership Settings */}
@@ -296,15 +272,6 @@ export default function Dashboard() {
             </div>
           </div>
         </main>
-
-      {/* Claim Rewards Modal */}
-      {showClaimModal && (
-        <ClaimRewardsModal
-          isOpen={showClaimModal}
-          onClose={() => setShowClaimModal(false)}
-          onSuccess={() => pendingRewardsQuery.refetch()}
-        />
-      )}
 
       {/* Create Bundle Modal */}
       <CreateBundleModal
