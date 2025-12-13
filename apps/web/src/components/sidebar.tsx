@@ -81,12 +81,6 @@ function SlideInSidebar({
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={onClose}
-      />
-
       {/* Slide-in Panel */}
       <aside className={`fixed top-0 left-0 h-full w-72 bg-black/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Header */}
