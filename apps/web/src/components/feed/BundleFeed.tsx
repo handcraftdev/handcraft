@@ -516,6 +516,7 @@ export function BundleFeed({ isSidebarOpen = false, onToggleSidebar }: BundleFee
               contentIndex={getCurrentContentIndex(bundleKey)}
               bundleItems={cache?.items ?? null}
               isLoadingItems={cache?.loading ?? true}
+              rightPanelOpen={showPlaylist}
             />
           );
         })}
@@ -533,9 +534,10 @@ interface BundleSlideProps {
   contentIndex: number;
   bundleItems: BundleWithItems | null;
   isLoadingItems: boolean;
+  rightPanelOpen?: boolean;
 }
 
-function BundleSlide({ bundle, index, isActive, contentIndex, bundleItems, isLoadingItems }: BundleSlideProps) {
+function BundleSlide({ bundle, index, isActive, contentIndex, bundleItems, isLoadingItems, rightPanelOpen = false }: BundleSlideProps) {
   const [enrichedContent, setEnrichedContent] = useState<EnrichedContent | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const lastContentIndexRef = useRef<number>(-1);
@@ -619,7 +621,7 @@ function BundleSlide({ bundle, index, isActive, contentIndex, bundleItems, isLoa
   }
 
   // Use ContentSlide to display the content with full layout
-  return <ContentSlide content={enrichedContent} index={index} isActive={isActive} />;
+  return <ContentSlide content={enrichedContent} index={index} isActive={isActive} rightPanelOpen={rightPanelOpen} />;
 }
 
 // ============== PLAYLIST PANEL ==============

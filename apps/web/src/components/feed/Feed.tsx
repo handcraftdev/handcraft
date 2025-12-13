@@ -436,7 +436,14 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
 }
 
 // ============== CONTENT SLIDE (immersive mode) ==============
-export function ContentSlide({ content, index, isActive }: { content: EnrichedContent; index: number; isActive: boolean }) {
+interface ContentSlideProps {
+  content: EnrichedContent;
+  index: number;
+  isActive: boolean;
+  rightPanelOpen?: boolean;
+}
+
+export function ContentSlide({ content, index, isActive, rightPanelOpen = false }: ContentSlideProps) {
   const [showOverlay, setShowOverlay] = useState(true);
   const [showBuyContentModal, setShowBuyContentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -621,8 +628,8 @@ export function ContentSlide({ content, index, isActive }: { content: EnrichedCo
         </div>
       </div>
 
-      {/* Right Actions */}
-      <div className={`absolute right-4 bottom-32 flex flex-col items-center gap-4 transition-all duration-500 ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+      {/* Right Actions - shift inside when right panel opens */}
+      <div className={`absolute bottom-32 flex flex-col items-center gap-4 transition-all duration-300 ${rightPanelOpen ? "right-[436px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
         {!isCreator && hasMintConfig && <button onClick={() => setShowBuyContentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Buy NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></button>}
         {!isCreator && hasRentConfig && <button onClick={() => setShowRentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={activeRental ? "Extend" : "Rent"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
         {!isCreator && ownedNftCount > 0 && <button onClick={() => setShowSellModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Sell NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
