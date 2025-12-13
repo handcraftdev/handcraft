@@ -406,8 +406,6 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
         </div>
       </div>
 
-      {showFilters && <div className="absolute inset-0 bg-black/50 z-30" onClick={() => setShowFilters(false)} />}
-
       {/* Progress Indicator */}
       <div className="absolute right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
         {displayContent.slice(Math.max(0, currentIndex - 3), Math.min(displayContent.length, currentIndex + 4)).map((_, idx) => {
@@ -422,8 +420,16 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
         })}
       </div>
 
-      {/* Main Feed Container */}
-      <div ref={containerRef} className="h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+      {/* Main Feed Container - click to close panels */}
+      <div
+        ref={containerRef}
+        className="h-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        onClick={() => {
+          if (showFilters) setShowFilters(false);
+          if (isSidebarOpen && onToggleSidebar) onToggleSidebar();
+        }}
+      >
         <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
         {displayContent.map((item, index) => (
           <ContentSlide key={item.contentCid} content={item} index={index} isActive={index === currentIndex} />

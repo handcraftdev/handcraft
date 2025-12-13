@@ -467,8 +467,6 @@ export function BundleFeed({ isSidebarOpen = false, onToggleSidebar }: BundleFee
         </div>
       </div>
 
-      {showFilters && <div className="absolute inset-0 bg-black/50 z-30" onClick={() => setShowFilters(false)} />}
-
       {/* Immersive Playlist Panel (Right Side) */}
       <div className={`fixed top-0 right-0 h-full w-[420px] bg-black/98 backdrop-blur-2xl border-l border-white/10 z-40 transform transition-transform duration-300 ${showPlaylist ? "translate-x-0" : "translate-x-full"}`}>
         {currentBundle && (
@@ -482,8 +480,6 @@ export function BundleFeed({ isSidebarOpen = false, onToggleSidebar }: BundleFee
           />
         )}
       </div>
-
-      {showPlaylist && <div className="absolute inset-0 bg-black/50 z-30" onClick={() => setShowPlaylist(false)} />}
 
       {/* Progress Indicator - hide when playlist is open */}
       {!showPlaylist && (
@@ -501,8 +497,17 @@ export function BundleFeed({ isSidebarOpen = false, onToggleSidebar }: BundleFee
         </div>
       )}
 
-      {/* Main Feed Container */}
-      <div ref={containerRef} className="h-full overflow-y-auto snap-y snap-mandatory scroll-smooth" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+      {/* Main Feed Container - click to close panels */}
+      <div
+        ref={containerRef}
+        className="h-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        onClick={() => {
+          if (showFilters) setShowFilters(false);
+          if (showPlaylist) setShowPlaylist(false);
+          if (isSidebarOpen && onToggleSidebar) onToggleSidebar();
+        }}
+      >
         <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
         {displayBundles.map((bundle, index) => {
           const bundleKey = `${bundle.creatorAddress}-${bundle.bundleId}`;
