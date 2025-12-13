@@ -4,19 +4,19 @@ import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useConnection } from "@solana/wallet-adapter-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sidebar } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
-import { ClaimRewardsModal } from "@/components/claim";
 import { BurnNftModal } from "@/components/nft";
 import { RarityBadge } from "@/components/rarity";
 import { CreatorMembershipBanner, EcosystemMembershipCard, CustomMembershipCard } from "@/components/membership";
-import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight } from "@handcraft/sdk";
+import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight, getCreatorPatronTreasuryPda, StreamflowClient, NETWORKS } from "@handcraft/sdk";
+import { useConnection } from "@solana/wallet-adapter-react";
+import Link from "next/link";
 
-const LAMPORTS_PER_SOL = 1_000_000_000;
+const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as keyof typeof NETWORKS;
 
-type Tab = "content" | "collected" | "rewards";
+type Tab = "content" | "collected" | "members";
 
 export default function ProfilePage() {
   const params = useParams();
@@ -24,10 +24,19 @@ export default function ProfilePage() {
   const { publicKey: connectedWallet } = useWallet();
   const { connection } = useConnection();
   const queryClient = useQueryClient();
-  const { globalContent, client, usePendingRewards } = useContentRegistry();
+  const {
+    globalContent,
+    globalBundles,
+    client,
+  } = useContentRegistry();
+
+  // Create Streamflow client for membership queries
+  const streamflowClient = useMemo(() => new StreamflowClient({
+    cluster: SOLANA_NETWORK as "mainnet" | "devnet" | "testnet",
+    rpcUrl: connection.rpcEndpoint,
+  }), [connection.rpcEndpoint]);
 
   const [activeTab, setActiveTab] = useState<Tab>("content");
-  const [showClaimModal, setShowClaimModal] = useState(false);
   const [burnModalData, setBurnModalData] = useState<{
     nftAsset: PublicKey;
     collectionAsset: PublicKey;
@@ -35,9 +44,6 @@ export default function ProfilePage() {
     title: string;
     previewUrl: string | null;
   } | null>(null);
-
-  // Fetch pending rewards (only relevant for own profile)
-  const { data: pendingRewards = [], isLoading: isLoadingRewards } = usePendingRewards();
 
   // Validate address
   const profileAddress = useMemo(() => {
@@ -50,16 +56,105 @@ export default function ProfilePage() {
 
   const isOwnProfile = profileAddress && connectedWallet?.equals(profileAddress);
 
-  // Fetch balance with react-query
-  const { data: balance } = useQuery({
-    queryKey: ["walletBalance", profileAddress?.toBase58()],
+  // Fetch user profile for the viewed address
+  const { data: profileData } = useQuery({
+    queryKey: ["userProfile", profileAddress?.toBase58()],
     queryFn: async () => {
-      if (!profileAddress) return null;
-      const bal = await connection.getBalance(profileAddress);
-      return bal / LAMPORTS_PER_SOL;
+      if (!client || !profileAddress) return null;
+      return client.fetchUserProfile(profileAddress);
     },
-    enabled: !!profileAddress,
-    staleTime: 30000,
+    enabled: !!profileAddress && !!client,
+    staleTime: 60000,
+  });
+
+  // Get unique creators from global content
+  const uniqueCreators = useMemo(() => {
+    const creatorSet = new Set<string>();
+    for (const content of globalContent) {
+      if (content.creator) {
+        creatorSet.add(content.creator.toBase58());
+      }
+    }
+    return Array.from(creatorSet);
+  }, [globalContent]);
+
+  // Fetch active membership streams (creators this user is a member of)
+  const { data: activeMemberships = [], isLoading: isLoadingMemberships } = useQuery({
+    queryKey: ["profileMemberships", profileAddress?.toBase58(), uniqueCreators.length],
+    queryFn: async () => {
+      if (!profileAddress || uniqueCreators.length === 0) return [];
+
+      try {
+        // Get all streams from this wallet
+        const streams = await streamflowClient.getStreamsForWallet(profileAddress);
+        const now = Math.floor(Date.now() / 1000);
+
+        // Build a map of treasury PDA -> creator address
+        const treasuryToCreator = new Map<string, string>();
+        for (const creatorAddr of uniqueCreators) {
+          const creatorPubkey = new PublicKey(creatorAddr);
+          const [treasuryPda] = getCreatorPatronTreasuryPda(creatorPubkey);
+          treasuryToCreator.set(treasuryPda.toBase58(), creatorAddr);
+        }
+
+        // Find active streams to creator treasuries
+        const memberships: Array<{
+          creatorAddress: string;
+          streamId: string;
+          startTime: number;
+          endTime: number;
+        }> = [];
+
+        for (const stream of streams) {
+          const creatorAddr = treasuryToCreator.get(stream.recipient);
+          if (creatorAddr) {
+            const hasTimeRemaining = stream.endTime > now;
+            const wasFunded = stream.depositedAmount.toNumber() > 0;
+            const isNotCancelled = stream.canceledAt === 0;
+
+            if (hasTimeRemaining && wasFunded && isNotCancelled) {
+              memberships.push({
+                creatorAddress: creatorAddr,
+                streamId: stream.id,
+                startTime: stream.startTime,
+                endTime: stream.endTime,
+              });
+            }
+          }
+        }
+
+        return memberships;
+      } catch (err) {
+        console.error("Error fetching memberships:", err);
+        return [];
+      }
+    },
+    enabled: !!profileAddress && uniqueCreators.length > 0,
+    staleTime: 60000,
+  });
+
+  // Fetch profile data for membership creators
+  const { data: membershipCreatorProfiles = new Map<string, { username?: string }>() } = useQuery({
+    queryKey: ["membershipCreatorProfiles", activeMemberships.map(m => m.creatorAddress).join(",")],
+    queryFn: async () => {
+      if (!client || activeMemberships.length === 0) return new Map();
+
+      const profiles = new Map<string, { username?: string }>();
+      for (const membership of activeMemberships) {
+        try {
+          const creatorPubkey = new PublicKey(membership.creatorAddress);
+          const profile = await client.fetchUserProfile(creatorPubkey);
+          if (profile) {
+            profiles.set(membership.creatorAddress, { username: profile.username });
+          }
+        } catch {
+          // Profile not found, use address
+        }
+      }
+      return profiles;
+    },
+    enabled: !!client && activeMemberships.length > 0,
+    staleTime: 300000,
   });
 
   // Fetch owned NFTs with react-query (properly cached)
@@ -156,20 +251,13 @@ export default function ProfilePage() {
       totalMints += Number(c.mintedCount || 0);
     }
 
-    // Calculate total pending rewards
-    const totalPendingRewards = pendingRewards.reduce(
-      (acc, r) => acc + r.pending,
-      BigInt(0)
-    );
-
     return {
       totalMints,
       contentCount: userContent.length,
       collectedCount: ownedNfts.length,
-      totalPendingRewards,
-      rewardPositions: pendingRewards.filter(r => r.pending > BigInt(0)).length,
+      membershipCount: activeMemberships.length,
     };
-  }, [userContent, ownedNfts, pendingRewards]);
+  }, [userContent, ownedNfts, activeMemberships]);
 
   // Invalid address
   if (!profileAddress) {
@@ -200,13 +288,18 @@ export default function ProfilePage() {
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                 {/* Avatar */}
                 <div className="w-24 h-24 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-4xl font-bold">
-                  {fullAddress.charAt(0).toUpperCase()}
+                  {profileData?.username?.charAt(0).toUpperCase() || fullAddress.charAt(0).toUpperCase()}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 text-center sm:text-left">
+                  {profileData?.username && (
+                    <h1 className="text-2xl font-bold mb-1">{profileData.username}</h1>
+                  )}
                   <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
-                    <h1 className="text-lg font-bold font-mono break-all">{fullAddress}</h1>
+                    <p className={`font-mono break-all ${profileData?.username ? "text-sm text-gray-400" : "text-lg font-bold"}`}>
+                      {fullAddress}
+                    </p>
                     {isOwnProfile && (
                       <span className="px-2 py-0.5 bg-primary-500/20 text-primary-400 text-xs rounded-full flex-shrink-0">
                         You
@@ -239,23 +332,6 @@ export default function ProfilePage() {
                       <p className="text-xl font-bold">{stats.totalMints}</p>
                       <p className="text-sm text-gray-400">Total Mints</p>
                     </div>
-                    {balance != null && (
-                      <div>
-                        <p className="text-xl font-bold">{balance.toFixed(2)}</p>
-                        <p className="text-sm text-gray-400">SOL</p>
-                      </div>
-                    )}
-                    {isOwnProfile && stats.totalPendingRewards > BigInt(0) && (
-                      <button
-                        onClick={() => setShowClaimModal(true)}
-                        className="text-left hover:bg-green-500/10 rounded-lg p-2 -m-2 transition-colors"
-                      >
-                        <p className="text-xl font-bold text-green-400">
-                          {(Number(stats.totalPendingRewards) / LAMPORTS_PER_SOL).toFixed(4)}
-                        </p>
-                        <p className="text-sm text-green-400/70">Claimable SOL</p>
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -304,26 +380,19 @@ export default function ProfilePage() {
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
                   )}
                 </button>
-                {isOwnProfile && (
-                  <button
-                    onClick={() => setActiveTab("rewards")}
-                    className={`pb-3 text-sm font-medium transition-colors relative ${
-                      activeTab === "rewards"
-                        ? "text-white"
-                        : "text-gray-400 hover:text-gray-300"
-                    }`}
-                  >
-                    Rewards
-                    {stats.rewardPositions > 0 && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
-                        {stats.rewardPositions}
-                      </span>
-                    )}
-                    {activeTab === "rewards" && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={() => setActiveTab("members")}
+                  className={`pb-3 text-sm font-medium transition-colors relative ${
+                    activeTab === "members"
+                      ? "text-white"
+                      : "text-gray-400 hover:text-gray-300"
+                  }`}
+                >
+                  Members ({stats.membershipCount})
+                  {activeTab === "members" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -424,6 +493,9 @@ export default function ProfilePage() {
                         ? getIpfsUrl(contentData.previewCid)
                         : null;
                       const rarity = nftRarities.get(nft.nftAsset.toBase58());
+                      // Parse edition from NFT name if it matches the new format: "Content Name (R #000001)"
+                      const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
+                      const edition = editionMatch ? editionMatch[2] : null;
 
                       return (
                         <div
@@ -458,9 +530,15 @@ export default function ProfilePage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <h3 className="font-medium text-sm truncate">{title}</h3>
-                                <p className="text-[10px] text-gray-500 font-mono break-all mt-1">
-                                  {nft.nftAsset.toBase58()}
-                                </p>
+                                {edition ? (
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    Edition <span className="font-mono">#{edition}</span>
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-gray-500 font-mono break-all mt-1">
+                                    {nft.nftAsset.toBase58()}
+                                  </p>
+                                )}
                               </div>
                               {isOwnProfile && nft.contentCid && (
                                 <button
@@ -487,116 +565,73 @@ export default function ProfilePage() {
               </>
             )}
 
-            {/* Rewards Tab */}
-            {activeTab === "rewards" && isOwnProfile && (
+            {/* Members Tab - Creators this user has active memberships with */}
+            {activeTab === "members" && (
               <>
-                {isLoadingRewards ? (
+                {isLoadingMemberships ? (
                   <div className="flex items-center justify-center py-16">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
                   </div>
-                ) : pendingRewards.length === 0 || stats.totalPendingRewards === BigInt(0) ? (
+                ) : activeMemberships.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                       <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-medium mb-2">No pending rewards</h3>
-                    <p className="text-gray-400">You'll earn rewards when new NFTs are minted for content you hold.</p>
+                    <h3 className="text-lg font-medium mb-2">No active memberships</h3>
+                    <p className="text-gray-400">This user hasn't joined any creator memberships yet</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {/* Summary Card */}
-                    <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 rounded-xl p-6 border border-green-500/20">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-sm font-medium text-gray-400 mb-1">Total Claimable</h3>
-                          <p className="text-3xl font-bold text-green-400">
-                            {(Number(stats.totalPendingRewards) / LAMPORTS_PER_SOL).toFixed(6)} SOL
-                          </p>
-                          <p className="text-sm text-gray-500 mt-1">
-                            From {stats.rewardPositions} content position{stats.rewardPositions > 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setShowClaimModal(true)}
-                          className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {activeMemberships.map((membership) => {
+                      const creatorProfile = membershipCreatorProfiles.get(membership.creatorAddress);
+                      const displayName = creatorProfile?.username || `${membership.creatorAddress.slice(0, 4)}...${membership.creatorAddress.slice(-4)}`;
+                      const daysRemaining = Math.max(0, Math.ceil((membership.endTime - Math.floor(Date.now() / 1000)) / (24 * 60 * 60)));
+                      const memberSince = new Date(membership.startTime * 1000).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      });
+
+                      return (
+                        <Link
+                          key={membership.streamId}
+                          href={`/profile/${membership.creatorAddress}`}
+                          className="bg-gray-900 rounded-xl border border-gray-800 p-4 hover:border-primary-500/50 transition-colors"
                         >
-                          Claim All
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Per-Content Breakdown */}
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-400 mb-4">Reward Breakdown by Content</h3>
-                      <div className="space-y-3">
-                        {pendingRewards.filter(r => r.pending > BigInt(0)).map((reward) => {
-                          const contentData = globalContent.find(c => c.contentCid === reward.contentCid);
-                          const metadata = (contentData as any)?.metadata;
-                          const title = metadata?.title || metadata?.name || `Content ${reward.contentCid.slice(0, 8)}...`;
-                          const previewUrl = contentData?.previewCid ? getIpfsUrl(contentData.previewCid) : null;
-
-                          return (
-                            <div
-                              key={reward.contentCid}
-                              className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-4"
-                            >
-                              {/* Thumbnail */}
-                              <div className="w-16 h-16 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden">
-                                {previewUrl ? (
-                                  <img src={previewUrl} alt={title} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Info */}
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-medium truncate">{title}</h4>
-                                <p className="text-sm text-gray-500">
-                                  {reward.nftCount.toString()} NFT{reward.nftCount > BigInt(1) ? "s" : ""} owned
-                                </p>
-                              </div>
-
-                              {/* Reward Amount */}
-                              <div className="text-right flex-shrink-0">
-                                <p className="text-lg font-bold text-green-400">
-                                  {(Number(reward.pending) / LAMPORTS_PER_SOL).toFixed(6)}
-                                </p>
-                                <p className="text-xs text-gray-500">SOL</p>
-                              </div>
+                          <div className="flex items-center gap-3">
+                            {/* Creator Avatar */}
+                            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0">
+                              {(creatorProfile?.username || membership.creatorAddress).charAt(0).toUpperCase()}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
 
-                    {/* Info */}
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <p className="text-sm text-gray-400 text-center">
-                        Rewards accumulate from the 12% holder share when NFTs are minted.
-                      </p>
-                      <p className="text-sm text-amber-400/80 mt-2 text-center">
-                        Tip: Claim before selling your NFTs - unclaimed rewards transfer to the new owner.
-                      </p>
-                    </div>
+                            {/* Creator Info */}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium truncate">{displayName}</h3>
+                              <p className="text-sm text-gray-400">Member since {memberSince}</p>
+                            </div>
+                          </div>
+
+                          {/* Membership Status */}
+                          <div className="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
+                            <span className="text-xs text-green-400 flex items-center gap-1">
+                              <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                              Active
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {daysRemaining} days remaining
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </>
             )}
           </div>
         </main>
-
-      {/* Claim Rewards Modal */}
-      <ClaimRewardsModal
-        isOpen={showClaimModal}
-        onClose={() => setShowClaimModal(false)}
-      />
 
       {/* Burn NFT Modal */}
       {burnModalData && (
