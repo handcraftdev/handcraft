@@ -166,7 +166,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { globalContent: rawGlobalContent, isLoadingGlobalContent, globalBundles: rawGlobalBundles, isLoadingGlobalBundles, allMintConfigs, allBundleMintConfigs, client } = useContentRegistry();
+  const { globalContent: rawGlobalContent, isLoadingGlobalContent, globalBundles: rawGlobalBundles, isLoadingGlobalBundles, allMintConfigs, allBundleMintConfigs, client, getCreatorUsername } = useContentRegistry();
 
   const updateParams = useCallback((updates: { nftType?: string; filter?: string; bundleType?: string; sort?: string; dir?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -973,7 +973,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts, useBundleMintConfig, useBundleRentConfig, bundleNftRarities } = useContentRegistry();
+  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts, useBundleMintConfig, useBundleRentConfig, bundleNftRarities, getCreatorUsername } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: rentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
@@ -1031,6 +1031,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const ownsNftFromBundle = contentBundles.length > 0 && walletBundleNfts.some(nft => nft.bundleId && nft.creator && contentBundles.some(bundle => bundle.bundleId === nft.bundleId && bundle.creator.toBase58() === nft.creator?.toBase58()));
 
   const shortAddress = content.creatorAddress ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}` : "Unknown";
+  const creatorUsername = content.creatorAddress ? getCreatorUsername(content.creatorAddress) : null;
+  const displayName = creatorUsername || shortAddress;
   const isCreator = publicKey?.toBase58() === content.creatorAddress;
   const hasMintConfig = mintConfig && mintConfig.isActive;
   const hasRentConfig = rentConfig && rentConfig.isActive;
@@ -1164,8 +1166,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       {/* Bottom Overlay */}
       <div className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{content.creatorAddress?.charAt(0).toUpperCase() || "?"}</div>
-          <div><p className="text-white font-medium">{shortAddress}</p><p className="text-white/40 text-xs">{timeAgo}</p></div>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
+          <div><p className="text-white font-medium">{displayName}</p><p className="text-white/40 text-xs">{timeAgo}</p></div>
         </div>
         <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || `Content ${content.contentCid.slice(0, 12)}...`}</h2>
         {(artist || album) && <p className="text-white/50 text-sm mb-2">{artist}{artist && album && " · "}{album}</p>}

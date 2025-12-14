@@ -86,6 +86,7 @@ function SearchContent() {
     globalContent,
     globalBundles,
     isLoadingGlobalContent,
+    getCreatorUsername,
   } = useContentRegistry();
 
   const [enrichedContent, setEnrichedContent] = useState<EnrichedContent[]>([]);
@@ -373,7 +374,7 @@ function SearchContent() {
                 )}
                 <div className="space-y-2">
                   {searchResults.content.map((item) => (
-                    <ContentResultCard key={item.contentCid} content={item} />
+                    <ContentResultCard key={item.contentCid} content={item} getCreatorUsername={getCreatorUsername} />
                   ))}
                 </div>
               </div>
@@ -387,7 +388,7 @@ function SearchContent() {
                 )}
                 <div className="space-y-2">
                   {searchResults.bundles.map((bundle) => (
-                    <BundleResultCard key={`${bundle.creator}-${bundle.bundleId}`} bundle={bundle} />
+                    <BundleResultCard key={`${bundle.creator}-${bundle.bundleId}`} bundle={bundle} getCreatorUsername={getCreatorUsername} />
                   ))}
                 </div>
               </div>
@@ -401,7 +402,7 @@ function SearchContent() {
                 )}
                 <div className="space-y-2">
                   {searchResults.creators.map((creator) => (
-                    <CreatorResultCard key={creator} address={creator} />
+                    <CreatorResultCard key={creator} address={creator} getCreatorUsername={getCreatorUsername} />
                   ))}
                 </div>
               </div>
@@ -446,10 +447,12 @@ export default function SearchPage() {
   );
 }
 
-function ContentResultCard({ content }: { content: EnrichedContent }) {
+function ContentResultCard({ content, getCreatorUsername }: { content: EnrichedContent; getCreatorUsername: (address: string) => string | null }) {
   const thumbnailUrl = content.metadata?.name
     ? getIpfsUrl(content.metadataCid).replace("/metadata.json", "/thumbnail.jpg")
     : null;
+  const creatorUsername = getCreatorUsername(content.creator);
+  const displayName = creatorUsername || `${content.creator.slice(0, 4)}...${content.creator.slice(-4)}`;
 
   return (
     <div className="group relative flex gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer">
@@ -482,7 +485,7 @@ function ContentResultCard({ content }: { content: EnrichedContent }) {
             {getContentTypeLabel(content.contentType)}
           </span>
           <Link href={`/profile/${content.creator}`} className="text-white/30 hover:text-white/50 text-xs transition-colors">
-            {content.creator.slice(0, 4)}...{content.creator.slice(-4)}
+            {displayName}
           </Link>
         </div>
       </div>
@@ -490,7 +493,10 @@ function ContentResultCard({ content }: { content: EnrichedContent }) {
   );
 }
 
-function BundleResultCard({ bundle }: { bundle: EnrichedBundle }) {
+function BundleResultCard({ bundle, getCreatorUsername }: { bundle: EnrichedBundle; getCreatorUsername: (address: string) => string | null }) {
+  const creatorUsername = getCreatorUsername(bundle.creator);
+  const displayName = creatorUsername || `${bundle.creator.slice(0, 4)}...${bundle.creator.slice(-4)}`;
+
   return (
     <Link
       href={`/content/${bundle.bundleId}`}
@@ -514,14 +520,18 @@ function BundleResultCard({ bundle }: { bundle: EnrichedBundle }) {
             {getBundleTypeLabel(bundle.bundleType)}
           </span>
           <span className="text-white/30 text-xs">{bundle.itemCount} items</span>
-          <span className="text-white/25 text-xs">{bundle.creator.slice(0, 4)}...{bundle.creator.slice(-4)}</span>
+          <span className="text-white/25 text-xs">{displayName}</span>
         </div>
       </div>
     </Link>
   );
 }
 
-function CreatorResultCard({ address }: { address: string }) {
+function CreatorResultCard({ address, getCreatorUsername }: { address: string; getCreatorUsername: (address: string) => string | null }) {
+  const creatorUsername = getCreatorUsername(address);
+  const displayName = creatorUsername || `${address.slice(0, 4)}...${address.slice(-4)}`;
+  const avatarInitial = (creatorUsername || address).charAt(0).toUpperCase();
+
   return (
     <Link
       href={`/profile/${address}`}
@@ -530,11 +540,11 @@ function CreatorResultCard({ address }: { address: string }) {
       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
       <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center text-lg font-semibold text-white/60">
-        {address.charAt(0).toUpperCase()}
+        {avatarInitial}
       </div>
 
       <div className="relative">
-        <h3 className="font-medium text-white/90">{address.slice(0, 4)}...{address.slice(-4)}</h3>
+        <h3 className="font-medium text-white/90">{displayName}</h3>
         <p className="text-sm text-white/40">Creator</p>
       </div>
     </Link>

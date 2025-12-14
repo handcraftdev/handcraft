@@ -1328,6 +1328,47 @@ export function useContentRegistry() {
     refetchOnWindowFocus: false,
   });
 
+  // Collect all unique creator addresses from global content and bundles
+  const allCreatorAddresses = useMemo(() => {
+    const addresses = new Set<string>();
+    const content = globalContentQuery.data || [];
+    const bundles = globalBundlesQuery.data || [];
+
+    for (const item of content) {
+      addresses.add(item.creator.toBase58());
+    }
+    for (const bundle of bundles) {
+      addresses.add(bundle.creator.toBase58());
+    }
+
+    return Array.from(addresses);
+  }, [globalContentQuery.data, globalBundlesQuery.data]);
+
+  // Batch fetch all creator profiles
+  const creatorProfilesQuery = useQuery({
+    queryKey: ["creatorProfiles", allCreatorAddresses.join(",")],
+    queryFn: async () => {
+      if (!client || allCreatorAddresses.length === 0) return new Map<string, UserProfile>();
+      const owners = allCreatorAddresses.map(addr => new PublicKey(addr));
+      return client.fetchUserProfilesBatch(owners);
+    },
+    enabled: !!client && allCreatorAddresses.length > 0,
+    staleTime: 300000, // Cache for 5 minutes
+    gcTime: 600000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Helper to get username for a creator address
+  const getCreatorUsername = useMemo(() => {
+    const profiles = creatorProfilesQuery.data;
+    return (address: string): string | null => {
+      if (!profiles) return null;
+      const profile = profiles.get(address);
+      return profile?.username ?? null;
+    };
+  }, [creatorProfilesQuery.data]);
+
   // Fetch content-to-bundle mapping (which bundles contain which content)
   const contentToBundlesQuery = useQuery({
     queryKey: ["contentToBundles"],
@@ -2832,6 +2873,11 @@ export function useContentRegistry() {
     updateUserProfile: updateUserProfile.mutateAsync,
     isCreatingUserProfile: createUserProfile.isPending,
     isUpdatingUserProfile: updateUserProfile.isPending,
+
+    // Creator Profiles (batch fetched for all creators in feed)
+    creatorProfiles: creatorProfilesQuery.data,
+    isLoadingCreatorProfiles: creatorProfilesQuery.isLoading,
+    getCreatorUsername,
 
     // Actions
     registerContent: registerContent.mutateAsync,

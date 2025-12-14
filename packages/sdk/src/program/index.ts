@@ -3261,6 +3261,66 @@ export async function fetchUserProfile(
 }
 
 /**
+ * Batch fetch user profiles by owner addresses
+ * @param connection Solana connection
+ * @param owners Array of owner public keys
+ * @returns Map of owner address to UserProfile (only includes existing profiles)
+ */
+export async function fetchUserProfilesBatch(
+  connection: Connection,
+  owners: PublicKey[]
+): Promise<Map<string, UserProfile>> {
+  const result = new Map<string, UserProfile>();
+  if (owners.length === 0) return result;
+
+  try {
+    // Get all PDAs
+    const pdas = owners.map(owner => getUserProfilePda(owner)[0]);
+
+    // Batch fetch all accounts
+    const accounts = await connection.getMultipleAccountsInfo(pdas);
+
+    // Parse each account
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+      const owner = owners[i];
+
+      if (account && account.data.length >= 8) {
+        try {
+          // Parse UserProfile: discriminator(8) + owner(32) + username(4 + len) + createdAt(8) + updatedAt(8)
+          const data = account.data;
+          const offset = 8; // Skip discriminator
+
+          // Read owner pubkey
+          const ownerPubkey = new PublicKey(data.slice(offset, offset + 32));
+
+          // Read username (borsh string: 4 bytes length + data)
+          const usernameLen = data.readUInt32LE(offset + 32);
+          const username = data.slice(offset + 36, offset + 36 + usernameLen).toString("utf8");
+
+          // Read timestamps
+          const createdAt = data.readBigUInt64LE(offset + 36 + usernameLen);
+          const updatedAt = data.readBigUInt64LE(offset + 36 + usernameLen + 8);
+
+          result.set(owner.toBase58(), {
+            owner: ownerPubkey,
+            username,
+            createdAt,
+            updatedAt,
+          });
+        } catch {
+          // Skip invalid account data
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error batch fetching user profiles:", err);
+  }
+
+  return result;
+}
+
+/**
  * Configure rental for a bundle
  */
 export async function configureBundleRentInstruction(
@@ -4803,6 +4863,7 @@ export function createContentRegistryClient(connection: Connection) {
 
     // User profile management
     fetchUserProfile: (owner: PublicKey) => fetchUserProfile(connection, owner),
+    fetchUserProfilesBatch: (owners: PublicKey[]) => fetchUserProfilesBatch(connection, owners),
 
     createUserProfileInstruction: (owner: PublicKey, username: string) =>
       createUserProfileInstruction(program, owner, username),
