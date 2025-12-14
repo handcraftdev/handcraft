@@ -31,6 +31,7 @@ import {
   getBundleCollectionPda,
   getBundleRewardPoolPda,
   getUserProfilePda,
+  getEcosystemStreamingTreasuryPda,
   MAGICBLOCK_DEFAULT_QUEUE,
   MB_FALLBACK_TIMEOUT_SECONDS,
   ContentRewardPool,
@@ -51,6 +52,9 @@ import {
   BundleRentConfig,
   BundleCollection,
   BundleRewardPool,
+  EcosystemEpochState,
+  GlobalHolderPool,
+  CreatorDistPool,
   getBundleTypeLabel,
   calculatePrimarySplit,
   calculatePendingReward,
@@ -92,7 +96,8 @@ export {
   MIN_RENT_FEE_LAMPORTS,
 };
 export type { MbMintRequest } from "@handcraft/sdk";
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool, UserProfile };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool, UserProfile, EcosystemEpochState, GlobalHolderPool, CreatorDistPool };
+export { getEcosystemStreamingTreasuryPda };
 
 export function useContentRegistry() {
   const { connection } = useConnection();
@@ -2065,6 +2070,16 @@ export function useContentRegistry() {
       // Collect ALL instructions first (both content and bundle)
       const allInstructions: TransactionInstruction[] = [];
 
+      // First, try to unwrap any WSOL in ecosystem treasury to native SOL
+      // This enables epoch distribution to work with streamed subscription funds
+      try {
+        const unwrapIx = await client.unwrapEcosystemTreasuryWsolInstruction(publicKey);
+        allInstructions.push(unwrapIx);
+        console.log("Added ecosystem treasury WSOL unwrap instruction");
+      } catch (err) {
+        console.log("Skipping ecosystem unwrap (may not have WSOL):", err);
+      }
+
       // Build content claim instructions
       if (contentCids.length > 0) {
         console.log("Building content claim instructions...", { count: contentCids.length });
@@ -2094,6 +2109,8 @@ export function useContentRegistry() {
       }
 
       // Build bundle claim instructions (batch per bundle - all NFTs from same bundle in one instruction)
+      // Also collect unique creators to unwrap their patron treasuries
+      const uniqueCreators = new Set<string>();
       if (bundleRewards.length > 0) {
         const totalBundleNfts = bundleRewards.reduce((acc, r) => acc + r.nftAssets.length, 0);
         if (totalBundleNfts > 0) {
@@ -2105,6 +2122,7 @@ export function useContentRegistry() {
           // One instruction per bundle (batches all NFTs from that bundle)
           for (const reward of bundleRewards) {
             if (reward.nftAssets.length > 0) {
+              uniqueCreators.add(reward.creator.toBase58());
               const ix = await client.batchClaimBundleRewardsInstruction(
                 publicKey,
                 reward.bundleId,
@@ -2117,8 +2135,22 @@ export function useContentRegistry() {
         }
       }
 
+      // Unwrap WSOL from creator patron treasuries to enable their epoch distributions
+      for (const creatorKey of uniqueCreators) {
+        try {
+          const creatorPubkey = new PublicKey(creatorKey);
+          const unwrapIx = await client.unwrapCreatorPatronTreasuryWsolInstruction(creatorPubkey, publicKey);
+          allInstructions.push(unwrapIx);
+          console.log(`Added creator patron treasury WSOL unwrap for ${creatorKey.slice(0, 8)}...`);
+        } catch (err) {
+          console.log(`Skipping creator patron unwrap for ${creatorKey.slice(0, 8)}... (may not have WSOL)`);
+        }
+      }
+
+      // Note: allInstructions may contain unwrap instructions even if no content/bundle claims
+      // We should still process unwrap instructions to enable future distributions
       if (allInstructions.length === 0) {
-        console.log("No claims to process");
+        console.log("No instructions to process");
         return { signatures: [] };
       }
 
@@ -2695,6 +2727,50 @@ export function useContentRegistry() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
+  // Fetch epoch state for subscription pools
+  const epochStateQuery = useQuery({
+    queryKey: ["epochState"],
+    queryFn: () => client?.fetchEcosystemEpochState() ?? null,
+    enabled: !!client,
+    staleTime: 60000, // Cache for 1 minute
+    gcTime: 120000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch global holder pool (12% of ecosystem subscriptions go to NFT holders)
+  const globalHolderPoolQuery = useQuery({
+    queryKey: ["globalHolderPool"],
+    queryFn: () => client?.fetchGlobalHolderPool() ?? null,
+    enabled: !!client,
+    staleTime: 60000,
+    gcTime: 120000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch creator distribution pool (80% of ecosystem subscriptions go to creators)
+  const creatorDistPoolQuery = useQuery({
+    queryKey: ["creatorDistPool"],
+    queryFn: () => client?.fetchCreatorDistPool() ?? null,
+    enabled: !!client,
+    staleTime: 60000,
+    gcTime: 120000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Fetch ecosystem streaming treasury balance (undistributed SOL)
+  const ecosystemTreasuryBalanceQuery = useQuery({
+    queryKey: ["ecosystemTreasuryBalance"],
+    queryFn: () => client?.fetchEcosystemStreamingTreasuryBalance() ?? BigInt(0),
+    enabled: !!client,
+    staleTime: 30000, // Refresh more often as this is a live balance
+    gcTime: 60000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
   // Derive mintable content from already-cached globalContent + allMintConfigs
   // This avoids duplicate RPC calls by reusing data from other queries
   const mintableContent = useMemo(() => {
@@ -2733,6 +2809,20 @@ export function useContentRegistry() {
     ecosystemConfigError: ecosystemConfigQuery.error,
     isEcosystemConfigError: ecosystemConfigQuery.isError,
     refetchEcosystemConfig: ecosystemConfigQuery.refetch,
+
+    // Epoch & Subscription Pools
+    epochState: epochStateQuery.data,
+    globalHolderPool: globalHolderPoolQuery.data,
+    creatorDistPool: creatorDistPoolQuery.data,
+    ecosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.data ?? BigInt(0),
+    isLoadingEpochState: epochStateQuery.isLoading,
+    isLoadingGlobalHolderPool: globalHolderPoolQuery.isLoading,
+    isLoadingCreatorDistPool: creatorDistPoolQuery.isLoading,
+    isLoadingEcosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.isLoading,
+    refetchEpochState: epochStateQuery.refetch,
+    refetchGlobalHolderPool: globalHolderPoolQuery.refetch,
+    refetchCreatorDistPool: creatorDistPoolQuery.refetch,
+    refetchEcosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.refetch,
 
     // User Profile
     userProfile: userProfileQuery.data,
