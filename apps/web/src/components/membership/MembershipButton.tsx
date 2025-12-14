@@ -124,21 +124,28 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
     if (!streamInfo) return null;
 
     const now = Math.floor(Date.now() / 1000);
-    const totalDuration = streamInfo.endTime - streamInfo.startTime;
-    const elapsed = Math.max(0, Math.min(now - streamInfo.startTime, totalDuration));
-    const progressPercent = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
-
     const depositedLamports = streamInfo.depositedAmount.toNumber();
-    const streamedLamports = Math.floor((elapsed / totalDuration) * depositedLamports);
+
+    // Calculate actual streamed amount based on time elapsed (not withdrawnAmount)
+    // withdrawnAmount only reflects what recipient has claimed, not what's been released
+    const elapsedSinceStart = Math.max(0, now - streamInfo.startTime);
+    const totalDuration = streamInfo.endTime - streamInfo.startTime;
+
+    // Linear release: streamed = deposited * (elapsed / total)
+    const streamedLamports = totalDuration > 0
+      ? Math.min(depositedLamports, Math.floor(depositedLamports * elapsedSinceStart / totalDuration))
+      : 0;
+
+    const progressPercent = depositedLamports > 0 ? (streamedLamports / depositedLamports) * 100 : 0;
     const remainingLamports = depositedLamports - streamedLamports;
+    const daysRemaining = Math.round(Math.max(0, streamInfo.endTime - now) / 86400);
 
     return {
       progressPercent: Math.min(100, progressPercent),
       streamedSol: streamedLamports / 1e9,
       remainingSol: remainingLamports / 1e9,
       totalSol: depositedLamports / 1e9,
-      daysTotal: Math.round(totalDuration / 86400),
-      daysElapsed: Math.floor(elapsed / 86400),
+      daysRemaining,
     };
   };
 
@@ -170,21 +177,18 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
               onClick={() => setShowDropdown(false)}
             />
             <div className="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
-              {/* Status Header */}
-              <div className="p-4 border-b border-gray-800">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="font-medium">Active Member</span>
-                  </div>
-                  <span className="text-sm text-gray-400">{daysRemaining}d left</span>
+              {/* Status Header - Inline */}
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="font-medium">Active Member</span>
                 </div>
                 {streamInfo && (
-                  <p className="text-xs text-gray-500">
-                    Member since {formatMemberSince(streamInfo.startTime)}
-                  </p>
+                  <span className="text-xs text-gray-500">
+                    Since {formatMemberSince(streamInfo.startTime)}
+                  </span>
                 )}
               </div>
 
@@ -194,7 +198,7 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-400">Stream Progress</span>
                     <span className="text-gray-300">
-                      {streamProgress.daysElapsed} / {streamProgress.daysTotal} days
+                      {streamProgress.daysRemaining} days remaining
                     </span>
                   </div>
 
@@ -355,7 +359,7 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
             </div>
 
             <div className="p-3 space-y-2">
-              {/* Yearly (Best Value) */}
+              {/* Yearly Membership (Best Value) */}
               <button
                 onClick={() => handleJoin("yearly")}
                 disabled={isJoiningMembership}
@@ -363,7 +367,7 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Yearly</span>
+                    <span className="font-medium">Yearly Membership</span>
                     <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">Best Value</span>
                   </div>
                   <span className="text-purple-400 font-bold">{formatSol(yearlyPrice)} SOL</span>
@@ -371,14 +375,14 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
                 <p className="text-xs text-gray-400">Pay for 10 months, get 12 months access</p>
               </button>
 
-              {/* Monthly */}
+              {/* Monthly Membership */}
               <button
                 onClick={() => handleJoin("monthly")}
                 disabled={isJoiningMembership}
                 className="w-full p-4 bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all disabled:opacity-50"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Monthly</span>
+                  <span className="font-medium">Monthly Membership</span>
                   <span className="text-white font-bold">{formatSol(membershipConfig.monthlyPrice)} SOL</span>
                 </div>
                 <p className="text-xs text-gray-400">Billed every 30 days</p>

@@ -5,3 +5,5 @@ export { EcosystemMembershipCard } from "./EcosystemMembershipCard";
 export { CustomMembershipManager } from "./CustomMembershipManager";
 export type { CustomMembershipTier } from "./CustomMembershipManager";
 export { CustomMembershipCard } from "./CustomMembershipCard";
+export { EpochStatusCard } from "./EpochStatusCard";
+export { CreatorPatronPoolCard } from "./CreatorPatronPoolCard";

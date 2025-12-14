@@ -107,21 +107,30 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
     if (!streamInfo) return null;
 
     const now = Math.floor(Date.now() / 1000);
-    const totalDuration = streamInfo.endTime - streamInfo.startTime;
-    const elapsed = Math.max(0, Math.min(now - streamInfo.startTime, totalDuration));
-    const progressPercent = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
-
     const depositedLamports = streamInfo.depositedAmount.toNumber();
-    const streamedLamports = Math.floor((elapsed / totalDuration) * depositedLamports);
+
+    // Calculate actual streamed amount based on time elapsed (not withdrawnAmount)
+    // withdrawnAmount only reflects what recipient has claimed, not what's been released
+    const elapsedSinceStart = Math.max(0, now - streamInfo.startTime);
+    const totalDuration = streamInfo.endTime - streamInfo.startTime;
+
+    // Linear release: streamed = deposited * (elapsed / total)
+    const streamedLamports = totalDuration > 0
+      ? Math.min(depositedLamports, Math.floor(depositedLamports * elapsedSinceStart / totalDuration))
+      : 0;
+
+    const progressPercent = depositedLamports > 0 ? (streamedLamports / depositedLamports) * 100 : 0;
     const remainingLamports = depositedLamports - streamedLamports;
+
+    // Days remaining uses same logic as getDaysRemaining
+    const daysRemaining = Math.round(Math.max(0, streamInfo.endTime - now) / 86400);
 
     return {
       progressPercent: Math.min(100, progressPercent),
       streamedSol: streamedLamports / 1e9,
       remainingSol: remainingLamports / 1e9,
       totalSol: depositedLamports / 1e9,
-      daysTotal: Math.round(totalDuration / 86400),
-      daysElapsed: Math.floor(elapsed / 86400),
+      daysRemaining,
     };
   };
 
@@ -136,7 +145,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
           <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          <span className="text-emerald-400 font-medium">Platform Member</span>
+          <span className="text-emerald-400 font-medium">Platform Subscriber</span>
           <span className="text-white/40">({daysRemaining}d)</span>
         </div>
       );
@@ -170,8 +179,8 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Platform Membership</h2>
-            <p className="text-sm text-white/40">Access all "Subscribers" tier content</p>
+            <h2 className="text-xl font-semibold tracking-tight">Platform Subscription</h2>
+            <p className="text-sm text-white/40">Access all "Subscriber Only" tier content</p>
           </div>
         </div>
       </div>
@@ -179,21 +188,18 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
       <div className="relative p-5">
         {isMember ? (
           <div className="space-y-4">
-            {/* Status Header */}
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-medium text-emerald-400">Active Member</span>
-                </div>
-                <span className="text-sm text-white/40">{daysRemaining} days remaining</span>
+            {/* Status Header - Inline */}
+            <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="font-medium text-emerald-400">Active Subscriber</span>
               </div>
               {streamInfo && (
-                <p className="text-xs text-white/30 mt-2">
-                  Member since {formatMemberSince(streamInfo.startTime)}
-                </p>
+                <span className="text-xs text-white/30">
+                  Since {formatMemberSince(streamInfo.startTime)}
+                </span>
               )}
             </div>
 
@@ -203,7 +209,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/40">Stream Progress</span>
                   <span className="text-white/70">
-                    {streamProgress.daysElapsed} / {streamProgress.daysTotal} days
+                    {streamProgress.daysRemaining} days remaining
                   </span>
                 </div>
 
@@ -287,8 +293,8 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
             {/* Info about billing period */}
             <p className="text-xs text-white/30 text-center">
               {originalBillingPeriod === "yearly"
-                ? "You have a yearly membership. To switch to monthly, cancel and rejoin."
-                : "You have a monthly membership. To switch to yearly, cancel and rejoin."}
+                ? "You have a yearly subscription. To switch to monthly, cancel and rejoin."
+                : "You have a monthly subscription. To switch to yearly, cancel and rejoin."}
             </p>
 
             {/* Low Balance Warning */}
@@ -298,7 +304,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <span className="text-sm text-amber-400">
-                  Your membership expires soon! Extend now to keep access.
+                  Your subscription expires soon! Extend now to keep access.
                 </span>
               </div>
             )}
@@ -306,7 +312,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
         ) : (
           <div className="space-y-4">
             <p className="text-white/40 text-sm">
-              Become a member to access all "Subscribers" tier content from every creator.
+              Subscribe to access all "Subscriber Only" tier content from every creator.
             </p>
 
             {error && (
@@ -317,7 +323,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
 
             {/* Join Options */}
             <div className="space-y-3">
-              {/* Yearly (Best Value) */}
+              {/* Yearly Subscription (Best Value) */}
               <button
                 onClick={() => handleJoin("yearly")}
                 disabled={isJoiningEcosystemMembership || !publicKey}
@@ -325,7 +331,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Yearly</span>
+                    <span className="font-medium">Yearly Subscription</span>
                     <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded">Best Value</span>
                   </div>
                   <span className="text-blue-400 font-bold">{formatSol(yearlyPrice)} SOL</span>
@@ -333,14 +339,14 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
                 <p className="text-xs text-white/40">Pay for 10 months, get 12 months access</p>
               </button>
 
-              {/* Monthly */}
+              {/* Monthly Subscription */}
               <button
                 onClick={() => handleJoin("monthly")}
                 disabled={isJoiningEcosystemMembership || !publicKey}
                 className="group w-full p-4 bg-white/[0.02] border border-white/5 hover:border-white/10 rounded-xl text-left transition-all disabled:opacity-50"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Monthly</span>
+                  <span className="font-medium">Monthly Subscription</span>
                   <span className="text-white font-bold">{formatSol(config!.price)} SOL</span>
                 </div>
                 <p className="text-xs text-white/40">Billed every 30 days</p>
@@ -368,16 +374,16 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="bg-black border border-white/10 rounded-2xl p-6 max-w-sm mx-4">
-            <h3 className="text-lg font-bold mb-2 tracking-tight">Cancel Platform Membership?</h3>
+            <h3 className="text-lg font-bold mb-2 tracking-tight">Cancel Platform Subscription?</h3>
             <p className="text-sm text-white/40 mb-4">
-              You'll lose access to all "Subscribers" tier content across the platform. This cannot be undone.
+              You'll lose access to all "Subscriber Only" tier content across the platform. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition-all"
               >
-                Keep Membership
+                Keep Subscription
               </button>
               <button
                 onClick={handleCancel}

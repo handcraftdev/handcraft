@@ -107,18 +107,27 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
   const getStreamProgress = () => {
     if (!streamInfo) return null;
     const now = Math.floor(Date.now() / 1000);
-    const totalDuration = streamInfo.endTime - streamInfo.startTime;
-    const elapsed = Math.max(0, Math.min(now - streamInfo.startTime, totalDuration));
-    const progressPercent = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
     const depositedLamports = streamInfo.depositedAmount.toNumber();
-    const streamedLamports = Math.floor((elapsed / totalDuration) * depositedLamports);
+
+    // Calculate actual streamed amount based on time elapsed (not withdrawnAmount)
+    // withdrawnAmount only reflects what recipient has claimed, not what's been released
+    const elapsedSinceStart = Math.max(0, now - streamInfo.startTime);
+    const totalDuration = streamInfo.endTime - streamInfo.startTime;
+
+    // Linear release: streamed = deposited * (elapsed / total)
+    const streamedLamports = totalDuration > 0
+      ? Math.min(depositedLamports, Math.floor(depositedLamports * elapsedSinceStart / totalDuration))
+      : 0;
+
+    const progressPercent = depositedLamports > 0 ? (streamedLamports / depositedLamports) * 100 : 0;
     const remainingLamports = depositedLamports - streamedLamports;
+    const daysRemaining = Math.round(Math.max(0, streamInfo.endTime - now) / 86400);
+
     return {
       progressPercent: Math.min(100, progressPercent),
       streamedSol: streamedLamports / 1e9,
       remainingSol: remainingLamports / 1e9,
-      daysTotal: Math.round(totalDuration / 86400),
-      daysElapsed: Math.floor(elapsed / 86400),
+      daysRemaining,
     };
   };
 
@@ -152,21 +161,18 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
       <div className="relative p-5">
         {isMember ? (
           <div className="space-y-4">
-            {/* Status Header */}
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-medium text-purple-400">Active Member</span>
-                </div>
-                <span className="text-sm text-white/40">{daysRemaining} days remaining</span>
+            {/* Status Header - Inline */}
+            <div className="flex items-center justify-between bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="font-medium text-purple-400">Active Member</span>
               </div>
               {streamInfo && (
-                <p className="text-xs text-white/30 mt-2">
-                  Member since {formatMemberSince(streamInfo.startTime)}
-                </p>
+                <span className="text-xs text-white/30">
+                  Since {formatMemberSince(streamInfo.startTime)}
+                </span>
               )}
             </div>
 
@@ -176,7 +182,7 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/40">Stream Progress</span>
                   <span className="text-white/70">
-                    {streamProgress.daysElapsed} / {streamProgress.daysTotal} days
+                    {streamProgress.daysRemaining} days remaining
                   </span>
                 </div>
 
@@ -290,7 +296,7 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
 
             {/* Join Options */}
             <div className="space-y-3">
-              {/* Yearly (Best Value) */}
+              {/* Yearly Membership (Best Value) */}
               <button
                 onClick={() => handleJoin("yearly")}
                 disabled={isJoiningMembership || !publicKey}
@@ -298,7 +304,7 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">Yearly</span>
+                    <span className="font-medium">Yearly Membership</span>
                     <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded">Best Value</span>
                   </div>
                   <span className="text-purple-400 font-bold">{formatSol(yearlyPrice)} SOL</span>
@@ -306,14 +312,14 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
                 <p className="text-xs text-white/40">Pay for 10 months, get 12 months access</p>
               </button>
 
-              {/* Monthly */}
+              {/* Monthly Membership */}
               <button
                 onClick={() => handleJoin("monthly")}
                 disabled={isJoiningMembership || !publicKey}
                 className="group w-full p-4 bg-white/[0.02] border border-white/5 hover:border-white/10 rounded-xl text-left transition-all disabled:opacity-50"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Monthly</span>
+                  <span className="font-medium">Monthly Membership</span>
                   <span className="text-white font-bold">{formatSol(membershipConfig!.monthlyPrice)} SOL</span>
                 </div>
                 <p className="text-xs text-white/40">Billed every 30 days</p>
