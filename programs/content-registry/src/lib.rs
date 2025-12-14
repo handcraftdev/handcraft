@@ -1899,5 +1899,44 @@ pub mod content_registry {
     pub fn update_user_profile(ctx: Context<UpdateUserProfile>, username: String) -> Result<()> {
         profile::update_user_profile(ctx, username)
     }
+
+    // =========================================================================
+    // TREASURY WSOL UNWRAP
+    // =========================================================================
+
+    /// Unwrap WSOL from ecosystem streaming treasury to native SOL
+    /// Anyone can call this - it converts accumulated WSOL from Streamflow to SOL
+    /// Must be called before epoch distribution can work with the accumulated funds
+    pub fn unwrap_ecosystem_treasury_wsol(ctx: Context<UnwrapEcosystemTreasuryWsol>) -> Result<()> {
+        handle_unwrap_ecosystem_treasury_wsol(ctx)
+    }
+
+    /// Unwrap WSOL from creator patron streaming treasury to native SOL
+    /// Anyone can call this - it converts accumulated WSOL from Streamflow to SOL
+    pub fn unwrap_creator_patron_treasury_wsol(ctx: Context<UnwrapCreatorPatronTreasuryWsol>) -> Result<()> {
+        handle_unwrap_creator_patron_treasury_wsol(ctx)
+    }
+
+    // =========================================================================
+    // STREAMFLOW WITHDRAW (Pull funds from escrow to treasury)
+    // =========================================================================
+
+    /// Withdraw accumulated WSOL from Streamflow stream to ecosystem treasury
+    /// Step 1: Pull released funds from Streamflow escrow to treasury's WSOL ATA
+    /// Step 2: Call unwrap_ecosystem_treasury_wsol to convert WSOL to native SOL
+    /// Anyone can call this to enable permissionless distribution
+    pub fn withdraw_ecosystem_stream_to_treasury(
+        ctx: Context<WithdrawEcosystemStreamToTreasury>,
+    ) -> Result<()> {
+        handle_withdraw_ecosystem_stream_to_treasury(ctx)
+    }
+
+    /// Withdraw accumulated WSOL from Streamflow stream to creator patron treasury
+    /// Anyone can call this to enable permissionless distribution
+    pub fn withdraw_creator_stream_to_treasury(
+        ctx: Context<WithdrawCreatorStreamToTreasury>,
+    ) -> Result<()> {
+        handle_withdraw_creator_stream_to_treasury(ctx)
+    }
 }
 

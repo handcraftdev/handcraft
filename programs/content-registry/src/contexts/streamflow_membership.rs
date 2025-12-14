@@ -239,12 +239,12 @@ pub fn handle_join_ecosystem_membership(
         cliff_amount,
         true,  // cancelable_by_sender
         false, // cancelable_by_recipient
-        false, // automatic_withdrawal
+        true,  // automatic_withdrawal - Streamflow auto-withdraws to treasury
         false, // transferable_by_sender
         false, // transferable_by_recipient
         true,  // can_topup (for renewals)
         stream_name,
-        0,     // withdraw_frequency (manual)
+        86400, // withdraw_frequency: daily (matches epoch duration)
         None,  // pausable
         None,  // can_update_rate
     )?;
@@ -458,12 +458,12 @@ pub fn handle_join_creator_membership(
         cliff_amount,
         true,  // cancelable_by_sender
         false, // cancelable_by_recipient
-        false, // automatic_withdrawal
+        true,  // automatic_withdrawal - Streamflow auto-withdraws to treasury
         false, // transferable_by_sender
         false, // transferable_by_recipient
         true,  // can_topup
         stream_name,
-        0,
+        86400, // withdraw_frequency: daily (matches epoch duration)
         None,
         None,
     )?;

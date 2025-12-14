@@ -200,4 +200,10 @@ pub enum ContentRegistryError {
     ProfileNotFound,
     #[msg("Invalid content name - must be 1-32 characters")]
     InvalidContentName,
+
+    // Treasury WSOL unwrap errors
+    #[msg("Invalid token account owner")]
+    InvalidOwner,
+    #[msg("Invalid token mint - expected WSOL")]
+    InvalidMint,
 }

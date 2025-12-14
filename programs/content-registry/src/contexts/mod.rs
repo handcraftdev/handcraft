@@ -19,6 +19,7 @@ pub mod ecosystem_subscription;
 pub mod simple_mint;
 pub mod streamflow_membership;
 pub mod profile;
+pub mod treasury_unwrap;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -41,3 +42,4 @@ pub use ecosystem_subscription::*;
 pub use simple_mint::*;
 pub use streamflow_membership::*;
 pub use profile::*;
+pub use treasury_unwrap::*;

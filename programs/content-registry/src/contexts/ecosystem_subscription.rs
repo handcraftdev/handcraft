@@ -211,7 +211,7 @@ pub fn handle_check_subscription_access(ctx: Context<CheckSubscriptionAccess>) -
                     // Membership is support-only, does NOT grant content access
                     if patron_sub.is_active
                         && patron_sub.tier == PatronTier::Subscription
-                        && now < patron_sub.started_at + DEFAULT_EPOCH_DURATION
+                        && now < patron_sub.started_at + SUBSCRIPTION_VALIDITY_PERIOD
                     {
                         msg!("Access granted: valid creator subscription");
                         return Ok(());
@@ -239,7 +239,7 @@ pub fn handle_check_subscription_access(ctx: Context<CheckSubscriptionAccess>) -
                     )?;
 
                     // Check if active and within 30 days
-                    if eco_sub.is_active && now < eco_sub.started_at + DEFAULT_EPOCH_DURATION {
+                    if eco_sub.is_active && now < eco_sub.started_at + SUBSCRIPTION_VALIDITY_PERIOD {
                         msg!("Access granted: valid ecosystem subscription");
                         return Ok(());
                     }

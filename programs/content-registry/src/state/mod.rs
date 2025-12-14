@@ -65,7 +65,7 @@ pub use subscription::{
     EcosystemSubConfig, ECOSYSTEM_SUB_CONFIG_SEED,
     EcosystemSubscription, ECOSYSTEM_SUB_SEED,
     // Constants
-    DEFAULT_EPOCH_DURATION, TEST_EPOCH_DURATION,
+    DEFAULT_EPOCH_DURATION, TEST_EPOCH_DURATION, SUBSCRIPTION_VALIDITY_PERIOD,
     // Helper functions
     calculate_primary_split, calculate_ecosystem_split,
 };

@@ -42,11 +42,14 @@ pub const ECOSYSTEM_SUB_CONFIG_SEED: &[u8] = b"ecosystem_sub_config";
 /// Ecosystem subscription - user's platform subscription
 pub const ECOSYSTEM_SUB_SEED: &[u8] = b"ecosystem_sub";
 
-/// Default epoch duration: 30 days in seconds
-pub const DEFAULT_EPOCH_DURATION: i64 = 30 * 24 * 60 * 60;
+/// Default epoch duration: 1 day in seconds (for distribution batching)
+pub const DEFAULT_EPOCH_DURATION: i64 = 24 * 60 * 60;
 
 /// Test epoch duration: 60 seconds (for E2E testing)
 pub const TEST_EPOCH_DURATION: i64 = 60;
+
+/// Subscription validity period: 30 days in seconds (for content access)
+pub const SUBSCRIPTION_VALIDITY_PERIOD: i64 = 30 * 24 * 60 * 60;
 
 // ============================================================================
 // UNIFIED NFT REWARD STATE
