@@ -598,13 +598,14 @@ export default function ProfilePage() {
 
                 {/* Bundle NFTs */}
                 {ownedBundleNfts.map((nft) => {
+                  if (!nft.creator || !nft.bundleId) return null;
                   const bundleData = globalBundles.find(b =>
-                    b.creator.toBase58() === nft.creator.toBase58() && b.bundleId === nft.bundleId
+                    b.creator.toBase58() === nft.creator!.toBase58() && b.bundleId === nft.bundleId
                   );
                   const title = nft.name || "Untitled Bundle";
-                  const previewUrl = bundleData?.metadata?.image
-                    ? getIpfsUrl(bundleData.metadata.image)
-                    : null;
+                  // Bundle on-chain data only has metadataCid, not parsed metadata
+                  // Preview URL would need separate metadata fetch
+                  const previewUrl: string | null = null;
                   const rarity = bundleNftRarities.get(nft.nftAsset.toBase58());
                   const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
                   const edition = editionMatch ? editionMatch[2] : null;

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
-import { getIpfsUrl, getContentDomain, getDomainLabel, BundleType } from "@handcraft/sdk";
+import { getIpfsUrl, getContentDomain, getDomainLabel, BundleType, ContentDomain } from "@handcraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
 import Link from "next/link";
 
@@ -15,8 +15,11 @@ type ViewMode = "grid" | "list";
 const BUNDLE_TYPE_LABELS: Record<BundleType, string> = {
   [BundleType.Album]: "Album",
   [BundleType.Series]: "Series",
+  [BundleType.Playlist]: "Playlist",
   [BundleType.Course]: "Course",
+  [BundleType.Newsletter]: "Newsletter",
   [BundleType.Collection]: "Collection",
+  [BundleType.ProductPack]: "Pack",
 };
 
 export default function LibraryPage() {
@@ -39,6 +42,7 @@ export default function LibraryPage() {
     const countMap = new Map<string, number>();
     const nftNameMap = new Map<string, string>(); // Store NFT name for each content
     for (const nft of walletNfts) {
+      if (!nft.contentCid) continue; // Skip NFTs without contentCid
       countMap.set(nft.contentCid, (countMap.get(nft.contentCid) || 0) + 1);
       // Store the first NFT name we encounter for this content
       if (!nftNameMap.has(nft.contentCid) && nft.name) {
@@ -55,7 +59,7 @@ export default function LibraryPage() {
         if (!content) return null;
         const nftName = nftNameMap.get(contentCid) || "";
         // NFT name format: "Content Name (R #000001)" - use the full NFT name
-        const title = nftName || content.metadata?.name || content.metadata?.title || `Content ${contentCid.slice(0, 8)}...`;
+        const title = nftName || `Content ${contentCid.slice(0, 8)}...`;
         return {
           id: contentCid,
           type: "content" as const,
@@ -80,6 +84,7 @@ export default function LibraryPage() {
     const countMap = new Map<string, number>();
     const nftNameMap = new Map<string, string>(); // Store NFT name for each bundle
     for (const nft of walletBundleNfts) {
+      if (!nft.creator || !nft.bundleId) continue; // Skip NFTs without creator/bundleId
       const key = `${nft.creator.toBase58()}-${nft.bundleId}`;
       countMap.set(key, (countMap.get(key) || 0) + 1);
       // Store the first NFT name we encounter for this bundle
@@ -97,13 +102,13 @@ export default function LibraryPage() {
         if (!bundle) return null;
         const nftName = nftNameMap.get(key) || "";
         // NFT name format: "Bundle Name (R #000001)" - use the full NFT name
-        const title = nftName || bundle.metadata?.name || bundle.bundleId;
+        const title = nftName || bundle.bundleId;
         return {
           id: bundle.bundleId,
           type: "bundle" as const,
           title,
-          previewCid: bundle.metadata?.image,
-          domain: "bundle",
+          previewCid: undefined, // Bundle metadata would need to be fetched separately
+          domain: "bundle" as string,
           bundleType: bundle.bundleType,
           createdAt: bundle.createdAt,
           itemCount: bundle.itemCount,
@@ -120,7 +125,7 @@ export default function LibraryPage() {
       type: "content" | "bundle";
       title: string;
       previewCid?: string;
-      domain: string;
+      domain: ContentDomain | "bundle";
       contentType?: number;
       bundleType?: BundleType;
       createdAt: bigint;
@@ -164,7 +169,7 @@ export default function LibraryPage() {
       } else {
         key = item.type === "bundle"
           ? (item.bundleType !== undefined ? BUNDLE_TYPE_LABELS[item.bundleType] : "Bundle")
-          : getDomainLabel(item.domain);
+          : getDomainLabel(item.domain as ContentDomain);
       }
 
       if (!groups.has(key)) groups.set(key, []);
@@ -344,7 +349,7 @@ export default function LibraryPage() {
                             <p className="text-white/50 text-xs capitalize">
                               {item.type === "bundle"
                                 ? (item.bundleType !== undefined ? BUNDLE_TYPE_LABELS[item.bundleType] : "Bundle")
-                                : getDomainLabel(item.domain)}
+                                : getDomainLabel(item.domain as ContentDomain)}
                             </p>
                           </div>
                         </div>
@@ -361,7 +366,7 @@ export default function LibraryPage() {
                               ? "bg-purple-500/80 text-white"
                               : "bg-white/20 text-white/80 backdrop-blur-sm"
                           }`}>
-                            {item.type === "bundle" ? "Bundle" : getDomainLabel(item.domain)}
+                            {item.type === "bundle" ? "Bundle" : getDomainLabel(item.domain as ContentDomain)}
                           </span>
                         </div>
                       </Link>
@@ -396,7 +401,7 @@ export default function LibraryPage() {
                           <p className="text-white/50 text-sm capitalize">
                             {item.type === "bundle"
                               ? (item.bundleType !== undefined ? BUNDLE_TYPE_LABELS[item.bundleType] : "Bundle")
-                              : getDomainLabel(item.domain)}
+                              : getDomainLabel(item.domain as ContentDomain)}
                             {item.type === "bundle" && item.itemCount && ` · ${item.itemCount} items`}
                           </p>
                         </div>

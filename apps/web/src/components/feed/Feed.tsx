@@ -551,17 +551,19 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         if (isKeyboardNavigating.current) return;
 
         // Find the most visible item
-        let mostVisible: { index: number; ratio: number } | null = null;
+        let mostVisibleIndex = -1;
+        let mostVisibleRatio = 0;
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const index = Number(entry.target.getAttribute("data-index"));
-            if (!isNaN(index) && (!mostVisible || entry.intersectionRatio > mostVisible.ratio)) {
-              mostVisible = { index, ratio: entry.intersectionRatio };
+            if (!isNaN(index) && entry.intersectionRatio > mostVisibleRatio) {
+              mostVisibleIndex = index;
+              mostVisibleRatio = entry.intersectionRatio;
             }
           }
         });
-        if (mostVisible && mostVisible.ratio > 0.3) {
-          setCurrentIndex(mostVisible.index);
+        if (mostVisibleIndex >= 0 && mostVisibleRatio > 0.3) {
+          setCurrentIndex(mostVisibleIndex);
         }
       },
       { root: container, threshold: [0, 0.3, 0.5, 0.7, 1] }
