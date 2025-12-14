@@ -1,21 +1,19 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { useState, useCallback } from "react";
+import { useParams } from "next/navigation";
 import { Feed } from "@/components/feed";
 import { SidebarPanel } from "@/components/sidebar";
 
-function FeedLoadingFallback() {
-  return (
-    <div className="h-screen bg-black flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-white/60 font-light tracking-wide">Loading content...</p>
-      </div>
-    </div>
-  );
-}
-
 export default function ContentPage() {
+  const params = useParams();
+  const slug = params.slug as string[];
+
+  // Parse slug: /content/CID or /content/CID/position
+  const cid = slug[0];
+  const positionParam = slug[1] ? parseInt(slug[1], 10) : 1;
+  const initialPosition = Math.max(1, positionParam);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
@@ -23,6 +21,10 @@ export default function ContentPage() {
   const toggleSidebar = useCallback(() => {
     setShowFilters(false); // Always close filters when toggling sidebar
     setIsSidebarOpen(prev => !prev);
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
   }, []);
 
   const handleOverlayChange = useCallback((visible: boolean) => {
@@ -49,16 +51,15 @@ export default function ContentPage() {
         </svg>
       </button>
 
-      {/* Feed Content - loads separately */}
-      <Suspense fallback={<FeedLoadingFallback />}>
-        <Feed
-          isSidebarOpen={isSidebarOpen}
-          onCloseSidebar={() => setIsSidebarOpen(false)}
-          showFilters={showFilters}
-          setShowFilters={setShowFilters}
-          onOverlayChange={handleOverlayChange}
-        />
-      </Suspense>
+      <Feed
+        isSidebarOpen={isSidebarOpen}
+        onCloseSidebar={handleCloseSidebar}
+        showFilters={showFilters}
+        setShowFilters={setShowFilters}
+        initialCid={cid}
+        initialPosition={initialPosition}
+        onOverlayChange={handleOverlayChange}
+      />
     </div>
   );
 }

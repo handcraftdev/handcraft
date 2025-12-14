@@ -5,24 +5,27 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { useSession } from "@/hooks/useSession";
-import { getIpfsUrl, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda } from "@handcraft/sdk";
+import { getIpfsUrl, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda, VisibilityLevel, getVisibilityLevelLabel, BundleType, getBundlePda } from "@handcraft/sdk";
 import { BuyContentModal, SellNftModal } from "@/components/mint";
 import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
+import { BuyBundleModal } from "@/components/bundle/BuyBundleModal";
+import { RentBundleModal } from "@/components/bundle/RentBundleModal";
 import { RarityBadge } from "@/components/rarity";
 import { Rarity } from "@handcraft/sdk";
-import { type EnrichedContent } from "./types";
+import { type EnrichedContent, type UnifiedFeedItem, type NftTypeFilter, NFT_TYPE_FILTERS, type EnrichedBundle, type BundleFeedMetadata } from "./types";
 import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo, formatDuration } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
 
 type ContentTypeFilter = "all" | SDKContentType;
+type BundleTypeFilter = "all" | BundleType;
 type SortType = "date" | "minted" | "price" | "random";
 type SortDirection = "desc" | "asc";
 
 const SORT_TYPES: { value: SortType; label: string }[] = [
   { value: "date", label: "Date" },
-  { value: "minted", label: "Minted" },
+  { value: "minted", label: "Sold" },
   { value: "price", label: "Price" },
   { value: "random", label: "Random" },
 ];
@@ -50,6 +53,17 @@ const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: SDKContentType.Post, label: "Post" },
 ];
 
+const BUNDLE_TYPE_FILTERS: { value: BundleTypeFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: BundleType.Album, label: "Album" },
+  { value: BundleType.Series, label: "Series" },
+  { value: BundleType.Playlist, label: "Playlist" },
+  { value: BundleType.Course, label: "Course" },
+  { value: BundleType.Newsletter, label: "Newsletter" },
+  { value: BundleType.Collection, label: "Collection" },
+  { value: BundleType.ProductPack, label: "Pack" },
+];
+
 function getItemHash(seed: number, itemId: string): number {
   let hash = seed;
   for (let i = 0; i < itemId.length; i++) {
@@ -63,6 +77,22 @@ function parseFilter(param: string | null): ContentTypeFilter {
   const num = Number(param);
   if (!isNaN(num) && Object.values(SDKContentType).includes(num)) {
     return num as SDKContentType;
+  }
+  return "all";
+}
+
+function parseBundleTypeFilter(param: string | null): BundleTypeFilter {
+  if (!param || param === "all") return "all";
+  const num = Number(param);
+  if (!isNaN(num) && Object.values(BundleType).includes(num)) {
+    return num as BundleType;
+  }
+  return "all";
+}
+
+function parseNftTypeFilter(param: string | null): NftTypeFilter {
+  if (param && ["all", "content", "bundle"].includes(param)) {
+    return param as NftTypeFilter;
   }
   return "all";
 }
@@ -81,36 +111,87 @@ function parseSortDir(param: string | null): SortDirection {
 
 interface FeedProps {
   isSidebarOpen?: boolean;
-  onToggleSidebar?: () => void;
+  onCloseSidebar?: () => void;
+  showFilters: boolean;
+  setShowFilters: (show: boolean) => void;
+  // When provided, this content/bundle starts first in the feed
+  initialCid?: string;
+  // For bundles: which item position to start at (1-indexed)
+  initialPosition?: number;
+  // Callback when overlay visibility changes (for syncing page-level UI)
+  onOverlayChange?: (visible: boolean) => void;
 }
 
-export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
+export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setShowFilters, initialCid, initialPosition = 1, onOverlayChange }: FeedProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  const nftTypeFilter = parseNftTypeFilter(searchParams.get("nftType"));
   const typeFilter = parseFilter(searchParams.get("filter"));
+  const bundleTypeFilter = parseBundleTypeFilter(searchParams.get("bundleType"));
   const sortType = parseSortType(searchParams.get("sort"));
   const sortDir = parseSortDir(searchParams.get("dir"));
-
-  const [showFilters, setShowFilters] = useState(false);
-
-  // When either panel is open, buttons shift inside
-  const panelOpen = isSidebarOpen || showFilters;
   const [randomSeed] = useState(() => Date.now());
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Track overlay visibility for syncing UI elements
+  const [localOverlayVisible, setLocalOverlayVisible] = useState(true);
+
+  // Wrapper to track overlay state locally and pass to parent
+  const handleOverlayChange = useCallback((visible: boolean) => {
+    setLocalOverlayVisible(visible);
+    onOverlayChange?.(visible);
+  }, [onOverlayChange]);
+
+  // Reset overlay to visible when changing slides
+  useEffect(() => {
+    setLocalOverlayVisible(true);
+    onOverlayChange?.(true);
+  }, [currentIndex, onOverlayChange]);
+
+  // Queue of items to insert at a specific position
+  const [queuedItem, setQueuedItem] = useState<{ cid: string; insertAfter: number } | null>(null);
+  const [jumpToQueued, setJumpToQueued] = useState(false);
+
+  // Navigation function to queue content/bundle after current position and jump to it
+  const navigateToContent = useCallback((cid: string) => {
+    setQueuedItem({ cid, insertAfter: currentIndex });
+    setJumpToQueued(true);
+  }, [currentIndex]);
+
+  // Flag to prevent intersection observer from overriding keyboard navigation
+  const isKeyboardNavigating = useRef(false);
+
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { globalContent: rawGlobalContent, isLoadingGlobalContent, allMintConfigs, client } = useContentRegistry();
+  const { globalContent: rawGlobalContent, isLoadingGlobalContent, globalBundles: rawGlobalBundles, isLoadingGlobalBundles, allMintConfigs, allBundleMintConfigs, client } = useContentRegistry();
 
-  const updateParams = useCallback((updates: { filter?: string; sort?: string; dir?: string }) => {
+  const updateParams = useCallback((updates: { nftType?: string; filter?: string; bundleType?: string; sort?: string; dir?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
+
+    if (updates.nftType !== undefined) {
+      if (updates.nftType === "all") {
+        params.delete("nftType");
+      } else {
+        params.set("nftType", updates.nftType);
+      }
+    }
 
     if (updates.filter !== undefined) {
       if (updates.filter === "all") {
         params.delete("filter");
       } else {
         params.set("filter", updates.filter);
+      }
+    }
+
+    if (updates.bundleType !== undefined) {
+      if (updates.bundleType === "all") {
+        params.delete("bundleType");
+      } else {
+        params.set("bundleType", updates.bundleType);
       }
     }
 
@@ -137,10 +218,22 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
     router.push(newUrl, { scroll: false });
   }, [searchParams, router]);
 
+  const setNftTypeFilter = useCallback((nftType: NftTypeFilter) => {
+    setVisibleCount(ITEMS_PER_PAGE);
+    setCurrentIndex(0);
+    updateParams({ nftType });
+  }, [updateParams]);
+
   const setTypeFilter = useCallback((filter: ContentTypeFilter) => {
     setVisibleCount(ITEMS_PER_PAGE);
     setCurrentIndex(0);
     updateParams({ filter: String(filter) });
+  }, [updateParams]);
+
+  const setBundleTypeFilter = useCallback((bundleType: BundleTypeFilter) => {
+    setVisibleCount(ITEMS_PER_PAGE);
+    setCurrentIndex(0);
+    updateParams({ bundleType: String(bundleType) });
   }, [updateParams]);
 
   const setSortType = useCallback((sort: SortType) => {
@@ -156,9 +249,13 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
   }, [updateParams, sortDir]);
 
   const [globalContent, setGlobalContent] = useState<EnrichedContent[]>([]);
+  const [globalBundles, setGlobalBundles] = useState<EnrichedBundle[]>([]);
   const [isEnrichingGlobal, setIsEnrichingGlobal] = useState(false);
+  const [isEnrichingBundles, setIsEnrichingBundles] = useState(false);
   const lastGlobalFetchRef = useRef<string>("");
+  const lastBundleFetchRef = useRef<string>("");
 
+  // Enrich content with metadata
   useEffect(() => {
     const contentKey = rawGlobalContent.map(c => c.contentCid).join(",");
     if (contentKey === lastGlobalFetchRef.current || !contentKey) return;
@@ -191,9 +288,116 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
     enrichGlobalFeed();
   }, [rawGlobalContent]);
 
-  const isLoading = !client || isLoadingGlobalContent || isEnrichingGlobal;
-  const baseContent = globalContent;
+  // Enrich bundles with metadata
+  useEffect(() => {
+    const bundleKey = rawGlobalBundles.map(b => b.bundleId).join(",");
+    if (bundleKey === lastBundleFetchRef.current || !bundleKey) return;
+    lastBundleFetchRef.current = bundleKey;
 
+    async function enrichBundles() {
+      setIsEnrichingBundles(true);
+      try {
+        const enriched = await Promise.all(
+          rawGlobalBundles
+            .filter(bundle => bundle.isActive) // Only show active bundles
+            .map(async (bundle) => {
+              const creatorAddress = bundle.creator.toBase58();
+              let metadata: BundleFeedMetadata | undefined;
+              try {
+                const metadataUrl = getIpfsUrl(bundle.metadataCid);
+                const res = await fetch(metadataUrl);
+                metadata = await res.json();
+              } catch {
+                // Keep metadata undefined
+              }
+              return { ...bundle, metadata, creatorAddress } as EnrichedBundle;
+            })
+        );
+        setGlobalBundles(enriched);
+      } catch (err) {
+        console.error("Error enriching bundles:", err);
+      } finally {
+        setIsEnrichingBundles(false);
+      }
+    }
+
+    enrichBundles();
+  }, [rawGlobalBundles]);
+
+  const isLoading = !client || isLoadingGlobalContent || isLoadingGlobalBundles || isEnrichingGlobal || isEnrichingBundles;
+
+  // Create unified feed items combining content and bundles
+  const unifiedFeed = useMemo((): UnifiedFeedItem[] => {
+    const items: UnifiedFeedItem[] = [];
+
+    // Add content items
+    for (const content of globalContent) {
+      items.push({
+        id: content.contentCid,
+        type: "content",
+        creator: content.creator,
+        createdAt: content.createdAt,
+        metadata: content.metadata ? {
+          title: content.metadata.title || content.metadata.name,
+          description: content.metadata.description,
+          image: content.previewCid ? getIpfsUrl(content.previewCid) : undefined,
+          tags: content.metadata.tags,
+        } : undefined,
+        contentCid: content.contentCid,
+        contentType: content.contentType,
+        previewCid: content.previewCid,
+        isEncrypted: content.isEncrypted,
+        visibilityLevel: content.visibilityLevel,
+        mintedCount: content.mintedCount,
+        isLocked: content.isLocked,
+        mintConfig: content.mintConfig,
+        contentEntry: content,
+      });
+    }
+
+    // Add bundle items
+    for (const bundle of globalBundles) {
+      items.push({
+        id: bundle.bundleId,
+        type: "bundle",
+        creator: bundle.creator,
+        createdAt: bundle.createdAt,
+        metadata: bundle.metadata ? {
+          title: bundle.metadata.name,
+          description: bundle.metadata.description,
+          image: bundle.metadata.image,
+          tags: bundle.metadata.tags,
+        } : undefined,
+        bundleId: bundle.bundleId,
+        bundleType: bundle.bundleType,
+        itemCount: bundle.itemCount,
+        mintedCount: bundle.mintedCount,
+        isLocked: bundle.isLocked,
+        mintConfig: bundle.mintConfig,
+        bundleEntry: bundle,
+      });
+    }
+
+    return items;
+  }, [globalContent, globalBundles]);
+
+  // Get price for content or bundle
+  const getItemPrice = useCallback((item: UnifiedFeedItem): bigint => {
+    if (item.type === "content" && item.contentCid) {
+      if (!allMintConfigs) return BigInt(0);
+      const [contentPda] = getContentPda(item.contentCid);
+      const config = allMintConfigs.get(contentPda.toBase58());
+      return config?.priceSol ?? BigInt(0);
+    } else if (item.type === "bundle" && item.bundleId) {
+      if (!allBundleMintConfigs) return BigInt(0);
+      const [bundlePda] = getBundlePda(item.creator, item.bundleId);
+      const config = allBundleMintConfigs.get(bundlePda.toBase58());
+      return config?.price ?? BigInt(0);
+    }
+    return BigInt(0);
+  }, [allMintConfigs, allBundleMintConfigs]);
+
+  // Legacy getPrice for ContentSlide compatibility
   const getPrice = useCallback((contentCid: string): bigint => {
     if (!allMintConfigs) return BigInt(0);
     const [contentPda] = getContentPda(contentCid);
@@ -201,35 +405,83 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
     return config?.priceSol ?? BigInt(0);
   }, [allMintConfigs]);
 
-  const { displayContent, totalItems, hasMore } = useMemo(() => {
-    const filtered = typeFilter === "all"
-      ? baseContent
-      : baseContent.filter(item => item.contentType === typeFilter);
+  const { displayItems, totalItems, hasMore } = useMemo(() => {
+    // First filter by NFT type
+    let filtered = unifiedFeed;
+    if (nftTypeFilter === "content") {
+      filtered = filtered.filter(item => item.type === "content");
+    } else if (nftTypeFilter === "bundle") {
+      filtered = filtered.filter(item => item.type === "bundle");
+    }
 
-    const sorted = [...filtered].sort((a, b) => {
+    // Then filter by content type (only applies to content items)
+    if (typeFilter !== "all") {
+      filtered = filtered.filter(item =>
+        item.type === "bundle" || item.contentType === typeFilter
+      );
+    }
+
+    // Filter by bundle type (only applies to bundle items)
+    if (bundleTypeFilter !== "all") {
+      filtered = filtered.filter(item =>
+        item.type === "content" || item.bundleType === bundleTypeFilter
+      );
+    }
+
+    let sorted = [...filtered].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       switch (sortType) {
         case "minted":
           return dir * (Number(a.mintedCount ?? 0) - Number(b.mintedCount ?? 0));
         case "price": {
-          const priceA = getPrice(a.contentCid);
-          const priceB = getPrice(b.contentCid);
+          const priceA = getItemPrice(a);
+          const priceB = getItemPrice(b);
           return dir * Number(priceA - priceB);
         }
         case "random":
-          return getItemHash(randomSeed, a.contentCid) - getItemHash(randomSeed, b.contentCid);
+          return getItemHash(randomSeed, a.id) - getItemHash(randomSeed, b.id);
         case "date":
         default:
           return dir * (Number(a.createdAt) - Number(b.createdAt));
       }
     });
 
+    // If initialCid is provided, move that item to the front
+    if (initialCid) {
+      const initialIndex = sorted.findIndex(item => item.id === initialCid);
+      if (initialIndex > 0) {
+        const [initialItem] = sorted.splice(initialIndex, 1);
+        sorted = [initialItem, ...sorted];
+      }
+    }
+
+    // If queuedItem is set, insert it at the fixed position
+    if (queuedItem) {
+      const queuedIndex = sorted.findIndex(item => item.id === queuedItem.cid);
+      const targetPos = queuedItem.insertAfter + 1;
+      if (queuedIndex >= 0 && queuedIndex !== targetPos) {
+        const [item] = sorted.splice(queuedIndex, 1);
+        // Insert at the fixed position
+        const insertAt = Math.min(targetPos, sorted.length);
+        sorted.splice(insertAt, 0, item);
+      }
+    }
+
     const totalItems = sorted.length;
     const displayed = sorted.slice(0, visibleCount);
     const hasMore = visibleCount < totalItems;
 
-    return { displayContent: displayed, totalItems, hasMore };
-  }, [baseContent, typeFilter, sortType, sortDir, visibleCount, randomSeed, getPrice]);
+    return { displayItems: displayed, totalItems, hasMore };
+  }, [unifiedFeed, nftTypeFilter, typeFilter, bundleTypeFilter, sortType, sortDir, visibleCount, randomSeed, getItemPrice, initialCid, queuedItem]);
+
+  // For backward compatibility, extract content-only items
+  const displayContent = useMemo(() => {
+    return displayItems
+      .filter((item): item is UnifiedFeedItem & { contentEntry: EnrichedContent } =>
+        item.type === "content" && item.contentEntry !== undefined
+      )
+      .map(item => item.contentEntry);
+  }, [displayItems]);
 
   // Intersection Observer for loading more content
   useEffect(() => {
@@ -252,29 +504,41 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
-        setCurrentIndex(prev => Math.min(prev + 1, displayContent.length - 1));
+        isKeyboardNavigating.current = true;
+        setCurrentIndex(prev => Math.min(prev + 1, displayItems.length - 1));
+        // Reset flag after scroll animation completes
+        setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
+        isKeyboardNavigating.current = true;
         setCurrentIndex(prev => Math.max(prev - 1, 0));
+        // Reset flag after scroll animation completes
+        setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [displayContent.length]);
+  }, [displayItems.length]);
 
   // Scroll snap to current item when navigating via keyboard
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || displayContent.length === 0) return;
+    if (!container || displayItems.length === 0) return;
 
     const items = container.querySelectorAll("[data-feed-item]");
     const targetItem = items[currentIndex];
     if (targetItem) {
       targetItem.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [currentIndex, displayContent.length]);
+  }, [currentIndex, displayItems.length]);
 
   // Intersection observer for scroll-based index updates
   useEffect(() => {
@@ -283,45 +547,118 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
 
     const observer = new IntersectionObserver(
       (entries) => {
+        // Skip if keyboard navigation is in progress
+        if (isKeyboardNavigating.current) return;
+
+        // Find the most visible item
+        let mostVisible: { index: number; ratio: number } | null = null;
         entries.forEach((entry) => {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+          if (entry.isIntersecting) {
             const index = Number(entry.target.getAttribute("data-index"));
-            if (!isNaN(index)) {
-              setCurrentIndex(index);
+            if (!isNaN(index) && (!mostVisible || entry.intersectionRatio > mostVisible.ratio)) {
+              mostVisible = { index, ratio: entry.intersectionRatio };
             }
           }
         });
+        if (mostVisible && mostVisible.ratio > 0.3) {
+          setCurrentIndex(mostVisible.index);
+        }
       },
-      { root: container, threshold: 0.5 }
+      { root: container, threshold: [0, 0.3, 0.5, 0.7, 1] }
     );
 
     const items = container.querySelectorAll("[data-feed-item]");
     items.forEach((item) => observer.observe(item));
 
     return () => observer.disconnect();
-  }, [displayContent]);
+  }, [displayItems]);
+
+  // Track if initial URL has been set (for bare /content)
+  const initialUrlSet = useRef(false);
+
+  // Update URL when current item changes (only on /content/* routes)
+  useEffect(() => {
+    if (displayItems.length === 0) return;
+
+    // For bare /content, always use first item and only set once
+    const isBareContent = window.location.pathname === "/content" || window.location.pathname === "/content/";
+    if (isBareContent && !initialUrlSet.current) {
+      const firstItem = displayItems[0];
+      if (firstItem) {
+        window.history.replaceState({}, "", `/content/${firstItem.id}`);
+        initialUrlSet.current = true;
+      }
+      return;
+    }
+
+    const currentItem = displayItems[currentIndex];
+    if (!currentItem) return;
+
+    // If initialCid is provided, wait until it's properly positioned at index 0
+    if (initialCid && currentIndex === 0 && currentItem.id !== initialCid) {
+      return;
+    }
+
+    // Update URL if on /content route and URL differs
+    if (window.location.pathname.startsWith("/content")) {
+      const newUrl = `/content/${currentItem.id}`;
+      if (window.location.pathname !== newUrl) {
+        window.history.pushState({}, "", newUrl);
+      }
+    }
+  }, [currentIndex, displayItems, initialCid]);
+
+  // Jump to queued item after it's inserted
+  useEffect(() => {
+    if (!jumpToQueued || !queuedItem) return;
+
+    const queuedIndex = displayItems.findIndex(item => item.id === queuedItem.cid);
+    if (queuedIndex >= 0 && containerRef.current) {
+      setCurrentIndex(queuedIndex);
+      const targetElement = containerRef.current.querySelector(`[data-index="${queuedIndex}"]`);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: "instant" });
+      }
+      setJumpToQueued(false);
+    }
+  }, [jumpToQueued, queuedItem, displayItems]);
 
   // Full screen immersive container
   const containerClass = "h-screen bg-black relative";
 
-  if (isLoading) {
+  // Check if initialCid is provided but not yet loaded/positioned
+  // Wait if: initialCid provided AND (feed still empty OR initialCid not yet at front)
+  const initialCidExistsInFeed = initialCid && unifiedFeed.some(item => item.id === initialCid);
+  const isWaitingForInitialContent = initialCid && (
+    // Feed is empty but we expect content to load
+    (unifiedFeed.length === 0) ||
+    // initialCid exists in feed but not yet positioned first in displayItems
+    (initialCidExistsInFeed && displayItems.length > 0 && displayItems[0]?.id !== initialCid)
+  );
+
+  if (isLoading || isWaitingForInitialContent) {
     return (
       <div className={`${containerClass} flex items-center justify-center`}>
         <div className="text-center">
           <div className="w-12 h-12 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white/60 font-light tracking-wide">Loading feed...</p>
+          <p className="text-white/60 font-light tracking-wide">Loading content...</p>
         </div>
       </div>
     );
   }
 
-  if (displayContent.length === 0) {
+  if (displayItems.length === 0) {
+    const hasAnyFilter = nftTypeFilter !== "all" || typeFilter !== "all" || bundleTypeFilter !== "all";
     return (
       <div className={`${containerClass} flex items-center justify-center p-8`}>
         <EmptyState
           showExplore={true}
-          hasFilter={typeFilter !== "all"}
-          onClearFilter={() => setTypeFilter("all")}
+          hasFilter={hasAnyFilter}
+          onClearFilter={() => {
+            setNftTypeFilter("all");
+            setTypeFilter("all");
+            setBundleTypeFilter("all");
+          }}
         />
       </div>
     );
@@ -329,44 +666,46 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
 
   return (
     <div className={containerClass}>
-      {/* Navigation Buttons - shift inside when panel opens */}
-      <div className={`fixed z-50 flex flex-col gap-2 transition-all duration-300 ${panelOpen ? "left-[296px]" : "left-4"}`} style={{ top: "1rem" }}>
-        {/* Menu Button */}
-        {onToggleSidebar && (
-          <button
-            onClick={() => {
-              if (showFilters) setShowFilters(false); // Close filter when opening sidebar
-              onToggleSidebar();
-            }}
-            className="p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all group"
-            title="Menu"
-          >
-            <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        )}
+      {/* Filter Button - positioned below menu button (handled by page), synced with overlay */}
+      <button
+        onClick={() => {
+          if (isSidebarOpen && onCloseSidebar) onCloseSidebar();
+          setShowFilters(!showFilters);
+        }}
+        className={`fixed z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen || showFilters ? "left-[304px]" : "left-4"} ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        style={{ top: "4.5rem" }}
+        title="Filter"
+      >
+        <svg className="w-5 h-5 text-white/70 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+      </button>
 
-        {/* Filter Toggle */}
-        <button
-          onClick={() => {
-            if (isSidebarOpen && onToggleSidebar) onToggleSidebar(); // Close sidebar when opening filter
-            setShowFilters(!showFilters);
-          }}
-          className="p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all group"
-          title="Filter"
-        >
-          <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Filters Panel */}
-      <div className={`absolute top-0 left-0 h-full w-72 bg-black/95 backdrop-blur-xl border-r border-white/10 z-40 transform transition-transform duration-300 ${showFilters ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="p-6 pt-20">
+      {/* Filters Panel - synced with overlay */}
+      <div className={`absolute top-0 left-0 h-full w-72 bg-black/95 backdrop-blur-xl border-r border-white/10 z-40 transform transition-all duration-300 overflow-y-auto ${showFilters ? "translate-x-0" : "-translate-x-full"} ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        <div className="p-6 pt-6 pb-12">
           <h3 className="text-white/40 text-xs uppercase tracking-[0.2em] mb-6">Filters</h3>
-          <div className="mb-8">
+
+          {/* NFT Type Filter */}
+          <div className="mb-6">
+            <label className="text-white/60 text-sm mb-3 block">Type</label>
+            <div className="flex gap-2">
+              {NFT_TYPE_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setNftTypeFilter(filter.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
+                    nftTypeFilter === filter.value ? "bg-white text-black font-medium" : "bg-white/10 text-white/60 hover:text-white hover:bg-white/20"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort */}
+          <div className="mb-6">
             <label className="text-white/60 text-sm mb-3 block">Sort by</label>
             <div className="space-y-1">
               {SORT_TYPES.map((option) => (
@@ -387,7 +726,9 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
               </button>
             )}
           </div>
-          <div>
+
+          {/* Content Type Filter - active when showing All or Content */}
+          <div className={`mb-6 ${nftTypeFilter === "bundle" ? "opacity-40 pointer-events-none" : ""}`}>
             <label className="text-white/60 text-sm mb-3 block">Content Type</label>
             <div className="flex flex-wrap gap-2">
               {CONTENT_TYPE_FILTERS.map((filter) => (
@@ -403,16 +744,34 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
               ))}
             </div>
           </div>
+
+          {/* Bundle Type Filter - active when showing All or Bundle */}
+          <div className={`${nftTypeFilter === "content" ? "opacity-40 pointer-events-none" : ""}`}>
+            <label className="text-white/60 text-sm mb-3 block">Bundle Type</label>
+            <div className="flex flex-wrap gap-2">
+              {BUNDLE_TYPE_FILTERS.map((filter) => (
+                <button
+                  key={String(filter.value)}
+                  onClick={() => setBundleTypeFilter(filter.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
+                    bundleTypeFilter === filter.value ? "bg-white text-black font-medium" : "bg-white/10 text-white/60 hover:text-white hover:bg-white/20"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Progress Indicator */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
-        {displayContent.slice(Math.max(0, currentIndex - 3), Math.min(displayContent.length, currentIndex + 4)).map((_, idx) => {
+      {/* Progress Indicator - synced with overlay */}
+      <div className={`absolute right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5 transition-opacity duration-300 ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        {displayItems.slice(Math.max(0, currentIndex - 3), Math.min(displayItems.length, currentIndex + 4)).map((item, idx) => {
           const actualIndex = Math.max(0, currentIndex - 3) + idx;
           return (
             <button
-              key={actualIndex}
+              key={item.id}
               onClick={() => setCurrentIndex(actualIndex)}
               className={`transition-all duration-300 rounded-full ${actualIndex === currentIndex ? "w-1.5 h-6 bg-white" : "w-1.5 h-1.5 bg-white/30 hover:bg-white/60"}`}
             />
@@ -420,19 +779,31 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
         })}
       </div>
 
-      {/* Main Feed Container - click to close panels */}
+      {/* Main Feed Container - click to close filter panel */}
       <div
         ref={containerRef}
-        className="h-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
+        className="h-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         onClick={() => {
           if (showFilters) setShowFilters(false);
-          if (isSidebarOpen && onToggleSidebar) onToggleSidebar();
         }}
       >
         <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
-        {displayContent.map((item, index) => (
-          <ContentSlide key={item.contentCid} content={item} index={index} isActive={index === currentIndex} />
+        {displayItems.map((item, index) => (
+          item.type === "content" && item.contentEntry ? (
+            <ContentSlide key={item.id} content={item.contentEntry} index={index} isActive={index === currentIndex} onNavigateToContent={navigateToContent} onOverlayChange={handleOverlayChange} />
+          ) : item.type === "bundle" && item.bundleEntry ? (
+            <BundleFeedItem
+              key={item.id}
+              bundle={item.bundleEntry}
+              metadata={item.metadata}
+              index={index}
+              isActive={index === currentIndex}
+              initialPosition={initialCid === item.id ? initialPosition : 1}
+              onNavigateToContent={navigateToContent}
+              onOverlayChange={handleOverlayChange}
+            />
+          ) : null
         ))}
         {/* Load more sentinel */}
         <div ref={loadMoreRef} className="h-1" />
@@ -442,15 +813,50 @@ export function Feed({ isSidebarOpen = false, onToggleSidebar }: FeedProps) {
 }
 
 // ============== CONTENT SLIDE (immersive mode) ==============
+export interface BundleItemDisplay {
+  contentCid: string;
+  title?: string;
+  description?: string;
+  previewCid?: string;
+  position: number;
+  contentType?: SDKContentType;
+  isEncrypted?: boolean;
+  artist?: string;
+  album?: string;
+  duration?: number;
+}
+
+export interface BundleContextProps {
+  bundle: EnrichedBundle;
+  metadata?: { title?: string; description?: string; image?: string; tags?: string[] };
+  items: BundleItemDisplay[];
+  currentIndex: number;
+  onNavigate: (idx: number) => void;
+  isLoadingItems: boolean;
+}
+
 interface ContentSlideProps {
   content: EnrichedContent;
   index: number;
   isActive: boolean;
   rightPanelOpen?: boolean;
+  // Bundle context - when provided, shows bundle sidebar and uses bundle commerce
+  bundleContext?: BundleContextProps;
+  // Navigation callback for in-feed navigation
+  onNavigateToContent?: (cid: string) => void;
+  // Callback when overlay visibility changes
+  onOverlayChange?: (visible: boolean) => void;
 }
 
-export function ContentSlide({ content, index, isActive, rightPanelOpen = false }: ContentSlideProps) {
+export function ContentSlide({ content, index, isActive, rightPanelOpen = false, bundleContext, onNavigateToContent, onOverlayChange }: ContentSlideProps) {
   const [showOverlay, setShowOverlay] = useState(true);
+
+  // Notify parent when overlay visibility changes or slide becomes active
+  useEffect(() => {
+    if (isActive) {
+      onOverlayChange?.(showOverlay);
+    }
+  }, [showOverlay, isActive, onOverlayChange]);
   const [showBuyContentModal, setShowBuyContentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -460,14 +866,148 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
+  // Bundle-specific state - default to open when viewing bundle
+  const [showBundleSidebar, setShowBundleSidebar] = useState(!!bundleContext);
+  const [showBuyBundleModal, setShowBuyBundleModal] = useState(false);
+  const [showRentBundleModal, setShowRentBundleModal] = useState(false);
+  // Swipe gesture tracking for bundle navigation
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const slideRef = useRef<HTMLDivElement>(null);
+
+  // Use native event listeners for touch/wheel to enable preventDefault
+  useEffect(() => {
+    const el = slideRef.current;
+    if (!el || !bundleContext) return;
+
+    // Track horizontal scroll accumulation for wheel events (trackpad)
+    let wheelDeltaX = 0;
+    let wheelTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if ((e.target as HTMLElement).closest("button, a, video, audio")) return;
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!touchStartRef.current) return;
+      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
+      const deltaY = e.touches[0].clientY - touchStartRef.current.y;
+
+      // Check if we can navigate in the swipe direction
+      const canGoNext = bundleContext.currentIndex < bundleContext.items.length - 1;
+      const canGoPrev = bundleContext.currentIndex > 0;
+      const isSwipingLeft = deltaX < 0;
+      const isSwipingRight = deltaX > 0;
+      const shouldCapture = (isSwipingLeft && canGoNext) || (isSwipingRight && canGoPrev);
+
+      if (shouldCapture && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchStartRef.current) return;
+      const touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      const deltaX = touchEnd.x - touchStartRef.current.x;
+      const deltaY = touchEnd.y - touchStartRef.current.y;
+      const minSwipeDistance = 50;
+
+      const canGoNext = bundleContext.currentIndex < bundleContext.items.length - 1;
+      const canGoPrev = bundleContext.currentIndex > 0;
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+        if (deltaX < 0 && canGoNext) {
+          e.preventDefault();
+          bundleContext.onNavigate(bundleContext.currentIndex + 1);
+        } else if (deltaX > 0 && canGoPrev) {
+          e.preventDefault();
+          bundleContext.onNavigate(bundleContext.currentIndex - 1);
+        }
+        // If can't navigate, let browser handle (back/forward)
+      }
+      touchStartRef.current = null;
+    };
+
+    // Wheel event for trackpad horizontal swipe (Mac)
+    const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest("button, a, video, audio")) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // Ignore vertical
+
+      e.preventDefault();
+
+      const canGoNext = bundleContext.currentIndex < bundleContext.items.length - 1;
+      const canGoPrev = bundleContext.currentIndex > 0;
+
+      wheelDeltaX += e.deltaX;
+
+      // Navigate when threshold reached, then reset
+      if (Math.abs(wheelDeltaX) > 50) {
+        if (wheelDeltaX > 0 && canGoNext) {
+          bundleContext.onNavigate(bundleContext.currentIndex + 1);
+        } else if (wheelDeltaX < 0 && canGoPrev) {
+          bundleContext.onNavigate(bundleContext.currentIndex - 1);
+        }
+        wheelDeltaX = 0;
+      }
+
+      // Reset accumulator after scrolling stops
+      if (wheelTimeout) clearTimeout(wheelTimeout);
+      wheelTimeout = setTimeout(() => {
+        wheelDeltaX = 0;
+      }, 100);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("wheel", onWheel, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("wheel", onWheel);
+      if (wheelTimeout) clearTimeout(wheelTimeout);
+    };
+  }, [bundleContext]);
+
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
-  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts } = useContentRegistry();
+  const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts, useBundleMintConfig, useBundleRentConfig, bundleNftRarities } = useContentRegistry();
 
   const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
   const { data: rentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
   const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
   const { data: activeRental, refetch: refetchActiveRental } = useActiveRental(content.contentCid);
+
+  // Bundle config hooks (only used when bundleContext is provided)
+  const { data: bundleMintConfig, refetch: refetchBundleMintConfig } = useBundleMintConfig(
+    bundleContext?.bundle.creator ?? null,
+    bundleContext?.bundle.bundleId ?? null
+  );
+  const { data: bundleRentConfig, refetch: refetchBundleRentConfig } = useBundleRentConfig(
+    bundleContext?.bundle.creator ?? null,
+    bundleContext?.bundle.bundleId ?? null
+  );
+
+  // Bundle commerce flags
+  const hasBundleMintConfig = bundleContext && bundleMintConfig && bundleMintConfig.isActive;
+  const hasBundleRentConfig = bundleContext && bundleRentConfig && bundleRentConfig.isActive;
+  const bundleMintPrice = hasBundleMintConfig ? bundleMintConfig.price : undefined;
+  const bundleLowestRentPrice = hasBundleRentConfig ? Math.min(
+    Number(bundleRentConfig.rentFee6h ?? Infinity),
+    Number(bundleRentConfig.rentFee1d ?? Infinity),
+    Number(bundleRentConfig.rentFee7d ?? Infinity)
+  ) : undefined;
+
+  // Bundle ownership
+  const ownedBundleNfts = bundleContext ? walletBundleNfts.filter(nft =>
+    nft.bundleId === bundleContext.bundle.bundleId && nft.creator?.toBase58() === bundleContext.bundle.creator.toBase58()
+  ) : [];
+  const ownsBundleNft = ownedBundleNfts.length > 0;
+  const ownedBundleRarities: Rarity[] = ownedBundleNfts
+    .map(nft => bundleNftRarities.get(nft.nftAsset.toBase58()))
+    .filter((r): r is Rarity => r !== undefined);
 
   const ownsNft = ownedNftCount > 0;
   const ownedNftsForContent = walletNfts.filter(nft => nft.contentCid === content.contentCid);
@@ -503,9 +1043,22 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
   const canEdit = isCreator && !isLocked;
   const canDelete = isCreator && !isLocked;
 
+  // Bundle display helpers
+  const bundleTypeLabel = bundleContext ? getBundleTypeLabel(bundleContext.bundle.bundleType) : null;
+  const bundleTypeIcon = bundleContext ? getBundleTypeIcon(bundleContext.bundle.bundleType) : null;
+  const bundleCreatorAddress = bundleContext?.bundle.creator.toBase58();
+  const isBundleCreator = bundleContext && publicKey?.toBase58() === bundleCreatorAddress;
+  const bundleMintedCount = bundleContext ? Number(bundleContext.bundle.mintedCount ?? 0) : 0;
+  const currentBundleItem = bundleContext?.items[bundleContext.currentIndex];
+
   const contentUrl = !isEncrypted ? fullContentUrl : decryptedUrl || previewUrl || null;
-  const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft && !ownsNftFromBundle;
-  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle) && !decryptedUrl && !sessionToken;
+  const isPublicContent = (content.visibilityLevel ?? 0) === 0;
+  // Access control - consider bundle ownership when viewing bundle content
+  const hasAccessViaBundle = bundleContext && ownsBundleNft;
+  // Don't show locked overlay for public content (level 0) - anyone can access
+  const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft && !ownsNftFromBundle && !hasAccessViaBundle && !isPublicContent;
+  // Need session if: encrypted AND (has access OR public content) AND no decrypted URL AND no session token
+  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent) && !decryptedUrl && !sessionToken;
   const showPlaceholder = isEncrypted && !contentUrl;
 
   const requestDecryptedContent = useCallback(async () => {
@@ -533,8 +1086,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
     if (!sessionToken) { if (decryptedUrl) { setDecryptedUrl(null); setHasAccess(null); } return; }
     const cached = getCachedDecryptedUrl(publicKey.toBase58(), content.contentCid, sessionToken);
     if (cached) { setDecryptedUrl(cached); setHasAccess(true); return; }
-    if ((isCreator || ownsNft || ownsNftFromBundle) && !decryptedUrl && !isDecrypting) { requestDecryptedContent(); }
-  }, [isEncrypted, publicKey, isCreator, ownsNft, ownsNftFromBundle, decryptedUrl, isDecrypting, content.contentCid, requestDecryptedContent, sessionToken]);
+    // Auto-request decryption for: creator, NFT owner, bundle owner, bundle context owner, OR public content (level 0)
+    const canAutoDecrypt = isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent;
+    if (canAutoDecrypt && !decryptedUrl && !isDecrypting) { requestDecryptedContent(); }
+  }, [isEncrypted, publicKey, isCreator, ownsNft, ownsNftFromBundle, hasAccessViaBundle, isPublicContent, decryptedUrl, isDecrypting, content.contentCid, requestDecryptedContent, sessionToken]);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button, a, video, audio")) return;
@@ -550,8 +1105,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
   };
 
   return (
-    <div data-feed-item data-index={index} className="h-screen w-full snap-start snap-always relative flex items-center justify-center bg-black" onClick={handleContentClick}>
-      <div className="absolute inset-0 flex items-center justify-center">
+    <div ref={slideRef} data-feed-item data-index={index} className="h-screen w-full snap-start snap-always relative flex items-center justify-center bg-black overflow-hidden" onClick={handleContentClick}>
+      <div className={`absolute top-0 bottom-0 left-0 flex items-center justify-center transition-all duration-300 ${showBundleSidebar ? "right-80" : "right-0"}`}>
         {contentDomain === "video" && (
           showPlaceholder ? (
             <div className="w-full h-full flex items-center justify-center"><svg className="w-24 h-24 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></div>
@@ -583,13 +1138,13 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
         )}
 
         {showLockedOverlay && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="text-center p-8 max-w-md">
               <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-white/10 flex items-center justify-center"><svg className="w-8 h-8 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
               <p className="text-white/60 text-sm mb-6">This content requires ownership</p>
               <div className="flex justify-center gap-3">
-                {hasMintConfig && <button onClick={(e) => { e.stopPropagation(); setShowBuyContentModal(true); }} className="px-6 py-2.5 bg-white text-black rounded-full text-sm font-medium hover:bg-white/90 transition-colors">Buy {mintPrice && `· ${Number(mintPrice) / 1e9} SOL`}</button>}
-                {hasRentConfig && <button onClick={(e) => { e.stopPropagation(); setShowRentModal(true); }} className="px-6 py-2.5 bg-white/10 text-white rounded-full text-sm font-medium hover:bg-white/20 transition-colors border border-white/20">Rent {lowestRentPrice && `· ${lowestRentPrice / 1e9} SOL`}</button>}
+                {(bundleContext ? hasBundleMintConfig : hasMintConfig) && <button onClick={() => bundleContext ? setShowBuyBundleModal(true) : setShowBuyContentModal(true)} className="px-6 py-2.5 bg-white text-black rounded-full text-sm font-medium hover:bg-white/90 transition-colors">Buy {bundleContext ? (bundleMintPrice && `· ${Number(bundleMintPrice) / 1e9} SOL`) : (mintPrice && `· ${Number(mintPrice) / 1e9} SOL`)}</button>}
+                {(bundleContext ? hasBundleRentConfig : hasRentConfig) && <button onClick={() => bundleContext ? setShowRentBundleModal(true) : setShowRentModal(true)} className="px-6 py-2.5 bg-white/10 text-white rounded-full text-sm font-medium hover:bg-white/20 transition-colors border border-white/20">Rent {bundleContext ? (bundleLowestRentPrice && `· ${bundleLowestRentPrice / 1e9} SOL`) : (lowestRentPrice && `· ${lowestRentPrice / 1e9} SOL`)}</button>}
               </div>
             </div>
           </div>
@@ -605,8 +1160,9 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
         )}
       </div>
 
+
       {/* Bottom Overlay */}
-      <div className={`absolute bottom-0 left-0 right-0 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{content.creatorAddress?.charAt(0).toUpperCase() || "?"}</div>
           <div><p className="text-white font-medium">{shortAddress}</p><p className="text-white/40 text-xs">{timeAgo}</p></div>
@@ -619,9 +1175,28 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
           <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{contentTypeLabel}</span>
           {genre && <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{genre}</span>}
           {duration && duration > 0 && <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{formatDuration(duration)}</span>}
+          {/* Access Level Badge */}
+          {content.visibilityLevel !== undefined && content.visibilityLevel > 0 && (
+            <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
+              content.visibilityLevel === VisibilityLevel.NftOnly
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                : content.visibilityLevel === VisibilityLevel.Subscriber
+                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+            }`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              {content.visibilityLevel === VisibilityLevel.NftOnly
+                ? "Buy/Rent Only"
+                : content.visibilityLevel === VisibilityLevel.Subscriber
+                ? "Members Only"
+                : "Subscriber Only"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4 text-white/40 text-sm">
-          {hasMintConfig && <span className="flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>{actualMintedCount} minted</span>}
+          {hasMintConfig && <span className="flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>{actualMintedCount} sold</span>}
           {!isCreator && ownedRarities.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-white/40">Owned:</span>
@@ -632,17 +1207,110 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
           )}
           {activeRental && <span className="text-amber-400/80 text-xs">Rental expires {new Date(Number(activeRental.expiresAt) * 1000).toLocaleDateString()}</span>}
         </div>
+
+        {/* Bundle Details Section - when viewing content in bundle context */}
+        {bundleContext && (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={bundleTypeIcon || ""} />
+                </svg>
+                <span className="text-purple-400 text-sm font-medium">{bundleTypeLabel}</span>
+              </div>
+              <span className="text-white/30">·</span>
+              <span className="text-white/60 text-sm">{bundleContext.currentIndex + 1} of {bundleContext.items.length}</span>
+            </div>
+            <h3 className="text-white font-medium mb-1">{bundleContext.metadata?.title || bundleContext.bundle.bundleId}</h3>
+            {bundleContext.metadata?.description && (
+              <p className="text-white/40 text-sm line-clamp-1 mb-2">{bundleContext.metadata.description}</p>
+            )}
+            <div className="flex items-center gap-4 text-white/40 text-sm">
+              {hasBundleMintConfig && (
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  {bundleMintedCount} sold
+                </span>
+              )}
+              {!isBundleCreator && ownedBundleRarities.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white/40">Owned:</span>
+                  {Object.entries(ownedBundleRarities.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<Rarity, number>)).sort(([a], [b]) => Number(b) - Number(a)).map(([rarity, count]) => (
+                    <span key={rarity} className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium ${rarityColors[Number(rarity) as Rarity]}`}>{count}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Bundle Indicator - only for standalone content */}
+        {!bundleContext && contentBundles.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <p className="text-white/40 text-xs mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              Part of {contentBundles.length} {contentBundles.length === 1 ? "bundle" : "bundles"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {contentBundles.slice(0, 3).map((bundle) => (
+                <button
+                  key={bundle.bundleId}
+                  onClick={(e) => { e.stopPropagation(); onNavigateToContent?.(bundle.bundleId); }}
+                  className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  {bundle.bundleId}
+                </button>
+              ))}
+              {contentBundles.length > 3 && (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">
+                  +{contentBundles.length - 3} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Right Actions - shift inside when right panel opens */}
-      <div className={`absolute bottom-32 flex flex-col items-center gap-4 transition-all duration-300 ${rightPanelOpen ? "right-[436px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
-        {!isCreator && hasMintConfig && <button onClick={() => setShowBuyContentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Buy NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></button>}
-        {!isCreator && hasRentConfig && <button onClick={() => setShowRentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={activeRental ? "Extend" : "Rent"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
-        {!isCreator && ownedNftCount > 0 && <button onClick={() => setShowSellModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Sell NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
+      {/* Right Actions - shift inside when sidebar opens */}
+      <div className={`absolute bottom-6 z-20 flex flex-col items-center gap-4 transition-all duration-300 ${rightPanelOpen || showBundleSidebar ? "right-[340px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+        {/* Bundle Sidebar Toggle */}
+        {bundleContext && bundleContext.items.length > 0 && (
+          <button
+            onClick={() => setShowBundleSidebar(prev => !prev)}
+            className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center text-white transition-colors border border-white/10 ${showBundleSidebar ? "bg-purple-500/30 border-purple-500/50" : "bg-white/10 hover:bg-white/20"}`}
+            title="View Playlist"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+          </button>
+        )}
+        {/* Bundle Buy/Rent buttons (when viewing bundle) */}
+        {bundleContext && !isBundleCreator && hasBundleMintConfig && (
+          <button onClick={() => setShowBuyBundleModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={`Buy Bundle · ${Number(bundleMintPrice) / 1e9} SOL`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          </button>
+        )}
+        {bundleContext && !isBundleCreator && hasBundleRentConfig && (
+          <button onClick={() => setShowRentBundleModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={`Rent Bundle · ${bundleLowestRentPrice! / 1e9} SOL`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+        )}
+        {/* Content Buy/Rent buttons (when viewing standalone content) */}
+        {!bundleContext && !isCreator && hasMintConfig && <button onClick={() => setShowBuyContentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Buy NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></button>}
+        {!bundleContext && !isCreator && hasRentConfig && <button onClick={() => setShowRentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={activeRental ? "Extend" : "Rent"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
+        {!bundleContext && !isCreator && ownedNftCount > 0 && <button onClick={() => setShowSellModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Sell NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
         <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/content/${content.contentCid}`).then(() => { setShowCopied(true); setTimeout(() => setShowCopied(false), 2000); }); }} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Share">
           {showCopied ? <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" /></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>}
         </button>
-        {isCreator && (
+        {isCreator && !bundleContext && (
           <>
             <button onClick={() => setShowEditModal(true)} disabled={!canEdit} className={`w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center transition-colors border border-white/10 ${canEdit ? "text-white hover:bg-white/20" : "text-white/30 cursor-not-allowed"}`} title={canEdit ? "Edit" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
             <button onClick={() => setShowDeleteModal(true)} disabled={!canDelete} className={`w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center transition-colors border border-white/10 ${canDelete ? "text-red-400 hover:bg-red-500/20" : "text-white/30 cursor-not-allowed"}`} title={canDelete ? "Delete" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
@@ -650,12 +1318,299 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false 
         )}
       </div>
 
-      {/* Modals */}
+      {/* Bundle Sidebar */}
+      {bundleContext && (
+        <div
+          className={`absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 transform transition-transform duration-300 z-30 ${showBundleSidebar ? "translate-x-0" : "translate-x-full"}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-medium truncate">{bundleContext.metadata?.title || bundleContext.bundle.bundleId}</h3>
+              <button onClick={() => setShowBundleSidebar(false)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
+                <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-white/40 text-xs">{bundleTypeLabel} · {bundleContext.items.length} items</p>
+          </div>
+
+          {/* Items List */}
+          <div className="overflow-y-auto h-[calc(100%-80px)]" style={{ scrollbarWidth: "thin" }}>
+            {bundleContext.isLoadingItems ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-white/20 border-t-purple-400 rounded-full animate-spin" />
+              </div>
+            ) : bundleContext.items.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-white/40 text-sm">No items found</div>
+            ) : (
+              <div className="py-2">
+                {bundleContext.items.map((item, idx) => (
+                  <button
+                    key={item.contentCid}
+                    onClick={() => bundleContext.onNavigate(idx)}
+                    className={`w-full px-4 py-3 flex items-center gap-3 transition-colors ${
+                      idx === bundleContext.currentIndex ? "bg-purple-500/20 border-l-2 border-purple-400" : "hover:bg-white/5 border-l-2 border-transparent"
+                    }`}
+                  >
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      idx === bundleContext.currentIndex ? "bg-purple-500 text-white" : "bg-white/10 text-white/60"
+                    }`}>{idx + 1}</span>
+                    <div className="w-10 h-10 rounded bg-white/5 flex-shrink-0 overflow-hidden">
+                      {item.previewCid ? (
+                        <img src={getIpfsUrl(item.previewCid)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <span className={`flex-1 text-left text-sm truncate ${idx === bundleContext.currentIndex ? "text-white" : "text-white/70"}`}>{item.title}</span>
+                    {idx === bundleContext.currentIndex && (
+                      <div className="flex gap-0.5">
+                        <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" />
+                        <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: "150ms" }} />
+                        <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Content Modals */}
       {showBuyContentModal && mintConfig && <BuyContentModal isOpen={showBuyContentModal} onClose={() => setShowBuyContentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} mintConfig={mintConfig} mintedCount={BigInt(actualMintedCount)} ownedCount={ownedNftCount} onSuccess={() => { refetchMintConfig(); refetchOwnership(); }} />}
       {showEditModal && <EditContentModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} contentCid={content.contentCid} currentTitle={content.metadata?.title || content.metadata?.name} currentDescription={content.metadata?.description} currentTags={content.metadata?.tags} />}
       {showDeleteModal && <DeleteContentModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} hasMintConfig={!!mintConfig} />}
       {showRentModal && rentConfig && <RentContentModal isOpen={showRentModal} onClose={() => setShowRentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} rentConfig={rentConfig} activeRental={activeRental} onSuccess={() => { refetchRentConfig(); refetchOwnership(); refetchActiveRental(); }} onBuyClick={mintConfig ? () => setShowBuyContentModal(true) : undefined} />}
       {showSellModal && <SellNftModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} ownedCount={ownedNftCount} userNfts={walletNfts} />}
+
+      {/* Bundle Modals */}
+      {showBuyBundleModal && bundleContext && bundleMintConfig && (
+        <BuyBundleModal
+          isOpen={showBuyBundleModal}
+          onClose={() => setShowBuyBundleModal(false)}
+          bundleId={bundleContext.bundle.bundleId}
+          bundleName={bundleContext.metadata?.title}
+          creator={bundleContext.bundle.creator}
+          mintConfig={bundleMintConfig}
+          mintedCount={bundleContext.bundle.mintedCount}
+          ownedCount={ownedBundleNfts.length}
+          onSuccess={() => { refetchBundleMintConfig(); }}
+        />
+      )}
+      {showRentBundleModal && bundleContext && bundleRentConfig && (
+        <RentBundleModal
+          isOpen={showRentBundleModal}
+          onClose={() => setShowRentBundleModal(false)}
+          bundleId={bundleContext.bundle.bundleId}
+          bundleName={bundleContext.metadata?.title}
+          creator={bundleContext.bundle.creator}
+          rentConfig={bundleRentConfig}
+          onSuccess={() => { refetchBundleRentConfig(); }}
+          onBuyClick={hasBundleMintConfig ? () => { setShowRentBundleModal(false); setShowBuyBundleModal(true); } : undefined}
+        />
+      )}
     </div>
   );
 }
+
+// ============== BUNDLE FEED ITEM (wrapper for bundles using ContentSlide) ==============
+interface BundleFeedItemProps {
+  bundle: EnrichedBundle;
+  metadata?: { title?: string; description?: string; image?: string; tags?: string[] };
+  index: number;
+  isActive: boolean;
+  // For deep links: which item to start at (1-indexed)
+  initialPosition?: number;
+  // Navigation callback for in-feed navigation
+  onNavigateToContent?: (cid: string) => void;
+  // Callback when overlay visibility changes
+  onOverlayChange?: (visible: boolean) => void;
+}
+
+function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1, onNavigateToContent, onOverlayChange }: BundleFeedItemProps) {
+  const [currentItemIndex, setCurrentItemIndex] = useState(Math.max(0, initialPosition - 1));
+  const [bundleItems, setBundleItems] = useState<BundleItemDisplay[]>([]);
+  const [itemContents, setItemContents] = useState<Map<string, EnrichedContent>>(new Map());
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+  const { client } = useContentRegistry();
+
+  // Notify parent when bundle becomes active (reset overlay to visible)
+  useEffect(() => {
+    if (isActive) {
+      onOverlayChange?.(true);
+    }
+  }, [isActive, onOverlayChange]);
+
+  // Fetch bundle items when slide becomes active
+  useEffect(() => {
+    if (!isActive || !client || bundleItems.length > 0) return;
+
+    async function fetchItems() {
+      setIsLoadingItems(true);
+      try {
+        const bundleWithItems = await client!.fetchBundleWithItems(bundle.creator, bundle.bundleId);
+        if (bundleWithItems?.items) {
+          const contentsMap = new Map<string, EnrichedContent>();
+
+          // Fetch metadata from IPFS for each item
+          const itemsWithMetadata = await Promise.all(
+            bundleWithItems.items
+              .sort((a, b) => a.item.position - b.item.position)
+              .map(async (item) => {
+                let meta: Record<string, unknown> | undefined;
+
+                // Fetch metadata from IPFS if content has metadataCid
+                if (item.content?.metadataCid) {
+                  try {
+                    const metadataUrl = getIpfsUrl(item.content.metadataCid);
+                    const res = await fetch(metadataUrl);
+                    if (res.ok) {
+                      meta = await res.json();
+                    }
+                  } catch (e) {
+                    console.error("Failed to fetch content metadata:", e);
+                  }
+                }
+
+                return { item: item.item, content: item.content, meta };
+              })
+          );
+
+          const items: BundleItemDisplay[] = itemsWithMetadata
+            .map(({ item, content, meta }) => {
+              const context = meta?.context as Record<string, unknown> | undefined;
+              const itemTitle = (meta?.title as string) || (meta?.name as string) || `Item ${item.position + 1}`;
+
+              // Store the full content entry with enriched metadata
+              if (content) {
+                const enrichedMetadata = {
+                  ...(meta || {}),
+                  title: itemTitle,
+                  name: itemTitle,
+                  description: meta?.description as string | undefined,
+                  context: context,
+                  artist: (context?.artist as string) || (meta?.artist as string),
+                  album: (context?.album as string) || (meta?.album as string),
+                };
+                const enriched: EnrichedContent = {
+                  ...content,
+                  metadata: enrichedMetadata as EnrichedContent["metadata"],
+                  creatorAddress: content.creator.toBase58(),
+                  mintConfig: null,
+                };
+                contentsMap.set(content.contentCid, enriched);
+              }
+
+              return {
+                contentCid: content?.contentCid || "",
+                title: itemTitle,
+                description: meta?.description as string | undefined,
+                previewCid: content?.previewCid,
+                position: item.position,
+                contentType: content?.contentType,
+                isEncrypted: content?.isEncrypted,
+                artist: (context?.artist as string) || (meta?.artist as string),
+                album: (context?.album as string) || (meta?.album as string),
+                duration: context?.duration as number | undefined,
+              };
+            })
+            .filter(item => item.contentCid);
+          setBundleItems(items);
+          setItemContents(contentsMap);
+        }
+      } catch (err) {
+        console.error("Failed to fetch bundle items:", err);
+      } finally {
+        setIsLoadingItems(false);
+      }
+    }
+
+    fetchItems();
+  }, [isActive, client, bundle.creator, bundle.bundleId, bundleItems.length]);
+
+  const navigateToItem = useCallback((idx: number) => {
+    setCurrentItemIndex(idx);
+    // Update URL without navigation
+    const newUrl = idx === 0 ? `/content/${bundle.bundleId}` : `/content/${bundle.bundleId}/${idx + 1}`;
+    window.history.replaceState({}, "", newUrl);
+  }, [bundle.bundleId]);
+
+  const currentItem = bundleItems[currentItemIndex];
+  const currentContent = currentItem ? itemContents.get(currentItem.contentCid) : null;
+
+  // Create bundle context for ContentSlide
+  const bundleContext: BundleContextProps = {
+    bundle,
+    metadata,
+    items: bundleItems,
+    currentIndex: currentItemIndex,
+    onNavigate: navigateToItem,
+    isLoadingItems,
+  };
+
+  const bundleTypeLabel = getBundleTypeLabel(bundle.bundleType);
+
+  // If still loading or no content, show loading state
+  if (!currentContent) {
+    return (
+      <div
+        data-feed-item
+        data-index={index}
+        className="h-screen w-full snap-start snap-always relative flex items-center justify-center bg-black"
+      >
+        <div className="text-center">
+          <div className="w-12 h-12 border-2 border-purple-400/20 border-t-purple-400 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/40 text-sm">Loading {bundleTypeLabel}...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ContentSlide
+      content={currentContent}
+      index={index}
+      isActive={isActive}
+      bundleContext={bundleContext}
+      onNavigateToContent={onNavigateToContent}
+      onOverlayChange={onOverlayChange}
+    />
+  );
+}
+
+// ============== BUNDLE TYPE HELPERS ==============
+function getBundleTypeLabel(bundleType: BundleType): string {
+  switch (bundleType) {
+    case BundleType.Album: return "Album";
+    case BundleType.Series: return "Series";
+    case BundleType.Playlist: return "Playlist";
+    case BundleType.Course: return "Course";
+    case BundleType.Newsletter: return "Newsletter";
+    case BundleType.Collection: return "Collection";
+    case BundleType.ProductPack: return "Pack";
+    default: return "Bundle";
+  }
+}
+
+function getBundleTypeIcon(bundleType: BundleType): string {
+  switch (bundleType) {
+    case BundleType.Album: return "M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3";
+    case BundleType.Series: return "M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z";
+    case BundleType.Playlist: return "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10";
+    case BundleType.Course: return "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253";
+    case BundleType.Newsletter: return "M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z";
+    case BundleType.Collection: return "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z";
+    case BundleType.ProductPack: return "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4";
+    default: return "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10";
+  }
+}
+
