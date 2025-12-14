@@ -393,6 +393,54 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(0)} KB`;
 }
 
+// Stable input components - defined outside to prevent re-creation on render
+function InputField({ label, field, placeholder, type = "text", required = false, value, onChange }: {
+  label: string;
+  field: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+  value: string;
+  onChange: (field: string, value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1.5 text-white/70">
+        {label} {required && <span className="text-red-400">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(field, e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm transition-all duration-300"
+      />
+    </div>
+  );
+}
+
+function TextAreaField({ label, field, placeholder, rows = 3, value, onChange }: {
+  label: string;
+  field: string;
+  placeholder?: string;
+  rows?: number;
+  value: string;
+  onChange: (field: string, value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1.5 text-white/70">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(field, e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm resize-none transition-all duration-300"
+      />
+    </div>
+  );
+}
+
 export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const { publicKey } = useWallet();
   const [step, setStep] = useState<Step>("domain");
@@ -400,6 +448,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [contentType, setContentType] = useState<ContentTypeConfig | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
 
   // Monetization tab
   const [monetizationTab, setMonetizationTab] = useState<MonetizationTab>("minting");
@@ -441,6 +491,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [fileSizeError, setFileSizeError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
   const { registerContentWithMintAndRent, ecosystemConfig, isLoadingEcosystemConfig, isEcosystemConfigError, refetchEcosystemConfig, userProfile, isLoadingUserProfile } = useContentRegistry();
 
@@ -508,6 +559,25 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     setStep("details");
   }, [updateMetadata, contentType]);
 
+  const handleThumbnailSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    // Validate it's an image
+    if (!selectedFile.type.startsWith("image/")) {
+      return;
+    }
+
+    // Max 5MB for thumbnail
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      return;
+    }
+
+    setThumbnail(selectedFile);
+    const url = URL.createObjectURL(selectedFile);
+    setThumbnailPreview(url);
+  }, []);
+
   const handleUpload = useCallback(async () => {
     if (!file || !contentType) return;
 
@@ -556,7 +626,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         duration: currentMetadata.duration || undefined,
         // Include any other metadata fields
         ...currentMetadata,
-      });
+      }, thumbnail || undefined);
 
       if (result) {
         setUploadResult(result);
@@ -632,7 +702,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     }
   }, [
     file, contentType, metadata, nftPrice, nftSupplyType, nftMaxSupply,
-    rentFee6h, rentFee1d, rentFee7d,
+    rentFee6h, rentFee1d, rentFee7d, thumbnail,
     uploadResult, publicKey, uploadContent, registerContentWithMintAndRent,
     ecosystemConfig, onSuccess, markComplete, LAMPORTS_PER_SOL,
   ]);
@@ -643,8 +713,11 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     }
 
     if (preview) URL.revokeObjectURL(preview);
+    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
     setFile(null);
     setPreview(null);
+    setThumbnail(null);
+    setThumbnailPreview(null);
     setMetadata({ collection_name: "", title: "", description: "", tags: "" });
     setSelectedDomain(null);
     setContentType(null);
@@ -685,8 +758,11 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       case "details":
         setStep("file");
         if (preview) URL.revokeObjectURL(preview);
+        if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
         setFile(null);
         setPreview(null);
+        setThumbnail(null);
+        setThumbnailPreview(null);
         break;
       case "monetization":
         setStep("details");
@@ -711,51 +787,18 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const renderMetadataForm = () => {
     if (!contentType) return null;
 
-    const InputField = ({ label, field, placeholder, type = "text", required = false }: {
-      label: string;
-      field: string;
-      placeholder?: string;
-      type?: string;
-      required?: boolean;
-    }) => (
-      <div>
-        <label className="block text-sm font-medium mb-1.5 text-gray-300">
-          {label} {required && <span className="text-red-400">*</span>}
-        </label>
-        <input
-          type={type}
-          value={metadata[field] || ""}
-          onChange={(e) => updateMetadata(field, e.target.value)}
-          placeholder={placeholder}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm"
-        />
-      </div>
-    );
-
-    const TextAreaField = ({ label, field, placeholder, rows = 3 }: {
-      label: string;
-      field: string;
-      placeholder?: string;
-      rows?: number;
-    }) => (
-      <div>
-        <label className="block text-sm font-medium mb-1.5 text-gray-300">{label}</label>
-        <textarea
-          value={metadata[field] || ""}
-          onChange={(e) => updateMetadata(field, e.target.value)}
-          placeholder={placeholder}
-          rows={rows}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500 text-sm resize-none"
-        />
-      </div>
-    );
+    // Helper to create input props
+    const inputProps = (field: string) => ({
+      value: metadata[field] || "",
+      onChange: updateMetadata,
+    });
 
     const commonFields = (
       <>
-        <InputField label="Collection Name" field="collection_name" placeholder="e.g., Summer Photos 2024" />
-        <InputField label="Title" field="title" placeholder="Enter title" required />
-        <TextAreaField label="Description" field="description" placeholder="Brief description..." rows={2} />
-        <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+        <InputField label="Collection Name" field="collection_name" placeholder="e.g., Summer Photos 2024" {...inputProps("collection_name")} />
+        <InputField label="Title" field="title" placeholder="Enter title" required {...inputProps("title")} />
+        <TextAreaField label="Description" field="description" placeholder="Brief description..." rows={2} {...inputProps("description")} />
+        <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
       </>
     );
 
@@ -765,7 +808,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         return (
           <div className="space-y-3">
             {commonFields}
-            <InputField label="Duration" field="duration" placeholder="10:30" />
+            <InputField label="Duration" field="duration" placeholder="10:30" {...inputProps("duration")} />
           </div>
         );
 
@@ -774,47 +817,47 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           <div className="space-y-3">
             {commonFields}
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Year" field="year" placeholder="2024" />
-              <InputField label="Duration" field="duration" placeholder="120 min" />
+              <InputField label="Year" field="year" placeholder="2024" {...inputProps("year")} />
+              <InputField label="Duration" field="duration" placeholder="120 min" {...inputProps("duration")} />
             </div>
-            <InputField label="Director" field="director" placeholder="Director name" />
-            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." />
-            <InputField label="Genre" field="genre" placeholder="Action, Drama..." />
+            <InputField label="Director" field="director" placeholder="Director name" {...inputProps("director")} />
+            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." {...inputProps("cast")} />
+            <InputField label="Genre" field="genre" placeholder="Action, Drama..." {...inputProps("genre")} />
           </div>
         );
 
       case "television":
         return (
           <div className="space-y-3">
-            <InputField label="Show Name" field="showName" placeholder="Series title" required />
-            <InputField label="Episode Title" field="title" placeholder="Episode title" required />
+            <InputField label="Show Name" field="showName" placeholder="Series title" required {...inputProps("showName")} />
+            <InputField label="Episode Title" field="title" placeholder="Episode title" required {...inputProps("title")} />
             <div className="grid grid-cols-3 gap-3">
-              <InputField label="Season" field="season" placeholder="1" type="number" />
-              <InputField label="Episode" field="episode" placeholder="1" type="number" />
-              <InputField label="Year" field="year" placeholder="2024" />
+              <InputField label="Season" field="season" placeholder="1" type="number" {...inputProps("season")} />
+              <InputField label="Episode" field="episode" placeholder="1" type="number" {...inputProps("episode")} />
+              <InputField label="Year" field="year" placeholder="2024" {...inputProps("year")} />
             </div>
-            <TextAreaField label="Synopsis" field="description" placeholder="Episode synopsis..." rows={2} />
-            <InputField label="Duration" field="duration" placeholder="45 min" />
-            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <TextAreaField label="Synopsis" field="description" placeholder="Episode synopsis..." rows={2} {...inputProps("description")} />
+            <InputField label="Duration" field="duration" placeholder="45 min" {...inputProps("duration")} />
+            <InputField label="Cast" field="cast" placeholder="Actor 1, Actor 2..." {...inputProps("cast")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "musicVideo":
         return (
           <div className="space-y-3">
-            <InputField label="Song Title" field="title" placeholder="Song title" required />
-            <InputField label="Artist" field="artist" placeholder="Artist name" required />
+            <InputField label="Song Title" field="title" placeholder="Song title" required {...inputProps("title")} />
+            <InputField label="Artist" field="artist" placeholder="Artist name" required {...inputProps("artist")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Album" field="album" placeholder="Album name" />
-              <InputField label="Year" field="year" placeholder="2024" />
+              <InputField label="Album" field="album" placeholder="Album name" {...inputProps("album")} />
+              <InputField label="Year" field="year" placeholder="2024" {...inputProps("year")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Genre" field="genre" placeholder="Pop, Rock..." />
-              <InputField label="Duration" field="duration" placeholder="3:45" />
+              <InputField label="Genre" field="genre" placeholder="Pop, Rock..." {...inputProps("genre")} />
+              <InputField label="Duration" field="duration" placeholder="3:45" {...inputProps("duration")} />
             </div>
-            <TextAreaField label="Description" field="description" placeholder="About this video..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <TextAreaField label="Description" field="description" placeholder="About this video..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -822,7 +865,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         return (
           <div className="space-y-3">
             {commonFields}
-            <InputField label="Duration" field="duration" placeholder="0:30" />
+            <InputField label="Duration" field="duration" placeholder="0:30" {...inputProps("duration")} />
           </div>
         );
 
@@ -830,45 +873,45 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       case "music":
         return (
           <div className="space-y-3">
-            <InputField label="Track Title" field="title" placeholder="Song title" required />
-            <InputField label="Artist" field="artist" placeholder="Artist name" required />
+            <InputField label="Track Title" field="title" placeholder="Song title" required {...inputProps("title")} />
+            <InputField label="Artist" field="artist" placeholder="Artist name" required {...inputProps("artist")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Album" field="album" placeholder="Album name" />
-              <InputField label="Duration" field="duration" placeholder="3:45" />
+              <InputField label="Album" field="album" placeholder="Album name" {...inputProps("album")} />
+              <InputField label="Duration" field="duration" placeholder="3:45" {...inputProps("duration")} />
             </div>
-            <InputField label="Genre" field="genre" placeholder="Electronic, Jazz..." />
-            <TextAreaField label="Description" field="description" placeholder="About this track..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Genre" field="genre" placeholder="Electronic, Jazz..." {...inputProps("genre")} />
+            <TextAreaField label="Description" field="description" placeholder="About this track..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "podcast":
         return (
           <div className="space-y-3">
-            <InputField label="Show Name" field="showName" placeholder="Podcast name" required />
-            <InputField label="Episode Title" field="title" placeholder="Episode title" required />
+            <InputField label="Show Name" field="showName" placeholder="Podcast name" required {...inputProps("showName")} />
+            <InputField label="Episode Title" field="title" placeholder="Episode title" required {...inputProps("title")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Episode #" field="episodeNumber" placeholder="42" type="number" />
-              <InputField label="Duration" field="duration" placeholder="45:00" />
+              <InputField label="Episode #" field="episodeNumber" placeholder="42" type="number" {...inputProps("episodeNumber")} />
+              <InputField label="Duration" field="duration" placeholder="45:00" {...inputProps("duration")} />
             </div>
-            <InputField label="Host(s)" field="host" placeholder="Host names" />
-            <TextAreaField label="Show Notes" field="description" placeholder="Episode description..." rows={3} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Host(s)" field="host" placeholder="Host names" {...inputProps("host")} />
+            <TextAreaField label="Show Notes" field="description" placeholder="Episode description..." rows={3} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "audiobook":
         return (
           <div className="space-y-3">
-            <InputField label="Book Title" field="title" placeholder="Book title" required />
-            <InputField label="Author" field="author" placeholder="Author name" required />
-            <InputField label="Narrator" field="narrator" placeholder="Narrator name" />
+            <InputField label="Book Title" field="title" placeholder="Book title" required {...inputProps("title")} />
+            <InputField label="Author" field="author" placeholder="Author name" required {...inputProps("author")} />
+            <InputField label="Narrator" field="narrator" placeholder="Narrator name" {...inputProps("narrator")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Chapter" field="chapter" placeholder="Chapter 1" />
-              <InputField label="Duration" field="duration" placeholder="8:30:00" />
+              <InputField label="Chapter" field="chapter" placeholder="Chapter 1" {...inputProps("chapter")} />
+              <InputField label="Duration" field="duration" placeholder="8:30:00" {...inputProps("duration")} />
             </div>
-            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -878,24 +921,24 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           <div className="space-y-3">
             {commonFields}
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Location" field="location" placeholder="City, Country" />
-              <InputField label="Date Taken" field="dateTaken" type="date" />
+              <InputField label="Location" field="location" placeholder="City, Country" {...inputProps("location")} />
+              <InputField label="Date Taken" field="dateTaken" type="date" {...inputProps("dateTaken")} />
             </div>
-            <InputField label="Camera" field="camera" placeholder="Camera model" />
+            <InputField label="Camera" field="camera" placeholder="Camera model" {...inputProps("camera")} />
           </div>
         );
 
       case "artwork":
         return (
           <div className="space-y-3">
-            <InputField label="Artwork Title" field="title" placeholder="Title" required />
-            <InputField label="Artist" field="artist" placeholder="Your name" />
+            <InputField label="Artwork Title" field="title" placeholder="Title" required {...inputProps("title")} />
+            <InputField label="Artist" field="artist" placeholder="Your name" {...inputProps("artist")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Medium" field="medium" placeholder="Digital, 3D..." />
-              <InputField label="Dimensions" field="dimensions" placeholder="1920x1080" />
+              <InputField label="Medium" field="medium" placeholder="Digital, 3D..." {...inputProps("medium")} />
+              <InputField label="Dimensions" field="dimensions" placeholder="1920x1080" {...inputProps("dimensions")} />
             </div>
-            <TextAreaField label="Description" field="description" placeholder="About this artwork..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <TextAreaField label="Description" field="description" placeholder="About this artwork..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -903,33 +946,33 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       case "book":
         return (
           <div className="space-y-3">
-            <InputField label="Book Title" field="title" placeholder="Book title" required />
-            <InputField label="Author" field="author" placeholder="Author name" required />
+            <InputField label="Book Title" field="title" placeholder="Book title" required {...inputProps("title")} />
+            <InputField label="Author" field="author" placeholder="Author name" required {...inputProps("author")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Publisher" field="publisher" placeholder="Publisher" />
-              <InputField label="Year" field="year" placeholder="2024" />
+              <InputField label="Publisher" field="publisher" placeholder="Publisher" {...inputProps("publisher")} />
+              <InputField label="Year" field="year" placeholder="2024" {...inputProps("year")} />
             </div>
-            <InputField label="ISBN" field="isbn" placeholder="978-..." />
-            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={3} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="ISBN" field="isbn" placeholder="978-..." {...inputProps("isbn")} />
+            <TextAreaField label="Description" field="description" placeholder="Book description..." rows={3} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "comic":
         return (
           <div className="space-y-3">
-            <InputField label="Title" field="title" placeholder="Comic title" required />
+            <InputField label="Title" field="title" placeholder="Comic title" required {...inputProps("title")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Issue #" field="issueNumber" placeholder="1" type="number" />
-              <InputField label="Year" field="year" placeholder="2024" />
+              <InputField label="Issue #" field="issueNumber" placeholder="1" type="number" {...inputProps("issueNumber")} />
+              <InputField label="Year" field="year" placeholder="2024" {...inputProps("year")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Writer" field="writer" placeholder="Writer name" />
-              <InputField label="Artist" field="artist" placeholder="Artist name" />
+              <InputField label="Writer" field="writer" placeholder="Writer name" {...inputProps("writer")} />
+              <InputField label="Artist" field="artist" placeholder="Artist name" {...inputProps("artist")} />
             </div>
-            <InputField label="Publisher" field="publisher" placeholder="Publisher name" />
-            <TextAreaField label="Synopsis" field="description" placeholder="Issue synopsis..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Publisher" field="publisher" placeholder="Publisher name" {...inputProps("publisher")} />
+            <TextAreaField label="Synopsis" field="description" placeholder="Issue synopsis..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -937,53 +980,53 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       case "asset":
         return (
           <div className="space-y-3">
-            <InputField label="Asset Name" field="title" placeholder="Asset name" required />
-            <InputField label="Format" field="format" placeholder="PSD, AI, Figma..." />
-            <InputField label="Category" field="category" placeholder="Template, mockup, icon..." />
-            <InputField label="Software" field="software" placeholder="Compatible software" />
-            <TextAreaField label="Description" field="description" placeholder="What's included..." rows={2} />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Asset Name" field="title" placeholder="Asset name" required {...inputProps("title")} />
+            <InputField label="Format" field="format" placeholder="PSD, AI, Figma..." {...inputProps("format")} />
+            <InputField label="Category" field="category" placeholder="Template, mockup, icon..." {...inputProps("category")} />
+            <InputField label="Software" field="software" placeholder="Compatible software" {...inputProps("software")} />
+            <TextAreaField label="Description" field="description" placeholder="What's included..." rows={2} {...inputProps("description")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "game":
         return (
           <div className="space-y-3">
-            <InputField label="Game Title" field="title" placeholder="Game name" required />
-            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web..." />
-            <InputField label="Genre" field="genre" placeholder="Puzzle, RPG, Action..." />
-            <InputField label="Version" field="version" placeholder="1.0.0" />
-            <TextAreaField label="Description" field="description" placeholder="Game description..." rows={2} />
-            <InputField label="Requirements" field="requirements" placeholder="System requirements" />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Game Title" field="title" placeholder="Game name" required {...inputProps("title")} />
+            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web..." {...inputProps("platform")} />
+            <InputField label="Genre" field="genre" placeholder="Puzzle, RPG, Action..." {...inputProps("genre")} />
+            <InputField label="Version" field="version" placeholder="1.0.0" {...inputProps("version")} />
+            <TextAreaField label="Description" field="description" placeholder="Game description..." rows={2} {...inputProps("description")} />
+            <InputField label="Requirements" field="requirements" placeholder="System requirements" {...inputProps("requirements")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "software":
         return (
           <div className="space-y-3">
-            <InputField label="Software Name" field="title" placeholder="App name" required />
-            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web, Mobile..." />
-            <InputField label="Version" field="version" placeholder="1.0.0" />
-            <InputField label="License" field="license" placeholder="MIT, Commercial..." />
-            <TextAreaField label="Description" field="description" placeholder="What it does..." rows={2} />
-            <InputField label="Requirements" field="requirements" placeholder="System requirements" />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Software Name" field="title" placeholder="App name" required {...inputProps("title")} />
+            <InputField label="Platform" field="platform" placeholder="Windows, Mac, Web, Mobile..." {...inputProps("platform")} />
+            <InputField label="Version" field="version" placeholder="1.0.0" {...inputProps("version")} />
+            <InputField label="License" field="license" placeholder="MIT, Commercial..." {...inputProps("license")} />
+            <TextAreaField label="Description" field="description" placeholder="What it does..." rows={2} {...inputProps("description")} />
+            <InputField label="Requirements" field="requirements" placeholder="System requirements" {...inputProps("requirements")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
       case "dataset":
         return (
           <div className="space-y-3">
-            <InputField label="Dataset Name" field="title" placeholder="Dataset name" required />
-            <InputField label="Format" field="format" placeholder="CSV, JSON, SQL..." />
+            <InputField label="Dataset Name" field="title" placeholder="Dataset name" required {...inputProps("title")} />
+            <InputField label="Format" field="format" placeholder="CSV, JSON, SQL..." {...inputProps("format")} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Size/Rows" field="size" placeholder="10,000 rows" />
-              <InputField label="Updated" field="updated" type="date" />
+              <InputField label="Size/Rows" field="size" placeholder="10,000 rows" {...inputProps("size")} />
+              <InputField label="Updated" field="updated" type="date" {...inputProps("updated")} />
             </div>
-            <TextAreaField label="Description" field="description" placeholder="What data is included..." rows={2} />
-            <InputField label="Schema" field="schema" placeholder="Brief schema description" />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <TextAreaField label="Description" field="description" placeholder="What data is included..." rows={2} {...inputProps("description")} />
+            <InputField label="Schema" field="schema" placeholder="Brief schema description" {...inputProps("schema")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -991,12 +1034,12 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
       case "post":
         return (
           <div className="space-y-3">
-            <InputField label="Title" field="title" placeholder="Post title" required />
-            <InputField label="Author" field="author" placeholder="Your name" />
-            <TextAreaField label="Excerpt" field="excerpt" placeholder="Brief summary or teaser..." rows={2} />
-            <TextAreaField label="Content Preview" field="description" placeholder="First paragraph or overview..." rows={3} />
-            <InputField label="Category" field="category" placeholder="Tech, Finance, Art..." />
-            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" />
+            <InputField label="Title" field="title" placeholder="Post title" required {...inputProps("title")} />
+            <InputField label="Author" field="author" placeholder="Your name" {...inputProps("author")} />
+            <TextAreaField label="Excerpt" field="excerpt" placeholder="Brief summary or teaser..." rows={2} {...inputProps("excerpt")} />
+            <TextAreaField label="Content Preview" field="description" placeholder="First paragraph or overview..." rows={3} {...inputProps("description")} />
+            <InputField label="Category" field="category" placeholder="Tech, Finance, Art..." {...inputProps("category")} />
+            <InputField label="Tags" field="tags" placeholder="comma, separated, tags" {...inputProps("tags")} />
           </div>
         );
 
@@ -1008,7 +1051,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
       <div className="relative bg-black rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
@@ -1146,7 +1189,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {step === "details" && file && contentType && (
             <div className="space-y-4">
               {/* Preview */}
-              <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden">
+              <div className="aspect-video bg-white/5 border border-white/10 rounded-xl overflow-hidden">
                 {contentType.domain === "video" && preview && (
                   <video src={preview} className="w-full h-full object-contain" controls />
                 )}
@@ -1160,7 +1203,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 )}
                 {(contentType.domain === "document" || contentType.domain === "file" || contentType.domain === "text") && (
                   <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-center text-gray-400">
+                    <div className="text-center text-white/40">
                       {contentType.icon}
                       <p className="mt-2 text-sm">{file.name}</p>
                     </div>
@@ -1169,8 +1212,59 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               </div>
 
               {/* File info */}
-              <div className="text-xs text-gray-500 px-1">
+              <div className="text-xs text-white/30 px-1">
                 {file.name} • {(file.size / (1024 * 1024)).toFixed(2)} MB
+              </div>
+
+              {/* Thumbnail Upload - Mandatory */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5 text-white/70">
+                  Thumbnail <span className="text-red-400">*</span>
+                </label>
+                <div
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  className={`relative border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all duration-300 ${
+                    thumbnail
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : "border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5"
+                  }`}
+                >
+                  {thumbnailPreview ? (
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={thumbnailPreview}
+                        alt="Thumbnail"
+                        className="w-20 h-20 object-cover rounded-lg"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white/70 truncate">{thumbnail?.name}</p>
+                        <p className="text-xs text-white/30">
+                          {thumbnail ? (thumbnail.size / 1024).toFixed(0) : 0} KB
+                        </p>
+                        <p className="text-xs text-emerald-400 mt-1">Click to change</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4">
+                      <div className="w-20 h-20 rounded-lg bg-white/5 flex items-center justify-center text-white/20">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-white/70">Upload thumbnail image</p>
+                        <p className="text-xs text-white/30">Required • Max 5MB • JPG, PNG, WebP</p>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={thumbnailInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleThumbnailSelect}
+                    className="hidden"
+                  />
+                </div>
               </div>
 
               {/* Type-specific metadata form */}
@@ -1179,10 +1273,10 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               {/* Continue button */}
               <button
                 onClick={() => setStep("monetization")}
-                disabled={!metadata.title?.trim()}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                disabled={!metadata.title?.trim() || !thumbnail}
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
               >
-                Continue to Monetization
+                {!thumbnail ? "Add Thumbnail to Continue" : "Continue to Monetization"}
               </button>
             </div>
           )}
@@ -1191,27 +1285,28 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {step === "monetization" && publicKey && (
             <div className="space-y-4">
               {/* Tabs */}
-              <div className="flex border-b border-gray-700">
+              <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl border border-white/5">
                 <button
                   onClick={() => setMonetizationTab("minting")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    monetizationTab === "minting" ? "text-primary-400" : "text-gray-400 hover:text-gray-300"
+                  className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                    monetizationTab === "minting"
+                      ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                      : "text-white/40 hover:text-white/60 hover:bg-white/5"
                   }`}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    Content Minting
+                    Buying
                   </div>
-                  {monetizationTab === "minting" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />
-                  )}
                 </button>
                 <button
                   onClick={() => setMonetizationTab("renting")}
-                  className={`flex-1 py-3 text-center font-medium transition-colors relative ${
-                    monetizationTab === "renting" ? "text-amber-400" : "text-gray-400 hover:text-gray-300"
+                  className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
+                    monetizationTab === "renting"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      : "text-white/40 hover:text-white/60 hover:bg-white/5"
                   }`}
                 >
                   <div className="flex items-center justify-center gap-2">
@@ -1220,21 +1315,18 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     </svg>
                     Rentals
                   </div>
-                  {monetizationTab === "renting" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
-                  )}
                 </button>
               </div>
 
-              {/* Minting Tab Content */}
+              {/* Buying Tab Content */}
               {monetizationTab === "minting" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-400">
-                    Configure how others can mint editions to permanently own your content.
+                  <p className="text-sm text-white/40">
+                    Configure how others can buy editions to permanently own your content.
                   </p>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Mint Price (SOL)</label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Buy Price (SOL)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -1243,71 +1335,86 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
                         placeholder="Min 0.001"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40">SOL</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Supply</label>
-                    <div className="flex gap-4 mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={nftSupplyType === "unlimited"}
-                          onChange={() => setNftSupplyType("unlimited")}
-                          className="text-primary-500"
-                        />
-                        <span>Unlimited</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={nftSupplyType === "limited"}
-                          onChange={() => setNftSupplyType("limited")}
-                          className="text-primary-500"
-                        />
-                        <span>Limited Edition</span>
-                      </label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Supply</label>
+                    <div className="flex gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setNftSupplyType("unlimited")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                          nftSupplyType === "unlimited"
+                            ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                            : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          nftSupplyType === "unlimited" ? "border-purple-400" : "border-white/30"
+                        }`}>
+                          {nftSupplyType === "unlimited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                        </div>
+                        Unlimited
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNftSupplyType("limited")}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                          nftSupplyType === "limited"
+                            ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
+                            : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          nftSupplyType === "limited" ? "border-purple-400" : "border-white/30"
+                        }`}>
+                          {nftSupplyType === "limited" && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                        </div>
+                        Limited
+                      </button>
                     </div>
                     {nftSupplyType === "limited" && (
                       <input
                         type="number"
                         min="1"
+                        max="999999"
                         value={nftMaxSupply}
                         onChange={(e) => setNftMaxSupply(e.target.value)}
-                        placeholder="Max editions (e.g., 100)"
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-primary-500"
+                        placeholder="Max supply (max 999,999)"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
                     )}
                   </div>
 
                   {/* Visibility Level */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Content Visibility</label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Content Visibility</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { level: 0, label: "Public", desc: "Anyone can view", icon: "🌍" },
-                        { level: 1, label: "Subscribers", desc: "Platform subscribers", icon: "🏠" },
-                        { level: 2, label: "Members", desc: "Your members", icon: "⭐" },
-                        { level: 3, label: "Buyers", desc: "Buyers only", icon: "🔒" },
+                        { level: 1, label: "Subscriber Only", desc: "Platform subscribers", icon: "🏠" },
+                        { level: 2, label: "Members Only", desc: "Your members", icon: "⭐" },
+                        { level: 3, label: "Buy/Rent Only", desc: "Buyers & renters", icon: "🔒" },
                       ].map((opt) => (
                         <button
                           key={opt.level}
                           type="button"
                           onClick={() => setVisibilityLevel(opt.level)}
-                          className={`p-3 rounded-lg border text-left transition-all ${
+                          className={`p-3 rounded-xl border text-left transition-all duration-300 ${
                             visibilityLevel === opt.level
-                              ? "border-primary-500 bg-primary-500/10"
-                              : "border-gray-700 hover:border-gray-600"
+                              ? "border-purple-500/50 bg-purple-500/10"
+                              : "border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/5"
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-1">
                             <span>{opt.icon}</span>
-                            <span className="font-medium text-sm">{opt.label}</span>
+                            <span className="font-medium text-sm text-white/80">{opt.label}</span>
                           </div>
-                          <p className="text-xs text-gray-500">{opt.desc}</p>
+                          <p className="text-xs text-white/30">{opt.desc}</p>
                         </button>
                       ))}
                     </div>
@@ -1315,51 +1422,51 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
                   <div className="grid grid-cols-2 gap-3">
                     {/* Primary Sale Split */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-sm font-medium mb-3">Primary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-400">You (Creator)</span>
-                          <span className="text-green-400 font-medium">80%</span>
+                          <span className="text-white/40">You (Creator)</span>
+                          <span className="text-emerald-400 font-medium">80%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Holders</span>
+                          <span className="text-white/40">Holders</span>
                           <span className="text-blue-400 font-medium">12%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Platform</span>
-                          <span className="text-gray-500">5%</span>
+                          <span className="text-white/30">Platform</span>
+                          <span className="text-white/30">5%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Ecosystem</span>
-                          <span className="text-gray-500">3%</span>
+                          <span className="text-white/30">Ecosystem</span>
+                          <span className="text-white/30">3%</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Secondary Sale Split */}
-                    <div className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-sm font-medium mb-3">Secondary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Seller</span>
-                          <span className="text-green-400 font-medium">90%</span>
+                          <span className="text-white/40">Seller</span>
+                          <span className="text-emerald-400 font-medium">90%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">You (Royalty)</span>
+                          <span className="text-white/40">You (Royalty)</span>
                           <span className="text-purple-400 font-medium">4%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-400">Holders</span>
+                          <span className="text-white/40">Holders</span>
                           <span className="text-blue-400 font-medium">4%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Platform</span>
-                          <span className="text-gray-500">1%</span>
+                          <span className="text-white/30">Platform</span>
+                          <span className="text-white/30">1%</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Ecosystem</span>
-                          <span className="text-gray-500">1%</span>
+                          <span className="text-white/30">Ecosystem</span>
+                          <span className="text-white/30">1%</span>
                         </div>
                       </div>
                     </div>
@@ -1370,61 +1477,55 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               {/* Renting Tab Content */}
               {monetizationTab === "renting" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-white/40">
                     Set rental prices for each duration tier. Leave empty to disable rentals.
                   </p>
 
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">6 Hours</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee6h}
-                        onChange={(e) => setRentFee6h(e.target.value)}
-                        placeholder="0.01"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Rental Pricing (SOL)</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-white/40 mb-2">6 Hours</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee6h}
+                          onChange={(e) => setRentFee6h(e.target.value)}
+                          placeholder="0.01"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white/40 mb-2">1 Day</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee1d}
+                          onChange={(e) => setRentFee1d(e.target.value)}
+                          placeholder="0.02"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-white/40 mb-2">7 Days</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0.001"
+                          value={rentFee7d}
+                          onChange={(e) => setRentFee7d(e.target.value)}
+                          placeholder="0.05"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">1 Day</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee1d}
-                        onChange={(e) => setRentFee1d(e.target.value)}
-                        placeholder="0.02"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <label className="w-24 text-sm text-gray-400">7 Days</label>
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        value={rentFee7d}
-                        onChange={(e) => setRentFee7d(e.target.value)}
-                        placeholder="0.05"
-                        className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-amber-500"
-                      />
-                      <span className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-400">SOL</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 text-sm">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
                     <p className="text-amber-400 font-medium mb-2">About Rentals</p>
-                    <ul className="text-amber-200/80 space-y-1">
+                    <ul className="text-amber-200/70 space-y-1">
                       <li>• Temporary access via non-transferable tokens</li>
                       <li>• Access expires automatically after rental period</li>
                       <li>• Same revenue split as minting (80% to creator)</li>
@@ -1435,7 +1536,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
               {/* Error states */}
               {isLoadingEcosystemConfig && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm">
                   <div className="flex items-center gap-2 text-blue-400">
                     <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -1447,14 +1548,14 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               )}
 
               {!isLoadingEcosystemConfig && !ecosystemConfig && (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-yellow-400">
+                    <span className="text-amber-400">
                       {isEcosystemConfigError ? "Network error." : "Config not found."}
                     </span>
                     <button
                       onClick={() => refetchEcosystemConfig()}
-                      className="px-2 py-1 text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded"
+                      className="px-3 py-1.5 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-all duration-300"
                     >
                       Retry
                     </button>
@@ -1465,7 +1566,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               {/* Rental validation - require all or none */}
               {/* Price validation - free minting not allowed */}
               {nftPrice && parseFloat(nftPrice) < MIN_PRICE_SOL && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
                   Minimum price is {MIN_PRICE_SOL} SOL. Free minting is not allowed.
                 </div>
               )}
@@ -1475,20 +1576,20 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
                 const hasPartialRent = hasAnyRent && !hasAllRent;
                 return hasPartialRent ? (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-400">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-400">
                     Please set all three rental tiers or leave them all empty.
                   </div>
                 ) : null;
               })()}
 
               {registrationError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
                   {registrationError}
                 </div>
               )}
 
               {uploadResult && !registrationError && (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-green-400">
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-sm text-emerald-400">
                   File uploaded to IPFS. Click below to register on-chain.
                 </div>
               )}
@@ -1504,7 +1605,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   // Disable if partial rental fees (require all or none)
                   Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
                 }
-                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
               >
                 {uploadResult ? "Register on Solana" : "Publish Content"}
               </button>
@@ -1514,10 +1615,10 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {/* Non-wallet user */}
           {step === "monetization" && !publicKey && (
             <div className="text-center py-8">
-              <p className="text-gray-400 mb-4">Connect your wallet to configure monetization and register on-chain.</p>
+              <p className="text-white/40 mb-4">Connect your wallet to configure monetization and register on-chain.</p>
               <button
                 onClick={handleUpload}
-                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+                className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl transition-all duration-300 font-medium text-white/90"
               >
                 Upload to IPFS Only
               </button>
@@ -1528,46 +1629,46 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {(step === "uploading" || step === "registering") && (
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4">
-                <svg className="animate-spin w-full h-full text-primary-500" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin w-full h-full text-purple-500" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">
+              <p className="text-lg font-medium mb-2 text-white/90">
                 {step === "uploading" ? "Uploading to IPFS..." : "Registering on Solana..."}
               </p>
               {step === "uploading" && (
                 <>
-                  <div className="w-full max-w-xs mx-auto bg-gray-800 rounded-full h-2 mb-2">
-                    <div className="bg-primary-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                  <div className="w-full max-w-xs mx-auto bg-white/10 rounded-full h-2 mb-2">
+                    <div className="bg-purple-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
                   </div>
-                  <p className="text-sm text-gray-500">{progress}% complete</p>
+                  <p className="text-sm text-white/30">{progress}% complete</p>
                 </>
               )}
               {step === "registering" && (
-                <p className="text-sm text-gray-500">Please confirm the transaction in your wallet</p>
+                <p className="text-sm text-white/30">Please confirm the transaction in your wallet</p>
               )}
-              {error && <p className="text-red-500 mt-4">{error}</p>}
+              {error && <p className="text-red-400 mt-4">{error}</p>}
             </div>
           )}
 
           {/* Step: Done */}
           {step === "done" && (
             <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-lg font-medium mb-2">Content Published!</p>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-lg font-medium mb-2 text-white/90">Content Published!</p>
+              <p className="text-sm text-white/30 mb-6">
                 {publicKey
                   ? "Your content is stored on IPFS and registered on Solana."
                   : "Your content is now stored on IPFS."}
               </p>
               <button
                 onClick={handleClose}
-                className="px-8 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-medium"
+                className="px-8 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl transition-all duration-300 font-medium text-white/90"
               >
                 Done
               </button>

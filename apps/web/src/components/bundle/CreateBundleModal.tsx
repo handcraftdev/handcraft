@@ -147,7 +147,7 @@ export function CreateBundleModal({
     // Parse values - free minting is not allowed
     const priceFloat = parseFloat(nftPrice);
     if (isNaN(priceFloat) || priceFloat < 0.001) {
-      setError("Minimum price is 0.001 SOL. Free minting is not allowed.");
+      setError("Minimum price is 0.001 SOL");
       return;
     }
 
@@ -562,7 +562,7 @@ export function CreateBundleModal({
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    NFT Minting
+                    NFT Buying
                   </div>
                 </button>
                 <button
@@ -582,15 +582,15 @@ export function CreateBundleModal({
                 </button>
               </div>
 
-              {/* Minting Tab Content */}
+              {/* Buying Tab Content */}
               {monetizationTab === "minting" && (
                 <div className="space-y-4">
                   <p className="text-sm text-white/40">
-                    Configure how others can mint editions to permanently own your bundle.
+                    Configure how others can buy editions to permanently own your bundle.
                   </p>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Mint Price (SOL)</label>
+                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Buy Price (SOL)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -603,7 +603,7 @@ export function CreateBundleModal({
                       />
                       <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
                     </div>
-                    <p className="text-xs text-white/30 mt-2">Minimum price is 0.001 SOL (free minting not allowed)</p>
+                    <p className="text-xs text-white/30 mt-2">Minimum price is 0.001 SOL</p>
                   </div>
 
                   <div>

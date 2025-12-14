@@ -131,6 +131,9 @@ export function BuyContentModal({
         await connection.confirmTransaction(sig, "confirmed");
         console.log("Simple mint confirmed:", sig);
 
+        // Wait for data propagation before fetching rarity
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
         // Fetch rarity from UnifiedNftRewardState
         try {
           const rewardState = await client.fetchNftRewardState(nftAsset);
@@ -214,7 +217,7 @@ export function BuyContentModal({
   const getStepMessage = () => {
     switch (mintStep) {
       case "committing":
-        return "Preparing your mint...";
+        return "Processing your purchase...";
       case "determining":
         return "Determining your rarity...";
       case "revealing":
@@ -222,7 +225,7 @@ export function BuyContentModal({
       case "success":
         return revealedRarity
           ? `You got a ${getRarityName(revealedRarity)} edition!`
-          : "Mint successful!";
+          : "Purchase successful!";
       default:
         return "";
     }
@@ -238,7 +241,7 @@ export function BuyContentModal({
 
         <div className="relative">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-medium text-white/90">Mint Content</h2>
+            <h2 className="text-xl font-medium text-white/90">Buy Content</h2>
             <button
               onClick={handleClose}
               disabled={isProcessing}
@@ -300,7 +303,7 @@ export function BuyContentModal({
                 <p className="text-lg font-medium text-white/90">{getStepMessage()}</p>
                 {quantity > 1 && (
                   <p className="text-sm text-white/40 mt-1">
-                    Minting {mintingProgress} of {quantity}
+                    Buying {mintingProgress} of {quantity}
                   </p>
                 )}
                 <div className="flex justify-center gap-1 mt-4">
@@ -332,7 +335,7 @@ export function BuyContentModal({
                       {getRarityName(revealedRarity)}!
                     </p>
                     <p className="text-sm text-white/40 mt-1">
-                      Your content has been minted with {getRarityName(revealedRarity).toLowerCase()} rarity
+                      Your edition has {getRarityName(revealedRarity).toLowerCase()} rarity
                     </p>
                     {revealedRarity >= Rarity.Rare && (
                       <p className="text-xs text-white/30 mt-2">
@@ -344,7 +347,7 @@ export function BuyContentModal({
                   <>
                     <p className="text-xl font-bold text-emerald-400">Success!</p>
                     <p className="text-sm text-white/40 mt-1">
-                      Your content has been minted successfully
+                      Your purchase was successful
                     </p>
                   </>
                 )}
@@ -422,7 +425,7 @@ export function BuyContentModal({
                 {!maxSupply && (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-white/40">Editions</span>
-                    <span className="text-white/70">{mintedCount.toString()} minted (unlimited)</span>
+                    <span className="text-white/70">{mintedCount.toString()} sold (unlimited)</span>
                   </div>
                 )}
               </div>
@@ -452,7 +455,7 @@ export function BuyContentModal({
                 </div>
                 {mintedCount === BigInt(0) && (
                   <p className="text-xs text-white/30 mt-2">
-                    First mint: 12% holder reward goes to creator
+                    First purchase: 12% holder reward goes to creator
                   </p>
                 )}
               </div>
@@ -486,10 +489,10 @@ export function BuyContentModal({
                   : !publicKey
                   ? "Connect Wallet"
                   : isFree
-                  ? quantity > 1 ? `Mint ${quantity} for Free` : "Mint for Free"
+                  ? quantity > 1 ? `Buy ${quantity} for Free` : "Buy for Free"
                   : quantity > 1
-                  ? `Mint ${quantity} for ${formatPrice(quantity)}`
-                  : `Mint for ${formatPrice()}`}
+                  ? `Buy ${quantity} for ${formatPrice(quantity)}`
+                  : `Buy for ${formatPrice()}`}
               </button>
             )}
           </div>

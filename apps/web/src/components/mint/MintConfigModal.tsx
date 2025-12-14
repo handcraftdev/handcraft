@@ -88,7 +88,7 @@ export function MintConfigModal({
       // Parse price (SOL only) - free minting is not allowed
       const priceFloat = parseFloat(price);
       if (isNaN(priceFloat) || priceFloat <= 0) {
-        setError("Price is required. Free minting is not allowed.");
+        setError("Price is required");
         return;
       }
       const priceValue = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
@@ -177,7 +177,7 @@ export function MintConfigModal({
 
           {contentTitle && (
             <p className="text-white/40 mb-5 text-sm">
-              {existingConfig ? "Editing" : "Setting up"} minting for: <span className="text-white/80">{contentTitle}</span>
+              {existingConfig ? "Editing" : "Setting up"} buying for: <span className="text-white/80">{contentTitle}</span>
             </p>
           )}
 
@@ -208,7 +208,7 @@ export function MintConfigModal({
                 </span>
               </div>
               <p className="text-xs text-white/30 mt-2">
-                Minimum price is 0.001 SOL (free minting not allowed)
+                Minimum price is 0.001 SOL
               </p>
             </div>
 
@@ -221,13 +221,14 @@ export function MintConfigModal({
                   <input
                     type="number"
                     min="1"
+                    max="999999"
                     value={maxSupply}
                     onChange={(e) => setMaxSupply(e.target.value)}
-                    placeholder="Max supply (e.g., 100)"
+                    placeholder="Max supply (max 999,999)"
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                   />
                   <p className="text-xs text-white/30 mt-2">
-                    Limited supply cannot be changed to unlimited after creation
+                    Limited supply cannot be changed to unlimited (max 999,999)
                   </p>
                 </>
               ) : existingConfig && existingConfig.maxSupply === null ? (
@@ -270,14 +271,15 @@ export function MintConfigModal({
                     <input
                       type="number"
                       min="1"
+                      max="999999"
                       value={maxSupply}
                       onChange={(e) => setMaxSupply(e.target.value)}
-                      placeholder="Max supply (e.g., 100)"
+                      placeholder="Max supply (max 999,999)"
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                     />
                   )}
                   <p className="text-xs text-white/30 mt-2">
-                    You can set a cap on unlimited supply
+                    You can set a cap on unlimited supply (max 999,999)
                   </p>
                 </>
               ) : (
@@ -320,27 +322,15 @@ export function MintConfigModal({
                     <input
                       type="number"
                       min="1"
+                      max="999999"
                       value={maxSupply}
                       onChange={(e) => setMaxSupply(e.target.value)}
-                      placeholder="Max supply (e.g., 100)"
+                      placeholder="Max supply (max 999,999)"
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                     />
                   )}
                 </>
               )}
-            </div>
-
-            {/* Royalty - Fixed at 4% */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
-                Secondary Sale Royalty
-              </label>
-              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/80">
-                {royaltyPercent}% (fixed)
-              </div>
-              <p className="text-xs text-white/30 mt-2">
-                Creator royalty is fixed at 4% on all secondary sales
-              </p>
             </div>
 
             {/* Revenue Split Info */}

@@ -224,6 +224,40 @@ export function useStreamflow() {
   };
 
   /**
+   * Get all incoming streams to the ecosystem treasury.
+   * Used to calculate total pending distribution from all subscriptions.
+   */
+  const useEcosystemTreasuryIncomingStreams = () => {
+    const [ecosystemTreasury] = getEcosystemStreamingTreasuryPda();
+
+    return useQuery({
+      queryKey: ["ecosystemTreasuryIncomingStreams"],
+      queryFn: async (): Promise<StreamInfo[]> => {
+        return streamflowClient.getIncomingStreams(ecosystemTreasury);
+      },
+      staleTime: 30000, // Refresh every 30 seconds
+      gcTime: 60000,
+    });
+  };
+
+  /**
+   * Calculate total available to withdraw from ecosystem treasury's incoming streams.
+   * This is the amount in escrow that can be withdrawn but hasn't been yet.
+   */
+  const useEcosystemEscrowBalance = () => {
+    const [ecosystemTreasury] = getEcosystemStreamingTreasuryPda();
+
+    return useQuery({
+      queryKey: ["ecosystemEscrowBalance"],
+      queryFn: async (): Promise<bigint> => {
+        return streamflowClient.getTotalAvailableForRecipient(ecosystemTreasury);
+      },
+      staleTime: 30000, // Refresh every 30 seconds
+      gcTime: 60000,
+    });
+  };
+
+  /**
    * Get a specific stream by ID.
    */
   const useStream = (streamId: string | null) => {
@@ -248,6 +282,11 @@ export function useStreamflow() {
     useCreatorStreams,
     useEcosystemStreams,
     useStream,
+    useEcosystemTreasuryIncomingStreams,
+    useEcosystemEscrowBalance,
+
+    // Streamflow client for advanced usage
+    streamflowClient,
 
     // Loading states
     isCreatingStream: createMembershipStream.isPending || createEcosystemStream.isPending,

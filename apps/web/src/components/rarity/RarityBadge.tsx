@@ -150,7 +150,7 @@ export function RarityReveal({ rarity, onClose }: RarityRevealProps) {
           {name}!
         </h2>
         <p className="text-gray-400">
-          Your NFT has been minted with {name.toLowerCase()} rarity
+          Your NFT was assigned {name.toLowerCase()} rarity
         </p>
         {rarity >= Rarity.Rare && (
           <p className="text-sm text-gray-500 mt-2">

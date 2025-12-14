@@ -194,6 +194,9 @@ export function BuyBundleModal({
         const sig = await sendTransaction(tx, connection);
         await connection.confirmTransaction(sig, "confirmed");
 
+        // Wait for data propagation before fetching rarity
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
         try {
           const rewardState = await client.fetchNftRewardState(nftAsset);
           if (rewardState) {
@@ -239,10 +242,10 @@ export function BuyBundleModal({
   const getStepMessage = () => {
     switch (mintStep) {
       case "committing": return "Preparing transaction...";
-      case "determining": return "Minting bundle...";
+      case "determining": return "Buying bundle...";
       case "revealing": return "Confirming...";
       case "success":
-        return revealedRarity ? `You got a ${getRarityName(revealedRarity)} edition!` : "Mint successful!";
+        return revealedRarity ? `You got a ${getRarityName(revealedRarity)} edition!` : "Purchase successful!";
       default: return "";
     }
   };
@@ -256,7 +259,7 @@ export function BuyBundleModal({
 
         <div className="relative">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-medium text-white/90">Mint Bundle</h2>
+            <h2 className="text-xl font-medium text-white/90">Buy Bundle</h2>
             <button
               onClick={handleClose}
               disabled={isProcessing}
@@ -311,8 +314,8 @@ export function BuyBundleModal({
                   )}
                 </div>
                 <p className="text-lg font-medium text-white/90">{getStepMessage()}</p>
-                {quantity > 1 && (
-                  <p className="text-sm text-white/40 mt-1">Minting {mintingProgress} of {quantity}</p>
+{quantity > 1 && (
+                  <p className="text-sm text-white/40 mt-1">Buying {mintingProgress} of {quantity}</p>
                 )}
                 <div className="flex justify-center gap-1 mt-4">
                   <div className={`w-2 h-2 rounded-full ${mintStep === "committing" || mintStep === "determining" ? "bg-cyan-400" : "bg-white/20"}`} />
@@ -362,12 +365,12 @@ export function BuyBundleModal({
                 {revealedRarity !== null && RARITY_STYLES[revealedRarity] ? (
                   <>
                     <p className={`text-xl font-bold ${RARITY_STYLES[revealedRarity].text}`}>{getRarityName(revealedRarity)}!</p>
-                    <p className="text-sm text-white/40 mt-1">Your bundle has been minted with {getRarityName(revealedRarity).toLowerCase()} rarity</p>
+                    <p className="text-sm text-white/40 mt-1">You purchased a {getRarityName(revealedRarity).toLowerCase()} rarity edition</p>
                   </>
                 ) : (
                   <>
                     <p className="text-xl font-bold text-emerald-400">Success!</p>
-                    <p className="text-sm text-white/40 mt-1">Your bundle has been minted successfully</p>
+                    <p className="text-sm text-white/40 mt-1">Your bundle purchase was successful</p>
                   </>
                 )}
               </div>
@@ -452,9 +455,9 @@ export function BuyBundleModal({
                   isSoldOut ? "bg-white/5 text-white/30 cursor-not-allowed"
                     : "bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 hover:border-cyan-500/50 text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 }`}>
-                {isCheckingPending ? "Checking for pending mints..." : isLoadingCollection ? "Loading..." : isSoldOut ? "Sold Out"
-                  : !publicKey ? "Connect Wallet" : isFree ? (quantity > 1 ? `Mint ${quantity} for Free` : "Mint for Free")
-                  : quantity > 1 ? `Mint ${quantity} for ${formatPrice(quantity)}` : `Mint for ${formatPrice()}`}
+{isCheckingPending ? "Checking..." : isLoadingCollection ? "Loading..." : isSoldOut ? "Sold Out"
+                  : !publicKey ? "Connect Wallet" : isFree ? (quantity > 1 ? `Buy ${quantity} for Free` : "Buy for Free")
+                  : quantity > 1 ? `Buy ${quantity} for ${formatPrice(quantity)}` : `Buy for ${formatPrice()}`}
               </button>
             )}
           </div>

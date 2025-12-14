@@ -83,43 +83,50 @@ export function UserProfileSettings({ onSuccess, highlight }: UserProfileSetting
 
   if (isLoadingUserProfile) {
     return (
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-800 rounded w-1/3 mb-4"></div>
-          <div className="h-10 bg-gray-800 rounded mb-3"></div>
-          <div className="h-10 bg-gray-800 rounded"></div>
+      <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
+        <div className="relative animate-pulse">
+          <div className="h-6 bg-white/5 rounded-lg w-1/3 mb-4"></div>
+          <div className="h-10 bg-white/5 rounded-xl mb-3"></div>
+          <div className="h-10 bg-white/5 rounded-xl"></div>
         </div>
       </div>
     );
   }
 
   // Determine border color based on highlight prop
-  const borderClass = highlight ? "border-red-500" : "border-gray-800";
+  const borderClass = highlight
+    ? "border-red-500/50 ring-1 ring-red-500/20"
+    : "border-white/5 hover:border-white/10";
 
   const isSubmitting = isCreatingUserProfile || isUpdatingUserProfile;
 
   return (
-    <div className={`bg-gray-900 rounded-xl border overflow-hidden ${borderClass}`}>
-      <div className="p-5 border-b border-gray-800">
+    <div className={`relative rounded-2xl bg-white/[0.02] border overflow-hidden transition-all duration-300 ${borderClass}`}>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
+
+      {/* Header */}
+      <div className="relative p-5 border-b border-white/5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-xl font-semibold">Creator Profile</h2>
-              <p className="text-sm text-gray-400">Your username appears on your NFT collections</p>
+              <h2 className="text-lg font-medium text-white/90">Creator Profile</h2>
+              <p className="text-sm text-white/40">Your username appears on your NFT collections</p>
             </div>
           </div>
           {hasExistingProfile && !isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 text-white/70 hover:text-white/90"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               Edit
             </button>
@@ -127,44 +134,52 @@ export function UserProfileSettings({ onSuccess, highlight }: UserProfileSetting
         </div>
       </div>
 
-      <div className="p-5">
+      {/* Content */}
+      <div className="relative p-5">
         {hasExistingProfile && !isEditing ? (
           <div className="space-y-4">
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Active Status */}
+            <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="font-medium text-green-400">Profile Active</span>
               </div>
-              <p className="text-sm text-gray-400">Your creator profile is set up and ready.</p>
+              <div>
+                <p className="font-medium text-emerald-400 text-sm">Profile Active</p>
+                <p className="text-xs text-white/40">Your creator profile is set up and ready</p>
+              </div>
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-4">
-              <p className="text-sm text-gray-400 mb-1">Username</p>
-              <p className="text-2xl font-bold text-white">{userProfile.username}</p>
+            {/* Username Display */}
+            <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Username</p>
+              <p className="text-2xl font-bold text-white/90 tracking-tight">{userProfile.username}</p>
             </div>
 
-            <div className="bg-gray-800/50 rounded-lg p-4">
-              <h4 className="text-sm font-medium mb-3">Your NFT Collection Name</h4>
-              <div className="bg-gray-900 rounded-lg p-3">
-                <code className="text-sm text-blue-400">HC: {userProfile.username}</code>
+            {/* Collection Name Preview */}
+            <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">NFT Collection Name</p>
+              <div className="bg-black/40 rounded-lg p-3 border border-white/5">
+                <code className="text-sm text-purple-400 font-mono">HC: {userProfile.username}</code>
               </div>
-              <p className="text-xs text-gray-500 mt-2">This is how your NFT collections will be named</p>
+              <p className="text-xs text-white/30 mt-2">This is how your NFT collections will be named</p>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-300">
+            {/* Info Banner */}
+            <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+              <p className="text-sm text-purple-300/80">
                 {isEditing
                   ? "Update your creator username. This will affect how new NFT collections are named."
-                  : "Set your creator username. This is required before you can create content and mint NFTs. Your NFT collections will be named \"HC: YourUsername\"."}
+                  : "Set your creator username. This is required before you can create content and sell editions. Your NFT collections will be named \"HC: YourUsername\"."}
               </p>
             </div>
 
+            {/* Username Input */}
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
                 Username
               </label>
               <input
@@ -172,12 +187,12 @@ export function UserProfileSettings({ onSuccess, highlight }: UserProfileSetting
                 maxLength={MAX_USERNAME_LENGTH}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white/90 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] transition-all duration-300 placeholder:text-white/20"
                 placeholder="Enter your username"
               />
-              <div className="flex justify-between mt-1">
-                <p className="text-xs text-gray-500">Letters, numbers, underscores, and spaces only</p>
-                <p className={`text-xs ${username.length > MAX_USERNAME_LENGTH ? "text-red-400" : "text-gray-500"}`}>
+              <div className="flex justify-between mt-2">
+                <p className="text-xs text-white/30">Letters, numbers, underscores, and spaces only</p>
+                <p className={`text-xs ${username.length > MAX_USERNAME_LENGTH ? "text-red-400" : "text-white/30"}`}>
                   {username.length}/{MAX_USERNAME_LENGTH}
                 </p>
               </div>
@@ -185,35 +200,38 @@ export function UserProfileSettings({ onSuccess, highlight }: UserProfileSetting
 
             {/* Preview */}
             {username.trim() && (
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <h4 className="text-sm font-medium mb-2">Preview</h4>
-                <div className="bg-gray-900 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Collection Name:</p>
-                  <code className="text-sm text-blue-400">HC: {username.trim()}</code>
+              <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Preview</p>
+                <div className="bg-black/40 rounded-lg p-3 border border-white/5">
+                  <p className="text-xs text-white/30 mb-1">Collection Name:</p>
+                  <code className="text-sm text-purple-400 font-mono">HC: {username.trim()}</code>
                 </div>
               </div>
             )}
 
+            {/* Error Message */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                 <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
 
+            {/* Success Message */}
             {success && (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                <p className="text-sm text-green-400">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                <p className="text-sm text-emerald-400">
                   {isEditing ? "Username updated successfully!" : "Profile created successfully!"}
                 </p>
               </div>
             )}
 
+            {/* Action Buttons */}
             <div className={isEditing ? "flex gap-3" : ""}>
               {isEditing && (
                 <button
                   type="button"
                   onClick={handleCancelEdit}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70"
                 >
                   Cancel
                 </button>
@@ -221,11 +239,11 @@ export function UserProfileSettings({ onSuccess, highlight }: UserProfileSetting
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`${isEditing ? "flex-1" : "w-full"} py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+                className={`${isEditing ? "flex-1" : "w-full"} py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 flex items-center justify-center gap-2 text-white/90`}
               >
                 {isSubmitting ? (
                   <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>

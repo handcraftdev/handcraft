@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { getIpfsUrl, getContentTypeLabel } from "@handcraft/sdk";
+import { getIpfsUrl, getContentTypeLabel, VisibilityLevel } from "@handcraft/sdk";
 import {
   useContentRegistry,
   ContentEntry,
   MIN_PRICE_LAMPORTS,
   MIN_RENT_FEE_LAMPORTS,
+  FIXED_CREATOR_ROYALTY_BPS,
 } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
@@ -44,7 +45,8 @@ export function ManageContentModal({
   const [mintPrice, setMintPrice] = useState("0.1");
   const [mintSupplyType, setMintSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [mintMaxSupply, setMintMaxSupply] = useState("");
-  const [mintRoyaltyPercent, setMintRoyaltyPercent] = useState("5");
+  // Royalty is now fixed at 4%
+  const fixedRoyaltyPercent = FIXED_CREATOR_ROYALTY_BPS / 100;
 
   // Rent config state
   const [rentFee6h, setRentFee6h] = useState("0.01");
@@ -103,7 +105,7 @@ export function ManageContentModal({
         setMintSupplyType("unlimited");
         setMintMaxSupply("");
       }
-      setMintRoyaltyPercent((mintConfig.creatorRoyaltyBps / 100).toString());
+      // Royalty is now fixed at 4%, no need to set from existing config
     }
   }, [mintConfig]);
 
@@ -138,12 +140,6 @@ export function ManageContentModal({
   const handleSaveMintSettings = async () => {
     setError(null);
 
-    const royaltyNum = parseFloat(mintRoyaltyPercent);
-    if (isNaN(royaltyNum) || royaltyNum < 2 || royaltyNum > 10) {
-      setError("Royalty must be between 2% and 10%");
-      return;
-    }
-
     try {
       const priceLamports = BigInt(Math.floor(parseFloat(mintPrice) * LAMPORTS_PER_SOL));
       if (priceLamports > 0 && priceLamports < BigInt(MIN_PRICE_LAMPORTS)) {
@@ -154,7 +150,8 @@ export function ManageContentModal({
       const maxSupplyValue = mintSupplyType === "limited" && mintMaxSupply
         ? BigInt(mintMaxSupply)
         : null;
-      const royaltyBps = Math.floor(royaltyNum * 100);
+      // Royalty is fixed at 4%
+      const royaltyBps = FIXED_CREATOR_ROYALTY_BPS;
 
       if (mintConfig) {
         // Update existing
@@ -291,7 +288,7 @@ export function ManageContentModal({
               }`}
             >
               <div className="flex items-center justify-center gap-2">
-                Mint
+                Buy
                 {mintConfig && (
                   <span className={`w-1.5 h-1.5 rounded-full ${mintConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
                 )}
@@ -343,6 +340,45 @@ export function ManageContentModal({
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content Visibility</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
+                      content.visibilityLevel === VisibilityLevel.NftOnly
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        : content.visibilityLevel === VisibilityLevel.Subscriber
+                        ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                        : content.visibilityLevel === VisibilityLevel.Ecosystem
+                        ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                        : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    }`}>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                        {content.visibilityLevel === 0 ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 3.03v.568c0 .334.148.65.405.864l1.068.89c.442.369.535 1.01.216 1.49l-.51.766a2.25 2.25 0 01-1.161.886l-.143.048a1.107 1.107 0 00-.57 1.664c.369.555.169 1.307-.427 1.605L9 13.125l.423 1.059a.956.956 0 01-1.652.928l-.679-.906a1.125 1.125 0 00-1.906.172L4.5 15.75l-.612.153M12.75 3.031a9 9 0 00-8.862 12.872M12.75 3.031a9 9 0 016.69 14.036m0 0l-.177-.529A2.25 2.25 0 0017.128 15H16.5l-.324-.324a1.453 1.453 0 00-2.328.377l-.036.073a1.586 1.586 0 01-.982.816l-.99.282c-.55.157-.894.702-.8 1.267l.073.438c.08.474.49.821.97.821.846 0 1.598.542 1.865 1.345l.215.643m5.276-3.67a9.012 9.012 0 01-5.276 3.67m0 0a9 9 0 01-10.275-4.835M15.75 9c0 .896-.393 1.7-1.016 2.25" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        )}
+                      </svg>
+                      {content.visibilityLevel === VisibilityLevel.NftOnly
+                        ? "Buy/Rent Only"
+                        : content.visibilityLevel === VisibilityLevel.Subscriber
+                        ? "Members Only"
+                        : content.visibilityLevel === VisibilityLevel.Ecosystem
+                        ? "Subscriber Only"
+                        : "Public"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/30 mt-2">
+                    {content.visibilityLevel === VisibilityLevel.NftOnly
+                      ? "Only NFT owners or active renters can access"
+                      : content.visibilityLevel === VisibilityLevel.Subscriber
+                      ? "Requires your membership or NFT ownership"
+                      : content.visibilityLevel === VisibilityLevel.Ecosystem
+                      ? "Requires platform subscription, membership, or NFT"
+                      : "Anyone can access this content"}
+                  </p>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                   <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${isLocked ? "bg-amber-400" : "bg-emerald-400"}`} />
@@ -366,12 +402,12 @@ export function ManageContentModal({
               <div className="space-y-4">
                 {mintConfig ? (
                   <>
-                    {/* Mint Status */}
+                    {/* Buy Status */}
                     <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
                       <div>
-                        <p className="text-sm font-medium text-white/80">Minting Status</p>
+                        <p className="text-sm font-medium text-white/80">Buying Status</p>
                         <p className="text-xs text-white/40 mt-0.5">
-                          {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
+                          {mintConfig.isActive ? "Active - users can buy editions" : "Paused - buying is disabled"}
                         </p>
                       </div>
                       <button
@@ -414,10 +450,11 @@ export function ManageContentModal({
                             value={mintMaxSupply}
                             onChange={(e) => setMintMaxSupply(e.target.value)}
                             min="1"
+                            max="999999"
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                           />
                           <p className="text-xs text-white/30 mt-2">
-                            Limited supply cannot be changed to unlimited
+                            Limited supply cannot be changed to unlimited (max 999,999)
                           </p>
                         </>
                       ) : (
@@ -462,49 +499,12 @@ export function ManageContentModal({
                               value={mintMaxSupply}
                               onChange={(e) => setMintMaxSupply(e.target.value)}
                               min="1"
-                              placeholder="Max supply (e.g., 100)"
+                              max="999999"
+                              placeholder="Max supply (max 999,999)"
                               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                             />
                           )}
                         </>
-                      )}
-                    </div>
-
-                    {/* Royalty Slider */}
-                    <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
-                        Secondary Sale Royalty
-                      </label>
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
-                          {isLocked && (
-                            <span className="text-xs text-amber-400/70">Locked</span>
-                          )}
-                        </div>
-                        <input
-                          type="range"
-                          min="2"
-                          max="10"
-                          step="0.5"
-                          value={mintRoyaltyPercent}
-                          onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                          disabled={isLocked}
-                          className={`w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
-                            [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
-                            [&::-webkit-slider-thumb]:hover:bg-purple-300 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-                        />
-                        <div className="flex justify-between text-xs text-white/30 mt-2">
-                          <span>2%</span>
-                          <span>10%</span>
-                        </div>
-                      </div>
-                      {isLocked && (
-                        <p className="text-xs text-white/30 mt-2">
-                          Royalty cannot be changed after NFTs have been minted
-                        </p>
                       )}
                     </div>
 
@@ -522,12 +522,12 @@ export function ManageContentModal({
                       disabled={isLoading}
                       className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                     >
-                      {isUpdatingMintSettings ? "Saving..." : "Update Mint Settings"}
+                      {isUpdatingMintSettings ? "Saving..." : "Update Buy Settings"}
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="text-white/40 mb-4 text-sm">Set up NFT minting for this content.</p>
+                    <p className="text-white/40 mb-4 text-sm">Set up NFT buying for this content.</p>
 
                     {/* Mint Price */}
                     <div>
@@ -590,39 +590,11 @@ export function ManageContentModal({
                           value={mintMaxSupply}
                           onChange={(e) => setMintMaxSupply(e.target.value)}
                           min="1"
-                          placeholder="Max supply (e.g., 100)"
+                          max="999999"
+                          placeholder="Max supply (max 999,999)"
                           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                         />
                       )}
-                    </div>
-
-                    {/* Royalty */}
-                    <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
-                        Secondary Sale Royalty
-                      </label>
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="2"
-                          max="10"
-                          step="0.5"
-                          value={mintRoyaltyPercent}
-                          onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                          className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
-                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
-                            [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
-                            [&::-webkit-slider-thumb]:hover:bg-purple-300"
-                        />
-                        <div className="flex justify-between text-xs text-white/30 mt-2">
-                          <span>2%</span>
-                          <span>10%</span>
-                        </div>
-                      </div>
                     </div>
 
                     <button
@@ -630,7 +602,7 @@ export function ManageContentModal({
                       disabled={isLoading}
                       className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                     >
-                      {isConfiguringMint ? "Setting Up..." : "Enable Minting"}
+                      {isConfiguringMint ? "Setting Up..." : "Enable Buying"}
                     </button>
                   </>
                 )}
@@ -647,7 +619,7 @@ export function ManageContentModal({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                     </div>
-                    <p className="text-white/40 text-sm">Set up NFT minting first before enabling rentals.</p>
+                    <p className="text-white/40 text-sm">Set up NFT buying first before enabling rentals.</p>
                     <button
                       onClick={() => setSettingsTab("mint")}
                       className="mt-4 px-4 py-2 text-sm text-purple-400 hover:text-purple-300 transition-colors duration-300"

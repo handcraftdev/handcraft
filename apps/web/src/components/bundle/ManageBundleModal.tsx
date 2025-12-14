@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getBundleTypeLabel, getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
-import { useContentRegistry, Bundle, ContentEntry, MIN_PRICE_LAMPORTS, MIN_RENT_FEE_LAMPORTS } from "@/hooks/useContentRegistry";
+import { useContentRegistry, Bundle, ContentEntry, MIN_PRICE_LAMPORTS, MIN_RENT_FEE_LAMPORTS, FIXED_CREATOR_ROYALTY_BPS } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface ManageBundleModalProps {
@@ -40,7 +40,8 @@ export function ManageBundleModal({
   const [mintPrice, setMintPrice] = useState("0.1");
   const [mintSupplyType, setMintSupplyType] = useState<"unlimited" | "limited">("unlimited");
   const [mintMaxSupply, setMintMaxSupply] = useState("");
-  const [mintRoyaltyPercent, setMintRoyaltyPercent] = useState("5");
+  // Royalty is now fixed at 4%
+  const fixedRoyaltyPercent = FIXED_CREATOR_ROYALTY_BPS / 100;
 
   // Rent config state
   const [rentFee6h, setRentFee6h] = useState("0.01");
@@ -100,7 +101,7 @@ export function ManageBundleModal({
         setMintSupplyType("unlimited");
         setMintMaxSupply("");
       }
-      setMintRoyaltyPercent((mintConfig.creatorRoyaltyBps / 100).toString());
+      // Royalty is now fixed at 4%, no need to set from existing config
     }
   }, [mintConfig]);
 
@@ -325,17 +326,11 @@ export function ManageBundleModal({
     if (!mintConfig) return;
     setError(null);
 
-    const royaltyNum = parseFloat(mintRoyaltyPercent);
-    if (isNaN(royaltyNum) || royaltyNum < 2 || royaltyNum > 10) {
-      setError("Royalty must be between 2% and 10%");
-      return;
-    }
-
     try {
       // Free minting is not allowed
       const priceFloat = parseFloat(mintPrice);
       if (isNaN(priceFloat) || priceFloat <= 0) {
-        setError("Price is required. Free minting is not allowed.");
+        setError("Price is required");
         return;
       }
       const priceLamports = BigInt(Math.floor(priceFloat * LAMPORTS_PER_SOL));
@@ -347,7 +342,8 @@ export function ManageBundleModal({
       const maxSupplyValue = mintSupplyType === "limited" && mintMaxSupply
         ? BigInt(mintMaxSupply)
         : null;
-      const royaltyBps = Math.floor(royaltyNum * 100);
+      // Royalty is fixed at 4%
+      const royaltyBps = FIXED_CREATOR_ROYALTY_BPS;
 
       await updateBundleMintSettings.mutateAsync({
         bundleId: bundle.bundleId,
@@ -623,7 +619,7 @@ export function ManageBundleModal({
                     }`}
                   >
                     <div className="flex items-center justify-center gap-2">
-                      Mint
+                      Buy
                       {mintConfig && (
                         <span className={`w-1.5 h-1.5 rounded-full ${mintConfig.isActive ? "bg-emerald-400" : "bg-white/30"}`} />
                       )}
@@ -703,12 +699,12 @@ export function ManageBundleModal({
                   <div className="space-y-4">
                     {mintConfig ? (
                       <>
-                        {/* Mint Status */}
+                        {/* Buy Status */}
                         <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
                           <div>
-                            <p className="text-sm font-medium text-white/80">Minting Status</p>
+                            <p className="text-sm font-medium text-white/80">Buying Status</p>
                             <p className="text-xs text-white/40 mt-0.5">
-                              {mintConfig.isActive ? "Active - users can mint NFTs" : "Paused - minting is disabled"}
+                              {mintConfig.isActive ? "Active - users can buy editions" : "Paused - buying is disabled"}
                             </p>
                           </div>
                           <button
@@ -738,7 +734,7 @@ export function ManageBundleModal({
                             placeholder="Min 0.001"
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                           />
-                          <p className="text-xs text-white/30 mt-2">Minimum 0.001 SOL (free minting not allowed)</p>
+                          <p className="text-xs text-white/30 mt-2">Minimum 0.001 SOL</p>
                         </div>
 
                         {/* Max Supply */}
@@ -753,10 +749,11 @@ export function ManageBundleModal({
                                 value={mintMaxSupply}
                                 onChange={(e) => setMintMaxSupply(e.target.value)}
                                 min="1"
+                                max="999999"
                                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                               />
                               <p className="text-xs text-white/30 mt-2">
-                                Limited supply cannot be changed to unlimited
+                                Limited supply cannot be changed to unlimited (max 999,999)
                               </p>
                             </>
                           ) : (
@@ -801,7 +798,8 @@ export function ManageBundleModal({
                                   value={mintMaxSupply}
                                   onChange={(e) => setMintMaxSupply(e.target.value)}
                                   min="1"
-                                  placeholder="Max supply (e.g., 100)"
+                                  max="999999"
+                                  placeholder="Max supply (max 999,999)"
                                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                                 />
                               )}
@@ -809,47 +807,9 @@ export function ManageBundleModal({
                           )}
                         </div>
 
-                        {/* Royalty Slider */}
-                        <div>
-                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
-                            Secondary Sale Royalty
-                          </label>
-                          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="text-white/90 font-medium">{mintRoyaltyPercent}%</span>
-                              {isLocked && (
-                                <span className="text-xs text-amber-400/70">Locked</span>
-                              )}
-                            </div>
-                            <input
-                              type="range"
-                              min="2"
-                              max="10"
-                              step="0.5"
-                              value={mintRoyaltyPercent}
-                              onChange={(e) => setMintRoyaltyPercent(e.target.value)}
-                              disabled={isLocked}
-                              className={`w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
-                                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
-                                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
-                                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all
-                                [&::-webkit-slider-thumb]:hover:bg-purple-300 ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
-                            />
-                            <div className="flex justify-between text-xs text-white/30 mt-2">
-                              <span>2%</span>
-                              <span>10%</span>
-                            </div>
-                          </div>
-                          {isLocked && (
-                            <p className="text-xs text-white/30 mt-2">
-                              Royalty cannot be changed after NFTs have been minted
-                            </p>
-                          )}
-                        </div>
-
                         {/* Stats */}
                         <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-                          <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Minted</h3>
+                          <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Sold</h3>
                           <p className="text-sm text-purple-400 font-medium">
                             {actualMintedCount}
                             {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
@@ -861,7 +821,7 @@ export function ManageBundleModal({
                           disabled={isLoading}
                           className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                         >
-                          {isUpdatingBundleMintSettings ? "Saving..." : "Update Mint Settings"}
+                          {isUpdatingBundleMintSettings ? "Saving..." : "Update Buy Settings"}
                         </button>
                       </>
                     ) : (
@@ -871,8 +831,8 @@ export function ManageBundleModal({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
                         </div>
-                        <p className="text-white/40 text-sm">Minting not configured for this bundle.</p>
-                        <p className="text-white/30 text-xs mt-1">This bundle was created without mint settings.</p>
+                        <p className="text-white/40 text-sm">Buying not configured for this bundle.</p>
+                        <p className="text-white/30 text-xs mt-1">This bundle was created without buy settings.</p>
                       </div>
                     )}
                   </div>
