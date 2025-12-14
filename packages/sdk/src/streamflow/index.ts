@@ -73,6 +73,36 @@ export interface StreamInfo {
 type WalletSigner = SignerWalletAdapter | Keypair;
 
 /**
+ * Internal helper to calculate available amount from a stream.
+ * Used by the class method before the exported function is defined.
+ */
+function calculateStreamAvailable(stream: StreamInfo, nowSeconds: number): bigint {
+  // If stream hasn't started yet, nothing is released
+  if (nowSeconds < stream.startTime) {
+    return BigInt(0);
+  }
+
+  // Calculate elapsed time since cliff (when streaming starts)
+  const elapsedSinceCliff = Math.max(0, nowSeconds - stream.cliff);
+
+  // Calculate released amount
+  const periodsElapsed = Math.floor(elapsedSinceCliff / stream.period);
+  const streamedAmount = BigInt(stream.amountPerPeriod.toString()) * BigInt(periodsElapsed);
+  const cliffAmount = BigInt(stream.cliffAmount.toString());
+  const depositedAmount = BigInt(stream.depositedAmount.toString());
+
+  // Released is min of (cliff + streamed, deposited)
+  const released = streamedAmount + cliffAmount;
+  const actualReleased = released > depositedAmount ? depositedAmount : released;
+
+  // Available = Released - Withdrawn
+  const withdrawn = BigInt(stream.withdrawnAmount.toString());
+  const available = actualReleased - withdrawn;
+
+  return available > BigInt(0) ? available : BigInt(0);
+}
+
+/**
  * Streamflow client for creating and managing payment streams.
  * Used for membership subscriptions where payments flow over time to creator treasuries.
  */
@@ -191,8 +221,8 @@ export class StreamflowClient {
       cancelableByRecipient: false, // Treasury can't cancel
       transferableBySender: false,
       transferableByRecipient: false,
-      automaticWithdrawal: false,
-      withdrawalFrequency: 0,
+      automaticWithdrawal: true, // Streamflow auto-withdraws to treasury
+      withdrawalFrequency: 86400, // Daily (matches epoch duration)
     };
 
     // Use isNative: true - Streamflow wraps SOL in a single transaction
@@ -250,8 +280,8 @@ export class StreamflowClient {
       cancelableByRecipient: false,
       transferableBySender: false,
       transferableByRecipient: false,
-      automaticWithdrawal: false,
-      withdrawalFrequency: 0,
+      automaticWithdrawal: true, // Streamflow auto-withdraws to treasury
+      withdrawalFrequency: 86400, // Daily (matches epoch duration)
     };
 
     // Use isNative: true - Streamflow wraps SOL in a single transaction
@@ -323,6 +353,42 @@ export class StreamflowClient {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Get all streams where the wallet is the recipient (incoming streams).
+   * Useful for treasury PDAs to find all membership streams.
+   *
+   * @param recipient The recipient wallet address
+   */
+  async getIncomingStreams(recipient: PublicKey): Promise<StreamInfo[]> {
+    try {
+      const allStreams = await this.getStreamsForWallet(recipient);
+      // Filter to only streams where this wallet is the recipient
+      return allStreams.filter(s => s.recipient === recipient.toBase58());
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Calculate total available to withdraw from all incoming streams.
+   * This is the amount that can be withdrawn to the treasury's WSOL ATA.
+   *
+   * @param recipient The recipient wallet (treasury PDA)
+   */
+  async getTotalAvailableForRecipient(recipient: PublicKey): Promise<bigint> {
+    const streams = await this.getIncomingStreams(recipient);
+    const now = Math.floor(Date.now() / 1000);
+
+    return streams.reduce((total, stream) => {
+      // Only include active streams (not cancelled)
+      if (stream.canceledAt > 0) return total;
+
+      // Calculate available for this stream
+      const available = calculateStreamAvailable(stream, now);
+      return total + available;
+    }, BigInt(0));
   }
 
   private mapStreamToInfo(id: string, stream: Stream): StreamInfo {
@@ -469,6 +535,61 @@ export function createYearlyStreamParams(
     durationSeconds: SECONDS_PER_YEAR,
     name,
   };
+}
+
+/**
+ * Calculate available amount to withdraw from a stream.
+ * Available = Released - Withdrawn
+ * Released = min(deposited, timeElapsed * amountPerPeriod + cliffAmount)
+ *
+ * @param stream The stream info
+ * @param nowSeconds Current unix timestamp in seconds
+ * @returns Available amount in lamports (bigint)
+ */
+export function calculateAvailableToWithdraw(stream: StreamInfo, nowSeconds?: number): bigint {
+  const now = nowSeconds ?? Math.floor(Date.now() / 1000);
+
+  // If stream hasn't started yet, nothing is released
+  if (now < stream.startTime) {
+    return BigInt(0);
+  }
+
+  // If stream is cancelled, calculate based on cancel time
+  const effectiveTime = stream.canceledAt > 0 ? stream.canceledAt : now;
+
+  // Calculate elapsed time since cliff (when streaming starts)
+  const elapsedSinceCliff = Math.max(0, effectiveTime - stream.cliff);
+
+  // Calculate released amount
+  const periodsElapsed = Math.floor(elapsedSinceCliff / stream.period);
+  const streamedAmount = BigInt(stream.amountPerPeriod.toString()) * BigInt(periodsElapsed);
+  const cliffAmount = BigInt(stream.cliffAmount.toString());
+  const depositedAmount = BigInt(stream.depositedAmount.toString());
+
+  // Released is min of (cliff + streamed, deposited)
+  const released = streamedAmount + cliffAmount;
+  const actualReleased = released > depositedAmount ? depositedAmount : released;
+
+  // Available = Released - Withdrawn
+  const withdrawn = BigInt(stream.withdrawnAmount.toString());
+  const available = actualReleased - withdrawn;
+
+  return available > BigInt(0) ? available : BigInt(0);
+}
+
+/**
+ * Calculate total available to withdraw from multiple streams.
+ * Useful for calculating pending treasury balance across all subscriptions.
+ *
+ * @param streams Array of stream infos
+ * @param nowSeconds Current unix timestamp in seconds
+ * @returns Total available amount in lamports (bigint)
+ */
+export function calculateTotalAvailableToWithdraw(streams: StreamInfo[], nowSeconds?: number): bigint {
+  return streams.reduce(
+    (total, stream) => total + calculateAvailableToWithdraw(stream, nowSeconds),
+    BigInt(0)
+  );
 }
 
 // Export constants

@@ -1096,6 +1096,7 @@ export async function fetchBundleNftRewardStatesBatch(
 
     for (let i = 0; i < nftAssets.length; i++) {
       const accountInfo = accounts[i];
+      const nftAssetKey = nftAssets[i].toBase58();
       if (accountInfo) {
         try {
           // Decode the account data using Anchor - now uses UnifiedNftRewardState (simple_mint)
@@ -1106,16 +1107,20 @@ export async function fetchBundleNftRewardStatesBatch(
           );
 
           // Map UnifiedNftRewardState to BundleNftRewardState format for backwards compatibility
-          states.set(nftAssets[i].toBase58(), {
+          states.set(nftAssetKey, {
             nftAsset: decoded.nftAsset,
             bundle: decoded.contentOrBundle, // UnifiedNftRewardState uses contentOrBundle
             rewardDebt: BigInt(decoded.contentOrBundleDebt?.toString() || "0"),
             weight: decoded.weight || 100,
             createdAt: BigInt(decoded.createdAt.toString()),
           });
-        } catch {
-          // Skip invalid account data
+        } catch (decodeErr) {
+          // Log decode errors for debugging
+          console.warn(`[fetchBundleNftRewardStatesBatch] Failed to decode state for ${nftAssetKey}:`, decodeErr);
         }
+      } else {
+        // Log when account doesn't exist
+        console.warn(`[fetchBundleNftRewardStatesBatch] No account found for NFT ${nftAssetKey}, PDA: ${nftRewardStatePdas[i].toBase58()}`);
       }
     }
   } catch (err) {
@@ -3623,6 +3628,326 @@ export async function fetchBundleWalletState(
 // NOTE: fetchBundleNftRarity and fetchBundleNftRarities removed - rarity data is now in UnifiedNftRewardState
 
 // ============================================
+// EPOCH & SUBSCRIPTION POOL FETCHING
+// ============================================
+
+/**
+ * Fetch ecosystem epoch state (singleton)
+ * Tracks last distribution time and epoch duration
+ */
+export async function fetchEcosystemEpochState(
+  connection: Connection
+): Promise<EcosystemEpochState | null> {
+  try {
+    const program = createProgram(connection);
+    const [epochStatePda] = getEcosystemEpochStatePda();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).ecosystemEpochState.fetch(epochStatePda);
+
+    return {
+      lastDistributionAt: BigInt(decoded.lastDistributionAt.toString()),
+      epochDuration: BigInt(decoded.epochDuration.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch global holder pool (singleton)
+ * Holds SOL for NFT holder claims (12% of ecosystem subscriptions)
+ */
+export async function fetchGlobalHolderPool(
+  connection: Connection
+): Promise<GlobalHolderPool | null> {
+  try {
+    const program = createProgram(connection);
+    const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).globalHolderPool.fetch(globalHolderPoolPda);
+
+    return {
+      rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
+      totalWeight: BigInt(decoded.totalWeight.toString()),
+      totalDeposited: BigInt(decoded.totalDeposited.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch creator distribution pool (singleton)
+ * Holds SOL for creator claims (80% of ecosystem subscriptions)
+ */
+export async function fetchCreatorDistPool(
+  connection: Connection
+): Promise<CreatorDistPool | null> {
+  try {
+    const program = createProgram(connection);
+    const [creatorDistPoolPda] = getCreatorDistPoolPda();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).creatorDistPool.fetch(creatorDistPoolPda);
+
+    return {
+      rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
+      totalWeight: BigInt(decoded.totalWeight.toString()),
+      totalDeposited: BigInt(decoded.totalDeposited.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Helper to get WSOL ATA for a given owner
+ * Used to check treasury WSOL balances
+ */
+function getWsolAtaAddress(owner: PublicKey): PublicKey {
+  const [ata] = PublicKey.findProgramAddressSync(
+    [
+      owner.toBuffer(),
+      TOKEN_PROGRAM_ID.toBuffer(),
+      WSOL_MINT.toBuffer(),
+    ],
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return ata;
+}
+
+/**
+ * Fetch token account balance (WSOL)
+ * Returns 0 if account doesn't exist
+ */
+async function fetchTokenAccountBalance(
+  connection: Connection,
+  tokenAccount: PublicKey
+): Promise<bigint> {
+  try {
+    const accountInfo = await connection.getAccountInfo(tokenAccount);
+    if (!accountInfo || accountInfo.data.length < 72) {
+      return BigInt(0);
+    }
+    // Token account data layout: amount is at offset 64 (8 bytes, little-endian u64)
+    const amount = accountInfo.data.readBigUInt64LE(64);
+    return amount;
+  } catch {
+    return BigInt(0);
+  }
+}
+
+/**
+ * Fetch ecosystem streaming treasury balance
+ * This is the undistributed WSOL from ecosystem subscriptions (Streamflow streams)
+ * Checks the Treasury PDA's WSOL ATA where Streamflow deposits vested payments
+ *
+ * NOTE: This only shows WSOL already withdrawn from Streamflow escrow.
+ * Use fetchEcosystemPendingDistribution for the complete picture including escrow.
+ */
+export async function fetchEcosystemStreamingTreasuryBalance(
+  connection: Connection
+): Promise<bigint> {
+  try {
+    const [treasuryPda] = getEcosystemStreamingTreasuryPda();
+    const wsolAta = getWsolAtaAddress(treasuryPda);
+    return await fetchTokenAccountBalance(connection, wsolAta);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+/**
+ * Result of pending distribution calculation
+ */
+export interface PendingDistributionResult {
+  /** WSOL in treasury's WSOL ATA (withdrawn from escrow, ready to unwrap) */
+  inTreasuryWsolAta: bigint;
+  /** WSOL in stream escrows (released but not yet withdrawn) */
+  inStreamEscrows: bigint;
+  /** Total pending = inTreasuryWsolAta + inStreamEscrows */
+  totalPending: bigint;
+  /** Active stream IDs that have available funds to withdraw */
+  streamsWithFunds: Array<{
+    streamId: string;
+    available: bigint;
+  }>;
+}
+
+/**
+ * Fetch complete pending distribution including both:
+ * 1. WSOL in treasury's WSOL ATA (already withdrawn from escrow)
+ * 2. WSOL in stream escrows (released but not yet withdrawn)
+ *
+ * This gives the full picture of funds pending distribution.
+ *
+ * @param connection Solana connection
+ * @param streamflowClient StreamflowClient instance for querying streams
+ */
+export async function fetchEcosystemPendingDistribution(
+  connection: Connection,
+  streamflowClient: { getIncomingStreams: (recipient: PublicKey) => Promise<Array<{ id: string; depositedAmount: { toString(): string }; withdrawnAmount: { toString(): string }; startTime: number; cliff: number; period: number; amountPerPeriod: { toString(): string }; cliffAmount: { toString(): string }; canceledAt: number }>> }
+): Promise<PendingDistributionResult> {
+  const [treasuryPda] = getEcosystemStreamingTreasuryPda();
+
+  // Fetch WSOL ATA balance
+  const wsolAta = getWsolAtaAddress(treasuryPda);
+  const inTreasuryWsolAta = await fetchTokenAccountBalance(connection, wsolAta);
+
+  // Fetch all incoming streams for the treasury
+  const streams = await streamflowClient.getIncomingStreams(treasuryPda);
+  const now = Math.floor(Date.now() / 1000);
+
+  // Calculate available for each stream
+  const streamsWithFunds: Array<{ streamId: string; available: bigint }> = [];
+  let inStreamEscrows = BigInt(0);
+
+  for (const stream of streams) {
+    // Skip cancelled streams
+    if (stream.canceledAt > 0) continue;
+
+    // Calculate available
+    const available = calculateStreamAvailableAmount(stream, now);
+    if (available > BigInt(0)) {
+      streamsWithFunds.push({
+        streamId: stream.id,
+        available,
+      });
+      inStreamEscrows += available;
+    }
+  }
+
+  return {
+    inTreasuryWsolAta,
+    inStreamEscrows,
+    totalPending: inTreasuryWsolAta + inStreamEscrows,
+    streamsWithFunds,
+  };
+}
+
+/**
+ * Helper to calculate available amount from a stream info object
+ */
+function calculateStreamAvailableAmount(
+  stream: {
+    depositedAmount: { toString(): string };
+    withdrawnAmount: { toString(): string };
+    startTime: number;
+    cliff: number;
+    period: number;
+    amountPerPeriod: { toString(): string };
+    cliffAmount: { toString(): string };
+  },
+  nowSeconds: number
+): bigint {
+  // If stream hasn't started yet, nothing is released
+  if (nowSeconds < stream.startTime) {
+    return BigInt(0);
+  }
+
+  // Calculate elapsed time since cliff (when streaming starts)
+  const elapsedSinceCliff = Math.max(0, nowSeconds - stream.cliff);
+
+  // Calculate released amount
+  const periodsElapsed = Math.floor(elapsedSinceCliff / stream.period);
+  const streamedAmount = BigInt(stream.amountPerPeriod.toString()) * BigInt(periodsElapsed);
+  const cliffAmount = BigInt(stream.cliffAmount.toString());
+  const depositedAmount = BigInt(stream.depositedAmount.toString());
+
+  // Released is min of (cliff + streamed, deposited)
+  const released = streamedAmount + cliffAmount;
+  const actualReleased = released > depositedAmount ? depositedAmount : released;
+
+  // Available = Released - Withdrawn
+  const withdrawn = BigInt(stream.withdrawnAmount.toString());
+  const available = actualReleased - withdrawn;
+
+  return available > BigInt(0) ? available : BigInt(0);
+}
+
+/**
+ * Fetch creator patron pool for a specific creator
+ * Holds SOL for NFT holder claims (12% of patron subscriptions)
+ */
+export async function fetchCreatorPatronPool(
+  connection: Connection,
+  creator: PublicKey
+): Promise<CreatorPatronPool | null> {
+  try {
+    const program = createProgram(connection);
+    const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).creatorPatronPool.fetch(creatorPatronPoolPda);
+
+    return {
+      creator: decoded.creator,
+      rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
+      totalWeight: BigInt(decoded.totalWeight.toString()),
+      totalDeposited: BigInt(decoded.totalDeposited.toString()),
+      totalClaimed: BigInt(decoded.totalClaimed.toString()),
+      lastDistributionAt: BigInt(decoded.lastDistributionAt.toString()),
+      epochDuration: BigInt(decoded.epochDuration.toString()),
+      createdAt: BigInt(decoded.createdAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch creator patron config for a specific creator
+ * Contains membership/subscription pricing and active status
+ */
+export async function fetchCreatorPatronConfig(
+  connection: Connection,
+  creator: PublicKey
+): Promise<CreatorPatronConfig | null> {
+  try {
+    const program = createProgram(connection);
+    const [patronConfigPda] = getCreatorPatronConfigPda(creator);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded = await (program.account as any).creatorPatronConfig.fetch(patronConfigPda);
+
+    return {
+      creator: decoded.creator,
+      membershipPrice: BigInt(decoded.membershipPrice.toString()),
+      subscriptionPrice: BigInt(decoded.subscriptionPrice.toString()),
+      isActive: decoded.isActive,
+      createdAt: BigInt(decoded.createdAt.toString()),
+      updatedAt: BigInt(decoded.updatedAt.toString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch creator patron streaming treasury balance
+ * This is the undistributed WSOL from patron subscriptions for this creator (Streamflow streams)
+ * Checks the Treasury PDA's WSOL ATA where Streamflow deposits vested payments
+ */
+export async function fetchCreatorPatronTreasuryBalance(
+  connection: Connection,
+  creator: PublicKey
+): Promise<bigint> {
+  try {
+    const [treasuryPda] = getCreatorPatronTreasuryPda(creator);
+    const wsolAta = getWsolAtaAddress(treasuryPda);
+    return await fetchTokenAccountBalance(connection, wsolAta);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+// ============================================
 // SUBSCRIPTION INSTRUCTIONS
 // ============================================
 
@@ -3810,6 +4135,157 @@ export async function renewEcosystemSubscriptionInstruction(
       ecosystemSubConfig: ecosystemSubConfigPda,
       ecosystemSubscription: ecosystemSubscriptionPda,
       subscriber,
+    })
+    .instruction();
+}
+
+// ============================================
+// TREASURY WSOL UNWRAP INSTRUCTIONS
+// ============================================
+
+/**
+ * Unwrap WSOL from ecosystem streaming treasury to native SOL
+ * Anyone can call this - it converts accumulated WSOL from Streamflow to native SOL
+ * Must be called before epoch distribution can work with the accumulated funds
+ *
+ * @param program - The Anchor program instance
+ * @param payer - The wallet paying for the transaction
+ */
+export async function unwrapEcosystemTreasuryWsolInstruction(
+  program: Program,
+  payer: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const treasuryWsolAta = getWsolAtaAddress(ecosystemTreasuryPda);
+
+  return await program.methods
+    .unwrapEcosystemTreasuryWsol()
+    .accounts({
+      ecosystemStreamingTreasury: ecosystemTreasuryPda,
+      treasuryWsolAta,
+      payer,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Unwrap WSOL from creator patron streaming treasury to native SOL
+ * Anyone can call this - it converts accumulated WSOL from Streamflow to native SOL
+ *
+ * @param program - The Anchor program instance
+ * @param creator - The creator whose treasury to unwrap
+ * @param payer - The wallet paying for the transaction
+ */
+export async function unwrapCreatorPatronTreasuryWsolInstruction(
+  program: Program,
+  creator: PublicKey,
+  payer: PublicKey
+): Promise<TransactionInstruction> {
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const treasuryWsolAta = getWsolAtaAddress(creatorPatronTreasuryPda);
+
+  return await program.methods
+    .unwrapCreatorPatronTreasuryWsol()
+    .accounts({
+      creator,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      treasuryWsolAta,
+      payer,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+// ============================================
+// STREAMFLOW WITHDRAW INSTRUCTIONS
+// ============================================
+// These instructions pull funds from Streamflow escrow to treasury's WSOL ATA
+// Step 1: Call withdraw to get WSOL from escrow
+// Step 2: Call unwrap to convert WSOL to native SOL
+
+/**
+ * Withdraw accumulated WSOL from Streamflow stream to ecosystem treasury
+ * Anyone can call this - pulls released funds from any ecosystem subscription stream
+ * This is Step 1 - after this, call unwrapEcosystemTreasuryWsol to convert WSOL to SOL
+ *
+ * @param program - The Anchor program instance
+ * @param streamMetadata - The stream ID (metadata account) to withdraw from
+ * @param partner - The partner account used when creating the stream
+ * @param payer - The wallet paying for the transaction
+ */
+export async function withdrawEcosystemStreamToTreasuryInstruction(
+  program: Program,
+  streamMetadata: PublicKey,
+  partner: PublicKey,
+  payer: PublicKey
+): Promise<TransactionInstruction> {
+  const [ecosystemTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const treasuryWsolAta = getWsolAtaAddress(ecosystemTreasuryPda);
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata);
+  const streamflowTreasuryWsol = getWsolAtaAddress(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAtaAddress(partner);
+
+  return await program.methods
+    .withdrawEcosystemStreamToTreasury()
+    .accounts({
+      ecosystemStreamingTreasury: ecosystemTreasuryPda,
+      treasuryWsolAta,
+      streamMetadata,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      payer,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+/**
+ * Withdraw accumulated WSOL from Streamflow stream to creator patron treasury
+ * Anyone can call this to enable permissionless distribution
+ *
+ * @param program - The Anchor program instance
+ * @param creator - The creator whose treasury to receive funds
+ * @param streamMetadata - The stream ID (metadata account) to withdraw from
+ * @param partner - The partner account used when creating the stream
+ * @param payer - The wallet paying for the transaction
+ */
+export async function withdrawCreatorStreamToTreasuryInstruction(
+  program: Program,
+  creator: PublicKey,
+  streamMetadata: PublicKey,
+  partner: PublicKey,
+  payer: PublicKey
+): Promise<TransactionInstruction> {
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const treasuryWsolAta = getWsolAtaAddress(creatorPatronTreasuryPda);
+  const [escrowTokensPda] = getStreamflowEscrowTokensPda(streamMetadata);
+  const streamflowTreasuryWsol = getWsolAtaAddress(STREAMFLOW_TREASURY);
+  const partnerWsol = getWsolAtaAddress(partner);
+
+  return await program.methods
+    .withdrawCreatorStreamToTreasury()
+    .accounts({
+      creator,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      treasuryWsolAta,
+      streamMetadata,
+      escrowTokens: escrowTokensPda,
+      streamflowTreasury: STREAMFLOW_TREASURY,
+      streamflowTreasuryWsol,
+      partner,
+      partnerWsol,
+      wsolMint: WSOL_MINT,
+      streamflowProgram: STREAMFLOW_PROGRAM_ID,
+      payer,
+      tokenProgram: TOKEN_PROGRAM_ID,
     })
     .instruction();
 }
@@ -4419,6 +4895,30 @@ export function createContentRegistryClient(connection: Connection) {
       subscriber: PublicKey
     ) => renewEcosystemSubscriptionInstruction(program, subscriber),
 
+    // Treasury WSOL unwrap instructions
+    unwrapEcosystemTreasuryWsolInstruction: (
+      payer: PublicKey
+    ) => unwrapEcosystemTreasuryWsolInstruction(program, payer),
+
+    unwrapCreatorPatronTreasuryWsolInstruction: (
+      creator: PublicKey,
+      payer: PublicKey
+    ) => unwrapCreatorPatronTreasuryWsolInstruction(program, creator, payer),
+
+    // Streamflow withdraw instructions (pull funds from escrow to treasury)
+    withdrawEcosystemStreamToTreasuryInstruction: (
+      streamMetadata: PublicKey,
+      partner: PublicKey,
+      payer: PublicKey
+    ) => withdrawEcosystemStreamToTreasuryInstruction(program, streamMetadata, partner, payer),
+
+    withdrawCreatorStreamToTreasuryInstruction: (
+      creator: PublicKey,
+      streamMetadata: PublicKey,
+      partner: PublicKey,
+      payer: PublicKey
+    ) => withdrawCreatorStreamToTreasuryInstruction(program, creator, streamMetadata, partner, payer),
+
     // Streamflow CPI membership instructions (secure on-chain stream creation)
     joinEcosystemMembershipInstruction: (
       subscriber: PublicKey,
@@ -4510,6 +5010,19 @@ export function createContentRegistryClient(connection: Connection) {
     fetchAllContentRewardPools: () => fetchAllContentRewardPools(connection),
     fetchNftRewardStatesBatch: (nftAssets: PublicKey[]) => fetchNftRewardStatesBatch(connection, nftAssets),
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
+
+    // Epoch & subscription pool fetching
+    fetchEcosystemEpochState: () => fetchEcosystemEpochState(connection),
+    fetchGlobalHolderPool: () => fetchGlobalHolderPool(connection),
+    fetchCreatorDistPool: () => fetchCreatorDistPool(connection),
+    fetchEcosystemStreamingTreasuryBalance: () => fetchEcosystemStreamingTreasuryBalance(connection),
+    fetchEcosystemPendingDistribution: (
+      streamflowClient: Parameters<typeof fetchEcosystemPendingDistribution>[1]
+    ) => fetchEcosystemPendingDistribution(connection, streamflowClient),
+    fetchCreatorPatronPool: (creator: PublicKey) => fetchCreatorPatronPool(connection, creator),
+    fetchCreatorPatronConfig: (creator: PublicKey) => fetchCreatorPatronConfig(connection, creator),
+    fetchCreatorPatronTreasuryBalance: (creator: PublicKey) => fetchCreatorPatronTreasuryBalance(connection, creator),
+
     fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
     fetchContentCollection: (contentCid: string) => fetchContentCollection(connection, contentCid),
     fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),

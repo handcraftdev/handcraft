@@ -3356,7 +3356,8 @@
     {
       "name": "configure_mint",
       "docs": [
-        "Configure NFT minting for content (creator only, SOL only)"
+        "Configure NFT minting for content (creator only, SOL only)",
+        "If max_supply is None, defaults to DEFAULT_MAX_SUPPLY (999,999)"
       ],
       "discriminator": [
         194,
@@ -5286,7 +5287,7 @@
         },
         {
           "name": "fee_oracle",
-          "address": "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT"
+          "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7"
         },
         {
           "name": "streamflow_program",
@@ -5877,7 +5878,7 @@
           "docs": [
             "Streamflow fee oracle"
           ],
-          "address": "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT"
+          "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7"
         },
         {
           "name": "streamflow_program",
@@ -9822,6 +9823,186 @@
       ]
     },
     {
+      "name": "unwrap_creator_patron_treasury_wsol",
+      "docs": [
+        "Unwrap WSOL from creator patron streaming treasury to native SOL",
+        "Anyone can call this - it converts accumulated WSOL from Streamflow to SOL"
+      ],
+      "discriminator": [
+        128,
+        205,
+        86,
+        182,
+        218,
+        160,
+        11,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The creator whose patron treasury to unwrap"
+          ]
+        },
+        {
+          "name": "creator_patron_treasury",
+          "docs": [
+            "The creator's patron streaming treasury PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  112,
+                  97,
+                  116,
+                  114,
+                  111,
+                  110,
+                  95,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wsol_ata",
+          "docs": [
+            "The treasury's WSOL token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call this to trigger unwrap"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unwrap_ecosystem_treasury_wsol",
+      "docs": [
+        "Unwrap WSOL from ecosystem streaming treasury to native SOL",
+        "Anyone can call this - it converts accumulated WSOL from Streamflow to SOL",
+        "Must be called before epoch distribution can work with the accumulated funds"
+      ],
+      "discriminator": [
+        56,
+        133,
+        157,
+        76,
+        182,
+        182,
+        245,
+        197
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_streaming_treasury",
+          "docs": [
+            "The ecosystem streaming treasury PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109,
+                  95,
+                  115,
+                  116,
+                  114,
+                  101,
+                  97,
+                  109,
+                  105,
+                  110,
+                  103,
+                  95,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wsol_ata",
+          "docs": [
+            "The treasury's WSOL token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call this to trigger unwrap"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_bundle",
       "docs": [
         "Update bundle metadata or active status"
@@ -10628,6 +10809,293 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "withdraw_creator_stream_to_treasury",
+      "docs": [
+        "Withdraw accumulated WSOL from Streamflow stream to creator patron treasury",
+        "Anyone can call this to enable permissionless distribution"
+      ],
+      "discriminator": [
+        49,
+        86,
+        200,
+        122,
+        90,
+        7,
+        231,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The creator whose patron treasury receives the funds"
+          ]
+        },
+        {
+          "name": "creator_patron_treasury",
+          "docs": [
+            "The creator's patron streaming treasury PDA (stream recipient)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  112,
+                  97,
+                  116,
+                  114,
+                  111,
+                  110,
+                  95,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wsol_ata",
+          "docs": [
+            "The treasury's WSOL token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "stream_metadata",
+          "docs": [
+            "The Streamflow stream metadata account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "escrow_tokens",
+          "docs": [
+            "The escrow token account holding streamed funds"
+          ],
+          "writable": true
+        },
+        {
+          "name": "streamflow_treasury",
+          "docs": [
+            "Streamflow treasury for their fee"
+          ],
+          "writable": true,
+          "address": "5SEpbdjFK5FxwTvfsGMXVQTD2v4M2c5tyRTxhdsPkgDw"
+        },
+        {
+          "name": "streamflow_treasury_wsol",
+          "docs": [
+            "Streamflow treasury WSOL account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner",
+          "docs": [
+            "Partner account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner_wsol",
+          "docs": [
+            "Partner WSOL account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "wsol_mint",
+          "docs": [
+            "WSOL mint"
+          ],
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "streamflow_program",
+          "docs": [
+            "Streamflow program"
+          ],
+          "address": "HqDGZjaVRXJ9MGRQEw7qDc2rAr6iH1n1kAQdCZaCMfMZ"
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call this"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_ecosystem_stream_to_treasury",
+      "docs": [
+        "Withdraw accumulated WSOL from Streamflow stream to ecosystem treasury",
+        "Step 1: Pull released funds from Streamflow escrow to treasury's WSOL ATA",
+        "Step 2: Call unwrap_ecosystem_treasury_wsol to convert WSOL to native SOL",
+        "Anyone can call this to enable permissionless distribution"
+      ],
+      "discriminator": [
+        63,
+        41,
+        253,
+        4,
+        189,
+        153,
+        99,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "ecosystem_streaming_treasury",
+          "docs": [
+            "The ecosystem streaming treasury PDA (stream recipient)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  99,
+                  111,
+                  115,
+                  121,
+                  115,
+                  116,
+                  101,
+                  109,
+                  95,
+                  115,
+                  116,
+                  114,
+                  101,
+                  97,
+                  109,
+                  105,
+                  110,
+                  103,
+                  95,
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_wsol_ata",
+          "docs": [
+            "The treasury's WSOL token account (receives withdrawn funds)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "stream_metadata",
+          "docs": [
+            "The Streamflow stream metadata account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "escrow_tokens",
+          "docs": [
+            "The escrow token account holding streamed funds"
+          ],
+          "writable": true
+        },
+        {
+          "name": "streamflow_treasury",
+          "docs": [
+            "Streamflow treasury for their fee"
+          ],
+          "writable": true,
+          "address": "5SEpbdjFK5FxwTvfsGMXVQTD2v4M2c5tyRTxhdsPkgDw"
+        },
+        {
+          "name": "streamflow_treasury_wsol",
+          "docs": [
+            "Streamflow treasury WSOL account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner",
+          "docs": [
+            "Partner account (same as what was used in create)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner_wsol",
+          "docs": [
+            "Partner WSOL account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "wsol_mint",
+          "docs": [
+            "WSOL mint"
+          ],
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "streamflow_program",
+          "docs": [
+            "Streamflow program"
+          ],
+          "address": "HqDGZjaVRXJ9MGRQEw7qDc2rAr6iH1n1kAQdCZaCMfMZ"
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can call this to trigger withdrawal"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -11142,383 +11610,398 @@
     },
     {
       "code": 6010,
+      "name": "MaxSupplyTooHigh",
+      "msg": "Max supply cannot exceed 999,999 (6-digit edition limit)"
+    },
+    {
+      "code": 6011,
       "name": "PriceTooLow",
       "msg": "Price below minimum allowed"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "FreeMintNotAllowed",
       "msg": "Free minting is not allowed - price must be greater than 0"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "InvalidRoyalty",
       "msg": "Royalty must be fixed at 4% (400 bps)"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "InsufficientPayment",
       "msg": "Insufficient payment amount"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "InvalidCurrency",
       "msg": "Invalid payment currency"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "CannotIncreaseSupply",
       "msg": "Cannot increase supply after minting has started"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "SupplyBelowMinted",
       "msg": "Cannot set supply below already minted count"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "EcosystemPaused",
       "msg": "Ecosystem is paused"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "EcosystemAlreadyInitialized",
       "msg": "Ecosystem config already initialized"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "InvalidUsdcMint",
       "msg": "Invalid USDC mint address"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "NftMismatch",
       "msg": "NFT asset does not match the reward state"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "ContentMismatch",
       "msg": "Content does not match the reward pool"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "NotNftOwner",
       "msg": "Holder does not own this NFT"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "NothingToClaim",
       "msg": "No rewards available to claim"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "InvalidAccountPairs",
       "msg": "Invalid account pairs for batch claim"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "InvalidAccountData",
       "msg": "Invalid account data"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "InvalidHookCaller",
       "msg": "Invalid lifecycle hook caller - must be Metaplex Core"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "InvalidAsset",
       "msg": "Invalid asset for transfer hook"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "SenderNotOwner",
       "msg": "Sender does not own this NFT"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "InvalidNftAsset",
       "msg": "Invalid NFT asset - not a valid Metaplex Core asset"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "NftNotInCollection",
       "msg": "NFT does not belong to the content's collection"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "ClaimerNotOwner",
       "msg": "Claimer does not own this NFT"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "NoNftsProvided",
       "msg": "No NFTs provided for verification"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "InvalidNftRewardState",
       "msg": "Invalid NftRewardState PDA"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "RentingNotActive",
       "msg": "Renting is not active for this content"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "RentFeeTooLow",
       "msg": "Rent fee below minimum allowed"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "InvalidRentPeriod",
       "msg": "Rent period must be between 1 hour and 365 days"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "RentalExpired",
       "msg": "Rental has expired"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "RentalNonTransferable",
       "msg": "Rental NFT cannot be transferred"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "InvalidRentEntry",
       "msg": "Invalid RentEntry PDA"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "RentConfigExists",
       "msg": "Rent config already exists for this content"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "BundleNotActive",
       "msg": "Bundle is not active"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "BundleNotEmpty",
       "msg": "Bundle must be empty to delete"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "BundleItemLimitReached",
       "msg": "Bundle item limit reached (max 1000)"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "NotContentCreator",
       "msg": "Only the content creator can add to bundles"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "BundleLocked",
       "msg": "Bundle is locked after first NFT mint"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "BundleMintConfigExists",
       "msg": "Bundle mint configuration already exists"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "BundleMintConfigNotFound",
       "msg": "Bundle mint configuration not found"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "BundleRentConfigExists",
       "msg": "Bundle rent configuration already exists"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "InvalidBundleCollection",
       "msg": "Invalid BundleCollection PDA"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "InvalidBundleRewardPool",
       "msg": "Invalid BundleRewardPool PDA"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "InvalidBundleNftRewardState",
       "msg": "Invalid BundleNftRewardState PDA"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "InvalidBundleRentEntry",
       "msg": "Invalid BundleRentEntry PDA"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "BundleMismatch",
       "msg": "Bundle does not match"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "RandomnessAlreadyRevealed",
       "msg": "Randomness has already been revealed"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "RandomnessNotResolved",
       "msg": "Randomness not yet resolved"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "InvalidRandomnessAccount",
       "msg": "Invalid randomness account"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "RarityAlreadyRevealed",
       "msg": "NFT rarity already revealed"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "PendingMintNotFound",
       "msg": "Pending mint request not found"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "InvalidNftRarity",
       "msg": "Invalid NftRarity PDA"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "CancelTooEarly",
       "msg": "Cannot cancel pending mint yet - must wait at least 10 minutes"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "AlreadyFulfilled",
       "msg": "Randomness already fulfilled for this request"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "RandomnessNotAvailable",
       "msg": "Randomness not yet available - wait for oracle callback"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "VrfRequestFailed",
       "msg": "VRF request failed"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "InvalidOraoClient",
       "msg": "Invalid ORAO client account"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "FallbackTooEarly",
       "msg": "Fallback claim too early - must wait for timeout"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "NotFulfilled",
       "msg": "Mint request not yet fulfilled"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "NotCreator",
       "msg": "Only the content creator can perform this action"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "NotAdmin",
       "msg": "Only the ecosystem admin can perform this action"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "InvalidState",
       "msg": "Invalid state - account should not exist or has wrong data"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "InvalidNftType",
       "msg": "Invalid NFT type - expected content NFT but got bundle NFT or vice versa"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "InvalidPatronConfig",
       "msg": "Invalid patron config - at least one tier must be enabled"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "PatronConfigInactive",
       "msg": "Patron config is not active"
     },
     {
-      "code": 6073,
+      "code": 6074,
       "name": "TierNotAvailable",
       "msg": "Selected tier is not available"
     },
     {
-      "code": 6074,
+      "code": 6075,
       "name": "EcosystemSubInactive",
       "msg": "Ecosystem subscription is not active"
     },
     {
-      "code": 6075,
+      "code": 6076,
       "name": "InvalidEcosystemSubPrice",
       "msg": "Invalid ecosystem subscription price"
     },
     {
-      "code": 6076,
+      "code": 6077,
       "name": "SubscriptionRequired",
       "msg": "Subscription required for this content"
     },
     {
-      "code": 6077,
+      "code": 6078,
       "name": "NftOrRentalRequired",
       "msg": "NFT ownership or active rental required for this content (subscriptions not accepted)"
     },
     {
-      "code": 6078,
+      "code": 6079,
       "name": "InvalidInput",
       "msg": "Invalid input value"
     },
     {
-      "code": 6079,
+      "code": 6080,
       "name": "InvalidVisibilityLevel",
       "msg": "Invalid visibility level - must be 0-3"
     },
     {
-      "code": 6080,
+      "code": 6081,
       "name": "InvalidDurationType",
       "msg": "Invalid duration type - must be 0 (monthly) or 1 (yearly)"
     },
     {
-      "code": 6081,
+      "code": 6082,
       "name": "InvalidStreamId",
       "msg": "Invalid stream ID - does not match subscription record"
     },
     {
-      "code": 6082,
+      "code": 6083,
       "name": "InvalidTier",
       "msg": "Invalid tier - must be 0 (membership) or 1 (subscription)"
     },
     {
-      "code": 6083,
+      "code": 6084,
       "name": "InvalidUsername",
       "msg": "Invalid username - must be 1-20 characters"
     },
     {
-      "code": 6084,
+      "code": 6085,
       "name": "ProfileNotFound",
       "msg": "User profile not found"
     },
     {
-      "code": 6085,
+      "code": 6086,
       "name": "InvalidContentName",
       "msg": "Invalid content name - must be 1-32 characters"
+    },
+    {
+      "code": 6087,
+      "name": "InvalidOwner",
+      "msg": "Invalid token account owner"
+    },
+    {
+      "code": 6088,
+      "name": "InvalidMint",
+      "msg": "Invalid token mint - expected WSOL"
     }
   ],
   "types": [
