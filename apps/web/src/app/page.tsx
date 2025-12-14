@@ -40,7 +40,7 @@ export default function Home() {
 
             <p className="text-lg md:text-xl text-white/40 max-w-2xl mx-auto mb-12 leading-relaxed">
               The decentralized content platform where creators truly own their work.
-              Mint, sell, and collect digital content on-chain.
+              Buy, sell, and collect digital content on-chain.
             </p>
 
             {/* CTA Buttons */}

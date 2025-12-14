@@ -8,7 +8,7 @@ import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { ManageContentModal } from "@/components/content";
 import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
 import { UserProfileSettings } from "@/components/profile";
-import { getIpfsUrl } from "@handcraft/sdk";
+import { getIpfsUrl, VisibilityLevel } from "@handcraft/sdk";
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -74,7 +74,7 @@ export default function Dashboard() {
       {/* Menu Button */}
       <button
         onClick={toggleSidebar}
-        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[296px]' : 'left-4'}`}
+        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
@@ -119,7 +119,7 @@ export default function Dashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-white/40 text-sm mb-0.5">NFTs Minted</p>
+                <p className="text-white/40 text-sm mb-0.5">NFTs Sold</p>
                 <p className="text-3xl font-bold tracking-tight">{stats.totalMints}</p>
               </div>
             </div>
@@ -186,9 +186,28 @@ export default function Dashboard() {
                       <p className="text-xs text-white/40 truncate mt-0.5">{item.contentCid.slice(0, 24)}...</p>
                     </div>
 
-                    <div className="relative flex items-center gap-4 text-sm">
+                    <div className="relative flex items-center gap-3 text-sm">
                       <span className="text-white/30">{contentType}</span>
-                      <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} mints</span>
+                      <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} sold</span>
+                      {/* Visibility Badge */}
+                      {item.visibilityLevel !== undefined && item.visibilityLevel > 0 && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
+                          item.visibilityLevel === VisibilityLevel.NftOnly
+                            ? "bg-amber-500/10 text-amber-400/80 border border-amber-500/20"
+                            : item.visibilityLevel === VisibilityLevel.Subscriber
+                            ? "bg-purple-500/10 text-purple-400/80 border border-purple-500/20"
+                            : "bg-blue-500/10 text-blue-400/80 border border-blue-500/20"
+                        }`}>
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                          {item.visibilityLevel === VisibilityLevel.NftOnly
+                            ? "Buy/Rent"
+                            : item.visibilityLevel === VisibilityLevel.Subscriber
+                            ? "Members"
+                            : "Subscribers"}
+                        </span>
+                      )}
                       {item.isLocked ? (
                         <span className="px-2.5 py-1 rounded-full text-[11px] bg-amber-500/10 text-amber-400/80 border border-amber-500/20">Locked</span>
                       ) : (

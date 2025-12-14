@@ -230,7 +230,7 @@ function SearchContent() {
       {/* Menu Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[296px]' : 'left-4'}`}
+        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
@@ -493,7 +493,7 @@ function ContentResultCard({ content }: { content: EnrichedContent }) {
 function BundleResultCard({ bundle }: { bundle: EnrichedBundle }) {
   return (
     <Link
-      href={`/bundle/${bundle.creator}/${bundle.bundleId}`}
+      href={`/content/${bundle.bundleId}`}
       className="group relative flex gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300"
     >
       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

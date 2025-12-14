@@ -9,7 +9,7 @@ import { SidebarPanel } from "@/components/sidebar";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { BurnNftModal } from "@/components/nft";
 import { RarityBadge } from "@/components/rarity";
-import { CreatorMembershipBanner, EcosystemMembershipCard, CustomMembershipCard } from "@/components/membership";
+import { CreatorMembershipBanner, EcosystemMembershipCard, CustomMembershipCard, CreatorPatronPoolCard } from "@/components/membership";
 import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight, getCreatorPatronTreasuryPda, StreamflowClient, NETWORKS } from "@handcraft/sdk";
 import { useConnection } from "@solana/wallet-adapter-react";
 import Link from "next/link";
@@ -187,6 +187,17 @@ export default function ProfilePage() {
     return allNfts.filter(nft => !rentalNftAssets.has(nft.nftAsset.toBase58()));
   }, [allNfts, rentalNftAssets]);
 
+  // Fetch owned bundle NFTs
+  const { data: ownedBundleNfts = [], isLoading: isLoadingBundleNfts } = useQuery({
+    queryKey: ["profileBundleNfts", profileAddress?.toBase58()],
+    queryFn: async () => {
+      if (!profileAddress || !client) return [];
+      return client.fetchWalletBundleNftMetadata(profileAddress);
+    },
+    enabled: !!profileAddress && !!client,
+    staleTime: 60000,
+  });
+
   // Fetch rarities for owned NFTs (from UnifiedNftRewardState)
   const { data: nftRarities = new Map<string, Rarity>(), isLoading: isLoadingRarities } = useQuery({
     queryKey: ["profileNftRarities", profileAddress?.toBase58(), ownedNfts.length],
@@ -202,6 +213,23 @@ export default function ProfilePage() {
       return result;
     },
     enabled: !!profileAddress && !!client && ownedNfts.length > 0,
+    staleTime: 300000,
+  });
+
+  // Fetch rarities for owned bundle NFTs
+  const { data: bundleNftRarities = new Map<string, Rarity>() } = useQuery({
+    queryKey: ["profileBundleNftRarities", profileAddress?.toBase58(), ownedBundleNfts.length],
+    queryFn: async () => {
+      if (!profileAddress || !client || ownedBundleNfts.length === 0) return new Map<string, Rarity>();
+      const nftAssets = ownedBundleNfts.map(nft => nft.nftAsset);
+      const rewardStates = await client.fetchBundleNftRewardStatesBatch(nftAssets);
+      const result = new Map<string, Rarity>();
+      for (const [key, state] of rewardStates) {
+        result.set(key, getRarityFromWeight(state.weight));
+      }
+      return result;
+    },
+    enabled: !!profileAddress && !!client && ownedBundleNfts.length > 0,
     staleTime: 300000,
   });
 
@@ -257,10 +285,10 @@ export default function ProfilePage() {
     return {
       totalMints,
       contentCount: userContent.length,
-      collectedCount: ownedNfts.length,
+      collectedCount: ownedNfts.length + ownedBundleNfts.length,
       membershipCount: activeMemberships.length,
     };
-  }, [userContent, ownedNfts, activeMemberships]);
+  }, [userContent, ownedNfts, ownedBundleNfts, activeMemberships]);
 
   const fullAddress = profileAddress?.toBase58() || "";
 
@@ -302,7 +330,7 @@ export default function ProfilePage() {
       {/* Menu Button */}
       <button
         onClick={toggleSidebar}
-        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[296px]' : 'left-4'}`}
+        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
@@ -362,7 +390,7 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold tracking-tight">{stats.totalMints}</p>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Mints</p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Sold</p>
                   </div>
                 </div>
               </div>
@@ -379,6 +407,7 @@ export default function ProfilePage() {
           <div className="mb-10 space-y-4">
             <CreatorMembershipBanner creator={profileAddress} />
             <CustomMembershipCard creator={profileAddress} />
+            <CreatorPatronPoolCard creator={profileAddress} />
           </div>
         )}
 
@@ -463,7 +492,7 @@ export default function ProfilePage() {
                           <p className="text-sm text-white/40 line-clamp-2 mb-3">{description}</p>
                         )}
                         <div className="text-xs text-white/30">
-                          <span>{Number(item.mintedCount || 0)} mints</span>
+                          <span>{Number(item.mintedCount || 0)} sold</span>
                         </div>
                       </div>
                     </div>
@@ -477,11 +506,11 @@ export default function ProfilePage() {
         {/* Collected NFTs Grid */}
         {activeTab === "collected" && (
           <>
-            {(isLoadingNfts || isLoadingRentals) ? (
+            {(isLoadingNfts || isLoadingRentals || isLoadingBundleNfts) ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
               </div>
-            ) : ownedNfts.length === 0 ? (
+            ) : (ownedNfts.length === 0 && ownedBundleNfts.length === 0) ? (
               <div className="relative p-16 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
                 <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -493,16 +522,14 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {/* Content NFTs */}
                 {ownedNfts.map((nft) => {
-                  // Find content metadata from globalContent
                   const contentData = globalContent.find(c => c.contentCid === nft.contentCid);
-                  const metadata = (contentData as any)?.metadata;
-                  const title = metadata?.title || metadata?.name || nft.name || "Untitled";
+                  const title = nft.name || "Untitled";
                   const previewUrl = contentData?.previewCid
                     ? getIpfsUrl(contentData.previewCid)
                     : null;
                   const rarity = nftRarities.get(nft.nftAsset.toBase58());
-                  // Parse edition from NFT name if it matches the new format: "Content Name (R #000001)"
                   const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
                   const edition = editionMatch ? editionMatch[2] : null;
 
@@ -513,7 +540,6 @@ export default function ProfilePage() {
                     >
                       <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                      {/* Image */}
                       <div className="aspect-square bg-white/5 relative">
                         {previewUrl ? (
                           <img
@@ -528,7 +554,6 @@ export default function ProfilePage() {
                             </svg>
                           </div>
                         )}
-                        {/* Rarity badge overlay */}
                         {rarity !== undefined && (
                           <div className="absolute top-2 left-2">
                             <RarityBadge rarity={rarity} size="sm" showGlow />
@@ -536,7 +561,6 @@ export default function ProfilePage() {
                         )}
                       </div>
 
-                      {/* Info */}
                       <div className="relative p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
@@ -569,6 +593,70 @@ export default function ProfilePage() {
                         </div>
                       </div>
                     </div>
+                  );
+                })}
+
+                {/* Bundle NFTs */}
+                {ownedBundleNfts.map((nft) => {
+                  const bundleData = globalBundles.find(b =>
+                    b.creator.toBase58() === nft.creator.toBase58() && b.bundleId === nft.bundleId
+                  );
+                  const title = nft.name || "Untitled Bundle";
+                  const previewUrl = bundleData?.metadata?.image
+                    ? getIpfsUrl(bundleData.metadata.image)
+                    : null;
+                  const rarity = bundleNftRarities.get(nft.nftAsset.toBase58());
+                  const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
+                  const edition = editionMatch ? editionMatch[2] : null;
+
+                  return (
+                    <Link
+                      key={nft.nftAsset.toBase58()}
+                      href={`/content/${nft.bundleId}`}
+                      className="group relative rounded-xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
+                    >
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                      <div className="aspect-square bg-white/5 relative">
+                        {previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt={title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          </div>
+                        )}
+                        {rarity !== undefined && (
+                          <div className="absolute top-2 left-2">
+                            <RarityBadge rarity={rarity} size="sm" showGlow />
+                          </div>
+                        )}
+                        {/* Bundle badge */}
+                        <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-purple-500/80 text-white text-[9px] font-medium rounded">
+                          Bundle
+                        </div>
+                      </div>
+
+                      <div className="relative p-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-sm truncate text-white/90">{title}</h3>
+                          {edition ? (
+                            <p className="text-[10px] text-white/40 mt-0.5">
+                              Edition <span className="font-mono">#{edition}</span>
+                            </p>
+                          ) : (
+                            <p className="text-[9px] text-white/30 font-mono break-all mt-1">
+                              {nft.nftAsset.toBase58().slice(0, 8)}...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
                   );
                 })}
               </div>
