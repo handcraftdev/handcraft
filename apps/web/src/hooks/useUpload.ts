@@ -2,6 +2,23 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
+const SESSION_STORAGE_KEY = "handcraft_session";
+
+/**
+ * Get session token from localStorage for authenticated uploads
+ */
+function getSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!stored) return null;
+    const session = JSON.parse(stored);
+    return session?.token || null;
+  } catch {
+    return null;
+  }
+}
+
 export interface UploadResult {
   cid: string;
   size: number;
@@ -198,8 +215,17 @@ export function useUpload(hookOptions: UseUploadOptions = {}) {
         // Simulate progress for now (XHR would give real progress)
         setState((prev) => ({ ...prev, progress: 30 }));
 
+        // Get session token for authenticated upload
+        const sessionToken = getSessionToken();
+        if (!sessionToken) {
+          throw new Error("Authentication required. Please sign in first.");
+        }
+
         const response = await fetch("/api/upload", {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${sessionToken}`,
+          },
           body: formData,
         });
 
@@ -245,10 +271,17 @@ export function useUpload(hookOptions: UseUploadOptions = {}) {
       name?: string
     ): Promise<{ cid: string; url: string } | null> => {
       try {
+        // Get session token for authenticated upload
+        const sessionToken = getSessionToken();
+        if (!sessionToken) {
+          throw new Error("Authentication required. Please sign in first.");
+        }
+
         const response = await fetch("/api/upload/metadata", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionToken}`,
           },
           body: JSON.stringify({ metadata, name }),
         });

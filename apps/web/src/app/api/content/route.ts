@@ -313,13 +313,19 @@ async function checkAuthorization(
     const creatorBytes = data.slice(8, 40);
     const creator = new PublicKey(creatorBytes);
 
-    // Parse visibility level
-    let visibilityLevel = 0;
+    // Parse visibility level - FAIL CLOSED on parse error
+    let visibilityLevel: number;
     try {
       visibilityLevel = parseVisibilityLevel(data);
-    } catch {
-      // Default to level 0 if parsing fails (backwards compatibility)
-      visibilityLevel = 0;
+      // Validate visibility level is in valid range (0-3)
+      if (visibilityLevel < 0 || visibilityLevel > 3) {
+        console.error("Invalid visibility level:", visibilityLevel);
+        return false; // Deny access on invalid level
+      }
+    } catch (parseError) {
+      // SECURITY: Fail closed - deny access if we can't parse visibility
+      console.error("Failed to parse visibility level, denying access:", parseError);
+      return false;
     }
 
     // Level 0: Public - anyone can access

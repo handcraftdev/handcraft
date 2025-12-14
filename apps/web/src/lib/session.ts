@@ -1,7 +1,26 @@
 import crypto from "crypto";
 
+// SECURITY: SESSION_SECRET should be separate from CONTENT_ENCRYPTION_SECRET
+// Using the same secret for both purposes violates cryptographic key separation
 const SESSION_SECRET = process.env.SESSION_SECRET || process.env.CONTENT_ENCRYPTION_SECRET;
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Warn if SESSION_SECRET is not explicitly set (falling back to encryption secret)
+if (typeof window === "undefined" && !process.env.SESSION_SECRET && process.env.CONTENT_ENCRYPTION_SECRET) {
+  console.warn(
+    "[SECURITY WARNING] SESSION_SECRET not set - falling back to CONTENT_ENCRYPTION_SECRET.\n" +
+    "This violates cryptographic key separation principle.\n" +
+    "Set a separate SESSION_SECRET environment variable in production."
+  );
+}
+
+// Error if no secret is available at all
+if (typeof window === "undefined" && !SESSION_SECRET) {
+  console.error(
+    "[SECURITY ERROR] Neither SESSION_SECRET nor CONTENT_ENCRYPTION_SECRET is set.\n" +
+    "Session authentication will not work."
+  );
+}
 
 export interface SessionToken {
   wallet: string;
@@ -48,14 +67,23 @@ export function verifySessionToken(token: string): string | null {
       return null;
     }
 
-    // Verify signature
+    // Verify signature using constant-time comparison to prevent timing attacks
     const payload = `${decoded.wallet}:${decoded.expiresAt}`;
     const expectedSignature = crypto
       .createHmac("sha256", SESSION_SECRET)
       .update(payload)
       .digest("hex");
 
-    if (decoded.signature !== expectedSignature) {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    const signatureBuffer = Buffer.from(decoded.signature, "hex");
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+
+    // Ensure both buffers are the same length (prevents timing leak from length check)
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      return null;
+    }
+
+    if (!crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
       return null;
     }
 
