@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createFilebaseClient } from "@handcraft/sdk";
-import { verifySessionToken } from "@/lib/session";
+import { createAuthenticatedClient, getAccessTokenFromHeader } from "@/lib/supabase";
 
 const filebase = process.env.FILEBASE_KEY && process.env.FILEBASE_SECRET && process.env.FILEBASE_BUCKET
   ? createFilebaseClient({
@@ -15,21 +15,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
   }
 
-  // SECURITY: Verify session token before allowing upload
-  const authHeader = request.headers.get("authorization");
-  const sessionToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : null;
+  // SECURITY: Verify Supabase JWT token before allowing upload
+  const accessToken = getAccessTokenFromHeader(request.headers.get("authorization"));
 
-  if (!sessionToken) {
+  if (!accessToken) {
     return NextResponse.json(
       { error: "Authentication required" },
       { status: 401 }
     );
   }
 
-  const wallet = verifySessionToken(sessionToken);
-  if (!wallet) {
+  // Verify the token by making a request to Supabase
+  const supabase = createAuthenticatedClient(accessToken);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
     return NextResponse.json(
       { error: "Invalid or expired session" },
       { status: 401 }

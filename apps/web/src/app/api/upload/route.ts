@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createFilebaseClient, createEncryptedBundleWithDerivedKey } from "@handcraft/sdk";
 import { randomBytes } from "crypto";
-import { verifySessionToken } from "@/lib/session";
+import { createAuthenticatedClient, getAccessTokenFromHeader } from "@/lib/supabase";
 
 const filebase = process.env.FILEBASE_KEY && process.env.FILEBASE_SECRET && process.env.FILEBASE_BUCKET
   ? createFilebaseClient({
@@ -51,21 +51,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Storage not configured" }, { status: 503 });
   }
 
-  // SECURITY: Verify session token before allowing upload
-  const authHeader = request.headers.get("authorization");
-  const sessionToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : null;
+  // SECURITY: Verify Supabase JWT token before allowing upload
+  const accessToken = getAccessTokenFromHeader(request.headers.get("authorization"));
 
-  if (!sessionToken) {
+  if (!accessToken) {
     return NextResponse.json(
       { error: "Authentication required" },
       { status: 401 }
     );
   }
 
-  const wallet = verifySessionToken(sessionToken);
-  if (!wallet) {
+  // Verify the token by making a request to Supabase
+  const supabase = createAuthenticatedClient(accessToken);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
     return NextResponse.json(
       { error: "Invalid or expired session" },
       { status: 401 }
@@ -146,6 +146,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Upload encryption metadata to IPFS if content was encrypted
+    let encryptionMetaCid: string | null = null;
+    if (encryptionMeta) {
+      const metaJson = JSON.stringify(encryptionMeta);
+      const metaBuffer = Buffer.from(metaJson, "utf-8");
+      const metaResult = await filebase.upload(
+        metaBuffer,
+        `encryption_meta_${Date.now()}.json`,
+        "application/json"
+      );
+      encryptionMetaCid = metaResult.cid;
+    }
+
     const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs";
 
     return NextResponse.json({
@@ -154,7 +167,7 @@ export async function POST(request: NextRequest) {
       name: file.name,
       url: `${IPFS_GATEWAY}/${contentCid}`,
       previewCid,
-      encryptionMeta, // Only present if encrypted, contains contentId for server-side decryption
+      encryptionMetaCid, // CID of encryption metadata on IPFS (for server-side decryption)
       size: buffer.length,
     });
   } catch (error) {
