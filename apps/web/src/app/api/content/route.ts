@@ -14,6 +14,7 @@ import {
   isSubscriptionValid,
 } from "@handcraft/sdk";
 import { verifySessionToken } from "@/lib/session";
+import { createAuthenticatedClient, getAccessTokenFromHeader } from "@/lib/supabase";
 
 const MASTER_SECRET = process.env.CONTENT_ENCRYPTION_SECRET;
 const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs";
@@ -70,9 +71,9 @@ export async function GET(request: NextRequest) {
   const metaCid = searchParams.get("metaCid");
   const sessionToken = searchParams.get("sessionToken");
 
-  if (!contentCid || !metaCid || !sessionToken) {
+  if (!contentCid || !metaCid) {
     return NextResponse.json(
-      { error: "Missing required parameters" },
+      { error: "Missing required parameters (contentCid, metaCid)" },
       { status: 400 }
     );
   }
@@ -86,8 +87,35 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Verify session token and extract wallet
-    const wallet = verifySessionToken(sessionToken);
+    // 1. Verify authentication - try Supabase JWT first, fall back to legacy session token
+    let wallet: string | null = null;
+
+    // Try Supabase JWT from Authorization header
+    const accessToken = getAccessTokenFromHeader(request.headers.get("authorization"));
+    if (accessToken) {
+      try {
+        const supabase = createAuthenticatedClient(accessToken);
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (!error && user) {
+          // Extract wallet address from Supabase Web3 auth
+          wallet =
+            user.user_metadata?.custom_claims?.address ||
+            user.user_metadata?.wallet_address ||
+            user.app_metadata?.address ||
+            user.identities?.[0]?.identity_data?.custom_claims?.address ||
+            user.identities?.[0]?.identity_data?.address ||
+            null;
+        }
+      } catch {
+        // Supabase auth failed, try legacy token
+      }
+    }
+
+    // Fall back to legacy session token if Supabase auth didn't work
+    if (!wallet && sessionToken) {
+      wallet = verifySessionToken(sessionToken);
+    }
+
     if (!wallet) {
       return NextResponse.json(
         { error: "Invalid or expired session" },
