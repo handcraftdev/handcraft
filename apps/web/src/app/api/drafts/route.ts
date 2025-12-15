@@ -125,19 +125,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Wallet address must be provided in body (client knows it from auth)
-    if (!body.creator_wallet) {
+    // Create authenticated Supabase client
+    const supabase = createAuthenticatedClient(accessToken);
+
+    // SECURITY: Extract wallet from JWT, don't trust client-provided value
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       return NextResponse.json(
-        { error: 'creator_wallet is required', code: 'VALIDATION_ERROR' },
+        { error: 'Invalid session', code: 'AUTH_ERROR' },
+        { status: 401 }
+      );
+    }
+
+    // Extract wallet address from Web3 auth JWT
+    const walletAddress =
+      user.user_metadata?.custom_claims?.address ||
+      user.user_metadata?.wallet_address ||
+      user.app_metadata?.address ||
+      user.identities?.[0]?.identity_data?.custom_claims?.address ||
+      user.identities?.[0]?.identity_data?.address ||
+      null;
+
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: 'Wallet address not found in session', code: 'WALLET_ERROR' },
         { status: 400 }
       );
     }
 
-    // Create authenticated Supabase client - RLS will validate wallet ownership
-    const supabase = createAuthenticatedClient(accessToken);
-
     const insertData = {
-      creator_wallet: body.creator_wallet,
+      creator_wallet: walletAddress, // Use JWT wallet, not client-provided
       content_type: body.content_type,
       domain: body.domain,
       status: body.status || 'draft',

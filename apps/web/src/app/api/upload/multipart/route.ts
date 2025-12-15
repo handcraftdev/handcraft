@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { fileName, fileSize, contentType, encrypt = false, creatorWallet } = body;
+    const { fileName, fileSize, contentType, encrypt = false } = body;
 
     if (!fileName || !fileSize) {
       return NextResponse.json(
@@ -55,9 +55,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!creatorWallet) {
+    // Create authenticated Supabase client
+    const supabase = createAuthenticatedClient(accessToken);
+
+    // SECURITY: Extract wallet from JWT, don't trust client-provided value
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       return NextResponse.json(
-        { error: "creatorWallet is required", code: "VALIDATION_ERROR" },
+        { error: "Invalid session", code: "AUTH_ERROR" },
+        { status: 401 }
+      );
+    }
+
+    // Extract wallet address from Web3 auth JWT
+    const walletAddress =
+      user.user_metadata?.custom_claims?.address ||
+      user.user_metadata?.wallet_address ||
+      user.app_metadata?.address ||
+      user.identities?.[0]?.identity_data?.custom_claims?.address ||
+      user.identities?.[0]?.identity_data?.address ||
+      null;
+
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: "Wallet address not found in session", code: "WALLET_ERROR" },
         { status: 400 }
       );
     }
@@ -69,16 +90,13 @@ export async function POST(request: NextRequest) {
     // Initialize multipart upload with Filebase
     const { uploadId, key } = await filebase.createMultipartUpload(fileName, contentType);
 
-    // Create authenticated Supabase client - RLS will validate ownership
-    const supabase = createAuthenticatedClient(accessToken);
-
     // Store upload state in database
     const { error: dbError } = await supabase
       .from('multipart_uploads')
       .insert({
         upload_id: uploadId,
         s3_key: key,
-        creator_wallet: creatorWallet,
+        creator_wallet: walletAddress, // Use JWT wallet, not client-provided
         file_name: fileName,
         file_size: fileSize,
         content_type: contentType,
