@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getIpfsUrl, getContentTypeLabel, VisibilityLevel } from "@handcraft/sdk";
@@ -392,6 +393,26 @@ export function ManageContentModal({
                   <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                     <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
                     <p className="text-sm text-purple-400 font-medium">{actualMintedCount} NFTs</p>
+                  </div>
+                )}
+
+                {/* Edit Metadata Button */}
+                {!isLocked ? (
+                  <Link
+                    href={`/studio/edit/${content.contentCid}`}
+                    onClick={onClose}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70 hover:text-white/90"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Metadata
+                  </Link>
+                ) : (
+                  <div className="text-center p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                    <p className="text-xs text-amber-400/70">
+                      Metadata cannot be edited after NFTs have been minted
+                    </p>
                   </div>
                 )}
               </div>

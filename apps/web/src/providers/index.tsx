@@ -10,6 +10,7 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TamaguiProvider } from "tamagui";
 import { config } from "@handcraft/ui/tamagui.config";
+import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -42,7 +43,9 @@ export function Providers({ children }: { children: ReactNode }) {
         <ConnectionProvider endpoint={endpoint}>
           <WalletProvider wallets={wallets} autoConnect>
             <WalletModalProvider>
-              {children}
+              <SupabaseAuthProvider>
+                {children}
+              </SupabaseAuthProvider>
             </WalletModalProvider>
           </WalletProvider>
         </ConnectionProvider>

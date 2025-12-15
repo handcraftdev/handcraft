@@ -1,33 +1,68 @@
 "use client";
 
-import { useState } from "react";
-import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { useState, useEffect } from "react";
+import { useContentRegistry, ContentEntry } from "@/hooks/useContentRegistry";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { getIpfsUrl } from "@handcraft/sdk";
 
 interface EditContentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  contentCid: string;
-  currentTitle?: string;
-  currentDescription?: string;
-  currentTags?: string[];
+  content: ContentEntry;
   onSuccess?: () => void;
 }
 
 export function EditContentModal({
   isOpen,
   onClose,
-  contentCid,
-  currentTitle = "",
-  currentDescription = "",
-  currentTags = [],
+  content,
   onSuccess,
 }: EditContentModalProps) {
   const { updateContent, isUpdatingContent } = useContentRegistry();
+  const { session } = useSupabaseAuth();
 
-  const [title, setTitle] = useState(currentTitle);
-  const [description, setDescription] = useState(currentDescription);
-  const [tags, setTags] = useState(currentTags.join(", "));
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(true);
+  const [originalMetadata, setOriginalMetadata] = useState<Record<string, unknown> | null>(null);
+
+  // Fetch current metadata from IPFS when modal opens
+  useEffect(() => {
+    async function fetchMetadata() {
+      if (!isOpen || !content.metadataCid) {
+        setIsLoadingMetadata(false);
+        return;
+      }
+
+      setIsLoadingMetadata(true);
+      try {
+        const url = getIpfsUrl(content.metadataCid);
+        const res = await fetch(url);
+        if (res.ok) {
+          const meta = await res.json();
+          setOriginalMetadata(meta);
+          setTitle(meta.properties?.title || meta.name || "");
+          setDescription(meta.description || "");
+          setTags((meta.properties?.tags || meta.tags || []).join(", "));
+        }
+      } catch (e) {
+        console.error("Failed to fetch metadata:", e);
+        // Use fallback from content object
+        const metadata = (content as any).metadata;
+        if (metadata) {
+          setTitle(metadata.title || metadata.name || "");
+          setDescription(metadata.description || "");
+          setTags((metadata.tags || []).join(", "));
+        }
+      } finally {
+        setIsLoadingMetadata(false);
+      }
+    }
+
+    fetchMetadata();
+  }, [isOpen, content]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,21 +73,35 @@ export function EditContentModal({
       return;
     }
 
+    if (!session?.access_token) {
+      setError("Please sign in to edit content");
+      return;
+    }
+
     try {
-      // Create new metadata
-      const metadata = {
+      const tagsArray = tags.split(",").map(t => t.trim()).filter(t => t);
+
+      // Build updated metadata, preserving original properties
+      const updatedMetadata = {
+        ...originalMetadata,
         name: title.trim(),
-        title: title.trim(),
         description: description.trim(),
-        tags: tags.split(",").map(t => t.trim()).filter(t => t),
+        properties: {
+          ...(originalMetadata?.properties as Record<string, unknown> || {}),
+          title: title.trim(),
+          tags: tagsArray,
+        },
         updatedAt: new Date().toISOString(),
       };
 
       // Upload new metadata to IPFS
       const metadataRes = await fetch("/api/upload/metadata", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metadata, name: "metadata" }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ metadata: updatedMetadata, name: "metadata" }),
       });
 
       if (!metadataRes.ok) {
@@ -63,9 +112,24 @@ export function EditContentModal({
 
       // Update on-chain
       await updateContent({
-        contentCid,
+        contentCid: content.contentCid,
         metadataCid,
       });
+
+      // Sync to indexed_content for immediate availability
+      try {
+        await fetch('/api/content/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ content_cid: content.contentCid }),
+        });
+      } catch (syncErr) {
+        // Non-fatal - content will be synced by indexer eventually
+        console.warn('Content sync failed:', syncErr);
+      }
 
       onSuccess?.();
       onClose();
@@ -99,6 +163,15 @@ export function EditContentModal({
             </button>
           </div>
 
+          {isLoadingMetadata ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="w-6 h-6 animate-spin text-white/40" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="ml-2 text-sm text-white/40">Loading metadata...</span>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Title */}
             <div>
@@ -160,6 +233,7 @@ export function EditContentModal({
               </button>
             </div>
           </form>
+          )}
         </div>
       </div>
     </div>

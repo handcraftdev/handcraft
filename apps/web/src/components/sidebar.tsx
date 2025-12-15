@@ -3,13 +3,12 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { EcosystemMembershipCard } from "@/components/membership";
-import { UploadModal } from "./upload";
 import { useSession } from "@/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
 import { createContentRegistryClient } from "@handcraft/sdk";
@@ -33,11 +32,11 @@ function SlideInSidebar({
   overlayVisible?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
   const { clearSession } = useSession();
 
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -217,7 +216,10 @@ function SlideInSidebar({
           {publicKey && (
             <div className="px-5 pb-5">
               <button
-                onClick={() => setIsUploadOpen(true)}
+                onClick={() => {
+                  router.push('/studio/upload');
+                  onClose();
+                }}
                 className="group w-full relative overflow-hidden"
               >
                 <div className="relative flex items-center justify-center gap-2.5 px-4 py-3 bg-white hover:bg-white/95 rounded-xl transition-all duration-200">
@@ -411,13 +413,6 @@ function SlideInSidebar({
           </div>
         </div>
       </aside>
-
-      {/* Upload Modal */}
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-        onSuccess={(result) => console.log("Upload successful:", result)}
-      />
     </>
   );
 }

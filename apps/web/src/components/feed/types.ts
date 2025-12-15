@@ -87,8 +87,10 @@ export interface ContentMetadata {
   name?: string;
   title?: string;
   description?: string;
+  image?: string;
   tags?: string[];
   contentType?: string;
+  // File info (from type_metadata during upload)
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
