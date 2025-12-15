@@ -20,6 +20,10 @@ pub mod simple_mint;
 pub mod streamflow_membership;
 pub mod profile;
 pub mod treasury_unwrap;
+pub mod submit_report;
+pub mod vote_on_report;
+pub mod resolve_moderation;
+pub mod moderation_admin;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -43,3 +47,7 @@ pub use simple_mint::*;
 pub use streamflow_membership::*;
 pub use profile::*;
 pub use treasury_unwrap::*;
+pub use submit_report::*;
+pub use vote_on_report::*;
+pub use resolve_moderation::*;
+pub use moderation_admin::*;
