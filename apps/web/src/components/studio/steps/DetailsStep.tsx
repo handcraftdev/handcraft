@@ -1,0 +1,195 @@
+"use client";
+
+import { ContentDraft } from '@/lib/supabase';
+import { VideoMetadataForm } from '../forms/VideoMetadataForm';
+import { MusicMetadataForm } from '../forms/MusicMetadataForm';
+import { PhotoMetadataForm } from '../forms/PhotoMetadataForm';
+import { BookMetadataForm } from '../forms/BookMetadataForm';
+import { PostMetadataForm } from '../forms/PostMetadataForm';
+import { ThumbnailUpload } from '../ThumbnailUpload';
+import { getCollectionNameInfo } from '@/utils/nft-naming';
+
+interface DetailsStepProps {
+  draft: ContentDraft | null;
+  onUpdate: (updates: Partial<ContentDraft>) => void;
+  onNext: () => void;
+  username?: string;
+  isEditMode?: boolean;
+}
+
+export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode = false }: DetailsStepProps) {
+  const handleMetadataUpdate = (field: string, value: any) => {
+    const typeMetadata = draft?.type_metadata || {};
+    onUpdate({
+      type_metadata: {
+        ...typeMetadata,
+        [field]: value,
+      }
+    });
+  };
+
+  const handleBasicUpdate = (field: string, value: any) => {
+    onUpdate({ [field]: value });
+  };
+
+  // Collection name preview
+  const collectionName = draft?.type_metadata?.collection_name || '';
+  const collectionNameInfo = getCollectionNameInfo(username, collectionName);
+
+  // Render appropriate form based on content type
+  const renderForm = () => {
+    const contentType = draft?.content_type;
+    const metadata = draft?.type_metadata || {};
+
+    switch (contentType) {
+      case 0: // Video
+      case 1: // Movie
+      case 2: // Television
+      case 3: // Music Video
+      case 4: // Short
+        return (
+          <VideoMetadataForm
+            contentType={contentType}
+            metadata={metadata}
+            title={draft?.title || ''}
+            description={draft?.description || ''}
+            tags={draft?.tags || []}
+            onUpdate={handleMetadataUpdate}
+            onBasicUpdate={handleBasicUpdate}
+          />
+        );
+      case 5: // Music
+      case 6: // Podcast
+      case 7: // Audiobook
+        return (
+          <MusicMetadataForm
+            contentType={contentType}
+            metadata={metadata}
+            title={draft?.title || ''}
+            description={draft?.description || ''}
+            tags={draft?.tags || []}
+            onUpdate={handleMetadataUpdate}
+            onBasicUpdate={handleBasicUpdate}
+          />
+        );
+      case 8: // Photo
+      case 9: // Artwork
+        return (
+          <PhotoMetadataForm
+            contentType={contentType}
+            metadata={metadata}
+            title={draft?.title || ''}
+            description={draft?.description || ''}
+            tags={draft?.tags || []}
+            onUpdate={handleMetadataUpdate}
+            onBasicUpdate={handleBasicUpdate}
+          />
+        );
+      case 10: // Book
+      case 11: // Comic
+        return (
+          <BookMetadataForm
+            contentType={contentType}
+            metadata={metadata}
+            title={draft?.title || ''}
+            description={draft?.description || ''}
+            tags={draft?.tags || []}
+            onUpdate={handleMetadataUpdate}
+            onBasicUpdate={handleBasicUpdate}
+          />
+        );
+      case 16: // Post
+        return (
+          <PostMetadataForm
+            metadata={metadata}
+            title={draft?.title || ''}
+            description={draft?.description || ''}
+            tags={draft?.tags || []}
+            onUpdate={handleMetadataUpdate}
+            onBasicUpdate={handleBasicUpdate}
+          />
+        );
+      default:
+        return <div className="text-white/40">Unsupported content type</div>;
+    }
+  };
+
+  // Photos and Artwork use the content itself as the image, so thumbnail is optional
+  const isImageContent = draft?.content_type === 8 || draft?.content_type === 9;
+  const requiresThumbnail = !isImageContent;
+  const hasThumbnail = !!draft?.thumbnail_cid;
+  const canProceed = draft?.title?.trim() && (!requiresThumbnail || hasThumbnail);
+
+  const handleThumbnailUpload = (cid: string) => {
+    onUpdate({ thumbnail_cid: cid || null });
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <h2 className="text-2xl font-medium text-white/90 mb-2">Content Details</h2>
+      <p className="text-white/40 mb-8">Add information about your content</p>
+
+      <div className="space-y-6">
+        {/* Thumbnail Upload - required for all except image content */}
+        {requiresThumbnail ? (
+          <ThumbnailUpload
+            thumbnailCid={draft?.thumbnail_cid || null}
+            onUpload={handleThumbnailUpload}
+            label="Cover Image"
+          />
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
+            <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
+            <ThumbnailUpload
+              thumbnailCid={draft?.thumbnail_cid || null}
+              onUpload={handleThumbnailUpload}
+              label=""
+            />
+          </div>
+        )}
+
+        {/* Collection Name - disabled in edit mode since it's on-chain */}
+        {isEditMode ? (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-white/70">Collection Name</label>
+            <div className="px-4 py-3 bg-white/[0.02] border border-white/5 rounded-xl text-white/50">
+              {collectionNameInfo.formatted || 'Not set'}
+            </div>
+            <p className="text-xs text-amber-400/70">Collection name cannot be changed after publishing</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-white/70">Collection Name (Optional)</label>
+            <input
+              type="text"
+              value={collectionName}
+              onChange={(e) => handleMetadataUpdate('collection_name', e.target.value)}
+              placeholder="e.g., Summer Photos 2024"
+              maxLength={collectionNameInfo.maxInputLength}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 placeholder:text-white/30"
+            />
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-white/30">
+                Preview: <code className="text-purple-400 font-mono">{collectionNameInfo.formatted}</code>
+              </span>
+              <span className={collectionNameInfo.length > 32 ? 'text-red-400' : 'text-white/30'}>
+                {collectionNameInfo.length}/32
+              </span>
+            </div>
+          </div>
+        )}
+
+        {renderForm()}
+
+        <button
+          onClick={onNext}
+          disabled={!canProceed}
+          className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+        >
+          Continue to Monetization
+        </button>
+      </div>
+    </div>
+  );
+}

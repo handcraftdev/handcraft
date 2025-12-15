@@ -1,16 +1,107 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import Link from "next/link";
 import { SidebarPanel } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
 import { ManageContentModal } from "@/components/content";
 import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
 import { UserProfileSettings } from "@/components/profile";
+import { DraftsList } from "@/components/studio/DraftsList";
 import { getIpfsUrl, VisibilityLevel } from "@handcraft/sdk";
 
+type StudioTab = "overview" | "content" | "bundles" | "membership";
+
 const LAMPORTS_PER_SOL = 1_000_000_000;
+
+// Component to display a published content item with metadata fetching
+function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: () => void }) {
+  const [metadata, setMetadata] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchMetadata() {
+      if (!item.metadataCid) return;
+      try {
+        const url = getIpfsUrl(item.metadataCid);
+        const res = await fetch(url);
+        if (res.ok) {
+          setMetadata(await res.json());
+        }
+      } catch (e) {
+        console.error("Failed to fetch metadata:", e);
+      }
+    }
+    fetchMetadata();
+  }, [item.metadataCid]);
+
+  const collectionName = metadata?.properties?.collection || '';
+  const title = metadata?.properties?.title || metadata?.title || metadata?.name || "Untitled";
+  const displayTitle = collectionName ? `${collectionName} - ${title}` : title;
+  // Use metadata.image (thumbnail) first, fall back to previewCid
+  const thumbnailUrl = metadata?.image || (item.previewCid ? getIpfsUrl(item.previewCid) : null);
+  const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
+
+  return (
+    <div
+      onClick={onClick}
+      className="group relative flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
+    >
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+      <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+        {thumbnailUrl ? (
+          <img src={thumbnailUrl} alt={displayTitle} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <svg className="w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      <div className="relative flex-1 min-w-0">
+        <p className="font-medium truncate text-white/90">{displayTitle}</p>
+        <p className="text-xs text-white/40 truncate mt-0.5">{item.contentCid.slice(0, 24)}...</p>
+      </div>
+
+      <div className="relative flex items-center gap-3 text-sm">
+        <span className="text-white/30">{contentType}</span>
+        <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} sold</span>
+        {/* Visibility Badge */}
+        {item.visibilityLevel !== undefined && item.visibilityLevel > 0 && (
+          <span className={`px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
+            item.visibilityLevel === VisibilityLevel.NftOnly
+              ? "bg-amber-500/10 text-amber-400/80 border border-amber-500/20"
+              : item.visibilityLevel === VisibilityLevel.Subscriber
+              ? "bg-purple-500/10 text-purple-400/80 border border-purple-500/20"
+              : "bg-blue-500/10 text-blue-400/80 border border-blue-500/20"
+          }`}>
+            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            {item.visibilityLevel === VisibilityLevel.NftOnly
+              ? "Buy/Rent"
+              : item.visibilityLevel === VisibilityLevel.Subscriber
+              ? "Members"
+              : "Subscribers"}
+          </span>
+        )}
+        {item.isLocked ? (
+          <span className="px-2.5 py-1 rounded-full text-[11px] bg-amber-500/10 text-amber-400/80 border border-amber-500/20">Locked</span>
+        ) : (
+          <span className="px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20">Active</span>
+        )}
+      </div>
+
+      <svg className="relative w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+      </svg>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { publicKey } = useWallet();
@@ -19,6 +110,7 @@ export default function Dashboard() {
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [selectedContent, setSelectedContent] = useState<ContentEntry | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<StudioTab>("overview");
 
   const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
 
@@ -82,214 +174,206 @@ export default function Dashboard() {
       </button>
 
       <main className="max-w-5xl mx-auto px-6 py-20">
-        {/* Page Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold mb-3 tracking-tight">Studio</h1>
-          <p className="text-white/40">Track your content performance and earnings</p>
-        </div>
-
-        {/* Creator Profile */}
-        <div className="mb-10">
-          <UserProfileSettings highlight={!isLoadingUserProfile && !userProfile} />
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-10">
-          <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
-                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-white/40 text-sm mb-0.5">My Content</p>
-                <p className="text-3xl font-bold tracking-tight">{stats.contentCount}</p>
-              </div>
-            </div>
+        {/* Page Header with Upload Button */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-4xl font-bold mb-2 tracking-tight">Studio</h1>
+            <p className="text-white/40">Track your content performance and earnings</p>
           </div>
+          <Link
+            href="/studio/upload"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl text-sm font-medium transition-all duration-300"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create New
+          </Link>
+        </div>
 
-          <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
-                <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-white/40 text-sm mb-0.5">NFTs Sold</p>
-                <p className="text-3xl font-bold tracking-tight">{stats.totalMints}</p>
-              </div>
+        {/* Tabs */}
+        <div className="flex gap-1 mb-8 p-1 bg-white/[0.02] rounded-xl border border-white/5 w-fit">
+          {[
+            { id: "overview", label: "Overview" },
+            { id: "content", label: "Content" },
+            { id: "bundles", label: "Bundles" },
+            { id: "membership", label: "Membership" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as StudioTab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? "bg-white/10 text-white"
+                  : "text-white/50 hover:text-white/70"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <>
+            {/* Creator Profile */}
+            <div className="mb-8">
+              <UserProfileSettings highlight={!isLoadingUserProfile && !userProfile} />
             </div>
-          </div>
-        </div>
 
-        {/* Membership Settings */}
-        <div className="mb-10">
-          <CreatorMembershipSettings />
-        </div>
-
-        {/* Custom Membership Tiers */}
-        <div className="mb-10">
-          <CustomMembershipManager />
-        </div>
-
-        {/* My Content */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold tracking-tight">My Content</h2>
-            <span className="text-white/30 text-sm">{myContent.length} items</span>
-          </div>
-
-          {myContent.length === 0 ? (
-            <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium mb-2">No content yet</h3>
-              <p className="text-white/40 text-sm">Upload your first content to start earning</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {myContent.map((item) => {
-                const metadata = (item as any).metadata;
-                const title = metadata?.title || metadata?.name || "Untitled";
-                const previewUrl = item.previewCid ? getIpfsUrl(item.previewCid) : null;
-                const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
-
-                return (
-                  <div
-                    key={item.contentCid}
-                    onClick={() => setSelectedContent(item)}
-                    className="group relative flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
-                  >
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                    <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
-                      {previewUrl ? (
-                        <img src={previewUrl} alt={title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="relative flex-1 min-w-0">
-                      <p className="font-medium truncate text-white/90">{title}</p>
-                      <p className="text-xs text-white/40 truncate mt-0.5">{item.contentCid.slice(0, 24)}...</p>
-                    </div>
-
-                    <div className="relative flex items-center gap-3 text-sm">
-                      <span className="text-white/30">{contentType}</span>
-                      <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} sold</span>
-                      {/* Visibility Badge */}
-                      {item.visibilityLevel !== undefined && item.visibilityLevel > 0 && (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
-                          item.visibilityLevel === VisibilityLevel.NftOnly
-                            ? "bg-amber-500/10 text-amber-400/80 border border-amber-500/20"
-                            : item.visibilityLevel === VisibilityLevel.Subscriber
-                            ? "bg-purple-500/10 text-purple-400/80 border border-purple-500/20"
-                            : "bg-blue-500/10 text-blue-400/80 border border-blue-500/20"
-                        }`}>
-                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                          </svg>
-                          {item.visibilityLevel === VisibilityLevel.NftOnly
-                            ? "Buy/Rent"
-                            : item.visibilityLevel === VisibilityLevel.Subscriber
-                            ? "Members"
-                            : "Subscribers"}
-                        </span>
-                      )}
-                      {item.isLocked ? (
-                        <span className="px-2.5 py-1 rounded-full text-[11px] bg-amber-500/10 text-amber-400/80 border border-amber-500/20">Locked</span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20">Active</span>
-                      )}
-                    </div>
-
-                    <svg className="relative w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* My Bundles */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold tracking-tight">My Bundles</h2>
-            <button
-              onClick={() => setShowCreateBundleModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create Bundle
-            </button>
-          </div>
-
-          {myBundles.length === 0 ? (
-            <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium mb-2">No bundles yet</h3>
-              <p className="text-white/40 text-sm mb-6">Create a bundle to group your content together</p>
-              <button
-                onClick={() => setShowCreateBundleModal(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
-              >
-                Create Your First Bundle
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {myBundles.map((bundle) => (
-                <div
-                  key={bundle.bundleId}
-                  onClick={() => setSelectedBundle(bundle)}
-                  className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
-                >
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                  <div className="relative">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-white/5 text-white/50 border border-white/10">
-                        {getBundleTypeLabel(bundle.bundleType)}
-                      </span>
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] ${
-                        bundle.isActive
-                          ? "bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20"
-                          : "bg-white/5 text-white/40 border border-white/10"
-                      }`}>
-                        {bundle.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                    <h3 className="font-medium truncate text-white/90 mb-1">{bundle.bundleId}</h3>
-                    <p className="text-sm text-white/40">{bundle.itemCount} items</p>
-                    <p className="text-xs text-white/25 mt-3">
-                      {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}
-                    </p>
+                  <div>
+                    <p className="text-white/40 text-sm mb-0.5">Published Content</p>
+                    <p className="text-3xl font-bold tracking-tight">{stats.contentCount}</p>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="relative p-6 rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden group hover:border-white/10 transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-white/40 text-sm mb-0.5">NFTs Sold</p>
+                    <p className="text-3xl font-bold tracking-tight">{stats.totalMints}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
+
+        {/* Content Tab */}
+        {activeTab === "content" && (
+          <div className="space-y-10">
+            {/* Drafts Section */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold tracking-tight">Drafts</h2>
+              </div>
+              <DraftsList excludeStatuses={['published']} />
+            </section>
+
+            {/* Published Section */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold tracking-tight">Published</h2>
+                <span className="text-white/30 text-sm">{myContent.length} items</span>
+              </div>
+
+              {myContent.length === 0 ? (
+                <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">No published content yet</h3>
+                  <p className="text-white/40 text-sm">Publish your drafts to start earning</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {myContent.map((item) => (
+                    <PublishedContentItem
+                      key={item.contentCid}
+                      item={item}
+                      onClick={() => setSelectedContent(item)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* Bundles Tab */}
+        {activeTab === "bundles" && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold tracking-tight">My Bundles</h2>
+              <button
+                onClick={() => setShowCreateBundleModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create Bundle
+              </button>
+            </div>
+
+            {myBundles.length === 0 ? (
+              <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium mb-2">No bundles yet</h3>
+                <p className="text-white/40 text-sm mb-6">Create a bundle to group your content together</p>
+                <button
+                  onClick={() => setShowCreateBundleModal(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-sm font-medium transition-all duration-300"
+                >
+                  Create Your First Bundle
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myBundles.map((bundle) => (
+                  <div
+                    key={bundle.bundleId}
+                    onClick={() => setSelectedBundle(bundle)}
+                    className="group relative p-5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
+                  >
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                    <div className="relative">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-white/5 text-white/50 border border-white/10">
+                          {getBundleTypeLabel(bundle.bundleType)}
+                        </span>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] ${
+                          bundle.isActive
+                            ? "bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20"
+                            : "bg-white/5 text-white/40 border border-white/10"
+                        }`}>
+                          {bundle.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <h3 className="font-medium truncate text-white/90 mb-1">{bundle.bundleId}</h3>
+                      <p className="text-sm text-white/40">{bundle.itemCount} items</p>
+                      <p className="text-xs text-white/25 mt-3">
+                        {new Date(Number(bundle.createdAt) * 1000).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Membership Tab */}
+        {activeTab === "membership" && (
+          <div className="space-y-8">
+            <CreatorMembershipSettings />
+            <CustomMembershipManager />
+          </div>
+        )}
       </main>
 
       {/* Modals */}
