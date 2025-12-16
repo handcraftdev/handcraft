@@ -140,7 +140,17 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
   const [editLoading, setEditLoading] = useState(isEditMode);
   const { draft: draftFromHook, updateDraft: updateDraftFromHook, saveDraft, publishDraft, isLoading: draftLoading, error: draftError } = useDraft(draftId);
   const { pauseUpload, resumeUpload, cancelUpload } = useFileUpload();
-  const { registerContentWithMintAndRent, updateContent, isUpdatingContent, ecosystemConfig, content, useMintConfig, useRentConfig } = useContentRegistry();
+  const {
+    registerContentWithMintAndRent,
+    updateContent,
+    isUpdatingContent,
+    ecosystemConfig,
+    content,
+    useMintConfig,
+    useRentConfig,
+    userProfile,
+    isLoadingUserProfile,
+  } = useContentRegistry();
   const { session } = useSupabaseAuth();
 
   // In edit mode, use editDraft; otherwise use draft from hook
@@ -366,8 +376,13 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         throw new Error('Ecosystem config not loaded. Please try again.');
       }
 
+      // Require user profile to exist before registering content
+      if (!userProfile) {
+        throw new Error('Please set up your creator profile in the Studio Overview tab before publishing.');
+      }
+
       // Build NFT naming (max 32 chars each)
-      const username = session?.user?.user_metadata?.username || '';
+      const username = userProfile?.username || '';
       const collectionName = draft.type_metadata?.collection_name as string | undefined;
 
       // Format names according to naming convention
@@ -491,7 +506,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
 
     try {
       // Build updated metadata JSON (preserving existing collection name from on-chain)
-      const username = session?.user?.user_metadata?.username || '';
+      const username = userProfile?.username || '';
       const collectionName = draft.type_metadata?.collection_name as string | undefined;
 
       const formattedCollectionName = formatCollectionName(username, collectionName);
@@ -709,6 +724,31 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
     );
   }
 
+  // Block access if user profile doesn't exist (not in edit mode)
+  if (!isEditMode && !isLoadingUserProfile && !userProfile) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="max-w-md text-center p-8">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-3">Set Up Your Creator Profile</h2>
+          <p className="text-white/50 mb-6">
+            Before creating content, please set up your creator profile with a username in the Studio Overview tab.
+          </p>
+          <button
+            onClick={() => router.push('/studio')}
+            className="px-6 py-3 bg-white text-black font-medium rounded-xl hover:bg-white/90 transition-colors"
+          >
+            Go to Studio Overview
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-black">
       {/* Main App Sidebar */}
@@ -769,7 +809,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
             draft={draft}
             onUpdate={updateDraft}
             onNext={() => handleNext('monetization')}
-            username={session?.user?.user_metadata?.username || ''}
+            username={userProfile?.username || ''}
             isEditMode={isEditMode}
           />
         )}
