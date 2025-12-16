@@ -9,6 +9,7 @@ import {
   MintConfig,
   Rarity,
   getRarityName,
+  getRarityFromWeight,
 } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 import { RarityBadge, RarityProbabilities, RARITY_STYLES } from "@/components/rarity";
@@ -138,15 +139,10 @@ export function BuyContentModal({
         try {
           const rewardState = await client.fetchNftRewardState(nftAsset);
           if (rewardState) {
-            // Convert weight to rarity
-            const weight = rewardState.weight;
-            let rarity: Rarity = Rarity.Common;
-            if (weight >= 12000) rarity = Rarity.Legendary;
-            else if (weight >= 6000) rarity = Rarity.Epic;
-            else if (weight >= 2000) rarity = Rarity.Rare;
-            else if (weight >= 500) rarity = Rarity.Uncommon;
+            // Convert weight to rarity (actual on-chain weights: 1, 5, 20, 60, 120)
+            const rarity = getRarityFromWeight(rewardState.weight);
             setRevealedRarity(rarity);
-            console.log("Content minted with rarity:", getRarityName(rarity));
+            console.log("Content minted with rarity:", getRarityName(rarity), "weight:", rewardState.weight);
           }
         } catch {
           // If we can't fetch rarity, continue without it

@@ -75,6 +75,7 @@ export {
   BundleType,
   getRarityName,
   getRarityWeight,
+  getRarityFromWeight,
   getBundleTypeLabel,
   getContentPda,
   getMbMintRequestPda,
