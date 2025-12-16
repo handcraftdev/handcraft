@@ -908,14 +908,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const slideRef = useRef<HTMLDivElement>(null);
 
-  // Use native event listeners for touch/wheel to enable preventDefault
+  // Use native event listeners for touch to enable preventDefault
   useEffect(() => {
     const el = slideRef.current;
     if (!el || !bundleContext) return;
-
-    // Track horizontal scroll accumulation for wheel events (trackpad)
-    let wheelDeltaX = 0;
-    let wheelTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const onTouchStart = (e: TouchEvent) => {
       if ((e.target as HTMLElement).closest("button, a, video, audio")) return;
@@ -962,48 +958,35 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       touchStartRef.current = null;
     };
 
-    // Wheel event for trackpad horizontal swipe (Mac)
-    const onWheel = (e: WheelEvent) => {
-      if ((e.target as HTMLElement).closest("button, a, video, audio")) return;
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // Ignore vertical
-
-      e.preventDefault();
-
-      const canGoNext = bundleContext.currentIndex < bundleContext.items.length - 1;
-      const canGoPrev = bundleContext.currentIndex > 0;
-
-      wheelDeltaX += e.deltaX;
-
-      // Navigate when threshold reached, then reset
-      if (Math.abs(wheelDeltaX) > 50) {
-        if (wheelDeltaX > 0 && canGoNext) {
-          bundleContext.onNavigate(bundleContext.currentIndex + 1);
-        } else if (wheelDeltaX < 0 && canGoPrev) {
-          bundleContext.onNavigate(bundleContext.currentIndex - 1);
-        }
-        wheelDeltaX = 0;
-      }
-
-      // Reset accumulator after scrolling stops
-      if (wheelTimeout) clearTimeout(wheelTimeout);
-      wheelTimeout = setTimeout(() => {
-        wheelDeltaX = 0;
-      }, 100);
-    };
-
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: false });
     el.addEventListener("touchend", onTouchEnd, { passive: false });
-    el.addEventListener("wheel", onWheel, { passive: false });
 
     return () => {
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("wheel", onWheel);
-      if (wheelTimeout) clearTimeout(wheelTimeout);
     };
   }, [bundleContext]);
+
+  // Keyboard navigation (left/right arrows) for bundle items
+  useEffect(() => {
+    if (!bundleContext || !isActive) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const canGoNext = bundleContext.currentIndex < bundleContext.items.length - 1;
+      const canGoPrev = bundleContext.currentIndex > 0;
+
+      if (e.key === "ArrowLeft" && canGoPrev) {
+        bundleContext.onNavigate(bundleContext.currentIndex - 1);
+      } else if (e.key === "ArrowRight" && canGoNext) {
+        bundleContext.onNavigate(bundleContext.currentIndex + 1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [bundleContext, isActive]);
 
   const { publicKey } = useWallet();
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
