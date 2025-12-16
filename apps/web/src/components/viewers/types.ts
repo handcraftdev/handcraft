@@ -4,9 +4,11 @@ export interface ContentMetadata {
   name?: string;
   description?: string;
   image?: string;
-  // File info
+  // File info (can be at root level or inside properties)
   mimeType?: string;
   fileName?: string;
+  // Nested properties object (from IPFS metadata structure)
+  properties?: Record<string, unknown>;
   // Common
   duration?: number;
   // Video/Audio

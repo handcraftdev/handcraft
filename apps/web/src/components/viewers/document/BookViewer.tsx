@@ -21,13 +21,12 @@ export default function BookViewer(props: ViewerProps) {
   const { contentUrl, title, metadata, isBlurred = false, showControls = true, className = "" } = props;
   const blurClass = isBlurred ? "blur-xl scale-105" : "";
 
-  // Detect file type from metadata (preferred) or URL fallback
-  const mimeType = metadata?.mimeType?.toLowerCase() || '';
-  const fileName = metadata?.fileName?.toLowerCase() || '';
+  // Detect file type from metadata (check both flat and nested properties)
+  // Metadata can have mimeType at root level OR inside properties object
+  const metaProps = metadata?.properties as Record<string, string> | undefined;
+  const mimeType = (metadata?.mimeType || metaProps?.mimeType || '').toLowerCase();
+  const fileName = (metadata?.fileName || metaProps?.fileName || '').toLowerCase();
   const lowerUrl = contentUrl.toLowerCase();
-
-  // Debug logging
-  console.log("[BookViewer] Detection:", { mimeType, fileName, url: lowerUrl.substring(0, 80) });
 
   // Check by mime type first, then filename, then URL
   const isPdf = mimeType === 'application/pdf' ||
@@ -39,8 +38,6 @@ export default function BookViewer(props: ViewerProps) {
     fileName.endsWith('.epub') ||
     lowerUrl.endsWith('.epub') ||
     lowerUrl.includes('.epub');
-
-  console.log("[BookViewer] Format detected:", { isPdf, isEpub });
 
   // PDF viewer
   if (isPdf) {
