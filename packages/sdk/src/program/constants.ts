@@ -379,8 +379,8 @@ export const STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING);
 export const STREAMFLOW_WITHDRAWOR_STRING = "wdrwhnCv4pzW8beKsbPa4S2UDZrXenjg16KJdKSpb5u";
 export const STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING);
 
-// Streamflow Fee Oracle
-export const STREAMFLOW_FEE_ORACLE_STRING = "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT";
+// Streamflow Fee Oracle (same as PROGRAM_ID)
+export const STREAMFLOW_FEE_ORACLE_STRING = "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7";
 export const STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING);
 
 // WSOL Mint (Native SOL wrapped)
