@@ -116,21 +116,6 @@ export function EditContentModal({
         metadataCid,
       });
 
-      // Sync to indexed_content for immediate availability
-      try {
-        await fetch('/api/content/sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ content_cid: content.contentCid }),
-        });
-      } catch (syncErr) {
-        // Non-fatal - content will be synced by indexer eventually
-        console.warn('Content sync failed:', syncErr);
-      }
-
       onSuccess?.();
       onClose();
     } catch (err) {
