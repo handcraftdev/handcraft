@@ -204,6 +204,12 @@ export default function EpubViewer({
         style={{ opacity: isLoading || error ? 0 : 1 }}
       />
 
+      {/* Click catcher - allows clicks to bubble up to parent for overlay toggle */}
+      {/* epub.js uses iframe so clicks don't bubble to React, this layer catches them */}
+      {!isLoading && !error && (
+        <div className="absolute inset-0 z-[5]" />
+      )}
+
       {/* Controls - synced with overlay visibility */}
       {!isLoading && !error && (
         <>
