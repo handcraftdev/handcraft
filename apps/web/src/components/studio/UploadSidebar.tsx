@@ -31,8 +31,8 @@ function formatFileSize(bytes: number): string {
 
 const STEPS: Array<{ key: UploadStep; label: string; icon: string }> = [
   { key: 'type', label: 'Content Type', icon: '📋' },
-  { key: 'file', label: 'Upload File', icon: '📤' },
   { key: 'details', label: 'Details', icon: '✏️' },
+  { key: 'file', label: 'Upload File', icon: '📤' },
   { key: 'monetization', label: 'Monetization', icon: '💰' },
   { key: 'review', label: 'Review', icon: '👁️' },
   { key: 'publish', label: 'Publish', icon: '🚀' },

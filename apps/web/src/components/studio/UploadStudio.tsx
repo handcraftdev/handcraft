@@ -57,15 +57,15 @@ export function isStepComplete(step: UploadStep, draft: ContentDraft | null): bo
   switch (step) {
     case 'type':
       return draft.domain !== undefined && draft.domain !== '' && draft.content_type !== undefined;
-    case 'file':
-      // File step is complete when we have a content_cid (file has been uploaded)
-      // For now, mark as incomplete until file upload is implemented
-      return draft.content_cid !== null && draft.content_cid !== undefined;
-    case 'details': {
-      // Photos (8) and Artwork (9) don't require thumbnail
+    case 'details':
+      // Details step requires title (thumbnail moved to file step)
+      return !!draft.title?.trim();
+    case 'file': {
+      // File step requires content_cid and thumbnail (for non-image content)
+      const hasContent = draft.content_cid !== null && draft.content_cid !== undefined;
       const isImageContent = draft.content_type === 8 || draft.content_type === 9;
       const hasThumbnail = !!draft.thumbnail_cid;
-      return !!draft.title?.trim() && (isImageContent || hasThumbnail);
+      return hasContent && (isImageContent || hasThumbnail);
     }
     case 'monetization':
       return isMonetizationComplete(draft);
@@ -84,20 +84,22 @@ export function canNavigateToStep(targetStep: UploadStep, draft: ContentDraft | 
   if (!draft) return targetStep === 'type';
 
   // Define what's required to navigate to each step
+  // New order: type → details → file → monetization → review → publish
   switch (targetStep) {
     case 'type':
       return true; // Always can go to type
-    case 'file':
+    case 'details':
       // Need type selected
       return draft.domain !== undefined && draft.domain !== '' && draft.content_type !== undefined;
-    case 'details':
-      // Need type selected (file upload is optional for now)
-      return draft.domain !== undefined && draft.domain !== '' && draft.content_type !== undefined;
+    case 'file':
+      // Need title filled in
+      return !!draft.title?.trim();
     case 'monetization': {
-      // Need title and thumbnail (for non-image content)
+      // Need file uploaded and thumbnail (for non-image content)
+      const hasContent = !!draft.content_cid;
       const isImageContent = draft.content_type === 8 || draft.content_type === 9;
       const hasThumbnail = !!draft.thumbnail_cid;
-      return !!draft.title?.trim() && (isImageContent || hasThumbnail);
+      return hasContent && (isImageContent || hasThumbnail);
     }
     case 'review':
       // Need full monetization (buy price + all rental prices)
@@ -115,10 +117,11 @@ function getResumeStep(draft: ContentDraft | null): UploadStep {
   if (!draft || !draft.id) return 'type';
 
   // Check from furthest to earliest
+  // New order: type → details → file → monetization → review → publish
   if (isMonetizationComplete(draft)) return 'review';
-  if (draft.title?.trim()) return 'monetization';
-  if (draft.content_cid) return 'details';
-  if (draft.domain && draft.content_type !== undefined) return 'file';
+  if (draft.content_cid) return 'monetization';
+  if (draft.title?.trim()) return 'file';
+  if (draft.domain && draft.content_type !== undefined) return 'details';
   return 'type';
 }
 
@@ -791,16 +794,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
           <TypeSelectStep
             draft={draft}
             onUpdate={updateDraft}
-            onNext={() => handleNext('file')}
-          />
-        )}
-
-        {step === 'file' && (
-          <FileUploadStep
-            draft={draft}
-            onUpdate={updateDraft}
             onNext={() => handleNext('details')}
-            onUploadStateChange={handleUploadStateChange}
           />
         )}
 
@@ -808,9 +802,18 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
           <DetailsStep
             draft={draft}
             onUpdate={updateDraft}
-            onNext={() => handleNext('monetization')}
+            onNext={() => handleNext('file')}
             username={userProfile?.username || ''}
             isEditMode={isEditMode}
+          />
+        )}
+
+        {step === 'file' && (
+          <FileUploadStep
+            draft={draft}
+            onUpdate={updateDraft}
+            onNext={() => handleNext('monetization')}
+            onUploadStateChange={handleUploadStateChange}
           />
         )}
 

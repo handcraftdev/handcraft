@@ -3,6 +3,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { ContentDraft } from '@/lib/supabase';
 import { useFileUpload, UploadProgress } from '@/hooks/useFileUpload';
+import { extractCover, coverToFile } from '@/hooks/useCoverExtraction';
+import { useSupabaseAuth } from '@/hooks/useSupabaseAuth';
+import { ThumbnailUpload } from '../ThumbnailUpload';
 
 interface FileUploadStepProps {
   draft: ContentDraft | null;
@@ -53,9 +56,11 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [coverExtractionStatus, setCoverExtractionStatus] = useState<'idle' | 'extracting' | 'uploading' | 'done' | 'failed'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { upload, pauseUpload, resumeUpload, cancelUpload, uploads } = useFileUpload();
+  const { session } = useSupabaseAuth();
 
   // Helper to update progress and notify parent
   const updateProgress = useCallback((progress: UploadProgress | null, file: File | null = selectedFile) => {
@@ -65,6 +70,55 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
 
   // Check if there's an existing paused upload
   const pausedUpload = uploads.find(u => u.status === 'paused');
+
+  // Extract and upload cover for books/comics
+  const extractAndUploadCover = useCallback(async (file: File) => {
+    if (!session?.access_token) return;
+
+    // Only extract covers for document types (books, comics)
+    if (draft?.domain !== 'document') return;
+
+    // Skip if already has a thumbnail
+    if (draft?.thumbnail_cid) return;
+
+    setCoverExtractionStatus('extracting');
+
+    try {
+      const cover = await extractCover(file);
+
+      if (!cover) {
+        setCoverExtractionStatus('failed');
+        return;
+      }
+
+      setCoverExtractionStatus('uploading');
+
+      // Convert to file and upload
+      const coverFile = coverToFile(cover, file.name);
+      const formData = new FormData();
+      formData.append('file', coverFile);
+      formData.append('encrypt', 'false'); // Thumbnails are not encrypted
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Cover upload failed');
+      }
+
+      const data = await response.json();
+      onUpdate({ thumbnail_cid: data.cid });
+      setCoverExtractionStatus('done');
+    } catch (err) {
+      console.error('[FileUpload] Cover extraction/upload error:', err);
+      setCoverExtractionStatus('failed');
+    }
+  }, [session?.access_token, draft?.domain, draft?.thumbnail_cid, onUpdate]);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!draft?.domain) return;
@@ -84,6 +138,9 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
       onUpdate({ title: nameWithoutExt });
     }
+
+    // Extract cover for books/comics (runs in parallel with upload)
+    extractAndUploadCover(file);
 
     // Start background upload
     // Always encrypt content - visibility level controls who can decrypt, not whether to encrypt
@@ -113,7 +170,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
         setError(err);
       },
     });
-  }, [draft, upload, onUpdate, onNext, onUploadStateChange, updateProgress]);
+  }, [draft, upload, onUpdate, onNext, onUploadStateChange, updateProgress, extractAndUploadCover]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -201,6 +258,16 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
   const isCompleted = uploadProgress?.status === 'completed' || draft?.content_cid;
   const isPaused = uploadProgress?.status === 'paused' || pausedUpload;
 
+  // Photos and Artwork use the content itself as the image, so thumbnail is optional
+  const isImageContent = draft?.content_type === 8 || draft?.content_type === 9;
+  const requiresThumbnail = !isImageContent;
+  const hasThumbnail = !!draft?.thumbnail_cid;
+  const canProceed = isCompleted && (!requiresThumbnail || hasThumbnail);
+
+  const handleThumbnailUpload = (cid: string) => {
+    onUpdate({ thumbnail_cid: cid || null });
+  };
+
   return (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-medium text-white/90 mb-2">Upload your content</h2>
@@ -283,6 +350,48 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
             />
           </div>
           <p className="text-xs text-white/30 mt-2 text-right">{uploadProgress.progress}%</p>
+
+          {/* Cover extraction status for books/comics */}
+          {draft?.domain === 'document' && coverExtractionStatus !== 'idle' && (
+            <div className="mt-3 pt-3 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs">
+                {coverExtractionStatus === 'extracting' && (
+                  <>
+                    <svg className="w-3 h-3 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="text-white/40">Extracting cover...</span>
+                  </>
+                )}
+                {coverExtractionStatus === 'uploading' && (
+                  <>
+                    <svg className="w-3 h-3 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="text-white/40">Uploading cover...</span>
+                  </>
+                )}
+                {coverExtractionStatus === 'done' && (
+                  <>
+                    <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-emerald-400/70">Cover extracted</span>
+                  </>
+                )}
+                {coverExtractionStatus === 'failed' && (
+                  <>
+                    <svg className="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="text-yellow-400/70">Could not extract cover</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -342,6 +451,29 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
         </div>
       )}
 
+      {/* Thumbnail Upload - shown after file is uploaded or uploading */}
+      {(isCompleted || isUploading) && (
+        <div className="mt-6">
+          {requiresThumbnail ? (
+            <ThumbnailUpload
+              thumbnailCid={draft?.thumbnail_cid || null}
+              onUpload={handleThumbnailUpload}
+              label="Cover Image"
+            />
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
+              <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
+              <ThumbnailUpload
+                thumbnailCid={draft?.thumbnail_cid || null}
+                onUpload={handleThumbnailUpload}
+                label=""
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
@@ -351,20 +483,20 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
 
       {/* Actions */}
       <div className="mt-6 flex gap-3">
-        {isUploading && (
+        {isUploading && !canProceed && (
           <button
-            onClick={onNext}
-            className="flex-1 py-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+            disabled
+            className="flex-1 py-3 bg-white/5 rounded-xl font-medium transition-all duration-300 border border-white/10 text-white/30 cursor-not-allowed"
           >
-            Continue while uploading
+            {requiresThumbnail && !hasThumbnail ? 'Upload cover image to continue' : 'Uploading...'}
           </button>
         )}
-        {isCompleted && (
+        {canProceed && (
           <button
             onClick={onNext}
             className="flex-1 py-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
           >
-            Continue to Details
+            Continue to Monetization
           </button>
         )}
         {!isUploading && !isCompleted && (

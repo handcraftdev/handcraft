@@ -6,7 +6,6 @@ import { MusicMetadataForm } from '../forms/MusicMetadataForm';
 import { PhotoMetadataForm } from '../forms/PhotoMetadataForm';
 import { BookMetadataForm } from '../forms/BookMetadataForm';
 import { PostMetadataForm } from '../forms/PostMetadataForm';
-import { ThumbnailUpload } from '../ThumbnailUpload';
 import { getCollectionNameInfo } from '@/utils/nft-naming';
 
 interface DetailsStepProps {
@@ -114,15 +113,8 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
     }
   };
 
-  // Photos and Artwork use the content itself as the image, so thumbnail is optional
-  const isImageContent = draft?.content_type === 8 || draft?.content_type === 9;
-  const requiresThumbnail = !isImageContent;
-  const hasThumbnail = !!draft?.thumbnail_cid;
-  const canProceed = draft?.title?.trim() && (!requiresThumbnail || hasThumbnail);
-
-  const handleThumbnailUpload = (cid: string) => {
-    onUpdate({ thumbnail_cid: cid || null });
-  };
+  // Details step only requires title (thumbnail moved to file step)
+  const canProceed = !!draft?.title?.trim();
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -130,25 +122,6 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
       <p className="text-white/40 mb-8">Add information about your content</p>
 
       <div className="space-y-6">
-        {/* Thumbnail Upload - required for all except image content */}
-        {requiresThumbnail ? (
-          <ThumbnailUpload
-            thumbnailCid={draft?.thumbnail_cid || null}
-            onUpload={handleThumbnailUpload}
-            label="Cover Image"
-          />
-        ) : (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
-            <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
-            <ThumbnailUpload
-              thumbnailCid={draft?.thumbnail_cid || null}
-              onUpload={handleThumbnailUpload}
-              label=""
-            />
-          </div>
-        )}
-
         {/* Collection Name - disabled in edit mode since it's on-chain */}
         {isEditMode ? (
           <div className="space-y-2">
@@ -187,7 +160,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
           disabled={!canProceed}
           className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
         >
-          Continue to Monetization
+          Continue to File Upload
         </button>
       </div>
     </div>
