@@ -28,6 +28,7 @@ export default function EpubViewer({
   const [toc, setToc] = useState<TocItem[]>([]);
   const [showToc, setShowToc] = useState(false);
 
+
   // Initialize the book
   useEffect(() => {
     if (!viewerRef.current || !contentUrl) return;
@@ -73,22 +74,26 @@ export default function EpubViewer({
         // Get container dimensions
         const container = viewerRef.current;
         const width = container.clientWidth;
-        const height = container.clientHeight;
 
-        // Render with explicit dimensions
+        // Render with scrolled-doc flow for scrollable content
         const rendition = book.renderTo(container, {
           width: width,
-          height: height,
+          height: "100%",
           spread: "none",
+          flow: "scrolled-doc",
         });
 
         renditionRef.current = rendition;
 
-        // Simple dark theme
+        // Dark theme + prevent horizontal overflow
         rendition.themes.default({
           body: {
             background: "#0a0a0a !important",
             color: "#e5e5e5 !important",
+            "overflow-x": "hidden !important",
+          },
+          html: {
+            "overflow-x": "hidden !important",
           },
         });
 
@@ -124,8 +129,7 @@ export default function EpubViewer({
     const handleResize = () => {
       if (viewerRef.current && renditionRef.current) {
         const width = viewerRef.current.clientWidth;
-        const height = viewerRef.current.clientHeight;
-        renditionRef.current.resize(width, height);
+        renditionRef.current.resize(width, "100%");
       }
     };
 
@@ -197,17 +201,35 @@ export default function EpubViewer({
         </div>
       )}
 
-      {/* Epub container */}
+      {/* Epub container - scrollable with scrolled-doc flow */}
+      <style>{`
+        .epub-viewer-container > div { overflow-x: hidden !important; }
+        .epub-viewer-container iframe { overflow-x: hidden !important; }
+      `}</style>
       <div
         ref={viewerRef}
-        className={`absolute inset-0 ${blurClass} transition-all duration-500`}
+        className={`epub-viewer-container absolute inset-0 overflow-y-auto overflow-x-hidden ${blurClass} transition-all duration-500`}
         style={{ opacity: isLoading || error ? 0 : 1 }}
       />
 
-      {/* Click catcher - allows clicks to bubble up to parent for overlay toggle */}
-      {/* epub.js uses iframe so clicks don't bubble to React, this layer catches them */}
-      {!isLoading && !error && (
+      {/* Click catcher - only when overlay is visible, to allow dismissing it */}
+      {/* When overlay is hidden, no catcher so user can scroll freely to read */}
+      {!isLoading && !error && showControls && (
         <div className="absolute inset-0 z-[5]" />
+      )}
+
+      {/* Show controls trigger - only when overlay is hidden */}
+      {/* Using div instead of button so click bubbles to parent's overlay toggle */}
+      {!isLoading && !error && !showControls && (
+        <div
+          className="absolute bottom-6 right-4 p-3 bg-black/60 hover:bg-black/80 rounded-full z-10 transition-colors shadow-lg cursor-pointer"
+          role="button"
+          aria-label="Show controls"
+        >
+          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </div>
       )}
 
       {/* Controls - synced with overlay visibility */}
