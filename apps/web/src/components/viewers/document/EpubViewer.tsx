@@ -27,6 +27,8 @@ export default function EpubViewer({
   const [fontSize, setFontSize] = useState(100);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [showToc, setShowToc] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
 
   // Touch swipe tracking
   const touchStartX = useRef<number | null>(null);
@@ -77,30 +79,39 @@ export default function EpubViewer({
         // Get container dimensions
         const container = viewerRef.current;
         const width = container.clientWidth;
+        const height = container.clientHeight;
 
-        // Render with scrolled-doc flow for scrollable content
+        // Render in paginated mode (no scrolling, just page navigation)
         const rendition = book.renderTo(container, {
           width: width,
-          height: "100%",
+          height: height,
           spread: "none",
-          flow: "scrolled-doc",
         });
 
         renditionRef.current = rendition;
 
-        // Dark theme + prevent horizontal overflow
+        // Dark theme
         rendition.themes.default({
           body: {
             background: "#0a0a0a !important",
             color: "#e5e5e5 !important",
-            "overflow-x": "hidden !important",
-          },
-          html: {
-            "overflow-x": "hidden !important",
           },
         });
 
+        // Track page changes for pagination indicator
+        rendition.on("locationChanged", (location: any) => {
+          if (location.start) {
+            const currentPageNum = location.start.displayed?.page || 1;
+            const totalPagesNum = location.start.displayed?.total || 0;
+            setCurrentPage(currentPageNum);
+            setTotalPages(totalPagesNum);
+          }
+        });
+
         await rendition.display();
+
+        // Get initial page count after book is ready
+        await book.locations.generate(1024);
 
         if (mounted) {
           setIsLoading(false);
@@ -132,7 +143,8 @@ export default function EpubViewer({
     const handleResize = () => {
       if (viewerRef.current && renditionRef.current) {
         const width = viewerRef.current.clientWidth;
-        renditionRef.current.resize(width, "100%");
+        const height = viewerRef.current.clientHeight;
+        renditionRef.current.resize(width, height);
       }
     };
 
@@ -249,95 +261,92 @@ export default function EpubViewer({
         </div>
       )}
 
-      {/* Epub container - scrollable with scrolled-doc flow */}
-      <style>{`
-        .epub-viewer-container > div { overflow-x: hidden !important; }
-        .epub-viewer-container iframe { overflow-x: hidden !important; }
-      `}</style>
+      {/* Epub container - paginated mode */}
       <div
         ref={viewerRef}
-        className={`epub-viewer-container absolute inset-0 overflow-y-auto overflow-x-hidden ${blurClass} transition-all duration-500`}
+        className={`absolute inset-0 ${blurClass} transition-all duration-500`}
         style={{ opacity: isLoading || error ? 0 : 1 }}
       />
 
-      {/* Click catcher - only when overlay is visible, to allow dismissing it */}
-      {/* When overlay is hidden, no catcher so user can scroll freely to read */}
-      {!isLoading && !error && showControls && (
+      {/* Click catcher - allows clicks to bubble up to parent for overlay toggle */}
+      {/* epub.js uses iframe so clicks don't bubble to React, this layer catches them */}
+      {!isLoading && !error && (
         <div className="absolute inset-0 z-[5]" />
       )}
 
-      {/* Show controls trigger - only when overlay is hidden */}
-      {/* Using div instead of button so click bubbles to parent's overlay toggle */}
-      {!isLoading && !error && !showControls && (
-        <div
-          className="absolute bottom-6 right-4 p-3 bg-black/60 hover:bg-black/80 rounded-full z-10 transition-colors shadow-lg cursor-pointer"
-          role="button"
-          aria-label="Show controls"
-        >
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </div>
-      )}
-
-      {/* Controls - synced with overlay visibility */}
+      {/* Viewer controls - always visible inside the viewer */}
       {!isLoading && !error && (
         <>
-          {/* Page navigation */}
+          {/* Page navigation - left */}
           <button
             onClick={prevPage}
-            className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-all duration-300 z-10 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors z-10"
             aria-label="Previous page"
           >
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+
+          {/* Page navigation - right */}
           <button
             onClick={nextPage}
-            className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-all duration-300 z-10 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors z-10"
             aria-label="Next page"
           >
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
-          {/* Top controls - TOC + Zoom */}
-          <div className={`absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/70 rounded-full px-3 py-2 z-10 transition-all duration-300 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"}`}>
+          {/* Bottom controls bar - pagination + zoom + TOC */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 z-10">
             {/* TOC button */}
             {toc.length > 0 && (
-              <button
-                onClick={() => setShowToc(!showToc)}
-                className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-                aria-label="Table of Contents"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                </svg>
-              </button>
+              <>
+                <button
+                  onClick={() => setShowToc(!showToc)}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                  aria-label="Table of Contents"
+                >
+                  <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                  </svg>
+                </button>
+                <div className="w-px h-4 bg-white/20" />
+              </>
             )}
-            {toc.length > 0 && <div className="w-px h-5 bg-white/20" />}
+
             {/* Zoom controls */}
             <button
               onClick={zoomOut}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+              className="p-1 hover:bg-white/10 rounded-full transition-colors"
               aria-label="Zoom out"
             >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
               </svg>
             </button>
-            <span className="text-white/70 text-sm w-12 text-center">{fontSize}%</span>
+            <span className="text-white/50 text-xs w-8 text-center">{fontSize}%</span>
             <button
               onClick={zoomIn}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+              className="p-1 hover:bg-white/10 rounded-full transition-colors"
               aria-label="Zoom in"
             >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
+
+            {/* Pagination indicator */}
+            {totalPages > 0 && (
+              <>
+                <div className="w-px h-4 bg-white/20" />
+                <span className="text-white/50 text-xs px-1">
+                  {currentPage} / {totalPages}
+                </span>
+              </>
+            )}
           </div>
 
           {/* TOC Sidebar */}
