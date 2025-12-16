@@ -168,7 +168,7 @@ export default function EpubViewer({
   const blurClass = isBlurred ? "blur-xl scale-105 pointer-events-none" : "";
 
   return (
-    <div data-viewer="epub" className={`relative w-full h-full bg-gradient-to-br from-stone-950 to-neutral-950 flex flex-col ${className}`}>
+    <div data-viewer="epub" className={`absolute inset-0 bg-gradient-to-br from-stone-950 to-neutral-950 flex flex-col ${className}`}>
       {/* Header - centered title and TOC */}
       {showControls && !isBlurred && (
         <div className="flex-none px-4 py-3 bg-black/50 border-b border-white/10 flex items-center justify-center z-10">

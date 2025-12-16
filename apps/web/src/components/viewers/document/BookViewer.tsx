@@ -42,11 +42,11 @@ export default function BookViewer(props: ViewerProps) {
   // PDF viewer
   if (isPdf) {
     return (
-      <div data-viewer="pdf" className={`relative w-full h-full bg-gradient-to-br from-amber-950/20 to-stone-950/20 ${className}`}>
-        <div className={`w-full h-full ${blurClass} transition-all duration-500`}>
+      <div data-viewer="pdf" className={`absolute inset-0 bg-gradient-to-br from-amber-950/20 to-stone-950/20 ${className}`}>
+        <div className={`absolute inset-0 ${blurClass} transition-all duration-500`}>
           <iframe
             src={contentUrl}
-            className="w-full h-full"
+            className="absolute inset-0 w-full h-full border-0"
             title={title || "Book"}
           />
         </div>
@@ -65,8 +65,8 @@ export default function BookViewer(props: ViewerProps) {
 
   // Fallback for other formats (show metadata + download)
   return (
-    <div data-viewer="book" className={`relative w-full h-full bg-gradient-to-br from-amber-950/20 to-stone-950/20 ${className}`}>
-      <div className={`w-full h-full flex items-center justify-center ${blurClass} transition-all duration-500`}>
+    <div data-viewer="book" className={`absolute inset-0 bg-gradient-to-br from-amber-950/20 to-stone-950/20 ${className}`}>
+      <div className={`absolute inset-0 flex items-center justify-center ${blurClass} transition-all duration-500`}>
         <div className="text-center max-w-2xl px-8">
           {/* Book cover placeholder */}
           {metadata?.image ? (
