@@ -1147,9 +1147,11 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
   return (
     <div ref={slideRef} {...wrapperProps} onClick={handleContentClick}>
-      <div className={`absolute top-0 bottom-0 left-0 flex items-center justify-center transition-all duration-300 ${showBundleSidebar ? "right-80" : "right-0"}`}>
+      <div className={`absolute inset-0 transition-all duration-300 ${showBundleSidebar ? "right-80" : ""}`}>
         {showPlaceholder || !contentUrl ? (
-          <ViewerPlaceholder contentType={content.contentType} />
+          <div className="w-full h-full flex items-center justify-center">
+            <ViewerPlaceholder contentType={content.contentType} />
+          </div>
         ) : (
           <ContentViewer
             contentUrl={contentUrl}
