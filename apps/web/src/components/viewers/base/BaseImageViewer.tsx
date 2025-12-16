@@ -28,6 +28,13 @@ export function BaseImageViewer({
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!enableZoom) return;
+    // Only capture wheel when already zoomed in or holding Ctrl/Cmd (intentional zoom)
+    // This allows normal feed scrolling when image is at default zoom
+    const isIntentionalZoom = e.ctrlKey || e.metaKey;
+    const isZoomedIn = zoom > 1;
+
+    if (!isIntentionalZoom && !isZoomedIn) return;
+
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setZoom(prev => Math.max(1, Math.min(5, prev * delta)));
