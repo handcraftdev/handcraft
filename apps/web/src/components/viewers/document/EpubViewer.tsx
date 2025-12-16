@@ -8,6 +8,7 @@ export default function EpubViewer({
   title,
   metadata,
   isBlurred = false,
+  showControls = true,
   className = "",
 }: ViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -184,13 +185,13 @@ export default function EpubViewer({
         style={{ opacity: isLoading || error ? 0 : 1 }}
       />
 
-      {/* Controls */}
-      {!isLoading && !error && !isBlurred && (
+      {/* Controls - synced with overlay visibility */}
+      {!isLoading && !error && (
         <>
           {/* Page navigation */}
           <button
             onClick={prevPage}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors z-10"
+            className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-all duration-300 z-10 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             aria-label="Previous page"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,7 +200,7 @@ export default function EpubViewer({
           </button>
           <button
             onClick={nextPage}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors z-10"
+            className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-all duration-300 z-10 ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             aria-label="Next page"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +209,7 @@ export default function EpubViewer({
           </button>
 
           {/* Zoom controls */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 rounded-full px-3 py-2 z-10">
+          <div className={`absolute bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 rounded-full px-3 py-2 z-10 transition-all duration-300 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}>
             <button
               onClick={zoomOut}
               className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
