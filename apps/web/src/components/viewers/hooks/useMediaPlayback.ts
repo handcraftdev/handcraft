@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect } from "react";
 
 export interface MediaPlaybackState {
   isPlaying: boolean;
@@ -66,16 +66,32 @@ export function useMediaPlayback(
     };
   }, [mediaRef]);
 
-  // Play/pause based on isActive
-  useEffect(() => {
+  // Play/pause based on isActive - use useLayoutEffect for synchronous execution
+  // This prevents audio from continuing to play during React's commit phase
+  useLayoutEffect(() => {
     const media = mediaRef.current;
     if (!media) return;
 
     if (isActive) {
+      // When becoming active, pause ALL other media elements first
+      // This ensures proper sync between content viewers, bundle wrappers, etc.
+      const otherMedia = document.querySelectorAll('video, audio');
+      otherMedia.forEach((el) => {
+        if (el !== media && el instanceof HTMLMediaElement) {
+          el.pause();
+        }
+      });
+      // Then play our media
       media.play().catch(() => {});
     } else {
       media.pause();
     }
+
+    // Cleanup: always pause when component unmounts or before effect re-runs
+    // This ensures audio stops when navigating away, even if React batches updates
+    return () => {
+      media.pause();
+    };
   }, [isActive, mediaRef]);
 
   const play = useCallback(() => {
