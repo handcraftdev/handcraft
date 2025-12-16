@@ -92,7 +92,7 @@ export function ViewerPlaceholder({ contentType }: { contentType: ContentType })
   const iconPath = DOMAIN_ICONS[domain] || DOMAIN_ICONS.file;
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-black/50">
+    <div className="w-full h-full flex items-center justify-center">
       <div className="animate-pulse">
         <svg
           className="w-24 h-24 text-white/20"

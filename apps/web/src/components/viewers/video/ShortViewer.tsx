@@ -18,7 +18,7 @@ export default function ShortViewer({
   const blurClass = isBlurred ? "blur-xl scale-105" : "";
 
   return (
-    <div className={`relative w-full h-full bg-black ${className}`}>
+    <div className={`relative w-full h-full ${className}`}>
       {/* Vertical video optimized for mobile/portrait */}
       <video
         ref={videoRef}

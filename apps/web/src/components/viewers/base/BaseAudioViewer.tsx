@@ -29,11 +29,11 @@ export function BaseAudioViewer({
   const albumArt = metadata?.image;
 
   return (
-    <div className={`relative w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-transparent ${className}`}>
+    <div className={`relative w-full h-full flex items-center justify-center ${className}`}>
       {/* Audio element always in DOM for continuous playback */}
       <audio ref={audioRef} src={contentUrl} className="hidden" />
 
-      <div className={`text-center ${blurClass} transition-all duration-500`}>
+      <div className={`relative text-center ${blurClass} transition-all duration-500`}>
         {albumArt ? (
           <div className="w-64 h-64 mx-auto mb-8 rounded-lg overflow-hidden shadow-2xl">
             <img src={albumArt} alt={title} className="w-full h-full object-cover" />

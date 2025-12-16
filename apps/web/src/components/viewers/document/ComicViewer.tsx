@@ -35,7 +35,7 @@ export default function ComicViewer({
   };
 
   return (
-    <div className={`relative w-full h-full bg-black ${className}`}>
+    <div className={`relative w-full h-full ${className}`}>
       {isPdf ? (
         <div className={`w-full h-full ${blurClass} transition-all duration-500`}>
           <iframe

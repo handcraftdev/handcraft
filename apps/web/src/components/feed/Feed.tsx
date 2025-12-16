@@ -1128,8 +1128,24 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
     ? { className: "h-full w-full relative flex items-center justify-center bg-black overflow-hidden" }
     : { "data-feed-item": true, "data-index": index, className: "h-screen w-full snap-start snap-always relative flex items-center justify-center bg-black overflow-hidden" };
 
+  // Get thumbnail for blurred background
+  // Use metadata.image if available, otherwise use content itself for images
+  const isImageContent = content.contentType === 8 || content.contentType === 9; // Photo, Artwork
+  const thumbnailUrl = content.metadata?.image || (isImageContent && contentUrl ? contentUrl : undefined);
+
   return (
     <div ref={slideRef} {...wrapperProps} onClick={handleContentClick}>
+      {/* Blurred thumbnail background */}
+      {thumbnailUrl && (
+        <>
+          <div
+            className="absolute inset-0 bg-cover bg-center blur scale-110"
+            style={{ backgroundImage: `url(${thumbnailUrl})` }}
+          />
+          <div className="absolute inset-0 bg-black/60" />
+        </>
+      )}
+
       <div className={`absolute inset-0 transition-all duration-300 ${showBundleSidebar ? "right-80" : ""}`}>
         {showPlaceholder || !contentUrl ? (
           <div className="w-full h-full flex items-center justify-center">
