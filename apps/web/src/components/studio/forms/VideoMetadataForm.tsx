@@ -177,7 +177,77 @@ export function VideoMetadataForm({
     );
   }
 
-  // Generic video form (0, 3, 4)
+  if (contentType === 3) {
+    // Music Video form - same fields as Music
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-2 text-white/70">Track Title *</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onBasicUpdate('title', e.target.value)}
+            placeholder="Song title"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-white/70">Artist *</label>
+            <input
+              type="text"
+              value={metadata.artist || ''}
+              onChange={(e) => onUpdate('artist', e.target.value)}
+              placeholder="Artist name"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2 text-white/70">Album</label>
+            <input
+              type="text"
+              value={metadata.album || ''}
+              onChange={(e) => onUpdate('album', e.target.value)}
+              placeholder="Album name"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2 text-white/70">Genre</label>
+          <input
+            type="text"
+            value={metadata.genre || ''}
+            onChange={(e) => onUpdate('genre', e.target.value)}
+            placeholder="Electronic, Jazz..."
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2 text-white/70">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => onBasicUpdate('description', e.target.value)}
+            placeholder="About this music video..."
+            rows={2}
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2 text-white/70">Tags</label>
+          <input
+            type="text"
+            value={tagsString}
+            onChange={(e) => handleTagsChange(e.target.value)}
+            placeholder="comma, separated, tags"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Generic video form (0, 4)
   return (
     <div className="space-y-4">
       <div>
