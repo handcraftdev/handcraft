@@ -33,8 +33,11 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [alertModal, setAlertModal] = useState<{ title: string; message: string } | null>(null);
 
+  // Use access_token string as dependency, not the whole session object
+  const accessToken = session?.access_token;
+
   const fetchDrafts = useCallback(async () => {
-    if (!isAuthenticated || !session?.access_token) {
+    if (!isAuthenticated || !accessToken) {
       setDrafts([]);
       setIsLoading(false);
       return;
@@ -46,13 +49,13 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
     try {
       const response = await fetch("/api/drafts", {
         headers: {
-          "Authorization": `Bearer ${session.access_token}`,
+          "Authorization": `Bearer ${accessToken}`,
         },
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("Drafts API error response:", errorData);
+        console.error("[DraftsList] API error response:", errorData);
         throw new Error(errorData.error || "Failed to fetch drafts");
       }
 
@@ -64,11 +67,11 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
       setDrafts(filteredDrafts);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load drafts");
-      console.error("Error fetching drafts:", err);
+      console.error("[DraftsList] Error fetching drafts:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, session, excludeStatuses]);
+  }, [isAuthenticated, accessToken, excludeStatuses]);
 
   useEffect(() => {
     fetchDrafts();

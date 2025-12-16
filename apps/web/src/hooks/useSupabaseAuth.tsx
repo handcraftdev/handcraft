@@ -1,25 +1,33 @@
-import { useEffect, useCallback, createContext, useContext, useRef, useState } from 'react';
+import { useEffect, useCallback, createContext, useContext, useState, useMemo, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
 
-// Create a single Supabase client instance for auth (singleton)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Singleton Supabase client - created once at module level
-let supabaseClient: SupabaseClient | null = null;
+// Cache clients per wallet to avoid "Multiple GoTrueClient instances" warning
+const clientCache = new Map<string, SupabaseClient>();
 
-function getSupabaseClient(): SupabaseClient {
-  if (!supabaseClient) {
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+// Get or create a Supabase client with per-wallet storage key for session isolation
+function getSupabaseClientForWallet(walletAddress: string | null): SupabaseClient {
+  const cacheKey = walletAddress || 'anonymous';
+
+  if (!clientCache.has(cacheKey)) {
+    const storageKey = walletAddress
+      ? `sb-handcraft-auth-${walletAddress}`
+      : 'sb-handcraft-auth-anonymous';
+
+    clientCache.set(cacheKey, createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        storageKey,
       },
-    });
+    }));
   }
-  return supabaseClient;
+
+  return clientCache.get(cacheKey)!;
 }
 
 // Auth state interface
@@ -61,10 +69,31 @@ interface SupabaseAuthProviderProps {
 
 /**
  * Provider component that manages Supabase auth state with native Web3 auth
+ * Each wallet gets isolated session storage to prevent cross-wallet session contamination
  */
 export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const wallet = useWallet();
-  const supabase = getSupabaseClient();
+  const walletAddress = wallet.publicKey?.toBase58() ?? null;
+
+  // Track previous wallet to detect changes
+  const prevWalletRef = useRef<string | null>(null);
+  const clientRef = useRef<SupabaseClient | null>(null);
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+
+  // Get cached client for current wallet
+  const supabase = useMemo(() => {
+    // Clean up previous subscription when wallet changes
+    if (prevWalletRef.current !== walletAddress && subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+    prevWalletRef.current = walletAddress;
+
+    const client = getSupabaseClientForWallet(walletAddress);
+    clientRef.current = client;
+    return client;
+  }, [walletAddress]);
+
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     session: null,
@@ -72,13 +101,7 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     error: null,
   });
 
-  // Track if we've attempted sign-in for this wallet connection
-  const signInAttempted = useRef(false);
-  const lastWalletAddress = useRef<string | null>(null);
-  // Track if wallet was ever connected (to distinguish page refresh from actual disconnect)
-  const walletWasConnected = useRef(false);
-
-  // Sign in with Web3 wallet (native Supabase Web3 auth)
+  // Sign in with Web3 wallet
   const signIn = useCallback(async () => {
     if (!wallet.connected || !wallet.publicKey) {
       setAuthState(prev => ({
@@ -91,17 +114,12 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      console.log('[SupabaseAuth] Signing in with wallet:', wallet.publicKey.toBase58());
-
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: 'solana',
         statement: 'Sign in to Handcraft',
-        wallet: wallet as any,
       });
 
       if (error) throw error;
-
-      console.log('[SupabaseAuth] Web3 sign in successful:', data.user?.id);
       // Auth state will be updated by onAuthStateChange listener
     } catch (err) {
       console.error('[SupabaseAuth] Sign in failed:', err);
@@ -123,15 +141,12 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
         console.warn('[SupabaseAuth] Supabase signOut error:', error);
       }
 
-      // Clear local state
       setAuthState({
         user: null,
         session: null,
         loading: false,
         error: null,
       });
-
-      console.log('[SupabaseAuth] Signed out');
     } catch (err) {
       console.error('[SupabaseAuth] Sign out failed:', err);
       setAuthState(prev => ({
@@ -142,88 +157,51 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     }
   }, [supabase]);
 
-  // Initialize auth state from existing session
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
+  // Track current session to avoid redundant updates
+  const currentSessionRef = useRef<string | null>(null);
 
-        setAuthState({
-          user: session?.user ?? null,
-          session,
-          loading: false,
-          error: null,
-        });
-      } catch (err) {
-        console.error('[SupabaseAuth] Failed to get session:', err);
-        setAuthState(prev => ({
-          ...prev,
-          loading: false,
-          error: null,
-        }));
-      }
+  // Initialize auth state and listen for changes
+  useEffect(() => {
+    let isMounted = true;
+
+    // Helper to update state only if session actually changed
+    const updateSession = (session: Session | null) => {
+      const sessionId = session?.access_token || null;
+      if (currentSessionRef.current === sessionId) return; // Skip if same session
+      currentSessionRef.current = sessionId;
+
+      setAuthState({
+        user: session?.user ?? null,
+        session,
+        loading: false,
+        error: null,
+      });
     };
 
-    initializeAuth();
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      updateSession(session);
+    });
 
-    // Listen for auth state changes
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[SupabaseAuth] Auth state changed:', event, session?.user?.id);
-        setAuthState({
-          user: session?.user ?? null,
-          session,
-          loading: false,
-          error: null,
-        });
+      (event, session) => {
+        if (!isMounted) return;
+        // Skip INITIAL_SESSION if we already have a session (SIGNED_IN already fired)
+        if (event === 'INITIAL_SESSION' && currentSessionRef.current) return;
+        updateSession(session);
       }
     );
 
+    subscriptionRef.current = subscription;
+
     return () => {
+      isMounted = false;
+      currentSessionRef.current = null;
       subscription.unsubscribe();
     };
   }, [supabase]);
-
-  // Auto sign-in when wallet connects (if no existing session)
-  useEffect(() => {
-    const walletAddress = wallet.publicKey?.toBase58() ?? null;
-
-    // Reset sign-in attempt tracker if wallet changes
-    if (walletAddress !== lastWalletAddress.current) {
-      signInAttempted.current = false;
-      lastWalletAddress.current = walletAddress;
-    }
-
-    // Auto sign-in when wallet connects and not already authenticated
-    if (
-      wallet.connected &&
-      wallet.publicKey &&
-      !authState.loading &&
-      !authState.session &&
-      !signInAttempted.current
-    ) {
-      console.log('[SupabaseAuth] Auto-signing in with wallet:', wallet.publicKey.toBase58());
-      signInAttempted.current = true;
-      signIn();
-    }
-  }, [wallet.connected, wallet.publicKey, authState.loading, authState.session, signIn]);
-
-  // Track when wallet connects
-  useEffect(() => {
-    if (wallet.connected) {
-      walletWasConnected.current = true;
-    }
-  }, [wallet.connected]);
-
-  // Sign out when wallet disconnects (only if it was previously connected)
-  useEffect(() => {
-    if (!wallet.connected && authState.session && walletWasConnected.current) {
-      console.log('[SupabaseAuth] Wallet disconnected, signing out');
-      walletWasConnected.current = false;
-      signOut();
-    }
-  }, [wallet.connected, authState.session, signOut]);
 
   const value: SupabaseAuthContextValue = {
     ...authState,

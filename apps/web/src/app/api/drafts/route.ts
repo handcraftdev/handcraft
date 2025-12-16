@@ -15,62 +15,36 @@ function formatError(error: unknown): { message: string; details?: unknown } {
 
 // GET /api/drafts - List drafts for the current user
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  console.log('[GET /api/drafts] === REQUEST START ===');
+
   try {
     const accessToken = getAccessTokenFromHeader(request.headers.get('authorization'));
 
     if (!accessToken) {
+      console.log('[GET /api/drafts] No access token');
       return NextResponse.json(
         { error: 'Authentication required', code: 'MISSING_AUTH' },
         { status: 401 }
       );
     }
 
-    // Create authenticated Supabase client
+    // Decode JWT to get wallet
+    let jwtWallet = 'unknown';
+    const parts = accessToken.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      jwtWallet = payload.custom_claims?.address || payload.wallet_address || 'not-found';
+    }
+    console.log('[GET /api/drafts] JWT wallet:', jwtWallet);
+
+    // Create authenticated Supabase client - RLS will filter by wallet from JWT
     const supabase = createAuthenticatedClient(accessToken);
 
-    // Get the authenticated user's wallet address
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Invalid session', code: 'AUTH_ERROR' },
-        { status: 401 }
-      );
-    }
-
-    // Try multiple paths to find wallet address from Web3 auth
-    const walletAddress =
-      user.user_metadata?.custom_claims?.address ||
-      user.user_metadata?.wallet_address ||
-      user.app_metadata?.address ||
-      user.identities?.[0]?.identity_data?.custom_claims?.address ||
-      user.identities?.[0]?.identity_data?.address ||
-      null;
-
-    if (!walletAddress) {
-      return NextResponse.json(
-        {
-          error: 'Wallet address not found in session',
-          code: 'WALLET_ERROR',
-          debug: {
-            userId: user.id,
-            email: user.email,
-            user_metadata: user.user_metadata,
-            app_metadata: user.app_metadata,
-            identities: user.identities?.map(i => ({
-              provider: i.provider,
-              identity_data: i.identity_data,
-            })),
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    // Filter drafts by the authenticated user's wallet
+    // Query drafts - RLS policy handles filtering by creator_wallet
     const { data, error } = await supabase
       .from('content_drafts')
       .select('*')
-      .eq('creator_wallet', walletAddress)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -81,6 +55,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('[GET /api/drafts] Returned', data?.length || 0, 'drafts in', Date.now() - startTime, 'ms');
     return NextResponse.json({ drafts: data });
   } catch (error) {
     console.error('[GET /api/drafts] Unexpected error:', error);
