@@ -230,6 +230,8 @@ pub enum ContentRegistryError {
     InvalidReportCategory,
     #[msg("Report details CID too long")]
     ReportDetailsTooLong,
+    #[msg("Timestamp too far from current time")]
+    InvalidTimestamp,
     #[msg("Invalid moderation pool PDA")]
     InvalidModerationPool,
     #[msg("Invalid content report PDA")]

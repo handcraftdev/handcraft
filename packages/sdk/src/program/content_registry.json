@@ -4742,6 +4742,68 @@
       ]
     },
     {
+      "name": "initialize_moderator_registry",
+      "docs": [
+        "Initialize the moderator registry (one-time, admin only)"
+      ],
+      "discriminator": [
+        30,
+        172,
+        27,
+        57,
+        22,
+        2,
+        95,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "moderator_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "ecosystem_config"
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "join_creator_membership",
       "docs": [
         "Join creator membership via Streamflow CPI",
@@ -6710,6 +6772,69 @@
       ]
     },
     {
+      "name": "register_moderator",
+      "docs": [
+        "Register as a moderator by staking SOL"
+      ],
+      "discriminator": [
+        159,
+        28,
+        33,
+        150,
+        199,
+        174,
+        232,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "moderator_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "moderator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "moderator_registry",
+          "writable": true
+        },
+        {
+          "name": "moderator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "stake_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "register_nft_in_subscription_pools",
       "docs": [
         "Register a newly minted content NFT in all subscription pools",
@@ -7830,6 +7955,170 @@
       ]
     },
     {
+      "name": "resolve_moderation",
+      "docs": [
+        "Resolve a moderation report after voting period ends"
+      ],
+      "discriminator": [
+        17,
+        120,
+        126,
+        185,
+        48,
+        80,
+        224,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "moderation_pool",
+          "writable": true
+        },
+        {
+          "name": "report",
+          "writable": true
+        },
+        {
+          "name": "moderator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reporter",
+          "docs": [
+            "Reporter (may receive refund if report upheld)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "resolver",
+          "docs": [
+            "Resolver (admin or moderator)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolve_moderation_with_attestation",
+      "docs": [
+        "Resolve moderation with Solana Attestation Service (SAS) attestation",
+        "Links the on-chain moderation decision to a verifiable attestation"
+      ],
+      "discriminator": [
+        50,
+        138,
+        46,
+        39,
+        162,
+        99,
+        131,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "moderation_pool",
+          "writable": true
+        },
+        {
+          "name": "report",
+          "writable": true
+        },
+        {
+          "name": "moderator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reporter",
+          "docs": [
+            "Reporter (may receive refund if report upheld)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "resolver",
+          "docs": [
+            "Resolver (admin or moderator)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "attestation_id",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "simple_mint",
       "docs": [
         "Simple mint content NFT with slot hash randomness + full subscription pool tracking",
@@ -8821,6 +9110,226 @@
         {
           "name": "bundle_name",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "slash_moderator",
+      "docs": [
+        "Slash a moderator for malicious behavior (admin only)"
+      ],
+      "discriminator": [
+        99,
+        70,
+        101,
+        135,
+        64,
+        53,
+        106,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "moderator_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "target"
+              }
+            ]
+          }
+        },
+        {
+          "name": "moderator_registry",
+          "writable": true
+        },
+        {
+          "name": "ecosystem_config"
+        },
+        {
+          "name": "target",
+          "docs": [
+            "The moderator being slashed"
+          ]
+        },
+        {
+          "name": "admin",
+          "docs": [
+            "Admin wallet (receives slashed stake)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_report",
+      "docs": [
+        "Submit a content moderation report"
+      ],
+      "discriminator": [
+        27,
+        178,
+        64,
+        9,
+        20,
+        46,
+        250,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "moderation_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "report",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116,
+                  95,
+                  114,
+                  101,
+                  112,
+                  111,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              },
+              {
+                "kind": "account",
+                "path": "reporter"
+              },
+              {
+                "kind": "arg",
+                "path": "timestamp"
+              }
+            ]
+          }
+        },
+        {
+          "name": "moderator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "reporter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "category",
+          "type": {
+            "defined": {
+              "name": "ReportCategory"
+            }
+          }
+        },
+        {
+          "name": "details_cid",
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
         }
       ]
     },
@@ -9823,6 +10332,64 @@
       ]
     },
     {
+      "name": "unregister_moderator",
+      "docs": [
+        "Unregister as a moderator and withdraw stake"
+      ],
+      "discriminator": [
+        155,
+        67,
+        180,
+        52,
+        27,
+        125,
+        93,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "moderator_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "moderator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "moderator_registry",
+          "writable": true
+        },
+        {
+          "name": "moderator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "unwrap_creator_patron_treasury_wsol",
       "docs": [
         "Unwrap WSOL from creator patron streaming treasury to native SOL",
@@ -10811,6 +11378,174 @@
       ]
     },
     {
+      "name": "voluntary_removal",
+      "docs": [
+        "Allow creator to voluntarily remove reported content"
+      ],
+      "discriminator": [
+        96,
+        45,
+        158,
+        76,
+        56,
+        221,
+        238,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "content",
+          "writable": true
+        },
+        {
+          "name": "moderation_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "report",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "content"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "vote_on_report",
+      "docs": [
+        "Vote on a content moderation report (moderators only)"
+      ],
+      "discriminator": [
+        211,
+        25,
+        50,
+        165,
+        151,
+        80,
+        235,
+        245
+      ],
+      "accounts": [
+        {
+          "name": "report",
+          "writable": true
+        },
+        {
+          "name": "moderator_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  111,
+                  100,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "moderator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vote_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "report"
+              },
+              {
+                "kind": "account",
+                "path": "moderator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "moderator_registry",
+          "writable": true
+        },
+        {
+          "name": "moderator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "choice",
+          "type": {
+            "defined": {
+              "name": "VoteChoice"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw_creator_stream_to_treasury",
       "docs": [
         "Withdraw accumulated WSOL from Streamflow stream to creator patron treasury",
@@ -11230,6 +11965,19 @@
       ]
     },
     {
+      "name": "ContentReport",
+      "discriminator": [
+        160,
+        240,
+        133,
+        20,
+        42,
+        27,
+        141,
+        14
+      ]
+    },
+    {
       "name": "ContentRewardPool",
       "discriminator": [
         118,
@@ -11386,6 +12134,45 @@
       ]
     },
     {
+      "name": "ModerationPool",
+      "discriminator": [
+        35,
+        108,
+        149,
+        186,
+        242,
+        22,
+        234,
+        151
+      ]
+    },
+    {
+      "name": "ModeratorAccount",
+      "discriminator": [
+        129,
+        208,
+        190,
+        35,
+        9,
+        28,
+        249,
+        53
+      ]
+    },
+    {
+      "name": "ModeratorRegistry",
+      "discriminator": [
+        12,
+        176,
+        101,
+        37,
+        86,
+        96,
+        146,
+        200
+      ]
+    },
+    {
       "name": "RentConfig",
       "discriminator": [
         51,
@@ -11435,6 +12222,19 @@
         180,
         13,
         194
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
       ]
     },
     {
@@ -11518,6 +12318,58 @@
       ]
     },
     {
+      "name": "RewardClaimEvent",
+      "discriminator": [
+        205,
+        12,
+        194,
+        218,
+        63,
+        68,
+        119,
+        89
+      ]
+    },
+    {
+      "name": "RewardDepositEvent",
+      "discriminator": [
+        222,
+        218,
+        60,
+        95,
+        59,
+        13,
+        62,
+        112
+      ]
+    },
+    {
+      "name": "RewardDistributionEvent",
+      "discriminator": [
+        118,
+        252,
+        226,
+        250,
+        126,
+        89,
+        179,
+        81
+      ]
+    },
+    {
+      "name": "RewardTransferEvent",
+      "discriminator": [
+        43,
+        49,
+        176,
+        12,
+        171,
+        147,
+        247,
+        185
+      ]
+    },
+    {
       "name": "SecondaryRoyaltySyncEvent",
       "discriminator": [
         133,
@@ -11528,6 +12380,32 @@
         156,
         56,
         21
+      ]
+    },
+    {
+      "name": "SubscriptionCancelledEvent",
+      "discriminator": [
+        10,
+        87,
+        228,
+        73,
+        76,
+        115,
+        135,
+        170
+      ]
+    },
+    {
+      "name": "SubscriptionCreatedEvent",
+      "discriminator": [
+        247,
+        246,
+        115,
+        176,
+        253,
+        84,
+        244,
+        155
       ]
     },
     {
@@ -12002,6 +12880,91 @@
       "code": 6088,
       "name": "InvalidMint",
       "msg": "Invalid token mint - expected WSOL"
+    },
+    {
+      "code": 6089,
+      "name": "InsufficientStake",
+      "msg": "Insufficient stake to become moderator"
+    },
+    {
+      "code": 6090,
+      "name": "ModeratorNotFound",
+      "msg": "Moderator not found"
+    },
+    {
+      "code": 6091,
+      "name": "ModeratorNotActive",
+      "msg": "Moderator is not active"
+    },
+    {
+      "code": 6092,
+      "name": "AlreadyVoted",
+      "msg": "Moderator has already voted on this report"
+    },
+    {
+      "code": 6093,
+      "name": "VotingEnded",
+      "msg": "Voting period has ended"
+    },
+    {
+      "code": 6094,
+      "name": "VotingNotEnded",
+      "msg": "Voting period has not ended yet"
+    },
+    {
+      "code": 6095,
+      "name": "ReportNotFound",
+      "msg": "Report not found"
+    },
+    {
+      "code": 6096,
+      "name": "ReportAlreadyResolved",
+      "msg": "Report has already been resolved"
+    },
+    {
+      "code": 6097,
+      "name": "QuorumNotReached",
+      "msg": "Quorum not reached"
+    },
+    {
+      "code": 6098,
+      "name": "InvalidReportCategory",
+      "msg": "Invalid report category"
+    },
+    {
+      "code": 6099,
+      "name": "ReportDetailsTooLong",
+      "msg": "Report details CID too long"
+    },
+    {
+      "code": 6100,
+      "name": "InvalidTimestamp",
+      "msg": "Timestamp too far from current time"
+    },
+    {
+      "code": 6101,
+      "name": "InvalidModerationPool",
+      "msg": "Invalid moderation pool PDA"
+    },
+    {
+      "code": 6102,
+      "name": "InvalidContentReport",
+      "msg": "Invalid content report PDA"
+    },
+    {
+      "code": 6103,
+      "name": "InvalidVoteRecord",
+      "msg": "Invalid vote record PDA"
+    },
+    {
+      "code": 6104,
+      "name": "InvalidModeratorAccount",
+      "msg": "Invalid moderator account PDA"
+    },
+    {
+      "code": 6105,
+      "name": "ModerationAdminOnly",
+      "msg": "Only admin can perform this action"
     }
   ],
   "types": [
@@ -12769,6 +13732,141 @@
       }
     },
     {
+      "name": "ContentReport",
+      "docs": [
+        "Content report submitted by users",
+        "PDA seeds: [\"content_report\", content, reporter, timestamp]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "Content being reported"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reporter",
+            "docs": [
+              "User who submitted the report"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "category",
+            "docs": [
+              "Category of the report"
+            ],
+            "type": {
+              "defined": {
+                "name": "ReportCategory"
+              }
+            }
+          },
+          {
+            "name": "details_cid",
+            "docs": [
+              "IPFS CID containing detailed report information"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status of the report"
+            ],
+            "type": {
+              "defined": {
+                "name": "ReportStatus"
+              }
+            }
+          },
+          {
+            "name": "submitted_at",
+            "docs": [
+              "Timestamp when report was submitted"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "voting_ends_at",
+            "docs": [
+              "Timestamp when voting ends"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "votes_remove",
+            "docs": [
+              "Number of votes to remove"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "votes_keep",
+            "docs": [
+              "Number of votes to keep"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "votes_abstain",
+            "docs": [
+              "Number of abstentions"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_votes",
+            "docs": [
+              "Total number of votes cast"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "outcome",
+            "docs": [
+              "Resolution outcome (if resolved)"
+            ],
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ResolutionOutcome"
+                }
+              }
+            }
+          },
+          {
+            "name": "resolved_at",
+            "docs": [
+              "Timestamp when resolved"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "resolver",
+            "docs": [
+              "Moderator who resolved the report"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "reporter_refunded",
+            "docs": [
+              "Whether reporter was refunded (if report upheld)"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "ContentRewardPool",
       "docs": [
         "Per-content reward pool with rarity-weighted distribution",
@@ -13353,6 +14451,45 @@
       }
     },
     {
+      "name": "FeeSplit",
+      "docs": [
+        "Fee split breakdown for primary sales/subscriptions"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_share",
+            "docs": [
+              "Creator share (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "platform_share",
+            "docs": [
+              "Platform share (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ecosystem_share",
+            "docs": [
+              "Ecosystem treasury share (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "holder_share",
+            "docs": [
+              "Holder reward pool share (lamports)"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "GlobalHolderPool",
       "docs": [
         "Global pool for ecosystem subscription holder rewards",
@@ -13475,6 +14612,224 @@
             "name": "updated_at",
             "docs": [
               "Timestamp when config was last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModerationPool",
+      "docs": [
+        "Per-content moderation pool for tracking reports and attestations",
+        "PDA seeds: [\"moderation_pool\", content]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "content",
+            "docs": [
+              "Content being moderated"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_reports",
+            "docs": [
+              "Total number of reports submitted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "active_reports",
+            "docs": [
+              "Number of active (pending/voting) reports"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "upheld_reports",
+            "docs": [
+              "Number of upheld reports (content removed)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "dismissed_reports",
+            "docs": [
+              "Number of dismissed reports"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_flagged",
+            "docs": [
+              "Whether content is currently flagged/removed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "flagged_at",
+            "docs": [
+              "Timestamp when content was flagged (if flagged)"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "sas_attestation_id",
+            "docs": [
+              "Solana Attestation Service (SAS) attestation ID",
+              "Points to on-chain attestation proving moderation decision"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when pool was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Timestamp when last updated"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModeratorAccount",
+      "docs": [
+        "Individual moderator account",
+        "PDA seeds: [\"moderator\", moderator_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "moderator",
+            "docs": [
+              "Moderator's wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "docs": [
+              "Amount staked"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Whether moderator is active"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "votes_cast",
+            "docs": [
+              "Number of votes cast"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "correct_votes",
+            "docs": [
+              "Number of correct votes (aligned with final outcome)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reputation",
+            "docs": [
+              "Reputation score (basis points, 10000 = 100%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "is_slashed",
+            "docs": [
+              "Whether moderator has been slashed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "joined_at",
+            "docs": [
+              "Timestamp when joined"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_vote_at",
+            "docs": [
+              "Timestamp when last voted"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ModeratorRegistry",
+      "docs": [
+        "Global moderator registry tracking all active moderators",
+        "PDA seeds: [\"moderator_registry\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "docs": [
+              "Admin who can add/remove moderators"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "total_moderators",
+            "docs": [
+              "Total number of registered moderators"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "active_moderators",
+            "docs": [
+              "Number of active moderators (staked and not slashed)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_stake",
+            "docs": [
+              "Total stake held by all moderators"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_votes_cast",
+            "docs": [
+              "Total number of votes cast across all reports"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when registry was created"
             ],
             "type": "i64"
           }
@@ -13772,6 +15127,425 @@
       }
     },
     {
+      "name": "ReportCategory",
+      "docs": [
+        "Report category types"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Copyright"
+          },
+          {
+            "name": "Illegal"
+          },
+          {
+            "name": "Spam"
+          },
+          {
+            "name": "AdultContent"
+          },
+          {
+            "name": "Harassment"
+          },
+          {
+            "name": "Fraud"
+          },
+          {
+            "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReportStatus",
+      "docs": [
+        "Current status of a report"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "VotingEnded"
+          },
+          {
+            "name": "Resolved"
+          },
+          {
+            "name": "Expired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ResolutionOutcome",
+      "docs": [
+        "Outcome of moderation resolution"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ContentRemoved"
+          },
+          {
+            "name": "Dismissed"
+          },
+          {
+            "name": "NoQuorum"
+          },
+          {
+            "name": "VoluntaryRemoval"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardClaimEvent",
+      "docs": [
+        "Emitted when a user claims rewards from a pool"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool_type",
+            "docs": [
+              "Pool type: \"content\", \"bundle\", \"patron\", \"global_holder\", \"creator_dist\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Pool identifier (content/bundle/creator pubkey, or empty for global)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "claimer",
+            "docs": [
+              "Claimer wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount claimed (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "nft_asset",
+            "docs": [
+              "NFT asset (if holder claim)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "nft_weight",
+            "docs": [
+              "NFT weight (if holder claim)"
+            ],
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "creator_weight",
+            "docs": [
+              "Creator weight (if creator ecosystem payout)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "debt_before",
+            "docs": [
+              "Reward debt before claim"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "debt_after",
+            "docs": [
+              "Reward debt after claim"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardDepositEvent",
+      "docs": [
+        "Emitted when rewards are deposited to a pool (primary sales, subscriptions)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool_type",
+            "docs": [
+              "Type of pool: \"content\", \"bundle\", \"creator_patron\", \"global_holder\", \"creator_dist\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Pool identifier (content/bundle/creator pubkey, or empty string for global pools)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount deposited to pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "source_type",
+            "docs": [
+              "Source transaction type: \"mint\", \"patron_subscription\", \"ecosystem_subscription\", \"secondary_royalty\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "source",
+            "docs": [
+              "Source identifier (buyer/subscriber wallet, or secondary sale asset)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator involved (if applicable)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "content_or_bundle",
+            "docs": [
+              "Content or bundle involved (if applicable)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_reward_per_share",
+            "docs": [
+              "New reward_per_share after deposit"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "fee_split",
+            "docs": [
+              "Fee split breakdown (if applicable - zero values if not a primary transaction)"
+            ],
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "FeeSplit"
+                }
+              }
+            }
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardDistributionEvent",
+      "docs": [
+        "Emitted when epoch-based lazy distribution occurs"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "distribution_type",
+            "docs": [
+              "Distribution type: \"patron_pool\", \"ecosystem_pools\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Pool identifier (creator pubkey for patron, empty for ecosystem)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "total_amount",
+            "docs": [
+              "Total amount distributed from streaming treasury (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_amount",
+            "docs": [
+              "Amount to creator (for patron distributions only)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "platform_amount",
+            "docs": [
+              "Amount to platform treasury"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "ecosystem_amount",
+            "docs": [
+              "Amount to ecosystem treasury"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "holder_pool_amount",
+            "docs": [
+              "Amount to holder pool"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_dist_pool_amount",
+            "docs": [
+              "Amount to creator distribution pool (for ecosystem distributions only)"
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "epoch_timestamp",
+            "docs": [
+              "Epoch timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardTransferEvent",
+      "docs": [
+        "Emitted when rewards are transferred between accounts (e.g., on NFT transfer)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool_type",
+            "docs": [
+              "Pool type affected: \"content\", \"bundle\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Pool identifier (content or bundle pubkey)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sender",
+            "docs": [
+              "Sender wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "receiver",
+            "docs": [
+              "Receiver wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_asset",
+            "docs": [
+              "NFT asset transferred"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sender_claimed",
+            "docs": [
+              "Amount sender claimed before transfer (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sender_new_debt",
+            "docs": [
+              "Sender's new debt after transfer"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "receiver_new_debt",
+            "docs": [
+              "Receiver's new debt after transfer"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SecondaryRoyaltySyncEvent",
       "docs": [
         "Emitted when secondary sale royalties are synced into the reward pool",
@@ -13805,6 +15579,109 @@
             "name": "timestamp",
             "docs": [
               "Timestamp of sync"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SubscriptionCancelledEvent",
+      "docs": [
+        "Emitted when a subscription is cancelled"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subscription_type",
+            "docs": [
+              "Subscription type: \"patron_membership\", \"patron_subscription\", \"ecosystem\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "subscriber",
+            "docs": [
+              "Subscriber wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator (for patron subscriptions)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "stream_id",
+            "docs": [
+              "Streamflow stream ID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_at",
+            "docs": [
+              "Cancelled timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SubscriptionCreatedEvent",
+      "docs": [
+        "Emitted when a subscription is created (patron or ecosystem)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "subscription_type",
+            "docs": [
+              "Subscription type: \"patron_membership\", \"patron_subscription\", \"ecosystem\""
+            ],
+            "type": "string"
+          },
+          {
+            "name": "subscriber",
+            "docs": [
+              "Subscriber wallet"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Creator (for patron subscriptions)"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "price",
+            "docs": [
+              "Monthly price (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "stream_id",
+            "docs": [
+              "Streamflow stream ID"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "started_at",
+            "docs": [
+              "Started timestamp"
             ],
             "type": "i64"
           }
@@ -13993,6 +15870,70 @@
           },
           {
             "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteChoice",
+      "docs": [
+        "Moderator vote choice"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Remove"
+          },
+          {
+            "name": "Keep"
+          },
+          {
+            "name": "Abstain"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "docs": [
+        "Individual vote record",
+        "PDA seeds: [\"vote_record\", report, moderator]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "docs": [
+              "Report being voted on"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "moderator",
+            "docs": [
+              "Moderator who cast the vote"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "choice",
+            "docs": [
+              "Vote choice"
+            ],
+            "type": {
+              "defined": {
+                "name": "VoteChoice"
+              }
+            }
+          },
+          {
+            "name": "voted_at",
+            "docs": [
+              "Timestamp when vote was cast"
+            ],
             "type": "i64"
           }
         ]

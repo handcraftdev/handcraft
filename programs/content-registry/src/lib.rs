@@ -1978,8 +1978,9 @@ pub mod content_registry {
         ctx: Context<SubmitReport>,
         category: ReportCategory,
         details_cid: String,
+        timestamp: i64,
     ) -> Result<()> {
-        handle_submit_report(ctx, category, details_cid)
+        handle_submit_report(ctx, category, details_cid, timestamp)
     }
 
     /// Vote on a content moderation report (moderators only)

@@ -4,6 +4,7 @@ use crate::errors::ContentRegistryError;
 
 /// Submit a content moderation report
 #[derive(Accounts)]
+#[instruction(category: ReportCategory, details_cid: String, timestamp: i64)]
 pub struct SubmitReport<'info> {
     #[account(mut)]
     pub content: Account<'info, ContentEntry>,
@@ -25,7 +26,7 @@ pub struct SubmitReport<'info> {
             CONTENT_REPORT_SEED,
             content.key().as_ref(),
             reporter.key().as_ref(),
-            &Clock::get()?.unix_timestamp.to_le_bytes()
+            &timestamp.to_le_bytes()
         ],
         bump
     )]
@@ -47,12 +48,18 @@ pub fn handle_submit_report(
     ctx: Context<SubmitReport>,
     category: ReportCategory,
     details_cid: String,
+    timestamp: i64,
 ) -> Result<()> {
     require!(details_cid.len() <= 64, ContentRegistryError::ReportDetailsTooLong);
 
     let report = &mut ctx.accounts.report;
     let moderation_pool = &mut ctx.accounts.moderation_pool;
-    let timestamp = Clock::get()?.unix_timestamp;
+    // Validate timestamp is reasonably close to current time (within 60 seconds)
+    let clock_timestamp = Clock::get()?.unix_timestamp;
+    require!(
+        (clock_timestamp - timestamp).abs() <= 60,
+        ContentRegistryError::InvalidTimestamp
+    );
 
     // Initialize moderation pool if this is the first report
     if moderation_pool.content == Pubkey::default() {
