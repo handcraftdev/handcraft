@@ -17,6 +17,7 @@ export default function EpubViewer({
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fontSize, setFontSize] = useState(100);
 
   // Initialize the book
   useEffect(() => {
@@ -119,12 +120,27 @@ export default function EpubViewer({
     return () => observer.disconnect();
   }, [isLoading]);
 
+  // Update font size when changed
+  useEffect(() => {
+    if (renditionRef.current) {
+      renditionRef.current.themes.fontSize(`${fontSize}%`);
+    }
+  }, [fontSize]);
+
   const nextPage = useCallback(() => {
     renditionRef.current?.next();
   }, []);
 
   const prevPage = useCallback(() => {
     renditionRef.current?.prev();
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    setFontSize((prev) => Math.min(prev + 10, 200));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setFontSize((prev) => Math.max(prev - 10, 50));
   }, []);
 
   const blurClass = isBlurred ? "blur-xl scale-105 pointer-events-none" : "";
@@ -168,9 +184,10 @@ export default function EpubViewer({
         style={{ opacity: isLoading || error ? 0 : 1 }}
       />
 
-      {/* Navigation buttons */}
+      {/* Controls */}
       {!isLoading && !error && !isBlurred && (
         <>
+          {/* Page navigation */}
           <button
             onClick={prevPage}
             className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors z-10"
@@ -189,6 +206,29 @@ export default function EpubViewer({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
+
+          {/* Zoom controls */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 rounded-full px-3 py-2 z-10">
+            <button
+              onClick={zoomOut}
+              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+              aria-label="Zoom out"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+            <span className="text-white/70 text-sm w-12 text-center">{fontSize}%</span>
+            <button
+              onClick={zoomIn}
+              className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+              aria-label="Zoom in"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
         </>
       )}
     </div>
