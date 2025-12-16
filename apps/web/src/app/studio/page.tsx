@@ -39,8 +39,7 @@ function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: 
   const collectionName = metadata?.properties?.collection || '';
   const title = metadata?.properties?.title || metadata?.title || metadata?.name || "Untitled";
   const displayTitle = collectionName ? `${collectionName} - ${title}` : title;
-  // Use metadata.image (thumbnail) first, fall back to previewCid
-  const thumbnailUrl = metadata?.image || (item.previewCid ? getIpfsUrl(item.previewCid) : null);
+  const thumbnailUrl = metadata?.image || null;
   const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
 
   return (

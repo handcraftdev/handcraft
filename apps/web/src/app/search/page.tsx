@@ -15,6 +15,7 @@ type SearchTab = "all" | "content" | "bundles" | "creators";
 interface ContentMetadata {
   name?: string;
   description?: string;
+  image?: string;
   tags?: string[];
 }
 
@@ -448,9 +449,7 @@ export default function SearchPage() {
 }
 
 function ContentResultCard({ content, getCreatorUsername }: { content: EnrichedContent; getCreatorUsername: (address: string) => string | null }) {
-  const thumbnailUrl = content.metadata?.name
-    ? getIpfsUrl(content.metadataCid).replace("/metadata.json", "/thumbnail.jpg")
-    : null;
+  const thumbnailUrl = content.metadata?.image || null;
   const creatorUsername = getCreatorUsername(content.creator);
   const displayName = creatorUsername || `${content.creator.slice(0, 4)}...${content.creator.slice(-4)}`;
 

@@ -451,7 +451,7 @@ export default function ProfilePage() {
                   const metadata = (item as any).metadata;
                   const title = metadata?.title || metadata?.name || "Untitled";
                   const description = metadata?.description || "";
-                  const previewUrl = item.previewCid ? getIpfsUrl(item.previewCid) : null;
+                  const thumbnailUrl = metadata?.image || null;
 
                   return (
                     <div
@@ -462,9 +462,9 @@ export default function ProfilePage() {
 
                       {/* Thumbnail */}
                       <div className="aspect-video bg-white/5 relative">
-                        {previewUrl ? (
+                        {thumbnailUrl ? (
                           <img
-                            src={previewUrl}
+                            src={thumbnailUrl}
                             alt={title}
                             className="w-full h-full object-cover"
                           />
@@ -525,10 +525,9 @@ export default function ProfilePage() {
                 {/* Content NFTs */}
                 {ownedNfts.map((nft) => {
                   const contentData = globalContent.find(c => c.contentCid === nft.contentCid);
+                  const metadata = (contentData as any)?.metadata;
                   const title = nft.name || "Untitled";
-                  const previewUrl = contentData?.previewCid
-                    ? getIpfsUrl(contentData.previewCid)
-                    : null;
+                  const thumbnailUrl = metadata?.image || null;
                   const rarity = nftRarities.get(nft.nftAsset.toBase58());
                   const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
                   const edition = editionMatch ? editionMatch[2] : null;
@@ -541,9 +540,9 @@ export default function ProfilePage() {
                       <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                       <div className="aspect-square bg-white/5 relative">
-                        {previewUrl ? (
+                        {thumbnailUrl ? (
                           <img
-                            src={previewUrl}
+                            src={thumbnailUrl}
                             alt={title}
                             className="w-full h-full object-cover"
                           />
@@ -579,7 +578,7 @@ export default function ProfilePage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openBurnModal(nft.nftAsset, nft.contentCid!, title, previewUrl);
+                                openBurnModal(nft.nftAsset, nft.contentCid!, title, thumbnailUrl);
                               }}
                               className="flex-shrink-0 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/80 hover:text-red-400 transition-colors border border-red-500/20"
                               title="Burn NFT"
