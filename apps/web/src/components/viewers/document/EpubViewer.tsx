@@ -221,7 +221,7 @@ export default function EpubViewer({
       )}
 
       {/* Main content area - epub.js handles its own scrolling */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
         {/* Table of Contents sidebar */}
         {showToc && !isBlurred && (
           <div className="absolute inset-y-0 left-0 w-72 bg-black/90 border-r border-white/10 z-20 overflow-y-auto">
@@ -289,7 +289,7 @@ export default function EpubViewer({
         {/* Epub viewer container */}
         <div
           ref={viewerRef}
-          className={`w-full h-full ${blurClass} transition-all duration-500`}
+          className={`absolute inset-0 ${blurClass} transition-all duration-500`}
           style={{ opacity: isLoading || error ? 0 : 1 }}
         />
       </div>
