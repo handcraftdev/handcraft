@@ -28,6 +28,9 @@ export default function EpubViewer({
   const [toc, setToc] = useState<TocItem[]>([]);
   const [showToc, setShowToc] = useState(false);
 
+  // Touch swipe tracking
+  const touchStartX = useRef<number | null>(null);
+
 
   // Initialize the book
   useEffect(() => {
@@ -146,6 +149,49 @@ export default function EpubViewer({
     }
   }, [fontSize]);
 
+  // Keyboard navigation (left/right arrows)
+  useEffect(() => {
+    if (isLoading || error) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        renditionRef.current?.prev();
+      } else if (e.key === "ArrowRight") {
+        renditionRef.current?.next();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isLoading, error]);
+
+  // Touch swipe handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartX.current = e.touches[0].clientX;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaX = touchEndX - touchStartX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(deltaX) > minSwipeDistance) {
+      if (deltaX > 0) {
+        // Swipe right -> previous page
+        renditionRef.current?.prev();
+      } else {
+        // Swipe left -> next page
+        renditionRef.current?.next();
+      }
+    }
+
+    touchStartX.current = null;
+  }, []);
+
   const nextPage = useCallback(() => {
     renditionRef.current?.next();
   }, []);
@@ -174,6 +220,8 @@ export default function EpubViewer({
       ref={containerRef}
       data-viewer="epub"
       className={`absolute inset-0 bg-neutral-950 ${className}`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Loading */}
       {isLoading && (
