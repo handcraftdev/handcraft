@@ -112,6 +112,8 @@ export async function PATCH(
     };
 
     if (body.status !== undefined) updates.status = body.status;
+    if (body.domain !== undefined) updates.domain = body.domain;
+    if (body.content_type !== undefined) updates.content_type = body.content_type;
     if (body.content_cid !== undefined) updates.content_cid = body.content_cid;
     if (body.preview_cid !== undefined) updates.preview_cid = body.preview_cid;
     if (body.thumbnail_cid !== undefined) updates.thumbnail_cid = body.thumbnail_cid;
