@@ -61,11 +61,12 @@ export function isStepComplete(step: UploadStep, draft: ContentDraft | null): bo
       // Details step requires title (thumbnail moved to file step)
       return !!draft.title?.trim();
     case 'file': {
-      // File step requires content_cid and thumbnail (for non-image content)
+      // File step requires content_cid and thumbnail (for non-image/text content)
       const hasContent = draft.content_cid !== null && draft.content_cid !== undefined;
       const isImageContent = draft.content_type === 8 || draft.content_type === 9;
+      const isTextContent = draft.content_type === 16; // Post
       const hasThumbnail = !!draft.thumbnail_cid;
-      return hasContent && (isImageContent || hasThumbnail);
+      return hasContent && (isImageContent || isTextContent || hasThumbnail);
     }
     case 'monetization':
       return isMonetizationComplete(draft);
@@ -95,11 +96,12 @@ export function canNavigateToStep(targetStep: UploadStep, draft: ContentDraft | 
       // Need title filled in
       return !!draft.title?.trim();
     case 'monetization': {
-      // Need file uploaded and thumbnail (for non-image content)
+      // Need file uploaded and thumbnail (for non-image/text content)
       const hasContent = !!draft.content_cid;
       const isImageContent = draft.content_type === 8 || draft.content_type === 9;
+      const isTextContent = draft.content_type === 16; // Post
       const hasThumbnail = !!draft.thumbnail_cid;
-      return hasContent && (isImageContent || hasThumbnail);
+      return hasContent && (isImageContent || isTextContent || hasThumbnail);
     }
     case 'review':
       // Need full monetization (buy price + all rental prices)
@@ -469,25 +471,6 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
       // Update draft status to published (or scheduled if scheduleAt provided)
       await publishDraft(scheduleAt, draft.content_cid);
 
-      // Sync to indexed_content (optional - indexer may not be set up yet)
-      try {
-        const syncRes = await fetch('/api/content/sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ content_cid: draft.content_cid }),
-        });
-        if (syncRes.ok) {
-          console.log('[UploadStudio] Content synced to index');
-        } else {
-          console.warn('[UploadStudio] Content sync skipped (indexer not ready)');
-        }
-      } catch (syncErr) {
-        console.warn('[UploadStudio] Content sync skipped:', syncErr);
-      }
-
     } catch (err) {
       console.error('[UploadStudio] Publish failed:', err);
 
@@ -555,23 +538,6 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         metadataCid: metadataResult.cid,
       });
       console.log('[UploadStudio] On-chain update successful!');
-
-      // Sync to indexed_content (optional - indexer may not be set up yet)
-      try {
-        const syncRes = await fetch('/api/content/sync', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ content_cid: editContentCid }),
-        });
-        if (!syncRes.ok) {
-          console.warn('[UploadStudio] Content sync skipped (indexer not ready)');
-        }
-      } catch (syncErr) {
-        console.warn('[UploadStudio] Content sync skipped:', syncErr);
-      }
 
       // Navigate back to studio
       router.push('/studio?tab=content');
@@ -814,6 +780,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
             onUpdate={updateDraft}
             onNext={() => handleNext('monetization')}
             onUploadStateChange={handleUploadStateChange}
+            username={userProfile?.username || ''}
           />
         )}
 

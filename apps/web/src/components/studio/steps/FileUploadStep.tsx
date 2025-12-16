@@ -12,6 +12,7 @@ interface FileUploadStepProps {
   onUpdate: (updates: Partial<ContentDraft>) => void;
   onNext: () => void;
   onUploadStateChange?: (progress: UploadProgress | null, file: File | null) => void;
+  username?: string;
 }
 
 const FILE_SIZE_LIMITS: Record<string, number> = {
@@ -51,9 +52,45 @@ function formatTime(ms: number): string {
   return `${seconds}s`;
 }
 
-export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }: FileUploadStepProps) {
+// Generate a thumbnail with user's initial for Post content
+function generateInitialThumbnail(username: string): Promise<Blob> {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 400;
+    const ctx = canvas.getContext('2d')!;
+
+    // Generate a consistent color based on username
+    const colors = [
+      '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+      '#f43f5e', '#ef4444', '#f97316', '#eab308', '#84cc16',
+      '#22c55e', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6',
+    ];
+    const colorIndex = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    const bgColor = colors[colorIndex];
+
+    // Draw background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, 400, 400);
+
+    // Draw initial
+    const initial = (username[0] || '?').toUpperCase();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 180px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initial, 200, 210);
+
+    canvas.toBlob((blob) => {
+      resolve(blob!);
+    }, 'image/jpeg', 0.9);
+  });
+}
+
+export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, username }: FileUploadStepProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [initialThumbnailStatus, setInitialThumbnailStatus] = useState<'idle' | 'generating' | 'done'>('idle');
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [coverExtractionStatus, setCoverExtractionStatus] = useState<'idle' | 'extracting' | 'uploading' | 'done' | 'failed'>('idle');
@@ -120,6 +157,48 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
     }
   }, [session?.access_token, draft?.domain, draft?.thumbnail_cid, onUpdate]);
 
+  // Generate and upload initial-based thumbnail for Post content
+  const generateAndUploadInitialThumbnail = useCallback(async () => {
+    if (!session?.access_token) return;
+    if (!username) return;
+
+    // Only for Post content type
+    if (draft?.content_type !== 16) return;
+
+    // Skip if already has a thumbnail
+    if (draft?.thumbnail_cid) return;
+
+    setInitialThumbnailStatus('generating');
+
+    try {
+      const blob = await generateInitialThumbnail(username);
+      const file = new File([blob], `${username}_initial.jpg`, { type: 'image/jpeg' });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('encrypt', 'false');
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Initial thumbnail upload failed');
+      }
+
+      const data = await response.json();
+      onUpdate({ thumbnail_cid: data.cid });
+      setInitialThumbnailStatus('done');
+    } catch (err) {
+      console.error('[FileUpload] Initial thumbnail generation/upload error:', err);
+      setInitialThumbnailStatus('idle');
+    }
+  }, [session?.access_token, username, draft?.content_type, draft?.thumbnail_cid, onUpdate]);
+
   const handleFileSelect = useCallback(async (file: File) => {
     if (!draft?.domain) return;
 
@@ -141,6 +220,9 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
 
     // Extract cover for books/comics (runs in parallel with upload)
     extractAndUploadCover(file);
+
+    // Generate initial thumbnail for Post content (runs in parallel with upload)
+    generateAndUploadInitialThumbnail();
 
     // Start background upload
     // Always encrypt content - visibility level controls who can decrypt, not whether to encrypt
@@ -170,7 +252,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
         setError(err);
       },
     });
-  }, [draft, upload, onUpdate, onNext, onUploadStateChange, updateProgress, extractAndUploadCover]);
+  }, [draft, upload, onUpdate, onNext, onUploadStateChange, updateProgress, extractAndUploadCover, generateAndUploadInitialThumbnail]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -258,9 +340,10 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
   const isCompleted = uploadProgress?.status === 'completed' || draft?.content_cid;
   const isPaused = uploadProgress?.status === 'paused' || pausedUpload;
 
-  // Photos and Artwork use the content itself as the image, so thumbnail is optional
+  // Photos, Artwork, and Posts don't require thumbnail (images use content itself, posts are text)
   const isImageContent = draft?.content_type === 8 || draft?.content_type === 9;
-  const requiresThumbnail = !isImageContent;
+  const isTextContent = draft?.content_type === 16; // Post
+  const requiresThumbnail = !isImageContent && !isTextContent;
   const hasThumbnail = !!draft?.thumbnail_cid;
   const canProceed = isCompleted && (!requiresThumbnail || hasThumbnail);
 
@@ -451,28 +534,26 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange }:
         </div>
       )}
 
-      {/* Thumbnail Upload - shown after file is uploaded or uploading */}
-      {(isCompleted || isUploading) && (
-        <div className="mt-6">
-          {requiresThumbnail ? (
+      {/* Thumbnail Upload - always visible */}
+      <div className="mt-6">
+        {requiresThumbnail ? (
+          <ThumbnailUpload
+            thumbnailCid={draft?.thumbnail_cid || null}
+            onUpload={handleThumbnailUpload}
+            label="Cover Image"
+          />
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
+            <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
             <ThumbnailUpload
               thumbnailCid={draft?.thumbnail_cid || null}
               onUpload={handleThumbnailUpload}
-              label="Cover Image"
+              label=""
             />
-          ) : (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
-              <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
-              <ThumbnailUpload
-                thumbnailCid={draft?.thumbnail_cid || null}
-                onUpload={handleThumbnailUpload}
-                label=""
-              />
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Error */}
       {error && (
