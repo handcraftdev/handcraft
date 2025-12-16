@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ViewerProps } from "../types";
 
+interface TocItem {
+  href: string;
+  label: string;
+  subitems?: TocItem[];
+}
+
 export default function EpubViewer({
   contentUrl,
   title,
@@ -19,6 +25,8 @@ export default function EpubViewer({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fontSize, setFontSize] = useState(100);
+  const [toc, setToc] = useState<TocItem[]>([]);
+  const [showToc, setShowToc] = useState(false);
 
   // Initialize the book
   useEffect(() => {
@@ -53,6 +61,12 @@ export default function EpubViewer({
         bookRef.current = book;
 
         await book.ready;
+
+        // Load table of contents
+        const navigation = await book.loaded.navigation;
+        if (navigation.toc) {
+          setToc(navigation.toc as TocItem[]);
+        }
 
         if (!mounted || !viewerRef.current) return;
 
@@ -144,6 +158,11 @@ export default function EpubViewer({
     setFontSize((prev) => Math.max(prev - 10, 50));
   }, []);
 
+  const goToChapter = useCallback((href: string) => {
+    renditionRef.current?.display(href);
+    setShowToc(false);
+  }, []);
+
   const blurClass = isBlurred ? "blur-xl scale-105 pointer-events-none" : "";
 
   return (
@@ -208,8 +227,22 @@ export default function EpubViewer({
             </svg>
           </button>
 
-          {/* Zoom controls */}
-          <div className={`absolute bottom-24 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/70 rounded-full px-3 py-2 z-10 transition-all duration-300 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}>
+          {/* Top controls - TOC + Zoom */}
+          <div className={`absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-black/70 rounded-full px-3 py-2 z-10 transition-all duration-300 ${showControls ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"}`}>
+            {/* TOC button */}
+            {toc.length > 0 && (
+              <button
+                onClick={() => setShowToc(!showToc)}
+                className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
+                aria-label="Table of Contents"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+              </button>
+            )}
+            {toc.length > 0 && <div className="w-px h-5 bg-white/20" />}
+            {/* Zoom controls */}
             <button
               onClick={zoomOut}
               className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
@@ -230,6 +263,51 @@ export default function EpubViewer({
               </svg>
             </button>
           </div>
+
+          {/* TOC Sidebar */}
+          {showToc && toc.length > 0 && (
+            <div className="absolute inset-y-0 left-0 w-72 bg-black/95 border-r border-white/10 z-20 overflow-y-auto">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-medium">Contents</h3>
+                  <button
+                    onClick={() => setShowToc(false)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <ul className="space-y-1">
+                  {toc.map((item, index) => (
+                    <li key={index}>
+                      <button
+                        onClick={() => goToChapter(item.href)}
+                        className="w-full text-left px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        {item.label}
+                      </button>
+                      {item.subitems && item.subitems.length > 0 && (
+                        <ul className="ml-4 mt-1 space-y-1">
+                          {item.subitems.map((subitem, subIndex) => (
+                            <li key={subIndex}>
+                              <button
+                                onClick={() => goToChapter(subitem.href)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                              >
+                                {subitem.label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
