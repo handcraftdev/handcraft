@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "echo 'Dependencies installed by CI'",
+  "installCommand": "echo 'Dependencies pre-installed by CI'",
   "buildCommand": "pnpm run build",
   "framework": "nextjs"
 }
