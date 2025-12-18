@@ -61,7 +61,7 @@ importers:
         specifier: 0.31.1
         version: 0.31.1(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@handcraft/sdk':
-        specifier: workspace:*
+        specifier: file:../../packages/sdk
         version: link:../../packages/sdk
       '@solana/spl-token':
         specifier: ^0.4.14
