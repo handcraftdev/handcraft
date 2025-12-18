@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
+      - 'vercel.json'
       - '.github/workflows/deploy.yml'
   pull_request:
     branches: [main]
@@ -33,7 +34,6 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-        working-directory: apps/web
 
       - name: Deploy Preview
         id: deploy
@@ -42,7 +42,6 @@ jobs:
         run: |
           url=$(vercel deploy --token="$VERCEL_TOKEN")
           echo "url=$url" >> $GITHUB_OUTPUT
-        working-directory: apps/web
 
       - name: Comment Preview URL
         uses: actions/github-script@v7
@@ -71,13 +70,11 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-        working-directory: apps/web
 
       - name: Deploy Production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prod --token="$VERCEL_TOKEN"
-        working-directory: apps/web
 
       - name: Deployment Summary
         run: |
