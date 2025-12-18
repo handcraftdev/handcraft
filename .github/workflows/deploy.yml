@@ -127,7 +127,9 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: |
+          vercel link --yes --token="$VERCEL_TOKEN"
           url=$(vercel deploy --prod --token="$VERCEL_TOKEN" --yes)
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
