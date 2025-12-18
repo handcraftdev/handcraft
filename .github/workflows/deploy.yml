@@ -2,7 +2,7 @@ name: Deploy Frontend
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
@@ -11,7 +11,7 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/deploy.yml'
   pull_request:
-    branches: [main]
+    branches: [dev]
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
@@ -22,8 +22,9 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
-  deploy-preview:
-    name: Deploy Preview
+  # PR Preview - deploys when PR is opened to dev
+  deploy-pr-preview:
+    name: Deploy PR Preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +38,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
 
-      - name: Deploy Preview
+      - name: Deploy PR Preview
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -55,9 +56,37 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Preview Deployment\n\nDeployed to: ${process.env.PREVIEW_URL}`
+              body: `## PR Preview Deployment\n\nDeployed to: ${process.env.PREVIEW_URL}`
             })
 
+  # Staging - deploys when code is pushed/merged to dev
+  deploy-staging:
+    name: Deploy Staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Deploy Staging
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --token="$VERCEL_TOKEN"
+
+      - name: Deployment Summary
+        run: |
+          echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Frontend deployed to staging (dev branch)." >> $GITHUB_STEP_SUMMARY
+
+  # Production - deploys when code is pushed/merged to main
   deploy-production:
     name: Deploy Production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
