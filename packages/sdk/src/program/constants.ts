@@ -173,13 +173,6 @@ export enum PaymentCurrency {
 // ========== RARITY CONSTANTS ==========
 export const PENDING_MINT_SEED = "pending_mint";
 
-// Rarity weights (matches program)
-export const RARITY_WEIGHT_COMMON = 100;
-export const RARITY_WEIGHT_UNCOMMON = 150;
-export const RARITY_WEIGHT_RARE = 200;
-export const RARITY_WEIGHT_EPIC = 300;
-export const RARITY_WEIGHT_LEGENDARY = 500;
-
 // Rarity probabilities (in basis points, out of 10000)
 export const RARITY_PROB_COMMON = 5500;      // 55%
 export const RARITY_PROB_UNCOMMON = 2700;    // 27%
@@ -187,7 +180,8 @@ export const RARITY_PROB_RARE = 1300;        // 13%
 export const RARITY_PROB_EPIC = 400;         //  4%
 export const RARITY_PROB_LEGENDARY = 100;    //  1%
 
-// Re-export Rarity from types for convenience
+// Re-export Rarity enum and weight helpers from types
+// Weights: Common=1, Uncommon=5, Rare=20, Epic=60, Legendary=120 (matches program)
 export { Rarity, getRarityWeight, getRarityName, getRarityFromWeight } from "./types";
 
 // ========== BUNDLE CONSTANTS ==========
