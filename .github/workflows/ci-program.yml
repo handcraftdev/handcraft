@@ -15,6 +15,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'Anchor.toml'
+  workflow_dispatch:
 
 concurrency:
   group: program-${{ github.ref }}

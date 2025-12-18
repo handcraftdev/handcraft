@@ -11,6 +11,7 @@ on:
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
+  workflow_dispatch:
 
 concurrency:
   group: frontend-${{ github.ref }}
