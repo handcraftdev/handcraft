@@ -6,11 +6,13 @@ on:
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
+      - '.github/workflows/deploy.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/web/**'
       - 'packages/sdk/**'
+  workflow_dispatch:
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
