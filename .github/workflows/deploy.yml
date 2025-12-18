@@ -59,7 +59,6 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
         run: |
           url=$(vercel deploy --token="$VERCEL_TOKEN" --yes)
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -128,7 +127,6 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
         run: |
           url=$(vercel deploy --prod --token="$VERCEL_TOKEN" --yes)
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -166,7 +164,6 @@ jobs:
         env:
           DEPLOY_ENV: ${{ github.event.inputs.environment }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
         run: |
           if [ "$DEPLOY_ENV" = "production" ]; then
             url=$(vercel deploy --prod --token="$VERCEL_TOKEN" --yes)
