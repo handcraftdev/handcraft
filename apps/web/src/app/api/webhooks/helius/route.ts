@@ -1,11 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { BorshCoder, Event, EventParser } from "@coral-xyz/anchor";
+import { timingSafeEqual } from "crypto";
 import { idl } from "@handcraft/sdk";
 import { getServiceSupabase } from "@/lib/supabase";
+import { rateLimit, RATE_LIMITS } from "@/lib/ratelimit";
 
 // Helius webhook secret for verification
 const WEBHOOK_SECRET = process.env.HELIUS_WEBHOOK_SECRET;
+
+/**
+ * Constant-time comparison for webhook authentication
+ * Prevents timing attacks on the webhook secret
+ */
+function verifyWebhookAuth(authHeader: string | null): boolean {
+  if (!WEBHOOK_SECRET) return true; // No secret configured, skip verification
+  if (!authHeader) return false;
+
+  const expected = `Bearer ${WEBHOOK_SECRET}`;
+
+  // Ensure both strings are the same length for timingSafeEqual
+  if (authHeader.length !== expected.length) {
+    return false;
+  }
+
+  try {
+    return timingSafeEqual(
+      Buffer.from(authHeader, "utf8"),
+      Buffer.from(expected, "utf8")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Safely convert BigInt/number to Number with overflow check
+ * Throws if value exceeds Number.MAX_SAFE_INTEGER
+ */
+function safeToNumber(value: bigint | number | string, fieldName: string): number {
+  const bigValue = typeof value === "bigint" ? value : BigInt(value);
+  if (bigValue > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${fieldName} exceeds safe integer range: ${bigValue}`);
+  }
+  if (bigValue < BigInt(Number.MIN_SAFE_INTEGER)) {
+    throw new Error(`${fieldName} below safe integer range: ${bigValue}`);
+  }
+  return Number(bigValue);
+}
 
 // Content Registry Program ID - lazy loaded to avoid build-time errors
 let _programId: PublicKey | null = null;
@@ -32,10 +74,19 @@ function getProgramId(): PublicKey {
  * - Webhook type: Enhanced
  */
 export async function POST(request: NextRequest) {
+  // Apply rate limiting to prevent abuse
+  const rateLimitResult = await rateLimit(request, RATE_LIMITS.webhook);
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfter) } }
+    );
+  }
+
   try {
-    // Verify webhook secret
+    // Verify webhook secret using constant-time comparison
     const authHeader = request.headers.get("authorization");
-    if (WEBHOOK_SECRET && authHeader !== `Bearer ${WEBHOOK_SECRET}`) {
+    if (!verifyWebhookAuth(authHeader)) {
       console.error("Unauthorized webhook request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -173,11 +224,11 @@ async function handleRewardDeposit(
     transaction_type: "mint", // or map from data.source_type
     pool_type: data.pool_type,
     pool_id: data.pool_id.toString(),
-    amount: Number(data.amount),
-    creator_share: data.fee_split ? Number(data.fee_split.creator_share) : null,
-    platform_share: data.fee_split ? Number(data.fee_split.platform_share) : null,
-    ecosystem_share: data.fee_split ? Number(data.fee_split.ecosystem_share) : null,
-    holder_share: data.fee_split ? Number(data.fee_split.holder_share) : null,
+    amount: safeToNumber(data.amount, "amount"),
+    creator_share: data.fee_split ? safeToNumber(data.fee_split.creator_share, "creator_share") : null,
+    platform_share: data.fee_split ? safeToNumber(data.fee_split.platform_share, "platform_share") : null,
+    ecosystem_share: data.fee_split ? safeToNumber(data.fee_split.ecosystem_share, "ecosystem_share") : null,
+    holder_share: data.fee_split ? safeToNumber(data.fee_split.holder_share, "holder_share") : null,
     source_wallet: data.source.toString(),
     creator_wallet: data.creator ? data.creator.toString() : null,
     content_pubkey: data.content_or_bundle ? data.content_or_bundle.toString() : null,
@@ -216,12 +267,12 @@ async function handleRewardDistribution(
     transaction_type: transactionType,
     pool_type: null, // Distribution affects multiple pools
     pool_id: data.pool_id ? data.pool_id.toString() : null,
-    amount: Number(data.total_amount),
-    creator_share: data.creator_amount ? Number(data.creator_amount) : null,
-    platform_share: Number(data.platform_amount),
-    ecosystem_share: Number(data.ecosystem_amount),
-    holder_share: Number(data.holder_pool_amount),
-    creator_dist_pool_amount: data.creator_dist_pool_amount ? Number(data.creator_dist_pool_amount) : null,
+    amount: safeToNumber(data.total_amount, "total_amount"),
+    creator_share: data.creator_amount ? safeToNumber(data.creator_amount, "creator_amount") : null,
+    platform_share: safeToNumber(data.platform_amount, "platform_amount"),
+    ecosystem_share: safeToNumber(data.ecosystem_amount, "ecosystem_amount"),
+    holder_share: safeToNumber(data.holder_pool_amount, "holder_pool_amount"),
+    creator_dist_pool_amount: data.creator_dist_pool_amount ? safeToNumber(data.creator_dist_pool_amount, "creator_dist_pool_amount") : null,
     source_wallet: "STREAMING_TREASURY", // Placeholder for treasury
     creator_wallet: data.pool_id ? data.pool_id.toString() : null,
     event_data: data,
@@ -250,10 +301,10 @@ async function handleRewardClaim(
     transaction_type: "reward_claim",
     pool_type: data.pool_type,
     pool_id: data.pool_id ? data.pool_id.toString() : null,
-    amount: Number(data.amount),
+    amount: safeToNumber(data.amount, "claim_amount"),
     source_wallet: data.claimer.toString(),
     nft_asset: data.nft_asset ? data.nft_asset.toString() : null,
-    nft_weight: data.nft_weight ? Number(data.nft_weight) : null,
+    nft_weight: data.nft_weight ? safeToNumber(data.nft_weight, "nft_weight") : null,
     debt_before: data.debt_before?.toString(),
     debt_after: data.debt_after?.toString(),
     event_data: data,
@@ -282,7 +333,7 @@ async function handleRewardTransfer(
     transaction_type: "reward_transfer",
     pool_type: data.pool_type,
     pool_id: data.pool_id.toString(),
-    amount: Number(data.sender_claimed),
+    amount: safeToNumber(data.sender_claimed, "sender_claimed"),
     source_wallet: data.sender.toString(),
     receiver_wallet: data.receiver.toString(),
     nft_asset: data.nft_asset.toString(),
@@ -312,9 +363,9 @@ async function handleSubscriptionCreated(
     creator_wallet: data.creator ? data.creator.toString() : null,
     subscription_type: data.subscription_type,
     stream_id: data.stream_id.toString(),
-    monthly_price: Number(data.price),
+    monthly_price: safeToNumber(data.price, "subscription_price"),
     is_active: true,
-    started_at: new Date(Number(data.started_at) * 1000).toISOString(),
+    started_at: new Date(safeToNumber(data.started_at, "started_at") * 1000).toISOString(),
     created_signature: signature,
   });
 
@@ -338,7 +389,7 @@ async function handleSubscriptionCancelled(
     .from("subscriptions")
     .update({
       is_active: false,
-      cancelled_at: new Date(Number(data.cancelled_at) * 1000).toISOString(),
+      cancelled_at: new Date(safeToNumber(data.cancelled_at, "cancelled_at") * 1000).toISOString(),
       cancelled_signature: signature,
       updated_at: new Date().toISOString(),
     })

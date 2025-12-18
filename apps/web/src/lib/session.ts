@@ -1,25 +1,61 @@
 import crypto from "crypto";
 
-// SECURITY: SESSION_SECRET should be separate from CONTENT_ENCRYPTION_SECRET
-// Using the same secret for both purposes violates cryptographic key separation
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.CONTENT_ENCRYPTION_SECRET;
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const IS_SERVER = typeof window === "undefined";
 
-// Warn if SESSION_SECRET is not explicitly set (falling back to encryption secret)
-if (typeof window === "undefined" && !process.env.SESSION_SECRET && process.env.CONTENT_ENCRYPTION_SECRET) {
-  console.warn(
-    "[SECURITY WARNING] SESSION_SECRET not set - falling back to CONTENT_ENCRYPTION_SECRET.\n" +
-    "This violates cryptographic key separation principle.\n" +
-    "Set a separate SESSION_SECRET environment variable in production."
-  );
+// SECURITY: SESSION_SECRET MUST be separate from CONTENT_ENCRYPTION_SECRET
+// Using the same secret for both purposes violates cryptographic key separation
+
+/**
+ * Get the session secret, validating security requirements.
+ * In production, SESSION_SECRET must be explicitly set.
+ * In development, falls back to CONTENT_ENCRYPTION_SECRET with warning.
+ */
+function getSessionSecret(): string | undefined {
+  if (process.env.SESSION_SECRET) {
+    return process.env.SESSION_SECRET;
+  }
+
+  const IS_PRODUCTION = process.env.NODE_ENV === "production";
+  const IS_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+
+  if (IS_PRODUCTION && !IS_BUILD) {
+    // In production runtime, refuse to operate without proper session secret
+    throw new Error(
+      "[SECURITY ERROR] SESSION_SECRET environment variable is required in production.\n" +
+      "Do NOT reuse CONTENT_ENCRYPTION_SECRET for session management.\n" +
+      "Generate a unique secret: openssl rand -hex 32"
+    );
+  }
+
+  if (process.env.CONTENT_ENCRYPTION_SECRET) {
+    // In development/build, allow fallback with warning
+    if (!IS_BUILD) {
+      console.warn(
+        "[SECURITY WARNING] SESSION_SECRET not set - using CONTENT_ENCRYPTION_SECRET.\n" +
+        "This is NOT allowed in production. Set a separate SESSION_SECRET."
+      );
+    }
+    return process.env.CONTENT_ENCRYPTION_SECRET;
+  }
+
+  if (!IS_BUILD) {
+    console.error(
+      "[SECURITY ERROR] Neither SESSION_SECRET nor CONTENT_ENCRYPTION_SECRET is set.\n" +
+      "Session authentication will not work."
+    );
+  }
+
+  return undefined;
 }
 
-// Error if no secret is available at all
-if (typeof window === "undefined" && !SESSION_SECRET) {
-  console.error(
-    "[SECURITY ERROR] Neither SESSION_SECRET nor CONTENT_ENCRYPTION_SECRET is set.\n" +
-    "Session authentication will not work."
-  );
+// Lazy-load secret on first use (avoids build-time errors)
+let _sessionSecret: string | undefined | null = null;
+function getSecret(): string | undefined {
+  if (_sessionSecret === null) {
+    _sessionSecret = IS_SERVER ? getSessionSecret() : undefined;
+  }
+  return _sessionSecret;
 }
 
 export interface SessionToken {
@@ -32,14 +68,15 @@ export interface SessionToken {
  * Create a session token for a wallet after signature verification
  */
 export function createSessionToken(wallet: string): string {
-  if (!SESSION_SECRET) {
+  const secret = getSecret();
+  if (!secret) {
     throw new Error("Session secret not configured");
   }
 
   const expiresAt = Date.now() + SESSION_DURATION_MS;
   const payload = `${wallet}:${expiresAt}`;
   const signature = crypto
-    .createHmac("sha256", SESSION_SECRET)
+    .createHmac("sha256", secret)
     .update(payload)
     .digest("hex");
 
@@ -53,7 +90,8 @@ export function createSessionToken(wallet: string): string {
  * Returns the wallet address if valid, null if invalid/expired
  */
 export function verifySessionToken(token: string): string | null {
-  if (!SESSION_SECRET) {
+  const secret = getSecret();
+  if (!secret) {
     return null;
   }
 
@@ -70,7 +108,7 @@ export function verifySessionToken(token: string): string | null {
     // Verify signature using constant-time comparison to prevent timing attacks
     const payload = `${decoded.wallet}:${decoded.expiresAt}`;
     const expectedSignature = crypto
-      .createHmac("sha256", SESSION_SECRET)
+      .createHmac("sha256", secret)
       .update(payload)
       .digest("hex");
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import { createSessionToken } from "@/lib/session";
+import { rateLimit, RATE_LIMITS } from "@/lib/ratelimit";
 
 /**
  * Session API - Create a session after wallet signature verification
@@ -12,6 +13,18 @@ import { createSessionToken } from "@/lib/session";
  * - timestamp: Timestamp that was signed
  */
 export async function POST(request: NextRequest) {
+  // Apply rate limiting to prevent brute force attacks
+  const rateLimitResult = await rateLimit(request, RATE_LIMITS.session);
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimitResult.retryAfter) },
+      }
+    );
+  }
+
   try {
     const body = await request.json();
     const { wallet, signature, timestamp } = body;
