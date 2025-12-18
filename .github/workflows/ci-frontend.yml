@@ -1,0 +1,50 @@
+name: CI - Frontend
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'apps/web/**'
+      - 'packages/sdk/**'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/web/**'
+      - 'packages/sdk/**'
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.14.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter @handcraft/web lint
+        continue-on-error: true
+
+      - name: Build
+        run: pnpm --filter @handcraft/web build
+        env:
+          NEXT_PUBLIC_SOLANA_RPC_URL: https://api.devnet.solana.com
+          NEXT_PUBLIC_SOLANA_NETWORK: devnet
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

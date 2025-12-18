@@ -1,0 +1,43 @@
+name: CI - SDK
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'packages/sdk/**'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'packages/sdk/**'
+
+concurrency:
+  group: sdk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-sdk:
+    name: Test SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.14.2"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Type Check
+        run: pnpm exec tsc --noEmit
