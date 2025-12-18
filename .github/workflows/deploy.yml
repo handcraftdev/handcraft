@@ -7,6 +7,8 @@ on:
       - 'apps/web/**'
       - 'packages/sdk/**'
       - 'vercel.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy.yml'
   pull_request:
     branches: [main]
