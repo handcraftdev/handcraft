@@ -164,6 +164,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
   // Flag to prevent intersection observer from overriding keyboard navigation
   const isKeyboardNavigating = useRef(false);
+  const keyboardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -515,14 +516,16 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         e.preventDefault();
         isKeyboardNavigating.current = true;
         setCurrentIndex(prev => Math.min(prev + 1, displayItems.length - 1));
-        // Reset flag after scroll animation completes
-        setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
+        // Clear previous timeout and set new one
+        if (keyboardTimeoutRef.current) clearTimeout(keyboardTimeoutRef.current);
+        keyboardTimeoutRef.current = setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         isKeyboardNavigating.current = true;
         setCurrentIndex(prev => Math.max(prev - 1, 0));
-        // Reset flag after scroll animation completes
-        setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
+        // Clear previous timeout and set new one
+        if (keyboardTimeoutRef.current) clearTimeout(keyboardTimeoutRef.current);
+        keyboardTimeoutRef.current = setTimeout(() => { isKeyboardNavigating.current = false; }, 500);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -531,13 +534,17 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
   // Scroll snap to current item when navigating via keyboard
   useEffect(() => {
+    // Only scroll when keyboard navigation is active
+    if (!isKeyboardNavigating.current) return;
+
     const container = containerRef.current;
     if (!container || displayItems.length === 0) return;
 
     const items = container.querySelectorAll("[data-feed-item]");
     const targetItem = items[currentIndex];
     if (targetItem) {
-      targetItem.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Use instant scroll for keyboard navigation - snappy response
+      targetItem.scrollIntoView({ behavior: "instant", block: "start" });
     }
   }, [currentIndex, displayItems.length]);
 
