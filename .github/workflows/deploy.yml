@@ -58,17 +58,20 @@ jobs:
       - name: Pull Vercel Environment
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
 
       - name: Build Project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: vercel build --token="$VERCEL_TOKEN"
 
       - name: Deploy Preview
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: |
           url=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -136,17 +139,20 @@ jobs:
       - name: Pull Vercel Environment
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build Project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy Production
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: |
           url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -183,12 +189,14 @@ jobs:
         env:
           DEPLOY_ENV: ${{ github.event.inputs.environment }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: vercel pull --yes --environment="$DEPLOY_ENV" --token="$VERCEL_TOKEN"
 
       - name: Build Project
         env:
           DEPLOY_ENV: ${{ github.event.inputs.environment }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: |
           if [ "$DEPLOY_ENV" = "production" ]; then
             vercel build --prod --token="$VERCEL_TOKEN"
@@ -201,6 +209,7 @@ jobs:
         env:
           DEPLOY_ENV: ${{ github.event.inputs.environment }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
         run: |
           if [ "$DEPLOY_ENV" = "production" ]; then
             url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
