@@ -10,7 +10,7 @@ import { useContentRegistry } from "@/hooks/useContentRegistry";
 import { BurnNftModal } from "@/components/nft";
 import { RarityBadge } from "@/components/rarity";
 import { CreatorMembershipBanner, EcosystemMembershipCard, CustomMembershipCard, CreatorPatronPoolCard } from "@/components/membership";
-import { getIpfsUrl, getContentCollectionPda, getContentPda, Rarity, getRarityFromWeight, getCreatorPatronTreasuryPda, StreamflowClient, NETWORKS } from "@handcraft/sdk";
+import { getIpfsUrl, getContentPda, Rarity, getRarityFromWeight, getCreatorPatronTreasuryPda, StreamflowClient, NETWORKS } from "@handcraft/sdk";
 import { useConnection } from "@solana/wallet-adapter-react";
 import Link from "next/link";
 
@@ -239,31 +239,47 @@ export default function ProfilePage() {
     return globalContent.filter(c => c.creator?.toBase58() === profileAddress.toBase58());
   }, [globalContent, profileAddress]);
 
-  // Fetch all content collections (for getting collection asset when burning)
-  const { data: allContentCollections = new Map() } = useQuery({
-    queryKey: ["allContentCollections"],
-    queryFn: async () => {
-      if (!client) return new Map();
-      return client.fetchAllContentCollections();
-    },
-    enabled: !!client,
-    staleTime: 60000,
-  });
+  // Build a map from contentPda -> ContentEntry for getting collectionAsset
+  // NOTE: ContentCollection removed - collectionAsset now stored directly in ContentEntry
+  const contentByPda = useMemo(() => {
+    const map = new Map<string, { collectionAsset: PublicKey }>();
+    for (const content of globalContent) {
+      // Use pubkey (content PDA) if available, otherwise try deriving from contentCid
+      if (content.collectionAsset && content.pubkey) {
+        map.set(content.pubkey.toBase58(), { collectionAsset: content.collectionAsset });
+      }
+    }
+    return map;
+  }, [globalContent]);
+
+  // Also build a map by collectionAsset for reverse lookup
+  const contentByCollection = useMemo(() => {
+    const map = new Map<string, { collectionAsset: PublicKey; pubkey?: PublicKey }>();
+    for (const content of globalContent) {
+      if (content.collectionAsset) {
+        map.set(content.collectionAsset.toBase58(), {
+          collectionAsset: content.collectionAsset,
+          pubkey: content.pubkey
+        });
+      }
+    }
+    return map;
+  }, [globalContent]);
 
   // Open burn NFT modal
   const openBurnModal = (nftAsset: PublicKey, contentCid: string, title: string, previewUrl: string | null) => {
-    // Get collection asset from content collections
+    // Get collection asset from content entry using contentCid
     const [contentPda] = getContentPda(contentCid);
-    const collection = allContentCollections.get(contentPda.toBase58());
+    const content = contentByPda.get(contentPda.toBase58());
 
-    if (!collection) {
-      console.error("Collection not found for this content");
+    if (!content) {
+      console.error("Content not found for this NFT - contentCid:", contentCid);
       return;
     }
 
     setBurnModalData({
       nftAsset,
-      collectionAsset: collection.collectionAsset,
+      collectionAsset: content.collectionAsset,
       contentCid,
       title,
       previewUrl,
@@ -455,7 +471,7 @@ export default function ProfilePage() {
 
                   return (
                     <div
-                      key={item.contentCid}
+                      key={item.pubkey?.toBase58() || item.collectionAsset?.toBase58() || Math.random()}
                       className="group relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
                     >
                       <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -524,7 +540,10 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {/* Content NFTs */}
                 {ownedNfts.map((nft) => {
-                  const contentData = globalContent.find(c => c.contentCid === nft.contentCid);
+                  // Match NFT to content using collectionAsset (contentCid removed from ContentEntry)
+                  const contentData = nft.collectionAsset
+                    ? globalContent.find(c => c.collectionAsset?.toBase58() === nft.collectionAsset?.toBase58())
+                    : undefined;
                   const metadata = (contentData as any)?.metadata;
                   const title = nft.name || "Untitled";
                   const thumbnailUrl = metadata?.image || null;

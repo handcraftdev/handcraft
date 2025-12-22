@@ -25,11 +25,15 @@ interface BundleMetadata {
 }
 
 interface EnrichedContent {
-  contentCid: string;
-  metadataCid: string;
-  contentType: ContentType;
+  pubkey: string;
   creator: string;
-  createdAt: bigint;
+  collectionAsset: string;
+  previewCid: string;
+  // Optional metadata fields - populated from Metaplex collection or database
+  contentCid?: string;
+  metadataCid?: string;
+  contentType?: ContentType;
+  createdAt?: bigint;
   metadata?: ContentMetadata;
 }
 
@@ -37,9 +41,11 @@ interface EnrichedBundle {
   bundleId: string;
   creator: string;
   bundleType: BundleType;
-  metadataCid: string;
+  collectionAsset: string;
   itemCount: number;
   createdAt: bigint;
+  // Optional metadata fields - populated from Metaplex collection or database
+  metadataCid?: string;
   metadata?: BundleMetadata;
 }
 
@@ -107,52 +113,29 @@ function SearchContent() {
     async function enrichData() {
       setIsEnriching(true);
 
+      // NOTE: metadataCid, contentCid, contentType, createdAt removed from on-chain ContentEntry
+      // Metadata should be fetched from Supabase instead
       const contentPromises = globalContent.map(async (item) => {
-        try {
-          const res = await fetch(getIpfsUrl(item.metadataCid));
-          const metadata = await res.json();
-          return {
-            contentCid: item.contentCid,
-            metadataCid: item.metadataCid,
-            contentType: item.contentType,
-            creator: item.creator.toBase58(),
-            createdAt: item.createdAt,
-            metadata,
-          };
-        } catch {
-          return {
-            contentCid: item.contentCid,
-            metadataCid: item.metadataCid,
-            contentType: item.contentType,
-            creator: item.creator.toBase58(),
-            createdAt: item.createdAt,
-          };
-        }
+        return {
+          pubkey: item.pubkey?.toBase58() || "",
+          creator: item.creator.toBase58(),
+          collectionAsset: item.collectionAsset?.toBase58() || "",
+          previewCid: item.previewCid,
+          // Metadata would need to come from Supabase or collection metadata
+        };
       });
 
+      // NOTE: metadataCid removed from Bundle - metadata stored in Metaplex collection
       const bundlePromises = globalBundles.map(async (bundle) => {
-        try {
-          const res = await fetch(getIpfsUrl(bundle.metadataCid));
-          const metadata = await res.json();
-          return {
-            bundleId: bundle.bundleId,
-            creator: bundle.creator.toBase58(),
-            bundleType: bundle.bundleType,
-            metadataCid: bundle.metadataCid,
-            itemCount: bundle.itemCount,
-            createdAt: bundle.createdAt,
-            metadata,
-          };
-        } catch {
-          return {
-            bundleId: bundle.bundleId,
-            creator: bundle.creator.toBase58(),
-            bundleType: bundle.bundleType,
-            metadataCid: bundle.metadataCid,
-            itemCount: bundle.itemCount,
-            createdAt: bundle.createdAt,
-          };
-        }
+        return {
+          bundleId: bundle.bundleId,
+          creator: bundle.creator.toBase58(),
+          bundleType: bundle.bundleType,
+          collectionAsset: bundle.collectionAsset?.toBase58() || "",
+          itemCount: bundle.itemCount,
+          createdAt: bundle.createdAt,
+          // Metadata would need to come from Supabase or collection metadata
+        };
       });
 
       const [contentResults, bundleResults] = await Promise.all([
@@ -481,7 +464,7 @@ function ContentResultCard({ content, getCreatorUsername }: { content: EnrichedC
         </p>
         <div className="flex items-center gap-3 mt-2">
           <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-white/5 text-white/50 border border-white/10">
-            {getContentTypeLabel(content.contentType)}
+            {content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content"}
           </span>
           <Link href={`/profile/${content.creator}`} className="text-white/30 hover:text-white/50 text-xs transition-colors">
             {displayName}

@@ -93,10 +93,10 @@ export function BuyContentModal({
       setRevealedRarity(null);
 
       try {
-        // Fetch the content collection
-        const contentCollection = await client.fetchContentCollection(contentCid);
-        if (!contentCollection) {
-          throw new Error("Content collection not found");
+        // Fetch the content entry to get the collection asset
+        const contentEntry = await client.fetchContent(contentCid);
+        if (!contentEntry) {
+          throw new Error("Content not found");
         }
 
         setMintStep("committing");
@@ -110,7 +110,7 @@ export function BuyContentModal({
           creator,
           ecosystemConfig.treasury,
           platformWallet,
-          contentCollection.collectionAsset,
+          contentEntry.collectionAsset,
           contentName.slice(0, 32) // Limit to 32 chars for Metaplex Core
         );
 

@@ -64,8 +64,8 @@ export interface Chapter {
 
 export interface ViewerProps {
   contentUrl: string;
-  contentCid: string;
-  contentType: ContentType;
+  contentCid?: string;
+  contentType?: ContentType;
   metadata: ContentMetadata | null;
   title?: string;
   isActive?: boolean;

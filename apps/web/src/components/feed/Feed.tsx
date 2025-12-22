@@ -263,22 +263,16 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
     if (contentKey === lastGlobalFetchRef.current || !contentKey) return;
     lastGlobalFetchRef.current = contentKey;
 
+    // NOTE: metadataCid removed from ContentEntry - metadata should come from Supabase
     async function enrichGlobalFeed() {
       setIsEnrichingGlobal(true);
       try {
-        const enriched = await Promise.all(
-          rawGlobalContent.map(async (item) => {
-            const creatorAddress = item.creator.toBase58();
-            try {
-              const metadataUrl = getIpfsUrl(item.metadataCid);
-              const res = await fetch(metadataUrl);
-              const metadata = await res.json();
-              return { ...item, metadata, creatorAddress };
-            } catch {
-              return { ...item, creatorAddress };
-            }
-          })
-        );
+        const enriched = rawGlobalContent.map((item) => {
+          const creatorAddress = item.creator.toBase58();
+          // Without metadataCid, we can't fetch metadata from IPFS
+          // TODO: Integrate with Supabase to get content metadata
+          return { ...item, creatorAddress };
+        });
         setGlobalContent(enriched);
       } catch (err) {
         console.error("Error enriching global feed:", err);
@@ -305,12 +299,14 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
             .map(async (bundle) => {
               const creatorAddress = bundle.creator.toBase58();
               let metadata: BundleFeedMetadata | undefined;
-              try {
-                const metadataUrl = getIpfsUrl(bundle.metadataCid);
-                const res = await fetch(metadataUrl);
-                metadata = await res.json();
-              } catch {
-                // Keep metadata undefined
+              if (bundle.metadataCid) {
+                try {
+                  const metadataUrl = getIpfsUrl(bundle.metadataCid);
+                  const res = await fetch(metadataUrl);
+                  metadata = await res.json();
+                } catch {
+                  // Keep metadata undefined
+                }
               }
               return { ...bundle, metadata, creatorAddress } as EnrichedBundle;
             })
@@ -334,18 +330,19 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
     // Add content items
     for (const content of globalContent) {
+      const contentId = content.contentCid ?? content.pubkey?.toBase58() ?? "";
       items.push({
-        id: content.contentCid,
+        id: contentId,
         type: "content",
         creator: content.creator,
-        createdAt: content.createdAt,
+        createdAt: content.createdAt ?? BigInt(0),
         metadata: content.metadata ? {
           title: content.metadata.title || content.metadata.name,
           description: content.metadata.description,
           image: content.previewCid ? getIpfsUrl(content.previewCid) : undefined,
           tags: content.metadata.tags,
         } : undefined,
-        contentCid: content.contentCid,
+        contentCid: content.contentCid ?? contentId,
         contentType: content.contentType,
         previewCid: content.previewCid,
         isEncrypted: content.isEncrypted,
@@ -999,10 +996,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const { token: sessionToken, createSession, isCreating: isCreatingSession } = useSession();
   const { useMintConfig, useRentConfig, useNftOwnership, useActiveRental, walletNfts, nftRarities, getBundlesForContent, walletBundleNfts, useBundleMintConfig, useBundleRentConfig, bundleNftRarities, getCreatorUsername } = useContentRegistry();
 
-  const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid);
-  const { data: rentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid);
-  const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid);
-  const { data: activeRental, refetch: refetchActiveRental } = useActiveRental(content.contentCid);
+  const { data: mintConfig, refetch: refetchMintConfig } = useMintConfig(content.contentCid ?? null);
+  const { data: rentConfig, refetch: refetchRentConfig } = useRentConfig(content.contentCid ?? null);
+  const { data: ownedNftCount = 0, refetch: refetchOwnership } = useNftOwnership(content.contentCid ?? null);
+  const { data: activeRental, refetch: refetchActiveRental } = useActiveRental(content.contentCid ?? null);
 
   // Bundle config hooks (only used when bundleContext is provided)
   const { data: bundleMintConfig, refetch: refetchBundleMintConfig } = useBundleMintConfig(
@@ -1039,11 +1036,11 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
   const isEncrypted = content.isEncrypted === true;
   const previewUrl = content.previewCid ? getIpfsUrl(content.previewCid) : null;
-  const fullContentUrl = getIpfsUrl(content.contentCid);
-  const contentTypeLabel = getContentTypeLabel(content.contentType);
-  const contentDomain = getContentDomain(content.contentType);
+  const fullContentUrl = content.contentCid ? getIpfsUrl(content.contentCid) : null;
+  const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content";
+  const contentDomain = content.contentType !== undefined ? getContentDomain(content.contentType) : "document";
   const domainLabel = getDomainLabel(contentDomain);
-  const timeAgo = getTimeAgo(Number(content.createdAt) * 1000);
+  const timeAgo = getTimeAgo(Number(content.createdAt ?? 0) * 1000);
 
   const contextData = content.metadata?.context || {};
   const genre = contextData.genre || content.metadata?.genre;
@@ -1051,7 +1048,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const album = contextData.album || content.metadata?.album;
   const duration = contextData.duration;
 
-  const contentBundles = getBundlesForContent(content.contentCid);
+  const contentBundles = content.contentCid ? getBundlesForContent(content.contentCid) : [];
   const ownsNftFromBundle = contentBundles.length > 0 && walletBundleNfts.some(nft => nft.bundleId && nft.creator && contentBundles.some(bundle => bundle.bundleId === nft.bundleId && bundle.creator.toBase58() === nft.creator?.toBase58()));
 
   const shortAddress = content.creatorAddress ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}` : "Unknown";
@@ -1088,7 +1085,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const showPlaceholder = isEncrypted && !contentUrl;
 
   const requestDecryptedContent = useCallback(async () => {
-    if (!publicKey || !content.encryptionMetaCid || isDecrypting || !sessionToken) return;
+    if (!publicKey || !content.encryptionMetaCid || isDecrypting || !sessionToken || !content.contentCid) return;
     const walletAddress = publicKey.toBase58();
     const cachedContent = getCachedDecryptedUrl(walletAddress, content.contentCid, sessionToken);
     if (cachedContent) { setDecryptedUrl(cachedContent); setHasAccess(true); return; }
@@ -1110,6 +1107,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
     if (!isEncrypted) { setHasAccess(true); return; }
     if (!publicKey) { setHasAccess(false); return; }
     if (!sessionToken) { if (decryptedUrl) { setDecryptedUrl(null); setHasAccess(null); } return; }
+    if (!content.contentCid) { return; }
     const cached = getCachedDecryptedUrl(publicKey.toBase58(), content.contentCid, sessionToken);
     if (cached) { setDecryptedUrl(cached); setHasAccess(true); return; }
     // Auto-request decryption for: creator, NFT owner, bundle owner, bundle context owner, OR public content (level 0)
@@ -1201,7 +1199,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
           <div><p className="text-white font-medium">{displayName}</p><p className="text-white/40 text-xs">{timeAgo}</p></div>
         </div>
-        <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || `Content ${content.contentCid.slice(0, 12)}...`}</h2>
+        <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
         {(artist || album) && <p className="text-white/50 text-sm mb-2">{artist}{artist && album && " · "}{album}</p>}
         {content.metadata?.description && <p className="text-white/40 text-sm line-clamp-2 mb-4">{content.metadata.description}</p>}
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1420,11 +1418,11 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       )}
 
       {/* Content Modals */}
-      {showBuyContentModal && mintConfig && <BuyContentModal isOpen={showBuyContentModal} onClose={() => setShowBuyContentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} mintConfig={mintConfig} mintedCount={BigInt(actualMintedCount)} ownedCount={ownedNftCount} onSuccess={() => { refetchMintConfig(); refetchOwnership(); }} />}
+      {showBuyContentModal && mintConfig && content.contentCid && <BuyContentModal isOpen={showBuyContentModal} onClose={() => setShowBuyContentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} mintConfig={mintConfig} mintedCount={BigInt(actualMintedCount)} ownedCount={ownedNftCount} onSuccess={() => { refetchMintConfig(); refetchOwnership(); }} />}
       {showEditModal && <EditContentModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} content={content} />}
-      {showDeleteModal && <DeleteContentModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} hasMintConfig={!!mintConfig} />}
-      {showRentModal && rentConfig && <RentContentModal isOpen={showRentModal} onClose={() => setShowRentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} rentConfig={rentConfig} activeRental={activeRental} onSuccess={() => { refetchRentConfig(); refetchOwnership(); refetchActiveRental(); }} onBuyClick={mintConfig ? () => setShowBuyContentModal(true) : undefined} />}
-      {showSellModal && <SellNftModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} ownedCount={ownedNftCount} userNfts={walletNfts} />}
+      {showDeleteModal && content.contentCid && <DeleteContentModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} hasMintConfig={!!mintConfig} />}
+      {showRentModal && rentConfig && content.contentCid && <RentContentModal isOpen={showRentModal} onClose={() => setShowRentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} rentConfig={rentConfig} activeRental={activeRental} onSuccess={() => { refetchRentConfig(); refetchOwnership(); refetchActiveRental(); }} onBuyClick={mintConfig ? () => setShowBuyContentModal(true) : undefined} />}
+      {showSellModal && content.contentCid && <SellNftModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} ownedCount={ownedNftCount} userNfts={walletNfts} />}
 
       {/* Bundle Modals */}
       {showBuyBundleModal && bundleContext && bundleMintConfig && (
@@ -1541,7 +1539,8 @@ function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1
                   creatorAddress: content.creator.toBase58(),
                   mintConfig: null,
                 };
-                contentsMap.set(content.contentCid, enriched);
+                const contentKey = content.contentCid ?? content.pubkey?.toBase58() ?? "";
+                if (contentKey) contentsMap.set(contentKey, enriched);
               }
 
               return {

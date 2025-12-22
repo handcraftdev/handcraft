@@ -8,7 +8,7 @@ import {
   getContentPda,
   getBundlePda,
   findBundlesForContent,
-  fetchAllBundleCollections,
+  fetchBundleByPda,
   getEcosystemSubscriptionPda,
   getCreatorPatronSubscriptionPda,
   isSubscriptionValid,
@@ -482,18 +482,16 @@ async function checkBundleOwnership(
       return false;
     }
 
-    // 2. Get all bundle collections to find collection addresses for these bundles
-    const allBundleCollections = await fetchAllBundleCollections(connection);
-
-    // 3. Get collection addresses for bundles containing this content
+    // 2. Get collection addresses for bundles containing this content
+    // NOTE: collectionAsset is now stored directly in Bundle (no separate BundleCollection PDA)
     const collectionAddresses = new Set<string>();
-    for (const bundle of bundlesWithContent) {
+    for (const bundleInfo of bundlesWithContent) {
       // Compute bundle PDA from creator and bundleId
-      const [bundlePda] = getBundlePda(bundle.creator, bundle.bundleId);
-      const bundleKey = bundlePda.toBase58();
-      const collection = allBundleCollections.get(bundleKey);
-      if (collection) {
-        collectionAddresses.add(collection.collectionAsset.toBase58());
+      const [bundlePda] = getBundlePda(bundleInfo.creator, bundleInfo.bundleId);
+      // Fetch bundle to get its collectionAsset
+      const bundle = await fetchBundleByPda(connection, bundlePda);
+      if (bundle && bundle.collectionAsset) {
+        collectionAddresses.add(bundle.collectionAsset.toBase58());
       }
     }
 

@@ -32,32 +32,47 @@ export default function LibraryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Build owned content list - deduplicate by contentCid
+  // Build owned content list - deduplicate by collectionAsset
+  // NOTE: ContentEntry no longer has contentCid - we use collectionAsset for mapping
+  // and get contentCid from the NFT's metadata
   const ownedContent = useMemo(() => {
     if (!walletNfts || walletNfts.length === 0) return [];
 
-    const contentMap = new Map(globalContent.map(c => [c.contentCid, c]));
+    // Map ContentEntry by collectionAsset (which is now stored in ContentEntry)
+    const contentByCollection = new Map(
+      globalContent
+        .filter(c => c.collectionAsset)
+        .map(c => [c.collectionAsset.toBase58(), c])
+    );
 
     // Deduplicate - count how many of each content the user owns and store first NFT name
+    // Use collectionAsset as the key for grouping
     const countMap = new Map<string, number>();
     const nftNameMap = new Map<string, string>(); // Store NFT name for each content
+    const contentCidMap = new Map<string, string>(); // Map collectionAsset -> contentCid from NFT
     for (const nft of walletNfts) {
-      if (!nft.contentCid) continue; // Skip NFTs without contentCid
-      countMap.set(nft.contentCid, (countMap.get(nft.contentCid) || 0) + 1);
+      if (!nft.collectionAsset) continue; // Skip NFTs without collectionAsset
+      const collectionKey = nft.collectionAsset.toBase58();
+      countMap.set(collectionKey, (countMap.get(collectionKey) || 0) + 1);
       // Store the first NFT name we encounter for this content
-      if (!nftNameMap.has(nft.contentCid) && nft.name) {
-        nftNameMap.set(nft.contentCid, nft.name);
+      if (!nftNameMap.has(collectionKey) && nft.name) {
+        nftNameMap.set(collectionKey, nft.name);
+      }
+      // Store contentCid from NFT metadata
+      if (!contentCidMap.has(collectionKey) && nft.contentCid) {
+        contentCidMap.set(collectionKey, nft.contentCid);
       }
     }
 
-    // Get unique content CIDs
-    const uniqueCids = Array.from(countMap.keys());
+    // Get unique collection keys
+    const uniqueCollections = Array.from(countMap.keys());
 
-    return uniqueCids
-      .map(contentCid => {
-        const content = contentMap.get(contentCid);
+    return uniqueCollections
+      .map(collectionKey => {
+        const content = contentByCollection.get(collectionKey);
         if (!content) return null;
-        const nftName = nftNameMap.get(contentCid) || "";
+        const nftName = nftNameMap.get(collectionKey) || "";
+        const contentCid = contentCidMap.get(collectionKey) || collectionKey;
         // NFT name format: "Content Name (R #000001)" - use the full NFT name
         const title = nftName || `Content ${contentCid.slice(0, 8)}...`;
         return {
@@ -65,10 +80,10 @@ export default function LibraryPage() {
           type: "content" as const,
           title,
           previewCid: content.previewCid,
-          domain: getContentDomain(content.contentType),
-          contentType: content.contentType,
-          createdAt: content.createdAt,
-          count: countMap.get(contentCid) || 1,
+          // NOTE: contentType and createdAt removed from on-chain struct
+          domain: "file" as ContentDomain,
+          createdAt: BigInt(0), // Not available from on-chain anymore
+          count: countMap.get(collectionKey) || 1,
         };
       })
       .filter(Boolean);

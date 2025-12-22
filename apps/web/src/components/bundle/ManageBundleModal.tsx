@@ -113,26 +113,18 @@ export function ManageBundleModal({
     }
   }, [rentConfig]);
 
-  // Fetch metadata from IPFS
+  // Fetch metadata from Metaplex collection or IPFS
+  // NOTE: metadataCid removed from Bundle - now stored in Metaplex collection metadata
+  // TODO: Implement fetchCollectionUri to get metadata from collection asset
   useEffect(() => {
     async function fetchMetadata() {
-      if (!bundle.metadataCid) return;
-      try {
-        const url = getIpfsUrl(bundle.metadataCid);
-        const res = await fetch(url);
-        if (res.ok) {
-          const meta = await res.json() as BundleMetadata;
-          setMetadata(meta);
-          if (meta.items && meta.items.length > 0) {
-            setOrderedItems(meta.items);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch bundle metadata:", e);
-      }
+      // For now, skip metadata fetch - would need to be implemented via
+      // fetchCollectionUri(connection, bundle.collectionAsset) from SDK
+      if (!bundle.collectionAsset) return;
+      // Placeholder - metadata fetching from collection not yet implemented
     }
     fetchMetadata();
-  }, [bundle.metadataCid]);
+  }, [bundle.collectionAsset]);
 
   // Sync ordered items when on-chain items change
   useEffect(() => {
@@ -561,23 +553,26 @@ export function ManageBundleModal({
                   <div>
                     <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Add Content</h3>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {addableContent.map((content) => (
-                        <div
-                          key={content.contentCid}
-                          className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 hover:border-white/10 transition-all duration-300"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-white/70 truncate">{content.contentCid.slice(0, 16)}...</p>
-                          </div>
-                          <button
-                            onClick={() => handleAddItem(content.contentCid)}
-                            disabled={isLoading}
-                            className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300"
+                      {addableContent.map((content) => {
+                        const contentKey = content.pubkey?.toBase58() || content.contentCid || "";
+                        return (
+                          <div
+                            key={contentKey}
+                            className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 hover:border-white/10 transition-all duration-300"
                           >
-                            Add
-                          </button>
-                        </div>
-                      ))}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-white/70 truncate">{contentKey.slice(0, 16)}...</p>
+                            </div>
+                            <button
+                              onClick={() => content.contentCid && handleAddItem(content.contentCid)}
+                              disabled={isLoading || !content.contentCid}
+                              className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

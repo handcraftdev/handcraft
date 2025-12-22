@@ -87,8 +87,8 @@ function getContentDomain(contentType: ContentType): string {
 /**
  * Loading placeholder shown while viewer loads
  */
-export function ViewerPlaceholder({ contentType }: { contentType: ContentType }) {
-  const domain = getContentDomain(contentType);
+export function ViewerPlaceholder({ contentType }: { contentType?: ContentType }) {
+  const domain = contentType !== undefined ? getContentDomain(contentType) : "document";
   const iconPath = DOMAIN_ICONS[domain] || DOMAIN_ICONS.file;
 
   return (
@@ -117,7 +117,9 @@ export function ViewerPlaceholder({ contentType }: { contentType: ContentType })
  * type-specific viewer based on content type.
  */
 export function ContentViewer(props: ViewerProps) {
-  const Viewer = VIEWER_REGISTRY[props.contentType] || VideoViewer;
+  const Viewer = props.contentType !== undefined
+    ? (VIEWER_REGISTRY[props.contentType] || VideoViewer)
+    : VideoViewer;
 
   return (
     <Suspense fallback={<ViewerPlaceholder contentType={props.contentType} />}>

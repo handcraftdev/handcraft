@@ -203,13 +203,13 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         const editableDraft: ContentDraft = {
           id: editContentCid!, // Use contentCid as ID for edit mode
           creator_wallet: contentEntry!.creator?.toBase58() || '',
-          content_type: contentEntry!.contentType as number,
+          content_type: (contentEntry!.contentType ?? 0) as number,
           domain: metadata.properties?.contentDomain || 'video',
           status: 'published',
-          content_cid: contentEntry!.contentCid,
+          content_cid: contentEntry!.contentCid ?? null,
           preview_cid: contentEntry!.previewCid || null,
           thumbnail_cid: metadata.image ? metadata.image.replace('https://ipfs.filebase.io/ipfs/', '') : null,
-          metadata_cid: contentEntry!.metadataCid || null,
+          metadata_cid: contentEntry!.metadataCid ?? null,
           encryption_meta_cid: contentEntry!.encryptionMetaCid || null,
           title: metadata.properties?.title || metadata.name || null,
           description: metadata.description || null,

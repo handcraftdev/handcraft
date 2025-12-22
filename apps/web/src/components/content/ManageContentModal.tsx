@@ -68,8 +68,9 @@ export function ManageContentModal({
   } = useContentRegistry();
 
   // Fetch mint/rent configs
-  const mintConfigQuery = useMintConfig(content.contentCid);
-  const rentConfigQuery = useRentConfig(content.contentCid);
+  // contentCid may be undefined for new optimized ContentEntry structure
+  const mintConfigQuery = useMintConfig(content.contentCid ?? null);
+  const rentConfigQuery = useRentConfig(content.contentCid ?? null);
 
   const mintConfig = mintConfigQuery.data;
   const rentConfig = rentConfigQuery.data;
@@ -121,6 +122,10 @@ export function ManageContentModal({
   // Handle toggle mint active
   const handleToggleMintActive = async () => {
     if (!mintConfig) return;
+    if (!content.contentCid) {
+      setError("Content CID not available");
+      return;
+    }
     setError(null);
     try {
       await updateMintSettings({
@@ -139,6 +144,10 @@ export function ManageContentModal({
 
   // Handle configure/update mint settings
   const handleSaveMintSettings = async () => {
+    if (!content.contentCid) {
+      setError("Content CID not available");
+      return;
+    }
     setError(null);
 
     try {
@@ -182,6 +191,10 @@ export function ManageContentModal({
   // Handle toggle rent active
   const handleToggleRentActive = async () => {
     if (!rentConfig) return;
+    if (!content.contentCid) {
+      setError("Content CID not available");
+      return;
+    }
     setError(null);
     try {
       await updateRentConfig({
@@ -200,6 +213,10 @@ export function ManageContentModal({
 
   // Handle configure/update rent config
   const handleSaveRentConfig = async () => {
+    if (!content.contentCid) {
+      setError("Content CID not available");
+      return;
+    }
     setError(null);
 
     try {
@@ -240,8 +257,8 @@ export function ManageContentModal({
 
   if (!isOpen) return null;
 
-  const contentTitle = metadata?.title || metadata?.name || content.contentCid.slice(0, 16) + "...";
-  const contentTypeLabel = getContentTypeLabel(content.contentType);
+  const contentTitle = metadata?.title || metadata?.name || (content.contentCid?.slice(0, 16) ?? content.pubkey?.toBase58().slice(0, 16) ?? "Unknown") + "...";
+  const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -325,7 +342,7 @@ export function ManageContentModal({
               <div className="space-y-3">
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                   <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content CID</h3>
-                  <p className="text-sm text-white/60 font-mono break-all">{content.contentCid}</p>
+                  <p className="text-sm text-white/60 font-mono break-all">{content.contentCid ?? "N/A"}</p>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
@@ -397,7 +414,7 @@ export function ManageContentModal({
                 )}
 
                 {/* Edit Metadata Button */}
-                {!isLocked ? (
+                {!isLocked && content.contentCid ? (
                   <Link
                     href={`/studio/edit/${content.contentCid}`}
                     onClick={onClose}
@@ -408,13 +425,13 @@ export function ManageContentModal({
                     </svg>
                     Edit Metadata
                   </Link>
-                ) : (
+                ) : isLocked ? (
                   <div className="text-center p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
                     <p className="text-xs text-amber-400/70">
                       Metadata cannot be edited after NFTs have been minted
                     </p>
                   </div>
-                )}
+                ) : null}
               </div>
             )}
 

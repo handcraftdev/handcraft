@@ -110,6 +110,11 @@ export function EditContentModal({
 
       const { cid: metadataCid } = await metadataRes.json();
 
+      // contentCid is required for on-chain update
+      if (!content.contentCid) {
+        throw new Error("Content CID not available");
+      }
+
       // Update on-chain
       await updateContent({
         contentCid: content.contentCid,

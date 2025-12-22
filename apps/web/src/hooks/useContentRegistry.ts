@@ -14,12 +14,10 @@ import {
   getRarityWeight,
   getRarityFromWeight,
   getContentPda,
-  getCidRegistryPda,
   getEcosystemConfigPda,
   getMintConfigPda,
   getContentRewardPoolPda,
   getWalletContentStatePda,
-  getContentCollectionPda,
   getRentConfigPda,
   getPendingMintPda,
   getMbMintRequestPda,
@@ -28,7 +26,6 @@ import {
   getBundleItemPda,
   getBundleMintConfigPda,
   getBundleRentConfigPda,
-  getBundleCollectionPda,
   getBundleRewardPoolPda,
   getUserProfilePda,
   getEcosystemStreamingTreasuryPda,
@@ -39,9 +36,7 @@ import {
   WalletContentState,
   MintConfig,
   EcosystemConfig,
-  ContentCollection,
   RentConfig,
-  RentEntry,
   ContentEntry,
   PendingMint,
   Bundle,
@@ -50,7 +45,6 @@ import {
   BundleWithItems,
   BundleMintConfig,
   BundleRentConfig,
-  BundleCollection,
   BundleRewardPool,
   EcosystemEpochState,
   GlobalHolderPool,
@@ -65,6 +59,11 @@ import {
   RENT_PERIOD_7D,
   MIN_RENT_FEE_LAMPORTS,
 } from "@handcraft/sdk";
+
+// NOTE: Removed imports for deprecated PDAs and types:
+// - getCidRegistryPda, getContentCollectionPda, getBundleCollectionPda
+// - ContentCollection, RentEntry, BundleCollection
+// Collection assets are now stored directly in ContentEntry and Bundle
 import { simulateTransaction, simulatePartiallySignedTransaction } from "@/utils/transaction";
 
 export {
@@ -84,7 +83,6 @@ export {
   getBundleItemPda,
   getBundleMintConfigPda,
   getBundleRentConfigPda,
-  getBundleCollectionPda,
   getBundleRewardPoolPda,
   getUserProfilePda,
   MAGICBLOCK_DEFAULT_QUEUE,
@@ -97,7 +95,7 @@ export {
   MIN_RENT_FEE_LAMPORTS,
 };
 export type { MbMintRequest } from "@handcraft/sdk";
-export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, ContentCollection, RentConfig, RentEntry, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleCollection, BundleRewardPool, UserProfile, EcosystemEpochState, GlobalHolderPool, CreatorDistPool };
+export type { MintConfig, EcosystemConfig, ContentRewardPool, WalletContentState, RentConfig, PendingMint, ContentEntry, Bundle, BundleItem, BundleWithItems, BundleMintConfig, BundleRentConfig, BundleRewardPool, UserProfile, EcosystemEpochState, GlobalHolderPool, CreatorDistPool };
 export { getEcosystemStreamingTreasuryPda };
 
 export function useContentRegistry() {
@@ -601,13 +599,17 @@ export function useContentRegistry() {
         buyer: publicKey.toBase58(),
       });
 
-      // First, fetch the content collection to get the collection asset address
-      const contentCollection = await client.fetchContentCollection(contentCid);
-      if (!contentCollection) {
-        throw new Error("Content collection not found. Make sure the content was registered with mint config.");
+      // Fetch the content entry to get the collection asset address
+      // NOTE: collectionAsset is now stored directly in ContentEntry (no separate ContentCollection PDA)
+      const content = await client.fetchContent(contentCid);
+      if (!content) {
+        throw new Error("Content not found.");
+      }
+      if (!content.collectionAsset) {
+        throw new Error("Content has no collection asset. Make sure the content was registered with mint config.");
       }
 
-      console.log("Collection Asset:", contentCollection.collectionAsset.toBase58());
+      console.log("Collection Asset:", content.collectionAsset.toBase58());
 
       // mintNftSolInstruction returns { instruction, nftAssetKeypair }
       // The nftAssetKeypair MUST be added as a signer to the transaction
@@ -617,7 +619,7 @@ export function useContentRegistry() {
         creator,
         treasury,
         platform,
-        contentCollection.collectionAsset
+        content.collectionAsset
       );
 
       console.log("NFT Asset pubkey:", nftAssetKeypair.publicKey.toBase58());
@@ -790,16 +792,20 @@ export function useContentRegistry() {
         contentCid,
       });
 
-      // First, fetch the content collection to get the collection asset address
-      const contentCollection = await client.fetchContentCollection(contentCid);
-      if (!contentCollection) {
-        throw new Error("Content collection not found.");
+      // Fetch the content entry to get the collection asset address
+      // NOTE: collectionAsset is now stored directly in ContentEntry
+      const content = await client.fetchContent(contentCid);
+      if (!content) {
+        throw new Error("Content not found.");
+      }
+      if (!content.collectionAsset) {
+        throw new Error("Content has no collection asset.");
       }
 
       // Fetch NFT assets owned by the user for this collection
       const nftAssets = await client.fetchWalletNftsForCollection(
         publicKey,
-        contentCollection.collectionAsset
+        content.collectionAsset
       );
 
       console.log("Found NFT assets:", nftAssets.length);
@@ -899,15 +905,16 @@ export function useContentRegistry() {
 
       // Build batched claims for each content
       for (const contentCid of contentCids) {
-        const contentCollection = await client.fetchContentCollection(contentCid);
-        if (!contentCollection) {
-          console.warn(`Skipping ${contentCid}: collection not found`);
+        // NOTE: collectionAsset is now stored directly in ContentEntry
+        const content = await client.fetchContent(contentCid);
+        if (!content || !content.collectionAsset) {
+          console.warn(`Skipping ${contentCid}: content or collection not found`);
           continue;
         }
 
         const nftAssets = await client.fetchWalletNftsForCollection(
           publicKey,
-          contentCollection.collectionAsset
+          content.collectionAsset
         );
 
         if (nftAssets.length === 0) {
@@ -1131,13 +1138,17 @@ export function useContentRegistry() {
         tier,
       });
 
-      // Fetch the content collection to get the collection asset address
-      const contentCollection = await client.fetchContentCollection(contentCid);
-      if (!contentCollection) {
-        throw new Error("Content collection not found.");
+      // Fetch the content entry to get the collection asset address
+      // NOTE: collectionAsset is now stored directly in ContentEntry
+      const content = await client.fetchContent(contentCid);
+      if (!content) {
+        throw new Error("Content not found.");
+      }
+      if (!content.collectionAsset) {
+        throw new Error("Content has no collection asset.");
       }
 
-      console.log("Collection Asset:", contentCollection.collectionAsset.toBase58());
+      console.log("Collection Asset:", content.collectionAsset.toBase58());
 
       const { instruction, nftAssetKeypair } = await client.rentContentSolInstruction(
         publicKey,
@@ -1145,7 +1156,7 @@ export function useContentRegistry() {
         creator,
         treasury,
         platform,
-        contentCollection.collectionAsset,
+        content.collectionAsset,
         tier
       );
 
@@ -1275,23 +1286,7 @@ export function useContentRegistry() {
     },
   });
 
-  // Batch fetch ALL content collections in one RPC call
-  const allContentCollectionsQuery = useQuery({
-    queryKey: ["allContentCollections"],
-    queryFn: async () => {
-      if (!client) return new Map<string, ContentCollection>();
-      return client.fetchAllContentCollections();
-    },
-    enabled: !!client,
-    staleTime: 60000,
-    gcTime: 300000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('429')) return false;
-      return failureCount < 2;
-    },
-  });
+  // NOTE: allContentCollectionsQuery removed - collectionAsset now stored in ContentEntry
 
   // Batch fetch ALL content reward pools in one RPC call
   const allRewardPoolsQuery = useQuery({
@@ -1376,7 +1371,7 @@ export function useContentRegistry() {
     queryFn: async () => {
       if (!client) return new Map<string, Array<{ bundleId: string; creator: { toBase58(): string } }>>();
       // Get all content CIDs from global content
-      const contentCids = globalContentQuery.data?.map(c => c.contentCid) || [];
+      const contentCids = globalContentQuery.data?.map(c => c.contentCid).filter((cid): cid is string => !!cid) || [];
       if (contentCids.length === 0) return new Map();
       return client.findBundlesForContentBatch(contentCids);
     },
@@ -1454,7 +1449,6 @@ export function useContentRegistry() {
       const instruction = await client.createBundleInstruction(
         publicKey,
         bundleId,
-        metadataCid,
         bundleType
       );
 
@@ -1633,7 +1627,6 @@ export function useContentRegistry() {
       const instruction = await client.updateBundleInstruction(
         publicKey,
         bundleId,
-        metadataCid,
         isActive
       );
 
@@ -1688,12 +1681,14 @@ export function useContentRegistry() {
   const configureBundleMint = useMutation({
     mutationFn: async ({
       bundleId,
+      metadataCid,
       price,
       maxSupply,
       creatorRoyaltyBps,
       platform,
     }: {
       bundleId: string;
+      metadataCid: string;
       price: bigint;
       maxSupply: bigint | null;
       creatorRoyaltyBps: number;
@@ -1704,6 +1699,7 @@ export function useContentRegistry() {
       const { instruction, collectionAssetKeypair } = await client.configureBundleMintInstruction(
         publicKey,
         bundleId,
+        metadataCid,
         price,
         maxSupply,
         creatorRoyaltyBps,
@@ -2127,12 +2123,12 @@ export function useContentRegistry() {
         console.log("Building content claim instructions...", { count: contentCids.length });
 
         for (const contentCid of contentCids) {
-          const contentCollection = await client.fetchContentCollection(contentCid);
-          if (!contentCollection) continue;
+          const contentEntry = await client.fetchContent(contentCid);
+          if (!contentEntry) continue;
 
           const nftAssets = await client.fetchWalletNftsForCollection(
             publicKey,
-            contentCollection.collectionAsset
+            contentEntry.collectionAsset
           );
           if (nftAssets.length === 0) continue;
 
@@ -2259,12 +2255,17 @@ export function useContentRegistry() {
     });
   };
 
-  // Fetch bundle collection
+  // Fetch bundle (collectionAsset is now directly in Bundle)
   const useBundleCollection = (creator: PublicKey | null, bundleId: string | null) => {
     return useQuery({
       queryKey: ["bundleCollection", creator?.toBase58(), bundleId],
-      queryFn: () =>
-        creator && bundleId && client ? client.fetchBundleCollection(creator, bundleId) : null,
+      queryFn: async () => {
+        if (!creator || !bundleId || !client) return null;
+        const bundle = await client.fetchBundle(creator, bundleId);
+        if (!bundle) return null;
+        // Return shape matching old BundleCollection for compatibility
+        return { collectionAsset: bundle.collectionAsset };
+      },
       enabled: !!creator && !!bundleId && !!client,
       staleTime: 60000,
       gcTime: 120000,
@@ -2555,19 +2556,7 @@ export function useContentRegistry() {
     refetchOnWindowFocus: false,
   });
 
-  // Batch fetch all bundle collections (needed for pending rewards calculation)
-  const allBundleCollectionsQuery = useQuery({
-    queryKey: ["allBundleCollections"],
-    queryFn: async () => {
-      if (!client) return new Map();
-      return client.fetchAllBundleCollections();
-    },
-    enabled: !!client,
-    staleTime: 120000,
-    gcTime: 300000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-  });
+  // NOTE: allBundleCollectionsQuery removed - collection_asset now stored directly in Bundle
 
   // Per-bundle pending reward info
   interface BundlePendingReward {
@@ -2594,16 +2583,14 @@ export function useContentRegistry() {
       if (nfts.length === 0) return [];
 
       const rewardPools = allBundleRewardPoolsQuery.data || new Map();
-      const collections = allBundleCollectionsQuery.data || new Map();
 
-      return client.getBundlePendingRewardsOptimized(publicKey, nfts, rewardPools, collections);
+      return client.getBundlePendingRewardsOptimized(publicKey, nfts, rewardPools);
     },
     enabled: walletBundleNftsQuery.isSuccess &&
              walletBundleNfts.length > 0 &&
              !!publicKey &&
              !!client &&
-             allBundleRewardPoolsQuery.isSuccess &&
-             allBundleCollectionsQuery.isSuccess,
+             allBundleRewardPoolsQuery.isSuccess,
     staleTime: 120000,
     gcTime: 300000,
     refetchOnMount: false,
@@ -2659,21 +2646,20 @@ export function useContentRegistry() {
       const nfts = walletNfts;
       if (nfts.length === 0) return [];
 
-      // Use pre-fetched batch data for reward pools and collections
+      // Use pre-fetched batch data for reward pools
+      // NOTE: ContentCollections removed - collectionAsset now in ContentEntry
       const rewardPools = allRewardPoolsQuery.data || new Map();
-      const collections = allContentCollectionsQuery.data || new Map();
 
       // Use optimized function that accepts pre-fetched data
       // This reduces N*M individual calls to just 1 batch call
-      return client.getPendingRewardsOptimized(publicKey, nfts, rewardPools, collections);
+      return client.getPendingRewardsOptimized(publicKey, nfts, rewardPools);
     },
     enabled: walletNftsQuery.isSuccess &&
              walletRentalNftsQuery.isSuccess &&
              walletNfts.length > 0 &&
              !!publicKey &&
              !!client &&
-             allRewardPoolsQuery.isSuccess &&
-             allContentCollectionsQuery.isSuccess,
+             allRewardPoolsQuery.isSuccess,
     staleTime: 120000, // Cache for 2 minutes
     gcTime: 300000, // Keep in cache for 5 minutes
     refetchOnMount: false,
@@ -2710,13 +2696,21 @@ export function useContentRegistry() {
     };
   };
 
+  // Active rental info type (from NFT Attributes)
+  interface ActiveRentalInfo {
+    nftAsset: PublicKey;
+    expiresAt: bigint;
+    tier: number;
+    isActive: boolean;
+  }
+
   // Fetch active rental for a specific content
   const useActiveRental = (contentCid: string | null) => {
     return useQuery({
       queryKey: ["activeRental", publicKey?.toBase58(), contentCid],
-      queryFn: async (): Promise<RentEntry | null> => {
+      queryFn: async (): Promise<ActiveRentalInfo | null> => {
         if (!publicKey || !contentCid || !client) return null;
-        return client.fetchActiveRentalForContent(publicKey, contentCid);
+        return client.fetchActiveRentalForContent(publicKey, contentCid) as Promise<ActiveRentalInfo | null>;
       },
       enabled: !!publicKey && !!contentCid && !!client,
       staleTime: 60000, // Cache for 1 minute
@@ -2824,6 +2818,7 @@ export function useContentRegistry() {
     const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
 
     for (const item of content) {
+      if (!item.contentCid) continue;
       const [contentPda] = getContentPda(item.contentCid);
       const mintConfig = mintConfigs.get(contentPda.toBase58());
       if (mintConfig && mintConfig.isActive) {
@@ -2989,12 +2984,10 @@ export function useContentRegistry() {
     // Utilities
     client,
     getContentPda,
-    getCidRegistryPda,
     getEcosystemConfigPda,
     getMintConfigPda,
     getContentRewardPoolPda,
     getWalletContentStatePda,
-    getContentCollectionPda,
     getRentConfigPda,
     getPendingMintPda,
     getBundlePda,

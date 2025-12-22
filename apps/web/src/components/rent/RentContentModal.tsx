@@ -3,8 +3,16 @@
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { useContentRegistry, RentTier, RentConfig, RentEntry, RENT_PERIOD_6H, RENT_PERIOD_1D, RENT_PERIOD_7D } from "@/hooks/useContentRegistry";
+import { useContentRegistry, RentTier, RentConfig, RENT_PERIOD_6H, RENT_PERIOD_1D, RENT_PERIOD_7D } from "@/hooks/useContentRegistry";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
+
+// Active rental info (from NFT Attributes)
+interface ActiveRentalInfo {
+  nftAsset: PublicKey;
+  expiresAt: bigint;
+  tier: number;
+  isActive: boolean;
+}
 
 interface RentContentModalProps {
   isOpen: boolean;
@@ -13,7 +21,7 @@ interface RentContentModalProps {
   contentTitle?: string;
   creator: PublicKey;
   rentConfig: RentConfig;
-  activeRental?: RentEntry | null;
+  activeRental?: ActiveRentalInfo | null;
   onSuccess?: () => void;
   onBuyClick?: () => void;
 }

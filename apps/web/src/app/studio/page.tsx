@@ -18,29 +18,12 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 
 // Component to display a published content item with metadata fetching
 function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: () => void }) {
-  const [metadata, setMetadata] = useState<any>(null);
-
-  useEffect(() => {
-    async function fetchMetadata() {
-      if (!item.metadataCid) return;
-      try {
-        const url = getIpfsUrl(item.metadataCid);
-        const res = await fetch(url);
-        if (res.ok) {
-          setMetadata(await res.json());
-        }
-      } catch (e) {
-        console.error("Failed to fetch metadata:", e);
-      }
-    }
-    fetchMetadata();
-  }, [item.metadataCid]);
-
-  const collectionName = metadata?.properties?.collection || '';
-  const title = metadata?.properties?.title || metadata?.title || metadata?.name || "Untitled";
-  const displayTitle = collectionName ? `${collectionName} - ${title}` : title;
-  const thumbnailUrl = metadata?.image || null;
-  const contentType = item.contentType?.toString().replace(/([A-Z])/g, ' $1').trim() || "Unknown";
+  // NOTE: metadataCid and contentType removed from ContentEntry
+  // Metadata should come from Supabase or be fetched via collection asset
+  // For now, show basic info without metadata
+  const displayTitle = item.previewCid ? `Content ${item.previewCid.slice(0, 8)}...` : "Untitled";
+  const thumbnailUrl: string | null = null;
+  const contentType = "Content";
 
   return (
     <div
@@ -63,7 +46,7 @@ function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: 
 
       <div className="relative flex-1 min-w-0">
         <p className="font-medium truncate text-white/90">{displayTitle}</p>
-        <p className="text-xs text-white/40 truncate mt-0.5">{item.contentCid.slice(0, 24)}...</p>
+        <p className="text-xs text-white/40 truncate mt-0.5">{item.pubkey?.toBase58().slice(0, 24) || "Unknown"}...</p>
       </div>
 
       <div className="relative flex items-center gap-3 text-sm">

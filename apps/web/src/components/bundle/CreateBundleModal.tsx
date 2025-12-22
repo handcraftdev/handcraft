@@ -83,6 +83,8 @@ export function CreateBundleModal({
     : ALL_BUNDLE_TYPES;
 
   // Load metadata for user's content
+  // NOTE: metadataCid and contentCid are now optional (stored in Metaplex collection metadata)
+  // Use pubkey as key since contentCid may not be available from on-chain data
   const loadContentMetadata = async () => {
     if (!userContent.length) return;
 
@@ -91,11 +93,17 @@ export function CreateBundleModal({
 
     await Promise.all(
       userContent.map(async (content) => {
+        const key = content.pubkey?.toBase58();
+        if (!key) return;
+
+        // Skip if no metadataCid available
+        if (!content.metadataCid) return;
+
         try {
           const url = getIpfsUrl(content.metadataCid);
           const res = await fetch(url);
           if (res.ok) {
-            metadataMap[content.contentCid] = await res.json();
+            metadataMap[key] = await res.json();
           }
         } catch {
           // Ignore errors
@@ -462,15 +470,17 @@ export function CreateBundleModal({
                   </div>
                 ) : (
                   userContent.map((content) => {
-                    const meta = contentMetadata[content.contentCid];
-                    const isSelected = selectedContentCids.includes(content.contentCid);
-                    const selectionIndex = selectedContentCids.indexOf(content.contentCid);
+                    // Use pubkey as identifier since contentCid may not be available from on-chain
+                    const contentKey = content.pubkey?.toBase58() || "";
+                    const meta = contentMetadata[contentKey];
+                    const isSelected = selectedContentCids.includes(contentKey);
+                    const selectionIndex = selectedContentCids.indexOf(contentKey);
 
                     return (
                       <button
-                        key={content.contentCid}
+                        key={contentKey}
                         type="button"
-                        onClick={() => toggleContentSelection(content.contentCid)}
+                        onClick={() => toggleContentSelection(contentKey)}
                         className={`relative w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 overflow-hidden ${
                           isSelected
                             ? "bg-cyan-500/10 border-cyan-500/50"
@@ -511,7 +521,7 @@ export function CreateBundleModal({
 
                         <div className="relative flex-1 text-left min-w-0">
                           <p className="font-medium text-white/80 truncate text-sm">
-                            {meta?.name || content.contentCid.slice(0, 16) + "..."}
+                            {meta?.name || contentKey.slice(0, 16) + "..."}
                           </p>
                           {meta?.description && (
                             <p className="text-xs text-white/40 truncate">{meta.description}</p>
