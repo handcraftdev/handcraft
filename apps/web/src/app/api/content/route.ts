@@ -183,36 +183,30 @@ export async function GET(request: NextRequest) {
 
 /**
  * Parse visibility level from content account data
- * Handles variable-length Borsh strings
+ * NEW ContentEntry layout (after PDA optimization):
+ * - discriminator: 8 bytes
+ * - creator: 32 bytes
+ * - collection_asset: 32 bytes
+ * - tips_received: 8 bytes (u64)
+ * - is_locked: 1 byte (bool)
+ * - minted_count: 8 bytes (u64)
+ * - pending_count: 8 bytes (u64)
+ * - is_encrypted: 1 byte (bool)
+ * - preview_cid: 4 + len bytes (String)
+ * - encryption_meta_cid: 4 + len bytes (String)
+ * - visibility_level: 1 byte (u8)
  */
 function parseVisibilityLevel(data: Buffer): number {
   let offset = 8; // Skip discriminator
   offset += 32; // Skip creator
+  offset += 32; // Skip collection_asset
+  offset += 8;  // Skip tips_received (u64)
+  offset += 1;  // Skip is_locked (bool)
+  offset += 8;  // Skip minted_count (u64)
+  offset += 8;  // Skip pending_count (u64)
+  offset += 1;  // Skip is_encrypted (bool)
 
-  // Skip content_cid (4-byte length + string bytes)
-  const contentCidLen = data.readUInt32LE(offset);
-  offset += 4 + contentCidLen;
-
-  // Skip metadata_cid
-  const metadataCidLen = data.readUInt32LE(offset);
-  offset += 4 + metadataCidLen;
-
-  // Skip content_type (1 byte enum)
-  offset += 1;
-  // Skip tips_received (u64)
-  offset += 8;
-  // Skip created_at (i64)
-  offset += 8;
-  // Skip is_locked (bool)
-  offset += 1;
-  // Skip minted_count (u64)
-  offset += 8;
-  // Skip pending_count (u64)
-  offset += 8;
-  // Skip is_encrypted (bool)
-  offset += 1;
-
-  // Skip preview_cid
+  // Skip preview_cid (4-byte length + string bytes)
   const previewCidLen = data.readUInt32LE(offset);
   offset += 4 + previewCidLen;
 
@@ -445,6 +439,7 @@ async function checkNFTOwnership(
             const metadata = await metadataResponse.json();
             if (
               metadata.contentCid === contentCid ||
+              metadata.properties?.contentCid === contentCid ||
               metadata.properties?.content_cid === contentCid ||
               metadata.image?.includes(contentCid) ||
               metadata.animation_url?.includes(contentCid)
