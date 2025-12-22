@@ -400,9 +400,12 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         name: nftBaseName,
         symbol: 'HC',
         description: draft.description || '',
+        // For encrypted content without thumbnail, don't use content_cid as it's encrypted
         image: draft.thumbnail_cid
           ? `https://ipfs.filebase.io/ipfs/${draft.thumbnail_cid}`
-          : `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
+          : draft.encryption_meta_cid
+            ? undefined  // Encrypted content without thumbnail - no image
+            : `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
         animation_url: `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
         external_url: `https://handcraft.app/content/${draft.content_cid}`,
         attributes: [
@@ -418,6 +421,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
           tags: draft.tags || [],
           collection: formattedCollectionName,
           title: draft.title || 'Untitled',
+          createdAt: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
           ...draft.type_metadata,
         },
       };
@@ -502,9 +506,12 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         name: nftBaseName,
         symbol: 'HC',
         description: draft.description || '',
+        // For encrypted content without thumbnail, don't use content_cid as it's encrypted
         image: draft.thumbnail_cid
           ? `https://ipfs.filebase.io/ipfs/${draft.thumbnail_cid}`
-          : `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
+          : draft.encryption_meta_cid
+            ? undefined  // Encrypted content without thumbnail - no image
+            : `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
         animation_url: `https://ipfs.filebase.io/ipfs/${draft.content_cid}`,
         external_url: `https://handcraft.app/content/${draft.content_cid}`,
         attributes: [
@@ -520,6 +527,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
           tags: draft.tags || [],
           collection: formattedCollectionName,
           title: draft.title || 'Untitled',
+          createdAt: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
           ...draft.type_metadata,
         },
       };
