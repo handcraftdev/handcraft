@@ -6,10 +6,8 @@ import {
   MINT_CONFIG_SEED,
   CONTENT_REWARD_POOL_SEED,
   WALLET_CONTENT_STATE_SEED,
-  CONTENT_COLLECTION_SEED,
   USER_PROFILE_SEED,
   RENT_CONFIG_SEED,
-  RENT_ENTRY_SEED,
   PENDING_MINT_SEED,
   MB_MINT_REQUEST_SEED,
   MB_NFT_SEED,
@@ -17,10 +15,8 @@ import {
   BUNDLE_ITEM_SEED,
   BUNDLE_MINT_CONFIG_SEED,
   BUNDLE_RENT_CONFIG_SEED,
-  BUNDLE_COLLECTION_SEED,
   BUNDLE_REWARD_POOL_SEED,
   BUNDLE_WALLET_STATE_SEED,
-  BUNDLE_RENT_ENTRY_SEED,
   BUNDLE_DIRECT_NFT_SEED,
   MB_BUNDLE_MINT_REQUEST_SEED,
   MB_BUNDLE_NFT_SEED,
@@ -60,13 +56,8 @@ export function getContentPda(contentCid: string): [PublicKey, number] {
   );
 }
 
-export function getCidRegistryPda(contentCid: string): [PublicKey, number] {
-  const cidHash = hashCid(contentCid);
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("cid"), cidHash],
-    PROGRAM_ID
-  );
-}
+// NOTE: CidRegistry PDA removed - CID uniqueness is now enforced by ContentEntry PDA seed
+// getCidRegistryPda is no longer needed
 
 export function getEcosystemConfigPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -96,12 +87,8 @@ export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKe
   );
 }
 
-export function getContentCollectionPda(contentPda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(CONTENT_COLLECTION_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
-  );
-}
+// NOTE: ContentCollection PDA removed - collection_asset is now stored directly in ContentEntry
+// getContentCollectionPda is no longer needed
 
 export function getUserProfilePda(owner: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -137,12 +124,8 @@ export function getRentConfigPda(contentPda: PublicKey): [PublicKey, number] {
   );
 }
 
-export function getRentEntryPda(nftAsset: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(RENT_ENTRY_SEED), nftAsset.toBuffer()],
-    PROGRAM_ID
-  );
-}
+// NOTE: RentEntry PDA removed - rental expiry is now stored in NFT Attributes plugin
+// getRentEntryPda is no longer needed
 
 export function getPendingMintPda(buyer: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -248,16 +231,7 @@ export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number
   );
 }
 
-/**
- * Get the BundleCollection PDA for a bundle
- * @param bundlePda - The bundle's PDA
- */
-export function getBundleCollectionPda(bundlePda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(BUNDLE_COLLECTION_SEED), bundlePda.toBuffer()],
-    PROGRAM_ID
-  );
-}
+// NOTE: BundleCollection PDA removed - collection_asset is now stored directly in Bundle
 
 /**
  * Get the BundleRewardPool PDA for a bundle
@@ -282,16 +256,8 @@ export function getBundleWalletStatePda(wallet: PublicKey, bundlePda: PublicKey)
   );
 }
 
-/**
- * Get the BundleRentEntry PDA for an NFT
- * @param nftAsset - The rental NFT asset's public key
- */
-export function getBundleRentEntryPda(nftAsset: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(BUNDLE_RENT_ENTRY_SEED), nftAsset.toBuffer()],
-    PROGRAM_ID
-  );
-}
+// NOTE: BundleRentEntry PDA removed - rental expiry is now stored in NFT Attributes plugin
+// getBundleRentEntryPda is no longer needed
 
 /**
  * Get the Bundle Direct NFT PDA for a buyer and bundle

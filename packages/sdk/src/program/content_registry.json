@@ -1,5 +1,5 @@
 {
-  "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7",
+  "address": "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT",
   "metadata": {
     "name": "content_registry",
     "version": "0.1.0",
@@ -186,9 +186,9 @@
           ]
         },
         {
-          "name": "bundle_collection",
+          "name": "bundle_mint_config",
           "docs": [
-            "BundleCollection PDA - holds collection info and is the burn delegate authority"
+            "BundleMintConfig PDA - authority for collection operations (signs burn)"
           ],
           "pda": {
             "seeds": [
@@ -202,16 +202,17 @@
                   108,
                   101,
                   95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
+                  109,
                   105,
+                  110,
+                  116,
+                  95,
+                  99,
                   111,
-                  110
+                  110,
+                  102,
+                  105,
+                  103
                 ]
               },
               {
@@ -501,33 +502,26 @@
           ]
         },
         {
-          "name": "content_collection",
+          "name": "mint_config",
           "docs": [
-            "ContentCollection PDA - holds collection info and is the burn delegate authority"
+            "MintConfig PDA - authority for collection operations"
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
+                  109,
+                  105,
                   110,
                   116,
                   95,
                   99,
                   111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
+                  110,
+                  102,
                   105,
-                  111,
-                  110
+                  103
                 ]
               },
               {
@@ -674,33 +668,26 @@
           ]
         },
         {
-          "name": "content_collection",
+          "name": "mint_config",
           "docs": [
-            "ContentCollection PDA - holds collection info and is the burn delegate authority"
+            "MintConfig PDA - authority for collection operations (signs burn)"
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
+                  109,
+                  105,
                   110,
                   116,
                   95,
                   99,
                   111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
+                  110,
+                  102,
                   105,
-                  111,
-                  110
+                  103
                 ]
               },
               {
@@ -1602,38 +1589,7 @@
       ],
       "accounts": [
         {
-          "name": "rent_entry",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
-                  114,
-                  101,
-                  110,
-                  116,
-                  95,
-                  101,
-                  110,
-                  116,
-                  114,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "rent_entry.nft_asset",
-                "account": "BundleRentEntry"
-              }
-            ]
-          }
+          "name": "nft_asset"
         }
       ],
       "args": []
@@ -1642,7 +1598,8 @@
       "name": "check_rent_expiry",
       "docs": [
         "Check if a rental has expired",
-        "Returns the rental status (can be used for access control)"
+        "Reads expiry from NFT's Attributes plugin",
+        "Returns error if expired, success if still valid"
       ],
       "discriminator": [
         30,
@@ -1655,32 +1612,6 @@
         212
       ],
       "accounts": [
-        {
-          "name": "rent_entry",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  110,
-                  116,
-                  95,
-                  101,
-                  110,
-                  116,
-                  114,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
-        },
         {
           "name": "nft_asset"
         }
@@ -2807,42 +2738,10 @@
           }
         },
         {
-          "name": "content_collection",
+          "name": "content",
           "docs": [
-            "The content collection to verify NFTs against"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content_reward_pool.content",
-                "account": "ContentRewardPool"
-              }
-            ]
-          }
+            "The content entry to get collection_asset for NFT verification"
+          ]
         },
         {
           "name": "holder",
@@ -3102,7 +3001,8 @@
       "name": "configure_bundle_mint",
       "docs": [
         "Configure NFT minting for a bundle (creator only)",
-        "Creates mint config and Metaplex Core collection"
+        "Creates mint config and Metaplex Core collection",
+        "metadata_cid: IPFS CID for collection metadata JSON"
       ],
       "discriminator": [
         175,
@@ -3126,14 +3026,15 @@
         {
           "name": "bundle",
           "docs": [
-            "The bundle to configure minting for"
+            "The bundle to configure minting for",
+            "collection_asset will be stored directly here"
           ],
           "writable": true
         },
         {
           "name": "mint_config",
           "docs": [
-            "Mint config PDA for the bundle"
+            "Mint config PDA for the bundle - also serves as collection authority"
           ],
           "writable": true,
           "pda": {
@@ -3169,44 +3070,10 @@
           }
         },
         {
-          "name": "bundle_collection",
-          "docs": [
-            "Bundle collection PDA (tracks the Metaplex collection)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "bundle"
-              }
-            ]
-          }
-        },
-        {
           "name": "collection_asset",
+          "docs": [
+            "Address stored in bundle.collection_asset"
+          ],
           "writable": true,
           "signer": true
         },
@@ -3247,6 +3114,10 @@
         }
       ],
       "args": [
+        {
+          "name": "metadata_cid",
+          "type": "string"
+        },
         {
           "name": "price",
           "type": "u64"
@@ -3513,7 +3384,8 @@
       "name": "create_bundle",
       "docs": [
         "Create a new bundle (album, series, playlist, course, etc.)",
-        "Bundles group related content with ordering and shared metadata"
+        "Bundles group related content with ordering and shared metadata",
+        "Metadata is stored in IPFS/Metaplex, not on-chain"
       ],
       "discriminator": [
         108,
@@ -3569,10 +3441,6 @@
           "type": "string"
         },
         {
-          "name": "metadata_cid",
-          "type": "string"
-        },
-        {
           "name": "bundle_type",
           "type": {
             "defined": {
@@ -3587,6 +3455,7 @@
       "docs": [
         "Create a bundle with mint and rent configuration in a single transaction",
         "Bundle is created as published with mint and rent enabled by default",
+        "metadata_cid: IPFS CID for collection metadata JSON",
         "collection_name: Optional collection name - if provided, collection is named \"HC: <Username>: <CollectionName>\""
       ],
       "discriminator": [
@@ -3638,7 +3507,7 @@
         {
           "name": "mint_config",
           "docs": [
-            "Mint config PDA for the bundle"
+            "Mint config PDA for the bundle - also serves as collection authority"
           ],
           "writable": true,
           "pda": {
@@ -3712,44 +3581,10 @@
           }
         },
         {
-          "name": "bundle_collection",
-          "docs": [
-            "Bundle collection PDA (tracks the Metaplex collection)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "bundle"
-              }
-            ]
-          }
-        },
-        {
           "name": "collection_asset",
+          "docs": [
+            "Address stored in bundle.collection_asset"
+          ],
           "writable": true,
           "signer": true
         },
@@ -3988,10 +3823,6 @@
           "writable": true
         },
         {
-          "name": "cid_registry",
-          "writable": true
-        },
-        {
           "name": "creator",
           "writable": true,
           "signer": true,
@@ -4020,10 +3851,6 @@
       "accounts": [
         {
           "name": "content",
-          "writable": true
-        },
-        {
-          "name": "cid_registry",
           "writable": true
         },
         {
@@ -5349,7 +5176,7 @@
         },
         {
           "name": "fee_oracle",
-          "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7"
+          "address": "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT"
         },
         {
           "name": "streamflow_program",
@@ -5940,7 +5767,7 @@
           "docs": [
             "Streamflow fee oracle"
           ],
-          "address": "5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7"
+          "address": "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT"
         },
         {
           "name": "streamflow_program",
@@ -6387,7 +6214,8 @@
     {
       "name": "register_content",
       "docs": [
-        "Register new content with CID uniqueness enforcement"
+        "Register new content with CID uniqueness enforcement",
+        "CID uniqueness is enforced via PDA seed [\"content\", hash(cid)]"
       ],
       "discriminator": [
         170,
@@ -6425,26 +6253,6 @@
           }
         },
         {
-          "name": "cid_registry",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  105,
-                  100
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "cid_hash"
-              }
-            ]
-          }
-        },
-        {
           "name": "authority",
           "writable": true,
           "signer": true
@@ -6469,18 +6277,6 @@
           "type": "string"
         },
         {
-          "name": "metadata_cid",
-          "type": "string"
-        },
-        {
-          "name": "content_type",
-          "type": {
-            "defined": {
-              "name": "ContentType"
-            }
-          }
-        },
-        {
           "name": "is_encrypted",
           "type": "bool"
         },
@@ -6502,6 +6298,9 @@
       "name": "register_content_with_mint",
       "docs": [
         "Register new content with optional NFT mint configuration",
+        "CID uniqueness is enforced via PDA seed [\"content\", hash(cid)]",
+        "collection_asset is stored directly in ContentEntry",
+        "metadata_cid: IPFS CID for collection metadata JSON (contains name, description, contentCid, contentType, etc.)",
         "collection_name: Optional collection name - if provided, collection is named \"HC: <Username>: <CollectionName>\"",
         "If not provided, collection is named \"HC: <Username>\""
       ],
@@ -6541,26 +6340,6 @@
           }
         },
         {
-          "name": "cid_registry",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  105,
-                  100
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "cid_hash"
-              }
-            ]
-          }
-        },
-        {
           "name": "mint_config",
           "writable": true,
           "pda": {
@@ -6589,47 +6368,10 @@
           }
         },
         {
-          "name": "content_collection",
-          "docs": [
-            "ContentCollection PDA to track the collection for this content"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
           "name": "collection_asset",
           "docs": [
-            "The Metaplex Core Collection asset (must be a new keypair)"
+            "The Metaplex Core Collection asset (must be a new keypair)",
+            "Address stored in content.collection_asset"
           ],
           "writable": true,
           "signer": true
@@ -6724,14 +6466,6 @@
         {
           "name": "metadata_cid",
           "type": "string"
-        },
-        {
-          "name": "content_type",
-          "type": {
-            "defined": {
-              "name": "ContentType"
-            }
-          }
         },
         {
           "name": "price",
@@ -7614,9 +7348,9 @@
           }
         },
         {
-          "name": "bundle_collection",
+          "name": "mint_config",
           "docs": [
-            "BundleCollection tracker PDA (must exist from configure_bundle_mint)"
+            "Mint config PDA - authority for collection operations"
           ],
           "pda": {
             "seeds": [
@@ -7630,16 +7364,17 @@
                   108,
                   101,
                   95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
+                  109,
                   105,
+                  110,
+                  116,
+                  95,
+                  99,
                   111,
-                  110
+                  110,
+                  102,
+                  105,
+                  103
                 ]
               },
               {
@@ -7651,6 +7386,9 @@
         },
         {
           "name": "collection_asset",
+          "docs": [
+            "The Metaplex Core Collection asset"
+          ],
           "writable": true
         },
         {
@@ -7668,45 +7406,12 @@
         },
         {
           "name": "nft_asset",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "rent_entry",
           "docs": [
-            "Rent entry PDA to track this rental"
+            "The rental NFT asset (new keypair, signer)",
+            "Expiry stored in Attributes plugin (no separate RentEntry PDA)"
           ],
           "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
-                  114,
-                  101,
-                  110,
-                  116,
-                  95,
-                  101,
-                  110,
-                  116,
-                  114,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "nft_asset"
-              }
-            ]
-          }
+          "signer": true
         },
         {
           "name": "renter",
@@ -7737,7 +7442,7 @@
       "name": "rent_content_sol",
       "docs": [
         "Rent content with SOL payment",
-        "Creates a frozen (non-transferable) NFT that expires after the rental period",
+        "Creates a frozen (non-transferable) NFT with expiry stored in Attributes plugin",
         "User selects one of 3 tiers: 6 hours, 1 day, or 7 days",
         "Payment is distributed according to primary sale percentages"
       ],
@@ -7774,7 +7479,10 @@
           }
         },
         {
-          "name": "content"
+          "name": "content",
+          "docs": [
+            "Content entry - collection_asset stored here"
+          ]
         },
         {
           "name": "rent_config",
@@ -7805,33 +7513,26 @@
           }
         },
         {
-          "name": "content_collection",
+          "name": "mint_config",
           "docs": [
-            "Content collection for minting the rental NFT"
+            "MintConfig PDA - authority for collection operations (signs NFT creation)"
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
+                  109,
+                  105,
                   110,
                   116,
                   95,
                   99,
                   111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
+                  110,
+                  102,
                   105,
-                  111,
-                  110
+                  103
                 ]
               },
               {
@@ -7889,17 +7590,10 @@
           }
         },
         {
-          "name": "rent_entry",
-          "docs": [
-            "Rental entry tracking expiry",
-            "PDA seeds: [\"rent_entry\", nft_asset]"
-          ],
-          "writable": true
-        },
-        {
           "name": "nft_asset",
           "docs": [
-            "The rental NFT asset (new keypair, signer)"
+            "The rental NFT asset (new keypair, signer)",
+            "Expiry stored in Attributes plugin (no separate RentEntry PDA)"
           ],
           "writable": true,
           "signer": true
@@ -8164,6 +7858,9 @@
         },
         {
           "name": "mint_config",
+          "docs": [
+            "MintConfig PDA - authority for collection operations (signs NFT creation)"
+          ],
           "pda": {
             "seeds": [
               {
@@ -8229,44 +7926,10 @@
           }
         },
         {
-          "name": "content_collection",
-          "docs": [
-            "ContentCollection tracker PDA"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  116,
-                  101,
-                  110,
-                  116,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "content"
-              }
-            ]
-          }
-        },
-        {
           "name": "collection_asset",
+          "docs": [
+            "The Metaplex Core Collection asset"
+          ],
           "writable": true
         },
         {
@@ -8659,6 +8322,9 @@
         },
         {
           "name": "bundle_mint_config",
+          "docs": [
+            "BundleMintConfig PDA - authority for collection operations (signs NFT creation)"
+          ],
           "pda": {
             "seeds": [
               {
@@ -8730,43 +8396,10 @@
           }
         },
         {
-          "name": "bundle_collection",
-          "docs": [
-            "BundleCollection tracker PDA"
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
-                  99,
-                  111,
-                  108,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "bundle"
-              }
-            ]
-          }
-        },
-        {
           "name": "collection_asset",
+          "docs": [
+            "The Metaplex Core Collection asset"
+          ],
           "writable": true
         },
         {
@@ -10572,7 +10205,8 @@
     {
       "name": "update_bundle",
       "docs": [
-        "Update bundle metadata or active status"
+        "Update bundle active status",
+        "Metadata is stored in IPFS/Metaplex, not on-chain"
       ],
       "discriminator": [
         243,
@@ -10599,12 +10233,6 @@
         }
       ],
       "args": [
-        {
-          "name": "metadata_cid",
-          "type": {
-            "option": "string"
-          }
-        },
         {
           "name": "is_active",
           "type": {
@@ -10800,7 +10428,8 @@
     {
       "name": "update_content",
       "docs": [
-        "Update content metadata (creator only, not locked)"
+        "Update content settings (creator only, not locked)",
+        "Metadata is stored in IPFS/Metaplex, not on-chain"
       ],
       "discriminator": [
         201,
@@ -10827,8 +10456,10 @@
       ],
       "args": [
         {
-          "name": "metadata_cid",
-          "type": "string"
+          "name": "preview_cid",
+          "type": {
+            "option": "string"
+          }
         }
       ]
     },
@@ -11848,19 +11479,6 @@
       ]
     },
     {
-      "name": "BundleCollection",
-      "discriminator": [
-        34,
-        10,
-        246,
-        93,
-        155,
-        31,
-        219,
-        70
-      ]
-    },
-    {
       "name": "BundleItem",
       "discriminator": [
         114,
@@ -11900,19 +11518,6 @@
       ]
     },
     {
-      "name": "BundleRentEntry",
-      "discriminator": [
-        245,
-        222,
-        77,
-        30,
-        149,
-        5,
-        161,
-        182
-      ]
-    },
-    {
       "name": "BundleRewardPool",
       "discriminator": [
         184,
@@ -11923,32 +11528,6 @@
         117,
         148,
         241
-      ]
-    },
-    {
-      "name": "CidRegistry",
-      "discriminator": [
-        76,
-        59,
-        180,
-        103,
-        33,
-        99,
-        115,
-        244
-      ]
-    },
-    {
-      "name": "ContentCollection",
-      "discriminator": [
-        4,
-        172,
-        24,
-        57,
-        39,
-        232,
-        166,
-        61
       ]
     },
     {
@@ -12183,19 +11762,6 @@
         99,
         142,
         200
-      ]
-    },
-    {
-      "name": "RentEntry",
-      "discriminator": [
-        231,
-        216,
-        91,
-        217,
-        209,
-        179,
-        219,
-        202
       ]
     },
     {
@@ -12648,321 +12214,331 @@
     },
     {
       "code": 6042,
+      "name": "RentalNotFound",
+      "msg": "Rental not found - NFT does not have rental attributes"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidCollection",
+      "msg": "Invalid collection asset"
+    },
+    {
+      "code": 6044,
       "name": "BundleNotActive",
       "msg": "Bundle is not active"
     },
     {
-      "code": 6043,
+      "code": 6045,
       "name": "BundleNotEmpty",
       "msg": "Bundle must be empty to delete"
     },
     {
-      "code": 6044,
+      "code": 6046,
       "name": "BundleItemLimitReached",
       "msg": "Bundle item limit reached (max 1000)"
     },
     {
-      "code": 6045,
+      "code": 6047,
       "name": "NotContentCreator",
       "msg": "Only the content creator can add to bundles"
     },
     {
-      "code": 6046,
+      "code": 6048,
       "name": "BundleLocked",
       "msg": "Bundle is locked after first NFT mint"
     },
     {
-      "code": 6047,
+      "code": 6049,
       "name": "BundleMintConfigExists",
       "msg": "Bundle mint configuration already exists"
     },
     {
-      "code": 6048,
+      "code": 6050,
       "name": "BundleMintConfigNotFound",
       "msg": "Bundle mint configuration not found"
     },
     {
-      "code": 6049,
+      "code": 6051,
       "name": "BundleRentConfigExists",
       "msg": "Bundle rent configuration already exists"
     },
     {
-      "code": 6050,
+      "code": 6052,
       "name": "InvalidBundleCollection",
       "msg": "Invalid BundleCollection PDA"
     },
     {
-      "code": 6051,
+      "code": 6053,
       "name": "InvalidBundleRewardPool",
       "msg": "Invalid BundleRewardPool PDA"
     },
     {
-      "code": 6052,
+      "code": 6054,
       "name": "InvalidBundleNftRewardState",
       "msg": "Invalid BundleNftRewardState PDA"
     },
     {
-      "code": 6053,
+      "code": 6055,
       "name": "InvalidBundleRentEntry",
       "msg": "Invalid BundleRentEntry PDA"
     },
     {
-      "code": 6054,
+      "code": 6056,
       "name": "BundleMismatch",
       "msg": "Bundle does not match"
     },
     {
-      "code": 6055,
+      "code": 6057,
       "name": "RandomnessAlreadyRevealed",
       "msg": "Randomness has already been revealed"
     },
     {
-      "code": 6056,
+      "code": 6058,
       "name": "RandomnessNotResolved",
       "msg": "Randomness not yet resolved"
     },
     {
-      "code": 6057,
+      "code": 6059,
       "name": "InvalidRandomnessAccount",
       "msg": "Invalid randomness account"
     },
     {
-      "code": 6058,
+      "code": 6060,
       "name": "RarityAlreadyRevealed",
       "msg": "NFT rarity already revealed"
     },
     {
-      "code": 6059,
+      "code": 6061,
       "name": "PendingMintNotFound",
       "msg": "Pending mint request not found"
     },
     {
-      "code": 6060,
+      "code": 6062,
       "name": "InvalidNftRarity",
       "msg": "Invalid NftRarity PDA"
     },
     {
-      "code": 6061,
+      "code": 6063,
       "name": "CancelTooEarly",
       "msg": "Cannot cancel pending mint yet - must wait at least 10 minutes"
     },
     {
-      "code": 6062,
+      "code": 6064,
       "name": "AlreadyFulfilled",
       "msg": "Randomness already fulfilled for this request"
     },
     {
-      "code": 6063,
+      "code": 6065,
       "name": "RandomnessNotAvailable",
       "msg": "Randomness not yet available - wait for oracle callback"
     },
     {
-      "code": 6064,
+      "code": 6066,
       "name": "VrfRequestFailed",
       "msg": "VRF request failed"
     },
     {
-      "code": 6065,
+      "code": 6067,
       "name": "InvalidOraoClient",
       "msg": "Invalid ORAO client account"
     },
     {
-      "code": 6066,
+      "code": 6068,
       "name": "FallbackTooEarly",
       "msg": "Fallback claim too early - must wait for timeout"
     },
     {
-      "code": 6067,
+      "code": 6069,
       "name": "NotFulfilled",
       "msg": "Mint request not yet fulfilled"
     },
     {
-      "code": 6068,
+      "code": 6070,
       "name": "NotCreator",
       "msg": "Only the content creator can perform this action"
     },
     {
-      "code": 6069,
+      "code": 6071,
       "name": "NotAdmin",
       "msg": "Only the ecosystem admin can perform this action"
     },
     {
-      "code": 6070,
+      "code": 6072,
       "name": "InvalidState",
       "msg": "Invalid state - account should not exist or has wrong data"
     },
     {
-      "code": 6071,
+      "code": 6073,
       "name": "InvalidNftType",
       "msg": "Invalid NFT type - expected content NFT but got bundle NFT or vice versa"
     },
     {
-      "code": 6072,
+      "code": 6074,
       "name": "InvalidPatronConfig",
       "msg": "Invalid patron config - at least one tier must be enabled"
     },
     {
-      "code": 6073,
+      "code": 6075,
       "name": "PatronConfigInactive",
       "msg": "Patron config is not active"
     },
     {
-      "code": 6074,
+      "code": 6076,
       "name": "TierNotAvailable",
       "msg": "Selected tier is not available"
     },
     {
-      "code": 6075,
+      "code": 6077,
       "name": "EcosystemSubInactive",
       "msg": "Ecosystem subscription is not active"
     },
     {
-      "code": 6076,
+      "code": 6078,
       "name": "InvalidEcosystemSubPrice",
       "msg": "Invalid ecosystem subscription price"
     },
     {
-      "code": 6077,
+      "code": 6079,
       "name": "SubscriptionRequired",
       "msg": "Subscription required for this content"
     },
     {
-      "code": 6078,
+      "code": 6080,
       "name": "NftOrRentalRequired",
       "msg": "NFT ownership or active rental required for this content (subscriptions not accepted)"
     },
     {
-      "code": 6079,
+      "code": 6081,
       "name": "InvalidInput",
       "msg": "Invalid input value"
     },
     {
-      "code": 6080,
+      "code": 6082,
       "name": "InvalidVisibilityLevel",
       "msg": "Invalid visibility level - must be 0-3"
     },
     {
-      "code": 6081,
+      "code": 6083,
       "name": "InvalidDurationType",
       "msg": "Invalid duration type - must be 0 (monthly) or 1 (yearly)"
     },
     {
-      "code": 6082,
+      "code": 6084,
       "name": "InvalidStreamId",
       "msg": "Invalid stream ID - does not match subscription record"
     },
     {
-      "code": 6083,
+      "code": 6085,
       "name": "InvalidTier",
       "msg": "Invalid tier - must be 0 (membership) or 1 (subscription)"
     },
     {
-      "code": 6084,
+      "code": 6086,
       "name": "InvalidUsername",
       "msg": "Invalid username - must be 1-20 characters"
     },
     {
-      "code": 6085,
+      "code": 6087,
       "name": "ProfileNotFound",
       "msg": "User profile not found"
     },
     {
-      "code": 6086,
+      "code": 6088,
       "name": "InvalidContentName",
       "msg": "Invalid content name - must be 1-32 characters"
     },
     {
-      "code": 6087,
+      "code": 6089,
       "name": "InvalidOwner",
       "msg": "Invalid token account owner"
     },
     {
-      "code": 6088,
+      "code": 6090,
       "name": "InvalidMint",
       "msg": "Invalid token mint - expected WSOL"
     },
     {
-      "code": 6089,
+      "code": 6091,
       "name": "InsufficientStake",
       "msg": "Insufficient stake to become moderator"
     },
     {
-      "code": 6090,
+      "code": 6092,
       "name": "ModeratorNotFound",
       "msg": "Moderator not found"
     },
     {
-      "code": 6091,
+      "code": 6093,
       "name": "ModeratorNotActive",
       "msg": "Moderator is not active"
     },
     {
-      "code": 6092,
+      "code": 6094,
       "name": "AlreadyVoted",
       "msg": "Moderator has already voted on this report"
     },
     {
-      "code": 6093,
+      "code": 6095,
       "name": "VotingEnded",
       "msg": "Voting period has ended"
     },
     {
-      "code": 6094,
+      "code": 6096,
       "name": "VotingNotEnded",
       "msg": "Voting period has not ended yet"
     },
     {
-      "code": 6095,
+      "code": 6097,
       "name": "ReportNotFound",
       "msg": "Report not found"
     },
     {
-      "code": 6096,
+      "code": 6098,
       "name": "ReportAlreadyResolved",
       "msg": "Report has already been resolved"
     },
     {
-      "code": 6097,
+      "code": 6099,
       "name": "QuorumNotReached",
       "msg": "Quorum not reached"
     },
     {
-      "code": 6098,
+      "code": 6100,
       "name": "InvalidReportCategory",
       "msg": "Invalid report category"
     },
     {
-      "code": 6099,
+      "code": 6101,
       "name": "ReportDetailsTooLong",
       "msg": "Report details CID too long"
     },
     {
-      "code": 6100,
+      "code": 6102,
       "name": "InvalidTimestamp",
       "msg": "Timestamp too far from current time"
     },
     {
-      "code": 6101,
+      "code": 6103,
       "name": "InvalidModerationPool",
       "msg": "Invalid moderation pool PDA"
     },
     {
-      "code": 6102,
+      "code": 6104,
       "name": "InvalidContentReport",
       "msg": "Invalid content report PDA"
     },
     {
-      "code": 6103,
+      "code": 6105,
       "name": "InvalidVoteRecord",
       "msg": "Invalid vote record PDA"
     },
     {
-      "code": 6104,
+      "code": 6106,
       "name": "InvalidModeratorAccount",
       "msg": "Invalid moderator account PDA"
     },
     {
-      "code": 6105,
+      "code": 6107,
       "name": "ModerationAdminOnly",
       "msg": "Only admin can perform this action"
     }
@@ -12995,7 +12571,9 @@
     {
       "name": "Bundle",
       "docs": [
-        "Bundle account - stores bundle metadata reference and stats"
+        "Bundle account - stores bundle state for on-chain logic",
+        "Bundle metadata (CID, name, description) stored in Metaplex Core collection metadata",
+        "PDA seeds: [\"bundle\", bundle_id_hash]"
       ],
       "type": {
         "kind": "struct",
@@ -13015,11 +12593,11 @@
             "type": "string"
           },
           {
-            "name": "metadata_cid",
+            "name": "collection_asset",
             "docs": [
-              "IPFS CID pointing to bundle metadata JSON"
+              "Metaplex Core collection asset for this bundle's NFTs"
             ],
-            "type": "string"
+            "type": "pubkey"
           },
           {
             "name": "bundle_type",
@@ -13091,47 +12669,6 @@
               "Level 3: NFT Only - ONLY NFT owners or renters (subscriptions don't grant access)"
             ],
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "BundleCollection",
-      "docs": [
-        "Bundle collection (mirrors ContentCollection)",
-        "Tracks the Metaplex Core Collection for bundle NFTs",
-        "PDA seeds: [\"bundle_collection\", bundle_pda]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bundle",
-            "docs": [
-              "The bundle PDA this collection belongs to"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "collection_asset",
-            "docs": [
-              "The Metaplex Core collection asset address"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "The creator of the bundle/collection"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp when collection was created"
-            ],
-            "type": "i64"
           }
         ]
       }
@@ -13329,68 +12866,6 @@
       }
     },
     {
-      "name": "BundleRentEntry",
-      "docs": [
-        "Bundle rent entry (mirrors RentEntry)",
-        "Active rental tracking for bundle rentals",
-        "PDA seeds: [\"bundle_rent_entry\", nft_asset]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "renter",
-            "docs": [
-              "The renter's wallet"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "bundle",
-            "docs": [
-              "The bundle being rented"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "nft_asset",
-            "docs": [
-              "The rental NFT asset (Metaplex Core)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "rented_at",
-            "docs": [
-              "Timestamp when rental started"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "expires_at",
-            "docs": [
-              "Timestamp when rental expires"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "is_active",
-            "docs": [
-              "Whether this rental is still active"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "fee_paid",
-            "docs": [
-              "Rent fee paid (for record keeping)"
-            ],
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "BundleRewardPool",
       "docs": [
         "Bundle reward pool (mirrors ContentRewardPool)",
@@ -13501,42 +12976,6 @@
       }
     },
     {
-      "name": "CidRegistry",
-      "docs": [
-        "Registry to ensure CID uniqueness across all content.",
-        "PDA seeds: [\"cid\", hash(content_cid)]",
-        "",
-        "This prevents multiple users from claiming the same content CID.",
-        "The first user to register a CID becomes its permanent owner."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "docs": [
-              "The owner who registered this CID"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "content_pda",
-            "docs": [
-              "The content PDA associated with this CID"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "registered_at",
-            "docs": [
-              "When this CID was registered"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
       "name": "ClaimRewardEvent",
       "type": {
         "kind": "struct",
@@ -13561,100 +13000,76 @@
       }
     },
     {
-      "name": "ContentCollection",
+      "name": "ContentEntry",
       "docs": [
-        "Tracks the Metaplex Core Collection associated with a content",
-        "Each content has one collection, and all NFTs minted from that content belong to it"
+        "Optimized ContentEntry - stores only data needed for on-chain logic",
+        "Content metadata (CID, type) is stored in Metaplex Core collection/NFT metadata",
+        "PDA seeds: [\"content\", cid_hash] - uniqueness enforced by PDA derivation"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "content",
+            "name": "creator",
             "docs": [
-              "The content PDA this collection belongs to"
+              "Creator/owner of the content"
             ],
             "type": "pubkey"
           },
           {
             "name": "collection_asset",
             "docs": [
-              "The Metaplex Core collection asset address"
+              "Metaplex Core collection asset for this content's NFTs"
             ],
             "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "The creator of the content/collection"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp when collection was created"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ContentEntry",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "content_cid",
-            "type": "string"
-          },
-          {
-            "name": "metadata_cid",
-            "type": "string"
-          },
-          {
-            "name": "content_type",
-            "type": {
-              "defined": {
-                "name": "ContentType"
-              }
-            }
           },
           {
             "name": "tips_received",
+            "docs": [
+              "Tips received (lamports)"
+            ],
             "type": "u64"
           },
           {
-            "name": "created_at",
-            "type": "i64"
-          },
-          {
             "name": "is_locked",
+            "docs": [
+              "Locked after first mint (no delete/edit metadata)"
+            ],
             "type": "bool"
           },
           {
             "name": "minted_count",
+            "docs": [
+              "Number of NFTs successfully minted (used for edition numbering)"
+            ],
             "type": "u64"
           },
           {
             "name": "pending_count",
+            "docs": [
+              "Number of pending VRF mints (for max_supply checking)"
+            ],
             "type": "u64"
           },
           {
             "name": "is_encrypted",
+            "docs": [
+              "Whether content is encrypted (requires NFT to access)"
+            ],
             "type": "bool"
           },
           {
             "name": "preview_cid",
+            "docs": [
+              "Preview CID for non-owners (empty if not gated)"
+            ],
             "type": "string"
           },
           {
             "name": "encryption_meta_cid",
+            "docs": [
+              "Encryption metadata CID (empty if not encrypted)"
+            ],
             "type": "string"
           },
           {
@@ -13927,65 +13342,6 @@
               "Timestamp when pool was created"
             ],
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ContentType",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Video"
-          },
-          {
-            "name": "Movie"
-          },
-          {
-            "name": "Television"
-          },
-          {
-            "name": "MusicVideo"
-          },
-          {
-            "name": "Short"
-          },
-          {
-            "name": "Music"
-          },
-          {
-            "name": "Podcast"
-          },
-          {
-            "name": "Audiobook"
-          },
-          {
-            "name": "Photo"
-          },
-          {
-            "name": "Artwork"
-          },
-          {
-            "name": "Book"
-          },
-          {
-            "name": "Comic"
-          },
-          {
-            "name": "Asset"
-          },
-          {
-            "name": "Game"
-          },
-          {
-            "name": "Software"
-          },
-          {
-            "name": "Dataset"
-          },
-          {
-            "name": "Post"
           }
         ]
       }
@@ -15040,68 +14396,6 @@
               "Timestamp when config was last updated"
             ],
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RentEntry",
-      "docs": [
-        "Active rental entry tracking",
-        "Created when user rents content, tracks expiry",
-        "PDA seeds: [\"rent_entry\", nft_asset]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "renter",
-            "docs": [
-              "The renter's wallet"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "content",
-            "docs": [
-              "The content being rented"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "nft_asset",
-            "docs": [
-              "The rental NFT asset (Metaplex Core)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "rented_at",
-            "docs": [
-              "Timestamp when rental started"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "expires_at",
-            "docs": [
-              "Timestamp when rental expires"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "is_active",
-            "docs": [
-              "Whether this rental is still active (not expired/burned)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "fee_paid",
-            "docs": [
-              "Rent fee paid (for record keeping)"
-            ],
-            "type": "u64"
           }
         ]
       }

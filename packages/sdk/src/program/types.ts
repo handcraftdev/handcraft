@@ -1,27 +1,55 @@
 import { PublicKey } from "@solana/web3.js";
-import { ContentType } from "./constants";
 
+/**
+ * Optimized ContentEntry - stores only data needed for on-chain logic
+ * Content metadata (CID, type) is stored in Metaplex Core collection/NFT metadata
+ * PDA seeds: ["content", cid_hash] - uniqueness enforced by PDA derivation
+ */
 export interface ContentEntry {
+  pubkey?: PublicKey;          // Account pubkey (content PDA) - included when fetching
   creator: PublicKey;
-  contentCid: string;
-  metadataCid: string;
-  contentType: ContentType;
+  collectionAsset: PublicKey;  // Metaplex Core collection for this content's NFTs
   tipsReceived: bigint;
-  createdAt: bigint;
-  isLocked: boolean;
-  mintedCount: bigint;    // Number of NFTs successfully minted (used for edition numbering)
-  pendingCount: bigint;   // Number of pending VRF mints (for max_supply checking)
+  isLocked: boolean;           // Locked after first mint
+  mintedCount: bigint;         // Number of NFTs successfully minted
+  pendingCount: bigint;        // Number of pending VRF mints
   isEncrypted: boolean;
-  previewCid: string;
-  encryptionMetaCid: string;
-  visibilityLevel: number; // 0=Public, 1=Basic (ecosystem sub/NFT), 2=Creator subscription
+  previewCid: string;          // Preview CID for non-owners
+  encryptionMetaCid: string;   // Encryption metadata CID
+  visibilityLevel: number;     // 0=Public, 1=Ecosystem, 2=Subscriber, 3=NFT Only
+  // Optional metadata fields - populated from Metaplex collection metadata URI
+  contentCid?: string;         // Content CID from collection metadata
+  metadataCid?: string;        // Metadata CID (collection URI CID)
+  contentType?: number;        // Content type enum value
+  createdAt?: bigint;          // Creation timestamp (from collection metadata or on-chain)
 }
 
-export interface CidRegistry {
-  cid: string;
-  content: PublicKey;
-  registeredAt: bigint;
+/**
+ * Collection metadata JSON structure (stored on IPFS, referenced by collection URI)
+ */
+export interface CollectionMetadata {
+  name?: string;
+  description?: string;
+  image?: string;
+  animation_url?: string;
+  contentCid?: string;
+  metadataCid?: string;
+  contentType?: number;
+  content_type?: number;       // Alternative naming
+  createdAt?: number;
+  created_at?: number;         // Alternative naming
+  properties?: {
+    content_cid?: string;
+    metadata_cid?: string;
+    content_type?: number;
+    created_at?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
 }
+
+// NOTE: CidRegistry removed - uniqueness now enforced by PDA derivation
+// NOTE: ContentCollection removed - collectionAsset now stored in ContentEntry
 
 export interface MintConfig {
   content: PublicKey;
@@ -63,11 +91,7 @@ export interface WalletContentState {
   lastUpdated: bigint;
 }
 
-export interface ContentCollection {
-  content: PublicKey;
-  collectionAsset: PublicKey;
-  createdAt: bigint;
-}
+// ContentCollection removed - collectionAsset now stored directly in ContentEntry
 
 export interface NftRewardState {
   nftAsset: PublicKey;
@@ -112,15 +136,7 @@ export interface RentConfig {
   updatedAt: bigint;
 }
 
-export interface RentEntry {
-  renter: PublicKey;
-  content: PublicKey;
-  nftAsset: PublicKey;
-  rentedAt: bigint;
-  expiresAt: bigint;
-  isActive: boolean;
-  feePaid: bigint;
-}
+// RentEntry removed - rental expiry now stored in NFT Attributes plugin
 
 // ========== BUNDLE TYPES (Layer 4 of Content Architecture) ==========
 
@@ -146,13 +162,14 @@ export enum BundleType {
 }
 
 /**
- * On-chain Bundle account
- * Stores the bundle metadata reference and items
+ * Optimized Bundle account
+ * Bundle metadata is stored in Metaplex Core collection metadata
+ * PDA seeds: ["bundle", creator, bundle_id]
  */
 export interface Bundle {
   creator: PublicKey;
-  bundleId: string;          // Unique identifier (could be CID or slug)
-  metadataCid: string;       // Points to off-chain bundle metadata JSON
+  bundleId: string;          // Unique identifier
+  collectionAsset: PublicKey; // Metaplex Core collection for this bundle's NFTs
   bundleType: BundleType;
   itemCount: number;         // Number of items in the bundle
   isActive: boolean;
@@ -161,6 +178,8 @@ export interface Bundle {
   mintedCount: bigint;       // Number of NFTs minted for this bundle
   pendingCount: bigint;      // Number of pending VRF mints
   isLocked: boolean;         // Locked after first mint
+  // Optional metadata fields - populated from Metaplex collection metadata URI
+  metadataCid?: string;      // Extracted from collection URI (ipfs.filebase.io/ipfs/{cid})
 }
 
 /**
@@ -446,15 +465,7 @@ export interface BundleRentConfig {
   updatedAt: bigint;
 }
 
-/**
- * Bundle collection (Metaplex Core collection for bundle NFTs)
- */
-export interface BundleCollection {
-  bundle: PublicKey;
-  collectionAsset: PublicKey;
-  creator: PublicKey;
-  createdAt: bigint;
-}
+// BundleCollection removed - collectionAsset now stored directly in Bundle
 
 /**
  * Bundle reward pool for holder rewards
@@ -503,18 +514,7 @@ export interface BundleNftRarity {
   revealedAt: bigint;
 }
 
-/**
- * Bundle rent entry (active rental)
- */
-export interface BundleRentEntry {
-  renter: PublicKey;
-  bundle: PublicKey;
-  nftAsset: PublicKey;
-  rentedAt: bigint;
-  expiresAt: bigint;
-  isActive: boolean;
-  feePaid: bigint;
-}
+// BundleRentEntry removed - rental expiry now stored in NFT Attributes plugin
 
 /**
  * Bundle NFT with rarity information (for UI display)

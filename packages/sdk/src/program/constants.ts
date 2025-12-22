@@ -16,12 +16,12 @@ export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
 export const MINT_CONFIG_SEED = "mint_config";
 export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
 export const WALLET_CONTENT_STATE_SEED = "wallet_content";
-export const CONTENT_COLLECTION_SEED = "content_collection";
 export const USER_PROFILE_SEED = "user_profile";
 
 // Rent seeds
+// NOTE: CONTENT_COLLECTION_SEED removed - collection_asset now stored in ContentEntry
+// NOTE: RENT_ENTRY_SEED removed - rental expiry now stored in NFT Attributes plugin
 export const RENT_CONFIG_SEED = "rent_config";
-export const RENT_ENTRY_SEED = "rent_entry";
 
 // Rent tier periods (in seconds)
 export const RENT_PERIOD_6H = 6 * 3600;        // 6 hours = 21,600 seconds
@@ -191,12 +191,12 @@ export const BUNDLE_SEED = "bundle";
 export const BUNDLE_ITEM_SEED = "bundle_item";
 
 // Bundle mint/rent seeds
+// NOTE: BUNDLE_COLLECTION_SEED removed - collection_asset now stored in Bundle
+// NOTE: BUNDLE_RENT_ENTRY_SEED removed - rental expiry now stored in NFT Attributes plugin
 export const BUNDLE_MINT_CONFIG_SEED = "bundle_mint_config";
 export const BUNDLE_RENT_CONFIG_SEED = "bundle_rent_config";
-export const BUNDLE_COLLECTION_SEED = "bundle_collection";
 export const BUNDLE_REWARD_POOL_SEED = "bundle_reward_pool";
 export const BUNDLE_WALLET_STATE_SEED = "bundle_wallet";
-export const BUNDLE_RENT_ENTRY_SEED = "bundle_rent_entry";
 export const BUNDLE_DIRECT_NFT_SEED = "bundle_direct_nft";
 export const BUNDLE_RENTAL_NFT_SEED = "bundle_rental_nft";
 

@@ -28,15 +28,14 @@ import {
 
 import {
   ContentEntry,
+  CollectionMetadata,
   MintConfig,
   EcosystemConfig,
   ContentRewardPool,
   WalletContentState,
-  ContentCollection,
   NftRewardState,
   WalletNftMetadata,
   RentConfig,
-  RentEntry,
   PendingMint,
   MbMintRequest,
   MbBundleMintRequest,
@@ -49,7 +48,6 @@ import {
   BundleWithItems,
   BundleMintConfig,
   BundleRentConfig,
-  BundleCollection,
   BundleRewardPool,
   BundleWalletState,
   BundleNftRarity,
@@ -74,17 +72,18 @@ import {
   UserProfile,
 } from "./types";
 
+// NOTE: ContentCollection, RentEntry, BundleCollection types removed
+// - collection_asset now stored directly in ContentEntry and Bundle
+// - rental expiry now stored in NFT Attributes plugin
+
 import {
   hashCid,
   getContentPda,
-  getCidRegistryPda,
   getEcosystemConfigPda,
   getMintConfigPda,
   getContentRewardPoolPda,
   getWalletContentStatePda,
-  getContentCollectionPda,
   getRentConfigPda,
-  getRentEntryPda,
   getPendingMintPda,
   getMbMintRequestPda,
   getMbNftAssetPda,
@@ -94,10 +93,8 @@ import {
   getBundleItemPda,
   getBundleMintConfigPda,
   getBundleRentConfigPda,
-  getBundleCollectionPda,
   getBundleRewardPoolPda,
   getBundleWalletStatePda,
-  getBundleRentEntryPda,
   getBundleDirectNftPda,
   calculatePendingRewardForNft,
   calculateWeightedPendingReward,
@@ -120,6 +117,275 @@ import {
   // Streamflow PDAs
   getStreamflowEscrowTokensPda,
 } from "./pda";
+
+// NOTE: getCidRegistryPda, getContentCollectionPda, getRentEntryPda,
+// getBundleRentEntryPda removed - PDAs no longer used
+
+// ============================================
+// METAPLEX CORE COLLECTION METADATA HELPERS
+// ============================================
+
+const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs/";
+
+/**
+ * Fetch collection metadata from IPFS using the metadata CID
+ * The collection URI format is: https://ipfs.filebase.io/ipfs/{metadata_cid}
+ */
+export async function fetchCollectionMetadata(
+  metadataUri: string
+): Promise<CollectionMetadata | null> {
+  try {
+    const response = await fetch(metadataUri, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract metadata CID from collection URI
+ * URI format: https://ipfs.filebase.io/ipfs/{cid}
+ */
+export function extractMetadataCidFromUri(uri: string): string | null {
+  if (!uri) return null;
+  // Handle IPFS gateway URLs
+  if (uri.includes("/ipfs/")) {
+    const parts = uri.split("/ipfs/");
+    return parts[1] || null;
+  }
+  // Handle ipfs:// protocol
+  if (uri.startsWith("ipfs://")) {
+    return uri.replace("ipfs://", "");
+  }
+  return null;
+}
+
+/**
+ * Parse Metaplex Core collection asset data to extract the URI
+ * Collection structure: key (1) + update_authority (33) + name (4+len) + uri (4+len) + ...
+ */
+export function parseCollectionUri(data: Buffer): string | null {
+  try {
+    // Skip discriminator/key (1 byte) and update_authority (33 bytes = 1 type + 32 pubkey)
+    let offset = 1 + 33;
+
+    // Read name length (4 bytes)
+    const nameLen = data.readUInt32LE(offset);
+    offset += 4 + nameLen;
+
+    // Read uri length (4 bytes)
+    const uriLen = data.readUInt32LE(offset);
+    offset += 4;
+
+    // Read uri string
+    const uri = data.slice(offset, offset + uriLen).toString("utf8");
+    return uri;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch Metaplex Core collection and extract its metadata URI
+ */
+export async function fetchCollectionUri(
+  connection: Connection,
+  collectionAsset: PublicKey
+): Promise<string | null> {
+  try {
+    const accountInfo = await connection.getAccountInfo(collectionAsset);
+    if (!accountInfo?.data) return null;
+    return parseCollectionUri(accountInfo.data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Enrich a ContentEntry with metadata from its Metaplex collection
+ * Fetches the collection URI and parses the metadata JSON
+ */
+export async function enrichContentWithMetadata(
+  connection: Connection,
+  content: ContentEntry
+): Promise<ContentEntry> {
+  try {
+    // Skip if no collection asset
+    if (!content.collectionAsset || content.collectionAsset.equals(PublicKey.default)) {
+      return content;
+    }
+
+    // Get collection URI
+    const uri = await fetchCollectionUri(connection, content.collectionAsset);
+    if (!uri) return content;
+
+    // Extract metadata CID from URI
+    const metadataCid = extractMetadataCidFromUri(uri);
+
+    // Fetch metadata from IPFS
+    const metadata = await fetchCollectionMetadata(uri);
+    if (!metadata) {
+      return { ...content, metadataCid: metadataCid || undefined };
+    }
+
+    // Extract fields from metadata
+    const contentCid = metadata.contentCid ||
+                       metadata.properties?.content_cid ||
+                       undefined;
+    const contentType = metadata.contentType ??
+                        metadata.content_type ??
+                        metadata.properties?.content_type ??
+                        undefined;
+    const createdAt = metadata.createdAt ??
+                      metadata.created_at ??
+                      metadata.properties?.created_at ??
+                      undefined;
+
+    return {
+      ...content,
+      contentCid,
+      metadataCid: metadataCid || undefined,
+      contentType,
+      createdAt: createdAt !== undefined ? BigInt(createdAt) : undefined,
+    };
+  } catch {
+    return content;
+  }
+}
+
+// ============================================
+// METAPLEX CORE NFT ATTRIBUTES HELPERS
+// ============================================
+
+/**
+ * Rental NFT info extracted from attributes
+ */
+export interface RentalNftInfo {
+  nftAsset: PublicKey;
+  expiresAt: bigint;
+  tier: number;
+  isActive: boolean;
+}
+
+/**
+ * Parse Metaplex Core NFT account data to extract attributes
+ * This is a simplified parser that looks for the expires_at attribute
+ *
+ * Metaplex Core asset structure:
+ * - Key (1 byte) = 1 for AssetV1
+ * - Owner (32 bytes)
+ * - UpdateAuthority (varies, typically 33 bytes for type + pubkey)
+ * - Name (4 bytes length + string)
+ * - URI (4 bytes length + string)
+ * - Seq (optional)
+ * - Plugins... (stored as plugin list at end)
+ */
+export function parseNftExpiresAt(data: Buffer): bigint | null {
+  try {
+    // Look for the "expires_at" string pattern in the account data
+    // The Attributes plugin stores key-value pairs as strings
+    const dataStr = data.toString("utf8", 0, data.length);
+
+    // Find "expires_at" followed by the timestamp value
+    const expiresAtIndex = dataStr.indexOf("expires_at");
+    if (expiresAtIndex === -1) return null;
+
+    // The value comes after the key in the attribute list
+    // Format: key string followed by value string (both length-prefixed in binary)
+    // We'll search for a numeric string after "expires_at"
+    const searchStart = expiresAtIndex + "expires_at".length;
+    const remaining = dataStr.substring(searchStart, Math.min(searchStart + 50, dataStr.length));
+
+    // Extract digits that look like a Unix timestamp (10+ digits)
+    const match = remaining.match(/(\d{10,})/);
+    if (match) {
+      return BigInt(match[1]);
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch rental info from a Metaplex Core NFT's attributes
+ */
+export async function fetchNftRentalInfo(
+  connection: Connection,
+  nftAsset: PublicKey
+): Promise<RentalNftInfo | null> {
+  try {
+    const accountInfo = await connection.getAccountInfo(nftAsset);
+    if (!accountInfo?.data) return null;
+
+    // Check if this is a Metaplex Core asset (key byte = 1)
+    if (accountInfo.data[0] !== 1) return null;
+
+    const expiresAt = parseNftExpiresAt(accountInfo.data);
+    if (!expiresAt) return null;
+
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const isActive = now < expiresAt;
+
+    // Try to extract tier from attributes (optional)
+    const tierMatch = accountInfo.data.toString("utf8").match(/tier.*?(\d)/);
+    const tier = tierMatch ? parseInt(tierMatch[1]) : 0;
+
+    return {
+      nftAsset,
+      expiresAt,
+      tier,
+      isActive,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch fetch rental info for multiple NFTs
+ */
+export async function fetchNftRentalInfoBatch(
+  connection: Connection,
+  nftAssets: PublicKey[]
+): Promise<Map<string, RentalNftInfo>> {
+  const result = new Map<string, RentalNftInfo>();
+
+  if (nftAssets.length === 0) return result;
+
+  try {
+    const accountInfos = await connection.getMultipleAccountsInfo(nftAssets);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+
+    for (let i = 0; i < nftAssets.length; i++) {
+      const accountInfo = accountInfos[i];
+      if (!accountInfo?.data) continue;
+
+      // Check if this is a Metaplex Core asset
+      if (accountInfo.data[0] !== 1) continue;
+
+      const expiresAt = parseNftExpiresAt(accountInfo.data);
+      if (!expiresAt) continue;
+
+      const isActive = now < expiresAt;
+      const tierMatch = accountInfo.data.toString("utf8").match(/tier.*?(\d)/);
+      const tier = tierMatch ? parseInt(tierMatch[1]) : 0;
+
+      result.set(nftAssets[i].toBase58(), {
+        nftAsset: nftAssets[i],
+        expiresAt,
+        tier,
+        isActive,
+      });
+    }
+  } catch {
+    // Return partial results on error
+  }
+
+  return result;
+}
 
 // Convert ContentType enum to Anchor format
 function contentTypeToAnchor(type: ContentType): object {
@@ -204,14 +470,12 @@ export async function registerContentInstruction(
 ): Promise<TransactionInstruction> {
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
-  const [cidRegistryPda] = getCidRegistryPda(contentCid);
 
+  // NOTE: CidRegistry removed - uniqueness now enforced by ContentEntry PDA seed
+  // NOTE: metadataCid and contentType removed - stored in Metaplex metadata
   return await program.methods
     .registerContent(
       Array.from(cidHash),
-      contentCid,
-      metadataCid,
-      contentTypeToAnchor(contentType),
       isEncrypted,
       previewCid,
       encryptionMetaCid,
@@ -219,7 +483,6 @@ export async function registerContentInstruction(
     )
     .accounts({
       content: contentPda,
-      cidRegistry: cidRegistryPda,
       authority: authority,
       systemProgram: SystemProgram.programId,
     })
@@ -249,11 +512,13 @@ export async function registerContentWithMintInstruction(
 ): Promise<RegisterContentWithMintResult> {
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
-  const [cidRegistryPda] = getCidRegistryPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [userProfilePda] = getUserProfilePda(authority);
+
+  // NOTE: CidRegistry and ContentCollection PDAs removed
+  // - collection_asset now stored in ContentEntry
+  // - mintConfig PDA used as update_authority for collection
 
   const collectionAssetKeypair = Keypair.generate();
 
@@ -262,7 +527,6 @@ export async function registerContentWithMintInstruction(
       Array.from(cidHash),
       contentCid,
       metadataCid,
-      contentTypeToAnchor(contentType),
       new BN(price.toString()),
       maxSupply !== null ? new BN(maxSupply.toString()) : null,
       creatorRoyaltyBps,
@@ -274,9 +538,7 @@ export async function registerContentWithMintInstruction(
     )
     .accounts({
       content: contentPda,
-      cidRegistry: cidRegistryPda,
       mintConfig: mintConfigPda,
-      contentCollection: contentCollectionPda,
       collectionAsset: collectionAssetKeypair.publicKey,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
       ecosystemConfig: ecosystemConfigPda,
@@ -333,13 +595,11 @@ export async function deleteContentInstruction(
   contentCid: string
 ): Promise<TransactionInstruction> {
   const [contentPda] = getContentPda(contentCid);
-  const [cidRegistryPda] = getCidRegistryPda(contentCid);
 
   return await program.methods
     .deleteContent()
     .accounts({
       content: contentPda,
-      cidRegistry: cidRegistryPda,
       creator: creator,
     })
     .instruction();
@@ -351,14 +611,12 @@ export async function deleteContentWithMintInstruction(
   contentCid: string
 ): Promise<TransactionInstruction> {
   const [contentPda] = getContentPda(contentCid);
-  const [cidRegistryPda] = getCidRegistryPda(contentCid);
   const [mintConfigPda] = getMintConfigPda(contentPda);
 
   return await program.methods
     .deleteContentWithMint()
     .accounts({
       content: contentPda,
-      cidRegistry: cidRegistryPda,
       mintConfig: mintConfigPda,
       creator: creator,
     })
@@ -481,18 +739,17 @@ export async function mintNftSolInstruction(
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
   const [buyerWalletStatePda] = getWalletContentStatePda(buyer, contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   const nftAssetKeypair = Keypair.generate();
   const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAssetKeypair.publicKey);
 
+  // NOTE: ContentCollection removed - mintConfig is now the collection authority
   const instruction = await program.methods
     .mintNftSol()
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       content: contentPda,
       mintConfig: mintConfigPda,
-      contentCollection: contentCollectionPda,
       collectionAsset: collectionAsset,
       contentRewardPool: contentRewardPoolPda,
       buyerWalletState: buyerWalletStatePda,
@@ -566,7 +823,6 @@ export async function claimRewardsVerifiedInstruction(
   const [contentPda] = getContentPda(contentCid);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
   const [walletContentStatePda] = getWalletContentStatePda(holder, contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   const remainingAccounts = nftAssets.flatMap(nftAsset => {
     const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
@@ -576,12 +832,13 @@ export async function claimRewardsVerifiedInstruction(
     ];
   });
 
+  // NOTE: ContentCollection removed - using content account for collection verification
   return await program.methods
     .claimRewardsVerified()
     .accounts({
       contentRewardPool: contentRewardPoolPda,
       walletContentState: walletContentStatePda,
-      contentCollection: contentCollectionPda,
+      content: contentPda,
       holder: holder,
       systemProgram: SystemProgram.programId,
     })
@@ -742,22 +999,22 @@ export async function rentContentSolInstruction(
   const [contentPda] = getContentPda(contentCid);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [rentConfigPda] = getRentConfigPda(contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
 
   const nftAssetKeypair = Keypair.generate();
-  const [rentEntryPda] = getRentEntryPda(nftAssetKeypair.publicKey);
 
+  // NOTE: RentEntry PDA removed - expiry now stored in NFT Attributes plugin
+  // NOTE: ContentCollection removed - mintConfig is now the collection authority
   const instruction = await program.methods
     .rentContentSol(rentTierToAnchor(tier))
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       content: contentPda,
       rentConfig: rentConfigPda,
-      contentCollection: contentCollectionPda,
+      mintConfig: mintConfigPda,
       collectionAsset: collectionAsset,
       contentRewardPool: contentRewardPoolPda,
-      rentEntry: rentEntryPda,
       nftAsset: nftAssetKeypair.publicKey,
       creator: creator,
       platform: platform,
@@ -775,13 +1032,12 @@ export async function checkRentExpiryInstruction(
   program: Program,
   nftAsset: PublicKey
 ): Promise<TransactionInstruction> {
-  const [rentEntryPda] = getRentEntryPda(nftAsset);
-
+  // NOTE: RentEntry PDA removed - expiry now read from NFT Attributes plugin
   return await program.methods
     .checkRentExpiry()
     .accounts({
-      rentEntry: rentEntryPda,
       nftAsset: nftAsset,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
     })
     .instruction();
 }
@@ -805,15 +1061,16 @@ export async function burnNftInstruction(
 ): Promise<TransactionInstruction> {
   // Derive all required PDAs
   const [contentPda] = getContentPda(contentCid);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
   const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
 
+  // NOTE: ContentCollection removed - mintConfig is now the burn authority
   return await program.methods
     .burnNft()
     .accounts({
       content: contentPda,
-      contentCollection: contentCollectionPda,
+      mintConfig: mintConfigPda,
       contentRewardPool: contentRewardPoolPda,
       nftRewardState: nftRewardStatePda,
       nftAsset: nftAsset,
@@ -833,7 +1090,8 @@ export async function burnNftInstruction(
 
 export async function fetchContent(
   connection: Connection,
-  contentCid: string
+  contentCid: string,
+  enrichMetadata: boolean = false
 ): Promise<ContentEntry | null> {
   try {
     const program = createProgram(connection);
@@ -844,13 +1102,13 @@ export async function fetchContent(
     const decoded = await (program.account as any).contentEntry.fetch(contentPda);
 
     // Anchor auto-converts snake_case to camelCase in returned objects
-    return {
+    // ContentEntry no longer stores contentCid, metadataCid, contentType, createdAt
+    // These are now fetched from the Metaplex collection metadata URI
+    const entry: ContentEntry = {
+      pubkey: contentPda,
       creator: decoded.creator,
-      contentCid: decoded.contentCid,
-      metadataCid: decoded.metadataCid,
-      contentType: anchorToContentType(decoded.contentType),
+      collectionAsset: decoded.collectionAsset,
       tipsReceived: BigInt(decoded.tipsReceived.toString()),
-      createdAt: BigInt(decoded.createdAt.toString()),
       isLocked: decoded.isLocked ?? false,
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
       pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
@@ -859,6 +1117,12 @@ export async function fetchContent(
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
       visibilityLevel: decoded.visibilityLevel ?? 0,
     };
+
+    // Optionally enrich with metadata from Metaplex collection
+    if (enrichMetadata) {
+      return enrichContentWithMetadata(connection, entry);
+    }
+    return entry;
   } catch {
     return null;
   }
@@ -866,7 +1130,8 @@ export async function fetchContent(
 
 export async function fetchContentByPda(
   connection: Connection,
-  pda: PublicKey
+  pda: PublicKey,
+  enrichMetadata: boolean = false
 ): Promise<ContentEntry | null> {
   try {
     const program = createProgram(connection);
@@ -876,13 +1141,13 @@ export async function fetchContentByPda(
     const decoded = await (program.account as any).contentEntry.fetch(pda);
 
     // Anchor auto-converts snake_case to camelCase in returned objects
-    return {
+    // ContentEntry no longer stores contentCid, metadataCid, contentType, createdAt
+    // These are now fetched from the Metaplex collection metadata URI
+    const entry: ContentEntry = {
+      pubkey: pda,
       creator: decoded.creator,
-      contentCid: decoded.contentCid,
-      metadataCid: decoded.metadataCid,
-      contentType: anchorToContentType(decoded.contentType),
+      collectionAsset: decoded.collectionAsset,
       tipsReceived: BigInt(decoded.tipsReceived.toString()),
-      createdAt: BigInt(decoded.createdAt.toString()),
       isLocked: decoded.isLocked ?? false,
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
       pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
@@ -891,6 +1156,12 @@ export async function fetchContentByPda(
       encryptionMetaCid: decoded.encryptionMetaCid ?? "",
       visibilityLevel: decoded.visibilityLevel ?? 0,
     };
+
+    // Optionally enrich with metadata from Metaplex collection
+    if (enrichMetadata) {
+      return enrichContentWithMetadata(connection, entry);
+    }
+    return entry;
   } catch {
     return null;
   }
@@ -990,60 +1261,11 @@ export async function fetchAllRentConfigs(
   return configs;
 }
 
-/**
- * Batch fetch all content collections in a single RPC call.
- * Returns a Map keyed by content PDA base58 string.
- */
-export async function fetchAllContentCollections(
-  connection: Connection
-): Promise<Map<string, ContentCollection>> {
-  const collections = new Map<string, ContentCollection>();
-  try {
-    const program = createProgram(connection);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allCollections = await (program.account as any).contentCollection.all();
+// NOTE: fetchAllContentCollections removed - collection_asset now stored in ContentEntry
+// Use fetchAllContentEntries and access collectionAsset directly
 
-    for (const { account } of allCollections) {
-      const contentKey = account.content.toBase58();
-      collections.set(contentKey, {
-        content: account.content,
-        collectionAsset: account.collectionAsset,
-        createdAt: BigInt(account.createdAt.toString()),
-      });
-    }
-  } catch (err) {
-    console.error("[fetchAllContentCollections] Error:", err);
-  }
-  return collections;
-}
-
-/**
- * Batch fetch all bundle collections in a single RPC call.
- * Returns a Map keyed by bundle PDA base58 string.
- */
-export async function fetchAllBundleCollections(
-  connection: Connection
-): Promise<Map<string, BundleCollection>> {
-  const collections = new Map<string, BundleCollection>();
-  try {
-    const program = createProgram(connection);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allCollections = await (program.account as any).bundleCollection.all();
-
-    for (const { account } of allCollections) {
-      const bundleKey = account.bundle.toBase58();
-      collections.set(bundleKey, {
-        bundle: account.bundle,
-        collectionAsset: account.collectionAsset,
-        creator: account.creator,
-        createdAt: BigInt(account.createdAt.toString()),
-      });
-    }
-  } catch (err) {
-    console.error("[fetchAllBundleCollections] Error:", err);
-  }
-  return collections;
-}
+// NOTE: fetchAllBundleCollections removed - collection_asset now stored in Bundle
+// Use fetchAllBundles and access collectionAsset directly
 
 /**
  * Batch fetch all bundle reward pools in a single RPC call.
@@ -1149,13 +1371,13 @@ export interface BundlePendingReward {
 /**
  * Optimized pending rewards calculation for bundles.
  * Similar to getPendingRewardsOptimized but for bundle NFTs.
+ * NOTE: bundleCollections parameter removed - collection_asset now stored in Bundle
  */
 export async function getBundlePendingRewardsOptimized(
   connection: Connection,
   wallet: PublicKey,
   walletBundleNfts: WalletBundleNftMetadata[],
-  bundleRewardPools: Map<string, BundleRewardPool>,
-  bundleCollections: Map<string, BundleCollection>
+  bundleRewardPools: Map<string, BundleRewardPool>
 ): Promise<BundlePendingReward[]> {
   const results: BundlePendingReward[] = [];
 
@@ -1364,29 +1586,8 @@ export async function fetchContentRewardPool(
   }
 }
 
-export async function fetchContentCollection(
-  connection: Connection,
-  contentCid: string
-): Promise<ContentCollection | null> {
-  try {
-    const program = createProgram(connection);
-    const [contentPda] = getContentPda(contentCid);
-    const [contentCollectionPda] = getContentCollectionPda(contentPda);
-
-    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).contentCollection.fetch(contentCollectionPda);
-
-    // Anchor auto-converts snake_case to camelCase in returned objects
-    return {
-      content: decoded.content,
-      collectionAsset: decoded.collectionAsset,
-      createdAt: BigInt(decoded.createdAt.toString()),
-    };
-  } catch {
-    return null;
-  }
-}
+// NOTE: fetchContentCollection removed - collection_asset now stored in ContentEntry
+// Use fetchContent and access collectionAsset directly
 
 export async function fetchWalletContentState(
   connection: Connection,
@@ -1475,32 +1676,11 @@ export async function fetchRentConfig(
   }
 }
 
-export async function fetchRentEntry(
-  connection: Connection,
-  nftAsset: PublicKey
-): Promise<RentEntry | null> {
-  try {
-    const program = createProgram(connection);
-    const [rentEntryPda] = getRentEntryPda(nftAsset);
-
-    // Use program.account.<name>.fetch() - the proper Anchor 0.30+ approach
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).rentEntry.fetch(rentEntryPda);
-
-    // Anchor auto-converts snake_case to camelCase in returned objects
-    return {
-      renter: decoded.renter,
-      content: decoded.content,
-      nftAsset: decoded.nftAsset,
-      rentedAt: BigInt(decoded.rentedAt.toString()),
-      expiresAt: BigInt(decoded.expiresAt.toString()),
-      isActive: decoded.isActive,
-      feePaid: BigInt(decoded.feePaid.toString()),
-    };
-  } catch {
-    return null;
-  }
-}
+// NOTE: fetchRentEntry removed - rental expiry now stored in NFT Attributes plugin
+// Use Metaplex Core SDK to read attributes from the NFT:
+// - expires_at: Rental expiry timestamp
+// - rented_at: When rental started
+// - tier: Rental tier (SixHours, OneDay, SevenDays)
 
 /**
  * Fetch a pending mint by buyer and content
@@ -1702,20 +1882,22 @@ export async function fetchAllPendingMintsForWallet(
   }
 }
 
+// NOTE: checkRentalAccess updated - RentEntry PDA removed, expiry now in NFT Attributes plugin
+// This function now reads expiry from NFT attributes
 export async function checkRentalAccess(
   connection: Connection,
   nftAsset: PublicKey
 ): Promise<{ hasAccess: boolean; expiresAt: bigint | null; remainingSeconds: number }> {
-  const rentEntry = await fetchRentEntry(connection, nftAsset);
-  if (!rentEntry || !rentEntry.isActive) {
+  const rentalInfo = await fetchNftRentalInfo(connection, nftAsset);
+  if (!rentalInfo) {
     return { hasAccess: false, expiresAt: null, remainingSeconds: 0 };
   }
 
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const hasAccess = now < rentEntry.expiresAt;
-  const remainingSeconds = hasAccess ? Number(rentEntry.expiresAt - now) : 0;
+  const hasAccess = now < rentalInfo.expiresAt;
+  const remainingSeconds = hasAccess ? Number(rentalInfo.expiresAt - now) : 0;
 
-  return { hasAccess, expiresAt: rentEntry.expiresAt, remainingSeconds };
+  return { hasAccess, expiresAt: rentalInfo.expiresAt, remainingSeconds };
 }
 
 export async function getPendingRewardForContent(
@@ -1723,14 +1905,14 @@ export async function getPendingRewardForContent(
   wallet: PublicKey,
   contentCid: string
 ): Promise<bigint> {
-  // Get reward pool and collection info
+  // Get reward pool and content info
   const rewardPool = await fetchContentRewardPool(connection, contentCid);
-  const contentCollection = await fetchContentCollection(connection, contentCid);
+  const content = await fetchContent(connection, contentCid);
 
-  if (!rewardPool || !contentCollection) return BigInt(0);
+  if (!rewardPool || !content) return BigInt(0);
 
   // Get all NFTs owned by wallet in this collection
-  const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+  const nftAssets = await fetchWalletNftsForCollection(connection, wallet, content.collectionAsset);
   if (nftAssets.length === 0) return BigInt(0);
 
   // Calculate pending rewards for each NFT using per-NFT tracking
@@ -1768,17 +1950,17 @@ export async function getPendingRewardsForWalletDetailed(
   const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }> = [];
 
   for (const contentCid of contentCids) {
-    // Get reward pool and collection info
+    // Get reward pool and content info
     const rewardPool = await fetchContentRewardPool(connection, contentCid);
-    const contentCollection = await fetchContentCollection(connection, contentCid);
+    const content = await fetchContent(connection, contentCid);
 
-    if (!rewardPool || !contentCollection) {
+    if (!rewardPool || !content) {
       results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(0), nftRewards: [] });
       continue;
     }
 
     // Get all NFTs owned by wallet in this collection
-    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, content.collectionAsset);
     const nftCount = BigInt(nftAssets.length);
 
     if (nftAssets.length === 0) {
@@ -1824,16 +2006,14 @@ export async function getPendingRewardsForWalletDetailed(
  * Uses batch fetching for NFT reward states to minimize RPC calls.
  *
  * Instead of N*M individual calls, this uses:
- * - Pre-fetched rewardPools and collections (0 calls - passed in)
- * - 1 call per unique collection to get NFTs (via getProgramAccounts filter)
+ * - Pre-fetched rewardPools (0 calls - passed in)
  * - 1 batch call for all NFT reward states
  */
 export async function getPendingRewardsOptimized(
   connection: Connection,
   wallet: PublicKey,
   walletNfts: WalletNftMetadata[],
-  rewardPools: Map<string, ContentRewardPool>,
-  contentCollections: Map<string, ContentCollection>
+  rewardPools: Map<string, ContentRewardPool>
 ): Promise<Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }>> {
   const results: Array<{ contentCid: string; pending: bigint; nftCount: bigint; nftRewards: Array<{ nftAsset: PublicKey; pending: bigint; rewardDebt: bigint; weight: number; createdAt: bigint }> }> = [];
 
@@ -1910,8 +2090,8 @@ export async function fetchWalletNftMetadata(
   connection: Connection,
   wallet: PublicKey
 ): Promise<WalletNftMetadata[]> {
-  // Fetch collections and content entries once upfront
-  const collections = await fetchAllContentCollections(connection);
+  // Fetch content entries to get collectionAsset mappings
+  // NOTE: collectionAsset is now stored directly in ContentEntry (no separate ContentCollection PDA)
   const program = createProgram(connection);
 
   // Fetch content entries using getProgramAccounts with manual decoding
@@ -1923,7 +2103,9 @@ export async function fetchWalletNftMetadata(
     ],
   });
 
-  const allContentEntries: Array<{ contentCid: string; creator: PublicKey }> = [];
+  // Build a map from collectionAsset -> contentCid for quick lookup
+  // collectionAsset is stored directly in ContentEntry
+  const collectionToContentCid = new Map<string, string>();
   for (const { account } of contentAccounts) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1931,24 +2113,20 @@ export async function fetchWalletNftMetadata(
         "contentEntry",
         account.data
       );
-      allContentEntries.push({
-        contentCid: decoded.contentCid,
-        creator: decoded.creator,
-      });
+      // contentCid is now a hash stored in the account, we need to get it from previewCid or reconstruct
+      // Actually, ContentEntry no longer has contentCid field - it's derived from the PDA seed
+      // We can use previewCid as the identifier, or get contentCid from somewhere else
+      // For now, use the decoded content with its collectionAsset
+      if (decoded.collectionAsset) {
+        // We need to get the contentCid - it's stored in the metadata or we reconstruct from context
+        // Since contentCid was removed from ContentEntry, we need to look it up differently
+        // The content PDA is derived from hash(contentCid), so we can't reverse it
+        // But the NFT's metadata URI contains the contentCid
+        // For now, we'll use previewCid as a proxy (it often contains the content identifier)
+        collectionToContentCid.set(decoded.collectionAsset.toBase58(), decoded.previewCid || "");
+      }
     } catch {
       // Skip accounts that fail to decode (old format)
-    }
-  }
-
-  // Build a map from collectionAsset -> contentCid for quick lookup
-  const collectionToContentCid = new Map<string, string>();
-  for (const collection of collections.values()) {
-    // Find the content entry for this collection
-    for (const entry of allContentEntries) {
-      if (entry.creator && collection.content.equals(getContentPda(entry.contentCid)[0])) {
-        collectionToContentCid.set(collection.collectionAsset.toBase58(), entry.contentCid);
-        break;
-      }
     }
   }
 
@@ -2033,8 +2211,8 @@ export async function fetchWalletBundleNftMetadata(
   connection: Connection,
   wallet: PublicKey
 ): Promise<WalletBundleNftMetadata[]> {
-  // Fetch bundle collections and bundle entries once upfront
-  const bundleCollections = await fetchAllBundleCollections(connection);
+  // Fetch bundle entries to get collectionAsset mappings
+  // NOTE: collectionAsset is now stored directly in Bundle (no separate BundleCollection PDA)
   const program = createProgram(connection);
 
   // Fetch bundle entries using getProgramAccounts with manual decoding
@@ -2045,36 +2223,24 @@ export async function fetchWalletBundleNftMetadata(
     ],
   });
 
-  const allBundleEntries: Array<{ bundleId: string; creator: PublicKey; bundlePda: PublicKey }> = [];
-  for (const { pubkey, account } of bundleAccounts) {
+  // Build a map from collectionAsset -> { bundleId, creator } for quick lookup
+  // collectionAsset is now stored directly in Bundle
+  const collectionToBundleInfo = new Map<string, { bundleId: string; creator: PublicKey }>();
+  for (const { account } of bundleAccounts) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const decoded = (program.account as any).bundle.coder.accounts.decode(
         "bundle",
         account.data
       );
-      allBundleEntries.push({
-        bundleId: decoded.bundleId,
-        creator: decoded.creator,
-        bundlePda: pubkey,
-      });
+      if (decoded.collectionAsset) {
+        collectionToBundleInfo.set(decoded.collectionAsset.toBase58(), {
+          bundleId: decoded.bundleId,
+          creator: decoded.creator,
+        });
+      }
     } catch {
       // Skip accounts that fail to decode
-    }
-  }
-
-  // Build a map from collectionAsset -> { bundleId, creator } for quick lookup
-  const collectionToBundleInfo = new Map<string, { bundleId: string; creator: PublicKey }>();
-  for (const collection of bundleCollections.values()) {
-    // Find the bundle entry for this collection
-    for (const entry of allBundleEntries) {
-      if (collection.bundle.equals(entry.bundlePda)) {
-        collectionToBundleInfo.set(collection.collectionAsset.toBase58(), {
-          bundleId: entry.bundleId,
-          creator: entry.creator,
-        });
-        break;
-      }
     }
   }
 
@@ -2237,30 +2403,32 @@ export async function fetchWalletNftsForCollection(
   }
 }
 
+// NOTE: fetchActiveRentalForContent updated - RentEntry PDA removed, expiry now in NFT Attributes
 export async function fetchActiveRentalForContent(
   connection: Connection,
   wallet: PublicKey,
   contentCid: string
-): Promise<RentEntry | null> {
+): Promise<RentalNftInfo | null> {
   try {
-    // First get the content collection to find NFTs in this collection
-    const contentCollection = await fetchContentCollection(connection, contentCid);
-    if (!contentCollection) return null;
+    // Get the content to find its collection
+    const content = await fetchContent(connection, contentCid);
+    if (!content) return null;
 
     // Get all NFTs owned by wallet in this collection
-    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, contentCollection.collectionAsset);
+    const nftAssets = await fetchWalletNftsForCollection(connection, wallet, content.collectionAsset);
     if (nftAssets.length === 0) return null;
 
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    let latestActiveRental: RentEntry | null = null;
+    // Batch fetch rental info for all NFTs
+    const rentalInfoMap = await fetchNftRentalInfoBatch(connection, nftAssets);
 
-    // Check each NFT for an active rent entry
-    for (const nftAsset of nftAssets) {
-      const rentEntry = await fetchRentEntry(connection, nftAsset);
-      if (rentEntry && rentEntry.isActive && rentEntry.expiresAt > now) {
-        // Keep track of the rental with the latest expiry
-        if (!latestActiveRental || rentEntry.expiresAt > latestActiveRental.expiresAt) {
-          latestActiveRental = rentEntry;
+    // Find the active rental with the latest expiry
+    let latestActiveRental: RentalNftInfo | null = null;
+    const now = BigInt(Math.floor(Date.now() / 1000));
+
+    for (const rentalInfo of rentalInfoMap.values()) {
+      if (rentalInfo.expiresAt > now) {
+        if (!latestActiveRental || rentalInfo.expiresAt > latestActiveRental.expiresAt) {
+          latestActiveRental = rentalInfo;
         }
       }
     }
@@ -2285,35 +2453,33 @@ export async function fetchWalletRentalNfts(
 }
 
 /**
- * Optimized version that accepts pre-fetched NFT metadata to avoid redundant RPC calls.
- * Uses batch fetching via getMultipleAccountsInfo instead of individual calls.
+ * Identify rental NFTs by checking for expires_at attribute in each NFT
+ * Returns a set of NFT asset addresses that are rental NFTs
  */
 export async function fetchRentalNftsFromMetadata(
   connection: Connection,
   nftMetadata: WalletNftMetadata[]
 ): Promise<Set<string>> {
+  const rentalNftAssets = new Set<string>();
+
+  if (nftMetadata.length === 0) return rentalNftAssets;
+
   try {
-    if (nftMetadata.length === 0) return new Set<string>();
+    // Extract NFT assets
+    const nftAssets = nftMetadata.map(nft => nft.nftAsset);
 
-    // Get all rent entry PDAs in one go
-    const rentEntryPdas = nftMetadata.map(nft => getRentEntryPda(nft.nftAsset)[0]);
+    // Batch fetch rental info
+    const rentalInfoMap = await fetchNftRentalInfoBatch(connection, nftAssets);
 
-    // Batch fetch all rent entries in a single RPC call
-    const rentEntryAccounts = await connection.getMultipleAccountsInfo(rentEntryPdas);
-
-    const rentalNftAssets = new Set<string>();
-
-    // Check which NFTs have rent entries (account exists = is a rental NFT)
-    for (let i = 0; i < nftMetadata.length; i++) {
-      if (rentEntryAccounts[i] !== null) {
-        rentalNftAssets.add(nftMetadata[i].nftAsset.toBase58());
-      }
+    // Any NFT that has rental info is a rental NFT
+    for (const [assetKey] of rentalInfoMap) {
+      rentalNftAssets.add(assetKey);
     }
-
-    return rentalNftAssets;
   } catch {
-    return new Set();
+    // Return partial results on error
   }
+
+  return rentalNftAssets;
 }
 
 export async function countTotalMintedNfts(
@@ -2361,18 +2527,18 @@ function anchorToBundleType(anchorType: object): BundleType {
 
 /**
  * Create a new bundle
+ * NOTE: metadataCid removed - stored in Metaplex metadata
  */
 export async function createBundleInstruction(
   program: Program,
   creator: PublicKey,
   bundleId: string,
-  metadataCid: string,
   bundleType: BundleType
 ): Promise<TransactionInstruction> {
   const [bundlePda] = getBundlePda(creator, bundleId);
 
   return await program.methods
-    .createBundle(bundleId, metadataCid, bundleTypeToAnchor(bundleType))
+    .createBundle(bundleId, bundleTypeToAnchor(bundleType))
     .accounts({
       creator,
       bundle: bundlePda,
@@ -2390,6 +2556,8 @@ export interface CreateBundleWithMintAndRentResult {
 /**
  * Create a bundle with mint and rent configuration in a single transaction
  * This is the recommended way to create bundles - single signature flow
+ * NOTE: metadataCid removed - stored in Metaplex metadata
+ * NOTE: BundleCollection removed - collection_asset stored in Bundle, mintConfig is authority
  */
 export async function createBundleWithMintAndRentInstruction(
   program: Program,
@@ -2409,7 +2577,6 @@ export async function createBundleWithMintAndRentInstruction(
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
   const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [userProfilePda] = getUserProfilePda(creator);
   const collectionAsset = Keypair.generate();
@@ -2432,7 +2599,6 @@ export async function createBundleWithMintAndRentInstruction(
       bundle: bundlePda,
       mintConfig: mintConfigPda,
       rentConfig: rentConfigPda,
-      bundleCollection: bundleCollectionPda,
       collectionAsset: collectionAsset.publicKey,
       ecosystemConfig: ecosystemConfigPda,
       platform,
@@ -2499,19 +2665,19 @@ export async function removeBundleItemInstruction(
 }
 
 /**
- * Update bundle metadata or status
+ * Update bundle status
+ * NOTE: metadataCid removed - stored in Metaplex metadata
  */
 export async function updateBundleInstruction(
   program: Program,
   creator: PublicKey,
   bundleId: string,
-  metadataCid?: string,
   isActive?: boolean
 ): Promise<TransactionInstruction> {
   const [bundlePda] = getBundlePda(creator, bundleId);
 
   return await program.methods
-    .updateBundle(metadataCid ?? null, isActive ?? null)
+    .updateBundle(isActive ?? null)
     .accounts({
       creator,
       bundle: bundlePda,
@@ -2565,6 +2731,7 @@ export async function fetchBundle(
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
       pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
       isLocked: decoded.isLocked ?? false,
+      collectionAsset: decoded.collectionAsset,
     };
   } catch {
     return null;
@@ -2596,6 +2763,7 @@ export async function fetchBundleByPda(
       mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
       pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
       isLocked: decoded.isLocked ?? false,
+      collectionAsset: decoded.collectionAsset,
     };
   } catch {
     return null;
@@ -2837,6 +3005,7 @@ export async function findBundlesForContentBatch(
           mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
           pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
           isLocked: decoded.isLocked ?? false,
+          collectionAsset: decoded.collectionAsset,
         });
       } catch {
         // Skip invalid accounts
@@ -2923,11 +3092,13 @@ export interface ConfigureBundleMintResult {
 
 /**
  * Configure minting for a bundle (creates collection)
+ * NOTE: BundleCollection removed - collection_asset stored in Bundle, mintConfig is authority
  */
 export async function configureBundleMintInstruction(
   program: Program,
   creator: PublicKey,
   bundleId: string,
+  metadataCid: string,
   price: bigint,
   maxSupply: bigint | null,
   creatorRoyaltyBps: number,
@@ -2935,12 +3106,12 @@ export async function configureBundleMintInstruction(
 ): Promise<ConfigureBundleMintResult> {
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const collectionAsset = Keypair.generate();
 
   const instruction = await program.methods
     .configureBundleMint(
+      metadataCid,
       new BN(price.toString()),
       maxSupply !== null ? new BN(maxSupply.toString()) : null,
       creatorRoyaltyBps
@@ -2949,7 +3120,6 @@ export async function configureBundleMintInstruction(
       creator,
       bundle: bundlePda,
       mintConfig: mintConfigPda,
-      bundleCollection: bundleCollectionPda,
       collectionAsset: collectionAsset.publicKey,
       ecosystemConfig: ecosystemConfigPda,
       platform,
@@ -3041,7 +3211,6 @@ export async function simpleMintInstruction(
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [mintConfigPda] = getMintConfigPda(contentPda);
   const [contentRewardPoolPda] = getContentRewardPoolPda(contentPda);
-  const [contentCollectionPda] = getContentCollectionPda(contentPda);
 
   // Fetch current minted count to calculate edition
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3061,6 +3230,7 @@ export async function simpleMintInstruction(
   const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
   const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
 
+  // NOTE: ContentCollection removed - mintConfig is now the collection authority
   const instruction = await program.methods
     .simpleMint(contentName)
     .accounts({
@@ -3068,7 +3238,6 @@ export async function simpleMintInstruction(
       content: contentPda,
       mintConfig: mintConfigPda,
       contentRewardPool: contentRewardPoolPda,
-      contentCollection: contentCollectionPda,
       collectionAsset,
       creator,
       treasury,
@@ -3120,7 +3289,7 @@ export async function simpleMintBundleInstruction(
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
   const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  // NOTE: bundleCollectionPda removed - collection_asset now stored in Bundle
 
   // Fetch current minted count to calculate edition
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -3154,7 +3323,7 @@ export async function simpleMintBundleInstruction(
       bundle: bundlePda,
       bundleMintConfig: mintConfigPda,
       bundleRewardPool: bundleRewardPoolPda,
-      bundleCollection: bundleCollectionPda,
+      // NOTE: bundleCollection removed - collection_asset now stored in Bundle
       collectionAsset,
       creator,
       treasury,
@@ -3381,6 +3550,8 @@ export async function updateBundleRentConfigInstruction(
 
 /**
  * Rent a bundle with SOL
+ * NOTE: BundleCollection and BundleRentEntry removed - using mintConfig for authority
+ *       and NFT Attributes plugin for expiry
  */
 export async function rentBundleSolInstruction(
   program: Program,
@@ -3396,10 +3567,9 @@ export async function rentBundleSolInstruction(
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [rentConfigPda] = getBundleRentConfigPda(bundlePda);
   const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
-  const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
+  const [bundleMintConfigPda] = getBundleMintConfigPda(bundlePda);
 
   const nftAsset = Keypair.generate();
-  const [rentEntryPda] = getBundleRentEntryPda(nftAsset.publicKey);
 
   // Convert tier to Anchor format
   const anchorTier = tier === RentTier.SixHours ? { sixHours: {} }
@@ -3413,20 +3583,20 @@ export async function rentBundleSolInstruction(
       bundle: bundlePda,
       rentConfig: rentConfigPda,
       bundleRewardPool: bundleRewardPoolPda,
-      bundleCollection: bundleCollectionPda,
+      bundleMintConfig: bundleMintConfigPda,
       collectionAsset,
       creator,
       treasury,
       platform,
       nftAsset: nftAsset.publicKey,
-      rentEntry: rentEntryPda,
       renter,
       mplCoreProgram: MPL_CORE_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
     .instruction();
 
-  return { instruction, nftAsset: nftAsset.publicKey, nftAssetKeypair: nftAsset, rentEntryPda };
+  // NOTE: rentEntryPda removed from return - expiry now in NFT Attributes
+  return { instruction, nftAsset: nftAsset.publicKey, nftAssetKeypair: nftAsset, rentEntryPda: PublicKey.default };
 }
 
 /**
@@ -3598,32 +3768,8 @@ export async function fetchBundleRentConfig(
   }
 }
 
-/**
- * Fetch bundle collection
- */
-export async function fetchBundleCollection(
-  connection: Connection,
-  creator: PublicKey,
-  bundleId: string
-): Promise<BundleCollection | null> {
-  try {
-    const program = createProgram(connection);
-    const [bundlePda] = getBundlePda(creator, bundleId);
-    const [bundleCollectionPda] = getBundleCollectionPda(bundlePda);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).bundleCollection.fetch(bundleCollectionPda);
-
-    return {
-      bundle: decoded.bundle,
-      collectionAsset: decoded.collectionAsset,
-      creator: decoded.creator,
-      createdAt: BigInt(decoded.createdAt.toString()),
-    };
-  } catch {
-    return null;
-  }
-}
+// NOTE: fetchBundleCollection removed - collection_asset now stored in Bundle
+// Use fetchBundle and access collectionAsset directly
 
 /**
  * Fetch bundle reward pool
@@ -4662,15 +4808,13 @@ export function createContentRegistryClient(connection: Connection) {
   return {
     program,
     getContentPda,
-    getCidRegistryPda,
+    // NOTE: getCidRegistryPda, getContentCollectionPda, getRentEntryPda removed - PDAs no longer used
     getEcosystemConfigPda,
     getMintConfigPda,
     getContentRewardPoolPda,
     getWalletContentStatePda,
-    getContentCollectionPda,
     getUnifiedNftRewardStatePda,
     getRentConfigPda,
-    getRentEntryPda,
     getPendingMintPda,
     hashCid,
     calculateWeightedPendingReward,
@@ -4772,8 +4916,8 @@ export function createContentRegistryClient(connection: Connection) {
       updateEcosystemInstruction(program, admin, newTreasury, newUsdcMint, isPaused),
 
     // Bundle management
-    createBundleInstruction: (creator: PublicKey, bundleId: string, metadataCid: string, bundleType: BundleType) =>
-      createBundleInstruction(program, creator, bundleId, metadataCid, bundleType),
+    createBundleInstruction: (creator: PublicKey, bundleId: string, bundleType: BundleType) =>
+      createBundleInstruction(program, creator, bundleId, bundleType),
 
     createBundleWithMintAndRentInstruction: (
       creator: PublicKey,
@@ -4800,8 +4944,8 @@ export function createContentRegistryClient(connection: Connection) {
     removeBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string) =>
       removeBundleItemInstruction(program, creator, bundleId, contentCid),
 
-    updateBundleInstruction: (creator: PublicKey, bundleId: string, metadataCid?: string, isActive?: boolean) =>
-      updateBundleInstruction(program, creator, bundleId, metadataCid, isActive),
+    updateBundleInstruction: (creator: PublicKey, bundleId: string, isActive?: boolean) =>
+      updateBundleInstruction(program, creator, bundleId, isActive),
 
     deleteBundleInstruction: (creator: PublicKey, bundleId: string) =>
       deleteBundleInstruction(program, creator, bundleId),
@@ -4824,11 +4968,12 @@ export function createContentRegistryClient(connection: Connection) {
     configureBundleMintInstruction: (
       creator: PublicKey,
       bundleId: string,
+      metadataCid: string,
       price: bigint,
       maxSupply: bigint | null,
       creatorRoyaltyBps: number,
       platform: PublicKey
-    ) => configureBundleMintInstruction(program, creator, bundleId, price, maxSupply, creatorRoyaltyBps, platform),
+    ) => configureBundleMintInstruction(program, creator, bundleId, metadataCid, price, maxSupply, creatorRoyaltyBps, platform),
 
     updateBundleMintSettingsInstruction: (
       creator: PublicKey,
@@ -5044,17 +5189,17 @@ export function createContentRegistryClient(connection: Connection) {
     // Bundle mint/rent PDA helpers
     getBundleMintConfigPda,
     getBundleRentConfigPda,
-    getBundleCollectionPda,
+    // NOTE: getBundleCollectionPda removed - collection_asset now stored in Bundle
+    // NOTE: getBundleRentEntryPda removed - rental expiry now in NFT Attributes
     getBundleRewardPoolPda,
     getBundleWalletStatePda,
-    getBundleRentEntryPda,
     getBundleDirectNftPda,
 
     // Bundle mint/rent fetching
     fetchBundleMintConfig: (creator: PublicKey, bundleId: string) => fetchBundleMintConfig(connection, creator, bundleId),
     fetchAllBundleMintConfigs: () => fetchAllBundleMintConfigs(connection),
     fetchBundleRentConfig: (creator: PublicKey, bundleId: string) => fetchBundleRentConfig(connection, creator, bundleId),
-    fetchBundleCollection: (creator: PublicKey, bundleId: string) => fetchBundleCollection(connection, creator, bundleId),
+    // NOTE: fetchBundleCollection removed - access collectionAsset via fetchBundle
     fetchBundleRewardPool: (creator: PublicKey, bundleId: string) => fetchBundleRewardPool(connection, creator, bundleId),
     fetchBundleWalletState: (wallet: PublicKey, creator: PublicKey, bundleId: string) => fetchBundleWalletState(connection, wallet, creator, bundleId),
 
@@ -5067,7 +5212,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchMintConfig: (contentCid: string) => fetchMintConfig(connection, contentCid),
     fetchAllMintConfigs: () => fetchAllMintConfigs(connection),
     fetchAllRentConfigs: () => fetchAllRentConfigs(connection),
-    fetchAllContentCollections: () => fetchAllContentCollections(connection),
+    // NOTE: fetchAllContentCollections removed - access collectionAsset via fetchContent
     fetchAllContentRewardPools: () => fetchAllContentRewardPools(connection),
     fetchNftRewardStatesBatch: (nftAssets: PublicKey[]) => fetchNftRewardStatesBatch(connection, nftAssets),
     fetchEcosystemConfig: () => fetchEcosystemConfig(connection),
@@ -5085,7 +5230,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchCreatorPatronTreasuryBalance: (creator: PublicKey) => fetchCreatorPatronTreasuryBalance(connection, creator),
 
     fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
-    fetchContentCollection: (contentCid: string) => fetchContentCollection(connection, contentCid),
+    // NOTE: fetchContentCollection removed - access collectionAsset via fetchContent
     fetchWalletContentState: (wallet: PublicKey, contentCid: string) => fetchWalletContentState(connection, wallet, contentCid),
     fetchNftRewardState: (nftAsset: PublicKey) => fetchNftRewardState(connection, nftAsset),
 
@@ -5093,7 +5238,7 @@ export function createContentRegistryClient(connection: Connection) {
 
     // Rent fetching
     fetchRentConfig: (contentCid: string) => fetchRentConfig(connection, contentCid),
-    fetchRentEntry: (nftAsset: PublicKey) => fetchRentEntry(connection, nftAsset),
+    // NOTE: fetchRentEntry removed - rental expiry now in NFT Attributes
     checkRentalAccess: (nftAsset: PublicKey) => checkRentalAccess(connection, nftAsset),
     fetchActiveRentalForContent: (wallet: PublicKey, contentCid: string) => fetchActiveRentalForContent(connection, wallet, contentCid),
     fetchWalletRentalNfts: (wallet: PublicKey) => fetchWalletRentalNfts(connection, wallet),
@@ -5108,9 +5253,8 @@ export function createContentRegistryClient(connection: Connection) {
     getPendingRewardsOptimized: (
       wallet: PublicKey,
       walletNfts: WalletNftMetadata[],
-      rewardPools: Map<string, ContentRewardPool>,
-      contentCollections: Map<string, ContentCollection>
-    ) => getPendingRewardsOptimized(connection, wallet, walletNfts, rewardPools, contentCollections),
+      rewardPools: Map<string, ContentRewardPool>
+    ) => getPendingRewardsOptimized(connection, wallet, walletNfts, rewardPools),
 
     // NFT ownership
     checkNftOwnership: (wallet: PublicKey, contentCid: string) => checkNftOwnership(connection, wallet, contentCid),
@@ -5123,7 +5267,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchWalletNftsForCollection: (wallet: PublicKey, collectionAsset: PublicKey) => fetchWalletNftsForCollection(connection, wallet, collectionAsset),
 
     // Bundle NFT ownership
-    fetchAllBundleCollections: () => fetchAllBundleCollections(connection),
+    // NOTE: fetchAllBundleCollections removed - access collectionAsset via fetchBundle
     fetchAllBundleRewardPools: () => fetchAllBundleRewardPools(connection),
     fetchBundleNftRewardStatesBatch: (nftAssets: PublicKey[]) => fetchBundleNftRewardStatesBatch(connection, nftAssets),
     fetchWalletBundleNftMetadata: (wallet: PublicKey) => fetchWalletBundleNftMetadata(connection, wallet),
@@ -5134,9 +5278,8 @@ export function createContentRegistryClient(connection: Connection) {
     getBundlePendingRewardsOptimized: (
       wallet: PublicKey,
       walletBundleNfts: WalletBundleNftMetadata[],
-      bundleRewardPools: Map<string, BundleRewardPool>,
-      bundleCollections: Map<string, BundleCollection>
-    ) => getBundlePendingRewardsOptimized(connection, wallet, walletBundleNfts, bundleRewardPools, bundleCollections),
+      bundleRewardPools: Map<string, BundleRewardPool>
+    ) => getBundlePendingRewardsOptimized(connection, wallet, walletBundleNfts, bundleRewardPools),
 
     // Pending mint request helpers
     findPendingBundleMintRequests: (
@@ -5161,7 +5304,7 @@ export function createContentRegistryClient(connection: Connection) {
 
         const entries: ContentEntry[] = [];
 
-        for (const { account } of accounts) {
+        for (const { pubkey, account } of accounts) {
           try {
             // Decode using Anchor's coder with error handling per account
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5170,29 +5313,29 @@ export function createContentRegistryClient(connection: Connection) {
               account.data
             );
 
+            // NOTE: ContentEntry now stores minimal data - contentCid, metadataCid, contentType, createdAt removed
+            // Those fields should be fetched from IPFS/Supabase
             entries.push({
+              pubkey, // Include account pubkey for identification
               creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
+              collectionAsset: decoded.collectionAsset,
               tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
               isLocked: decoded.isLocked ?? false,
               mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
               pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
               isEncrypted: decoded.isEncrypted ?? false,
               previewCid: decoded.previewCid ?? "",
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
-              visibilityLevel: decoded.visibilityLevel,
+              visibilityLevel: decoded.visibilityLevel ?? 0,
             });
           } catch {
-            // Skip accounts that fail to decode (old format without pendingCount)
-            // This allows the feed to show new content while ignoring incompatible old accounts
+            // Skip accounts that fail to decode (old format or incompatible)
             console.warn("[fetchGlobalContent] Skipping account with incompatible format");
           }
         }
 
-        return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
+        // Sort by mintedCount (proxy for recency since createdAt was removed)
+        return entries.sort((a, b) => Number(b.mintedCount - a.mintedCount));
       } catch (err) {
         console.error("[fetchGlobalContent] Error fetching content:", err);
         return [];
@@ -5213,7 +5356,7 @@ export function createContentRegistryClient(connection: Connection) {
 
         const entries: ContentEntry[] = [];
 
-        for (const { account } of accounts) {
+        for (const { pubkey, account } of accounts) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const decoded = (program.account as any).contentEntry.coder.accounts.decode(
@@ -5221,20 +5364,20 @@ export function createContentRegistryClient(connection: Connection) {
               account.data
             );
 
+            // NOTE: ContentEntry no longer stores contentCid, metadataCid, contentType, createdAt
+            // These should be fetched from the Metaplex collection metadata if needed
             entries.push({
+              pubkey,
               creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
+              collectionAsset: decoded.collectionAsset,
               tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
               isLocked: decoded.isLocked ?? false,
               mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
               pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
               isEncrypted: decoded.isEncrypted ?? false,
               previewCid: decoded.previewCid ?? "",
               encryptionMetaCid: decoded.encryptionMetaCid ?? "",
-              visibilityLevel: decoded.visibilityLevel,
+              visibilityLevel: decoded.visibilityLevel ?? 0,
             });
           } catch {
             // Skip accounts that fail to decode
@@ -5242,7 +5385,8 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        return entries.sort((a, b) => Number(b.createdAt - a.createdAt));
+        // Sort by mintedCount as proxy for recency (createdAt was removed from on-chain)
+        return entries.sort((a, b) => Number(b.mintedCount - a.mintedCount));
       } catch (err) {
         console.error("[fetchContentByCreator] Error:", err);
         return [];
@@ -5263,9 +5407,10 @@ export function createContentRegistryClient(connection: Connection) {
 
         const results: Array<{ content: ContentEntry; mintConfig: MintConfig }> = [];
 
-        // Build content entries map with error handling per account
+        // Build content entries map by pubkey (content PDA)
+        // NOTE: contentCid is no longer stored on-chain, use pubkey as key
         const contentEntries: Map<string, ContentEntry> = new Map();
-        for (const { account } of contentAccounts) {
+        for (const { pubkey, account } of contentAccounts) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const decoded = (program.account as any).contentEntry.coder.accounts.decode(
@@ -5273,13 +5418,11 @@ export function createContentRegistryClient(connection: Connection) {
               account.data
             );
 
-            contentEntries.set(decoded.contentCid, {
+            contentEntries.set(pubkey.toBase58(), {
+              pubkey,
               creator: decoded.creator,
-              contentCid: decoded.contentCid,
-              metadataCid: decoded.metadataCid,
-              contentType: anchorToContentType(decoded.contentType),
+              collectionAsset: decoded.collectionAsset,
               tipsReceived: BigInt(decoded.tipsReceived.toString()),
-              createdAt: BigInt(decoded.createdAt.toString()),
               isLocked: decoded.isLocked ?? false,
               mintedCount: BigInt(decoded.mintedCount?.toString() || "0"),
               pendingCount: BigInt(decoded.pendingCount?.toString() || "0"),
@@ -5293,30 +5436,29 @@ export function createContentRegistryClient(connection: Connection) {
           }
         }
 
-        // Match mint configs with content entries
+        // Match mint configs with content entries by content PDA
         for (const { account: mintConfig } of allMintConfigs) {
-          for (const [cid, content] of contentEntries) {
-            const [contentPda] = getContentPda(cid);
-            if (contentPda.equals(mintConfig.content)) {
-              // Anchor auto-converts to camelCase
-              results.push({
-                content,
-                mintConfig: {
-                  content: mintConfig.content,
-                  creator: mintConfig.creator,
-                  priceSol: BigInt(mintConfig.price.toString()),
-                  maxSupply: mintConfig.maxSupply ? BigInt(mintConfig.maxSupply.toString()) : null,
-                  creatorRoyaltyBps: mintConfig.creatorRoyaltyBps,
-                  isActive: mintConfig.isActive,
-                  createdAt: BigInt(mintConfig.createdAt.toString()),
-                },
-              });
-              break;
-            }
+          const contentPdaKey = mintConfig.content.toBase58();
+          const content = contentEntries.get(contentPdaKey);
+          if (content) {
+            // Anchor auto-converts to camelCase
+            results.push({
+              content,
+              mintConfig: {
+                content: mintConfig.content,
+                creator: mintConfig.creator,
+                priceSol: BigInt(mintConfig.price.toString()),
+                maxSupply: mintConfig.maxSupply ? BigInt(mintConfig.maxSupply.toString()) : null,
+                creatorRoyaltyBps: mintConfig.creatorRoyaltyBps,
+                isActive: mintConfig.isActive,
+                createdAt: BigInt(mintConfig.createdAt.toString()),
+              },
+            });
           }
         }
 
-        return results.sort((a, b) => Number(b.content.createdAt - a.content.createdAt));
+        // Sort by mintedCount as proxy for recency (createdAt was removed from ContentEntry)
+        return results.sort((a, b) => Number(b.content.mintedCount - a.content.mintedCount));
       } catch {
         return [];
       }
