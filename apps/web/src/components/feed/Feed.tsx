@@ -263,16 +263,48 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
     if (contentKey === lastGlobalFetchRef.current || !contentKey) return;
     lastGlobalFetchRef.current = contentKey;
 
-    // NOTE: metadataCid removed from ContentEntry - metadata should come from Supabase
+    // Fetch metadata from IPFS for each content item using metadataCid
     async function enrichGlobalFeed() {
       setIsEnrichingGlobal(true);
       try {
-        const enriched = rawGlobalContent.map((item) => {
-          const creatorAddress = item.creator.toBase58();
-          // Without metadataCid, we can't fetch metadata from IPFS
-          // TODO: Integrate with Supabase to get content metadata
-          return { ...item, creatorAddress };
-        });
+        const enriched = await Promise.all(
+          rawGlobalContent.map(async (item) => {
+            const creatorAddress = item.creator.toBase58();
+            let metadata: EnrichedContent["metadata"] | undefined;
+
+            // Fetch metadata from IPFS if metadataCid is available
+            let metadataCreatedAt: bigint | undefined;
+            if (item.metadataCid) {
+              try {
+                const metadataUrl = getIpfsUrl(item.metadataCid);
+                const res = await fetch(metadataUrl);
+                if (res.ok) {
+                  const json = await res.json();
+                  metadata = {
+                    name: json.name,
+                    title: json.properties?.title || json.name,
+                    description: json.description,
+                    image: json.image,
+                    tags: json.properties?.tags || [],
+                    contentType: json.properties?.contentDomain,
+                    domain: json.properties?.contentDomain,
+                  };
+                  // Extract createdAt from metadata properties (stored as unix timestamp in seconds)
+                  const createdAtValue = json.properties?.createdAt || json.properties?.created_at;
+                  if (createdAtValue) {
+                    metadataCreatedAt = BigInt(createdAtValue);
+                  }
+                }
+              } catch {
+                // Keep metadata undefined on error
+              }
+            }
+
+            // Use createdAt from metadata if available, otherwise fall back to on-chain value
+            const createdAt = metadataCreatedAt ?? item.createdAt ?? BigInt(0);
+            return { ...item, creatorAddress, metadata, createdAt } as EnrichedContent;
+          })
+        );
         setGlobalContent(enriched);
       } catch (err) {
         console.error("Error enriching global feed:", err);
@@ -1040,7 +1072,9 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content";
   const contentDomain = content.contentType !== undefined ? getContentDomain(content.contentType) : "document";
   const domainLabel = getDomainLabel(contentDomain);
-  const timeAgo = getTimeAgo(Number(content.createdAt ?? 0) * 1000);
+  const timeAgo = content.createdAt && content.createdAt > 0
+    ? getTimeAgo(Number(content.createdAt) * 1000)
+    : null;
 
   const contextData = content.metadata?.context || {};
   const genre = contextData.genre || content.metadata?.genre;
@@ -1197,7 +1231,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       <div className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
-          <div><p className="text-white font-medium">{displayName}</p><p className="text-white/40 text-xs">{timeAgo}</p></div>
+          <div><p className="text-white font-medium">{displayName}</p>{timeAgo && <p className="text-white/40 text-xs">{timeAgo}</p>}</div>
         </div>
         <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
         {(artist || album) && <p className="text-white/50 text-sm mb-2">{artist}{artist && album && " · "}{album}</p>}

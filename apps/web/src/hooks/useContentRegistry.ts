@@ -110,10 +110,11 @@ export function useContentRegistry() {
     return createContentRegistryClient(connection);
   }, [connection]);
 
-  // Fetch global content (all creators) - this is the ONLY content fetch
+  // Fetch global content (all creators) with Metaplex metadata enrichment
+  // This fetches contentCid, metadataCid, contentType from collection metadata
   const globalContentQuery = useQuery({
     queryKey: ["globalContent"],
-    queryFn: () => client?.fetchGlobalContent() ?? [],
+    queryFn: () => client?.fetchGlobalContentWithMetadata() ?? [],
     enabled: !!client,
     staleTime: 60000, // Cache for 60 seconds
     gcTime: 120000,

@@ -113,20 +113,51 @@ function SearchContent() {
     async function enrichData() {
       setIsEnriching(true);
 
-      // NOTE: metadataCid, contentCid, contentType, createdAt removed from on-chain ContentEntry
-      // Metadata should be fetched from Supabase instead
+      // Fetch metadata from IPFS using metadataCid (populated by SDK enrichment)
       const contentPromises = globalContent.map(async (item) => {
+        let metadata: ContentMetadata | undefined;
+        if (item.metadataCid) {
+          try {
+            const res = await fetch(getIpfsUrl(item.metadataCid));
+            if (res.ok) {
+              const json = await res.json();
+              metadata = {
+                name: json.properties?.title || json.name,
+                description: json.description,
+                image: json.image,
+                tags: json.properties?.tags || [],
+              };
+            }
+          } catch {
+            // Keep metadata undefined
+          }
+        }
         return {
           pubkey: item.pubkey?.toBase58() || "",
           creator: item.creator.toBase58(),
           collectionAsset: item.collectionAsset?.toBase58() || "",
           previewCid: item.previewCid,
-          // Metadata would need to come from Supabase or collection metadata
+          contentCid: item.contentCid,
+          metadataCid: item.metadataCid,
+          contentType: item.contentType,
+          createdAt: item.createdAt,
+          metadata,
         };
       });
 
-      // NOTE: metadataCid removed from Bundle - metadata stored in Metaplex collection
+      // Fetch bundle metadata from IPFS using metadataCid
       const bundlePromises = globalBundles.map(async (bundle) => {
+        let metadata: BundleMetadata | undefined;
+        if (bundle.metadataCid) {
+          try {
+            const res = await fetch(getIpfsUrl(bundle.metadataCid));
+            if (res.ok) {
+              metadata = await res.json();
+            }
+          } catch {
+            // Keep metadata undefined
+          }
+        }
         return {
           bundleId: bundle.bundleId,
           creator: bundle.creator.toBase58(),
@@ -134,7 +165,8 @@ function SearchContent() {
           collectionAsset: bundle.collectionAsset?.toBase58() || "",
           itemCount: bundle.itemCount,
           createdAt: bundle.createdAt,
-          // Metadata would need to come from Supabase or collection metadata
+          metadataCid: bundle.metadataCid,
+          metadata,
         };
       });
 
