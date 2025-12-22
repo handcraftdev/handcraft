@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { SidebarPanel } from "@/components/sidebar";
 import { useContentRegistry, getBundleTypeLabel, ContentEntry } from "@/hooks/useContentRegistry";
 import { CreateBundleModal, ManageBundleModal } from "@/components/bundle";
@@ -10,20 +11,52 @@ import { ManageContentModal } from "@/components/content";
 import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
 import { UserProfileSettings } from "@/components/profile";
 import { DraftsList } from "@/components/studio/DraftsList";
-import { getIpfsUrl, VisibilityLevel } from "@handcraft/sdk";
+import { getIpfsUrl, VisibilityLevel, getContentTypeLabel, ContentType } from "@handcraft/sdk";
 
 type StudioTab = "overview" | "content" | "bundles" | "membership";
 
+const VALID_TABS: StudioTab[] = ["overview", "content", "bundles", "membership"];
+
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
-// Component to display a published content item with metadata fetching
+// Metadata fetched from IPFS
+interface ContentMetadataJson {
+  name?: string;
+  description?: string;
+  image?: string;
+  properties?: {
+    title?: string;
+    contentCid?: string;
+    contentType?: number;
+    contentDomain?: string;
+    tags?: string[];
+  };
+}
+
+// Component to display a published content item with metadata from Metaplex collection
 function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: () => void }) {
-  // NOTE: metadataCid and contentType removed from ContentEntry
-  // Metadata should come from Supabase or be fetched via collection asset
-  // For now, show basic info without metadata
-  const displayTitle = item.previewCid ? `Content ${item.previewCid.slice(0, 8)}...` : "Untitled";
-  const thumbnailUrl: string | null = null;
-  const contentType = "Content";
+  const [metadata, setMetadata] = useState<ContentMetadataJson | null>(null);
+
+  // Fetch metadata from IPFS when metadataCid is available
+  useEffect(() => {
+    if (!item.metadataCid) return;
+
+    fetch(`https://ipfs.filebase.io/ipfs/${item.metadataCid}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setMetadata(data))
+      .catch(() => setMetadata(null));
+  }, [item.metadataCid]);
+
+  // Use title from metadata, fallback to contentCid
+  const displayTitle = metadata?.properties?.title
+    || metadata?.name
+    || (item.contentCid ? `Content ${item.contentCid.slice(0, 12)}...` : "Untitled");
+
+  // Get thumbnail from metadata image or use preview CID
+  const thumbnailUrl = metadata?.image
+    || (item.previewCid ? `https://ipfs.filebase.io/ipfs/${item.previewCid}` : null);
+
+  const contentType = item.contentType !== undefined ? getContentTypeLabel(item.contentType as ContentType) : "Content";
 
   return (
     <div
@@ -85,14 +118,18 @@ function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: 
   );
 }
 
-export default function Dashboard() {
+function StudioContent() {
   const { publicKey } = useWallet();
+  const searchParams = useSearchParams();
   const { content, myBundlesQuery, userProfile, isLoadingUserProfile } = useContentRegistry();
   const [showCreateBundleModal, setShowCreateBundleModal] = useState(false);
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [selectedContent, setSelectedContent] = useState<ContentEntry | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<StudioTab>("overview");
+
+  // Get active tab from URL params (default to overview)
+  const tabParam = searchParams.get("tab");
+  const activeTab: StudioTab = VALID_TABS.includes(tabParam as StudioTab) ? (tabParam as StudioTab) : "overview";
 
   const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
 
@@ -181,9 +218,9 @@ export default function Dashboard() {
             { id: "bundles", label: "Bundles" },
             { id: "membership", label: "Membership" },
           ].map((tab) => (
-            <button
+            <Link
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as StudioTab)}
+              href={tab.id === "overview" ? "/studio" : `/studio?tab=${tab.id}`}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab.id
                   ? "bg-white/10 text-white"
@@ -191,7 +228,7 @@ export default function Dashboard() {
               }`}
             >
               {tab.label}
-            </button>
+            </Link>
           ))}
         </div>
 
@@ -270,7 +307,7 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   {myContent.map((item) => (
                     <PublishedContentItem
-                      key={item.contentCid}
+                      key={item.pubkey?.toBase58() || item.contentCid || item.previewCid}
                       item={item}
                       onClick={() => setSelectedContent(item)}
                     />
@@ -382,5 +419,29 @@ export default function Dashboard() {
         />
       )}
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function StudioLoading() {
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-5xl mx-auto px-6 py-20">
+        <div className="h-10 w-32 bg-white/5 rounded-lg animate-pulse mb-4" />
+        <div className="h-4 w-64 bg-white/5 rounded animate-pulse mb-8" />
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="h-24 bg-white/[0.02] border border-white/5 rounded-2xl animate-pulse" />
+          <div className="h-24 bg-white/[0.02] border border-white/5 rounded-2xl animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<StudioLoading />}>
+      <StudioContent />
+    </Suspense>
   );
 }
