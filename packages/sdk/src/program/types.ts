@@ -35,10 +35,16 @@ export interface CollectionMetadata {
   contentCid?: string;
   metadataCid?: string;
   contentType?: number;
-  content_type?: number;       // Alternative naming
+  content_type?: number;       // Alternative naming (snake_case)
   createdAt?: number;
-  created_at?: number;         // Alternative naming
+  created_at?: number;         // Alternative naming (snake_case)
   properties?: {
+    // camelCase (used by UploadStudio)
+    contentCid?: string;
+    metadataCid?: string;
+    contentType?: number;
+    createdAt?: number;
+    // snake_case (legacy)
     content_cid?: string;
     metadata_cid?: string;
     content_type?: number;

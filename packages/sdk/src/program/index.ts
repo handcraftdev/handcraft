@@ -163,12 +163,12 @@ export function extractMetadataCidFromUri(uri: string): string | null {
 
 /**
  * Parse Metaplex Core collection asset data to extract the URI
- * Collection structure: key (1) + update_authority (33) + name (4+len) + uri (4+len) + ...
+ * Collection structure: key (1) + update_authority (32) + name (4+len) + uri (4+len) + ...
  */
 export function parseCollectionUri(data: Buffer): string | null {
   try {
-    // Skip discriminator/key (1 byte) and update_authority (33 bytes = 1 type + 32 pubkey)
-    let offset = 1 + 33;
+    // Skip key (1 byte) and update_authority (32 bytes raw pubkey)
+    let offset = 1 + 32;
 
     // Read name length (4 bytes)
     const nameLen = data.readUInt32LE(offset);
@@ -229,16 +229,19 @@ export async function enrichContentWithMetadata(
       return { ...content, metadataCid: metadataCid || undefined };
     }
 
-    // Extract fields from metadata
+    // Extract fields from metadata (check both camelCase and snake_case)
     const contentCid = metadata.contentCid ||
+                       metadata.properties?.contentCid ||
                        metadata.properties?.content_cid ||
                        undefined;
     const contentType = metadata.contentType ??
                         metadata.content_type ??
+                        metadata.properties?.contentType ??
                         metadata.properties?.content_type ??
                         undefined;
     const createdAt = metadata.createdAt ??
                       metadata.created_at ??
+                      metadata.properties?.createdAt ??
                       metadata.properties?.created_at ??
                       undefined;
 
@@ -252,6 +255,42 @@ export async function enrichContentWithMetadata(
   } catch {
     return content;
   }
+}
+
+/**
+ * Batch enrich multiple ContentEntries with metadata from Metaplex collections
+ * Uses Promise.allSettled for resilience - failed enrichments return original content
+ * @param connection Solana connection
+ * @param entries Array of ContentEntry objects to enrich
+ * @param concurrency Max concurrent metadata fetches (default 5)
+ */
+export async function enrichContentEntriesWithMetadata(
+  connection: Connection,
+  entries: ContentEntry[],
+  concurrency = 5
+): Promise<ContentEntry[]> {
+  if (entries.length === 0) return [];
+
+  // Process in batches to limit concurrent requests
+  const results: ContentEntry[] = [];
+  for (let i = 0; i < entries.length; i += concurrency) {
+    const batch = entries.slice(i, i + concurrency);
+    const enrichedBatch = await Promise.allSettled(
+      batch.map(entry => enrichContentWithMetadata(connection, entry))
+    );
+
+    for (let j = 0; j < enrichedBatch.length; j++) {
+      const result = enrichedBatch[j];
+      if (result.status === "fulfilled") {
+        results.push(result.value);
+      } else {
+        // On failure, keep original entry
+        results.push(batch[j]);
+      }
+    }
+  }
+
+  return results;
 }
 
 // ============================================
@@ -5391,6 +5430,31 @@ export function createContentRegistryClient(connection: Connection) {
         console.error("[fetchContentByCreator] Error:", err);
         return [];
       }
+    },
+
+    /**
+     * Enrich content entries with metadata from their Metaplex collections
+     * Fetches contentCid, metadataCid, contentType, createdAt from collection metadata URI
+     */
+    enrichContentWithMetadata(entries: ContentEntry[]): Promise<ContentEntry[]> {
+      return enrichContentEntriesWithMetadata(connection, entries);
+    },
+
+    /**
+     * Fetch global content AND enrich with Metaplex collection metadata
+     * This is slower but includes contentCid, metadataCid, contentType, createdAt
+     */
+    async fetchGlobalContentWithMetadata(): Promise<ContentEntry[]> {
+      const entries = await this.fetchGlobalContent();
+      return enrichContentEntriesWithMetadata(connection, entries);
+    },
+
+    /**
+     * Fetch content by creator AND enrich with Metaplex collection metadata
+     */
+    async fetchContentByCreatorWithMetadata(creator: PublicKey): Promise<ContentEntry[]> {
+      const entries = await this.fetchContentByCreator(creator);
+      return enrichContentEntriesWithMetadata(connection, entries);
     },
 
     async fetchMintableContent(): Promise<Array<{ content: ContentEntry; mintConfig: MintConfig }>> {
