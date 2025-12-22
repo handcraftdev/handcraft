@@ -26,8 +26,11 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
   const [publishMode, setPublishMode] = useState<'now' | 'later' | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState(5);
 
-  // Auto-redirect to studio after successful publish
+  // Auto-redirect to studio after successful publish (not in edit mode)
   useEffect(() => {
+    // In edit mode, content is already published - don't auto-redirect
+    if (isEditMode) return;
+
     if (draft?.status === 'published') {
       const timer = setInterval(() => {
         setRedirectCountdown((prev) => {
@@ -41,7 +44,7 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [draft?.status, router]);
+  }, [draft?.status, router, isEditMode]);
   const [scheduleDateTime, setScheduleDateTime] = useState(() => {
     // Initialize from draft.scheduled_at if available, otherwise use current time
     if (draft?.scheduled_at) {
