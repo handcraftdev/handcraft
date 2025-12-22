@@ -114,13 +114,35 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
+      // Get the wallet adapter - try standard wallet first, then Phantom
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const walletAdapter = (window as any).solana || (window as any).phantom?.solana;
+
+      if (!walletAdapter) {
+        throw new Error('No Solana wallet found. Please install Phantom or another Solana wallet.');
+      }
+
+      // Ensure the wallet is connected
+      if (!walletAdapter.isConnected && walletAdapter.connect) {
+        await walletAdapter.connect();
+      }
       const { data, error } = await supabase.auth.signInWithWeb3({
         chain: 'solana',
         statement: 'Sign in to Handcraft',
+        wallet: walletAdapter,
       });
 
       if (error) throw error;
-      // Auth state will be updated by onAuthStateChange listener
+
+      // Manually update auth state if session is returned
+      if (data?.session) {
+        setAuthState({
+          user: data.session.user,
+          session: data.session,
+          loading: false,
+          error: null,
+        });
+      }
     } catch (err) {
       console.error('[SupabaseAuth] Sign in failed:', err);
       setAuthState(prev => ({
@@ -165,9 +187,10 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     let isMounted = true;
 
     // Helper to update state only if session actually changed
-    const updateSession = (session: Session | null) => {
+    const updateSession = (session: Session | null, forceUpdate = false) => {
       const sessionId = session?.access_token || null;
-      if (currentSessionRef.current === sessionId) return; // Skip if same session
+      // Skip if same session, unless forcing update (for initial load)
+      if (currentSessionRef.current === sessionId && !forceUpdate) return;
       currentSessionRef.current = sessionId;
 
       setAuthState({
@@ -181,7 +204,12 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isMounted) return;
-      updateSession(session);
+      updateSession(session, true); // Force update on initial load
+    }).catch(err => {
+      console.error('[SupabaseAuth] getSession error:', err);
+      if (isMounted) {
+        setAuthState(prev => ({ ...prev, loading: false, error: 'Failed to get session' }));
+      }
     });
 
     // Listen for auth changes
@@ -202,6 +230,27 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
       subscription.unsubscribe();
     };
   }, [supabase]);
+
+  // Auto sign-in when wallet connects and no session exists
+  const hasAttemptedAutoSignIn = useRef(false);
+  useEffect(() => {
+    // Only attempt auto sign-in once per wallet connection
+    if (
+      wallet.connected &&
+      wallet.publicKey &&
+      !authState.session &&
+      !authState.loading &&
+      !hasAttemptedAutoSignIn.current
+    ) {
+      hasAttemptedAutoSignIn.current = true;
+      signIn();
+    }
+
+    // Reset the flag when wallet disconnects
+    if (!wallet.connected) {
+      hasAttemptedAutoSignIn.current = false;
+    }
+  }, [wallet.connected, wallet.publicKey, authState.session, authState.loading, signIn]);
 
   const value: SupabaseAuthContextValue = {
     ...authState,

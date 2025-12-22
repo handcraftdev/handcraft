@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ContentDraft } from '@/lib/supabase';
 
 interface PublishStepProps {
@@ -20,8 +21,27 @@ function formatDateTimeLocal(date: Date): string {
 }
 
 export function PublishStep({ draft, onPublish, isPublishing: externalPublishing, error, isEditMode = false, onSaveEdit }: PublishStepProps) {
+  const router = useRouter();
   const [localPublishing, setLocalPublishing] = useState(false);
   const [publishMode, setPublishMode] = useState<'now' | 'later' | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState(5);
+
+  // Auto-redirect to studio after successful publish
+  useEffect(() => {
+    if (draft?.status === 'published') {
+      const timer = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            router.push('/studio');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [draft?.status, router]);
   const [scheduleDateTime, setScheduleDateTime] = useState(() => {
     // Initialize from draft.scheduled_at if available, otherwise use current time
     if (draft?.scheduled_at) {
@@ -140,7 +160,16 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
           </svg>
         </div>
         <h2 className="text-2xl font-medium text-white/90 mb-2">Content Published!</h2>
-        <p className="text-white/40">Your content is now live on the blockchain</p>
+        <p className="text-white/40 mb-6">Your content is now live on the blockchain</p>
+        <button
+          onClick={() => router.push('/studio')}
+          className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white/90 rounded-xl transition-colors"
+        >
+          Go to Studio {redirectCountdown > 0 && `(${redirectCountdown}s)`}
+        </button>
+        <p className="text-white/30 text-sm mt-3">
+          Redirecting automatically in {redirectCountdown} seconds...
+        </p>
       </div>
     );
   }
