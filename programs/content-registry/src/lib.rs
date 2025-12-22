@@ -263,7 +263,7 @@ use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
 
-declare_id!("5r5Le8NEtokFbkzcYmdKuq1mjLnQeTaFm3oavUMbyAG7");
+declare_id!("A73jzT8qnVsV86o2R9NLUmjFJsChAx81EY5wzHwaGUyh");
 
 #[program]
 pub mod content_registry {
