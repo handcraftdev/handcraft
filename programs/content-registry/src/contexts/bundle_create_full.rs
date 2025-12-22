@@ -37,7 +37,7 @@ pub struct CreateBundleWithMintAndRent<'info> {
     )]
     pub bundle: Account<'info, Bundle>,
 
-    /// Mint config PDA for the bundle
+    /// Mint config PDA for the bundle - also serves as collection authority
     #[account(
         init,
         payer = creator,
@@ -57,17 +57,8 @@ pub struct CreateBundleWithMintAndRent<'info> {
     )]
     pub rent_config: Account<'info, BundleRentConfig>,
 
-    /// Bundle collection PDA (tracks the Metaplex collection)
-    #[account(
-        init,
-        payer = creator,
-        space = 8 + BundleCollection::INIT_SPACE,
-        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
-        bump
-    )]
-    pub bundle_collection: Account<'info, BundleCollection>,
-
     /// CHECK: The Metaplex Core Collection asset to create
+    /// Address stored in bundle.collection_asset
     #[account(mut)]
     pub collection_asset: Signer<'info>,
 
@@ -114,6 +105,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
     // Collection naming
     collection_name: Option<String>,
 ) -> Result<()> {
+    require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
     // Validate mint price
     require!(
         BundleMintConfig::validate_price(mint_price),
@@ -152,7 +144,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
     let bundle = &mut ctx.accounts.bundle;
     bundle.creator = ctx.accounts.creator.key();
     bundle.bundle_id = bundle_id.clone();
-    bundle.metadata_cid = metadata_cid.clone();
+    bundle.collection_asset = ctx.accounts.collection_asset.key(); // Store directly
     bundle.bundle_type = bundle_type;
     bundle.item_count = 0;
     bundle.is_active = true; // Published by default
@@ -187,14 +179,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
     rent_config.created_at = clock.unix_timestamp;
     rent_config.updated_at = clock.unix_timestamp;
 
-    // ========== 4. Initialize Bundle Collection ==========
-    let bundle_collection = &mut ctx.accounts.bundle_collection;
-    bundle_collection.bundle = bundle_key;
-    bundle_collection.collection_asset = ctx.accounts.collection_asset.key();
-    bundle_collection.creator = ctx.accounts.creator.key();
-    bundle_collection.created_at = clock.unix_timestamp;
-
-    // ========== 5. Create Metaplex Core Collection ==========
+    // ========== 4. Create Metaplex Core Collection ==========
     // Derive BundleRewardPool PDA for holder royalties
     let (holder_reward_pool, _) = Pubkey::find_program_address(
         &[BUNDLE_REWARD_POOL_SEED, bundle_key.as_ref()],
@@ -208,6 +193,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
         Some(name) => format!("HC: {}: {}", username, name),
         None => format!("HC: {}", username),
     };
+    // Collection metadata URI points to IPFS (on-chain accessible)
     let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", metadata_cid);
 
     // Calculate royalty shares
@@ -240,11 +226,11 @@ pub fn handle_create_bundle_with_mint_and_rent(
         authority: None,
     };
 
-    // Create collection with bundle_collection as update authority
+    // Create collection with mint_config PDA as update authority
     CreateCollectionV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .collection(&ctx.accounts.collection_asset.to_account_info())
         .payer(&ctx.accounts.creator.to_account_info())
-        .update_authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+        .update_authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .system_program(&ctx.accounts.system_program.to_account_info())
         .name(collection_name_str)
         .uri(collection_uri)

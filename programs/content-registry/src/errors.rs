@@ -96,6 +96,10 @@ pub enum ContentRegistryError {
     InvalidRentEntry,
     #[msg("Rent config already exists for this content")]
     RentConfigExists,
+    #[msg("Rental not found - NFT does not have rental attributes")]
+    RentalNotFound,
+    #[msg("Invalid collection asset")]
+    InvalidCollection,
 
     // Bundle errors
     #[msg("Bundle is not active")]

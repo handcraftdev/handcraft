@@ -60,12 +60,11 @@ pub struct ClaimRewardsVerified<'info> {
     )]
     pub wallet_content_state: Account<'info, WalletContentState>,
 
-    /// The content collection to verify NFTs against
+    /// The content entry to get collection_asset for NFT verification
     #[account(
-        seeds = [CONTENT_COLLECTION_SEED, content_reward_pool.content.as_ref()],
-        bump
+        constraint = content.key() == content_reward_pool.content @ ContentRegistryError::ContentMismatch
     )]
-    pub content_collection: Account<'info, ContentCollection>,
+    pub content: Account<'info, ContentEntry>,
 
     /// The holder claiming the reward
     #[account(mut)]

@@ -15,6 +15,7 @@ use crate::{MPL_CORE_ID, DEFAULT_MAX_SUPPLY};
 
 /// Configure NFT minting for a bundle (creator only)
 /// Creates the mint config and Metaplex Core collection
+/// Stores collection_asset directly in Bundle
 /// Can be done before publishing (is_active=false), but not after first mint (is_locked=true)
 #[derive(Accounts)]
 pub struct ConfigureBundleMint<'info> {
@@ -22,6 +23,7 @@ pub struct ConfigureBundleMint<'info> {
     pub creator: Signer<'info>,
 
     /// The bundle to configure minting for
+    /// collection_asset will be stored directly here
     #[account(
         mut,
         has_one = creator,
@@ -29,7 +31,7 @@ pub struct ConfigureBundleMint<'info> {
     )]
     pub bundle: Account<'info, Bundle>,
 
-    /// Mint config PDA for the bundle
+    /// Mint config PDA for the bundle - also serves as collection authority
     #[account(
         init,
         payer = creator,
@@ -39,17 +41,8 @@ pub struct ConfigureBundleMint<'info> {
     )]
     pub mint_config: Account<'info, BundleMintConfig>,
 
-    /// Bundle collection PDA (tracks the Metaplex collection)
-    #[account(
-        init,
-        payer = creator,
-        space = 8 + BundleCollection::INIT_SPACE,
-        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
-        bump
-    )]
-    pub bundle_collection: Account<'info, BundleCollection>,
-
     /// CHECK: The Metaplex Core Collection asset to create
+    /// Address stored in bundle.collection_asset
     #[account(mut)]
     pub collection_asset: Signer<'info>,
 
@@ -73,10 +66,13 @@ pub struct ConfigureBundleMint<'info> {
 
 pub fn handle_configure_bundle_mint(
     ctx: Context<ConfigureBundleMint>,
+    metadata_cid: String,
     price: u64,
     max_supply: Option<u64>,
     creator_royalty_bps: u16,
 ) -> Result<()> {
+    require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
+
     // Validate price
     require!(
         BundleMintConfig::validate_price(price),
@@ -109,12 +105,8 @@ pub fn handle_configure_bundle_mint(
     mint_config.created_at = clock.unix_timestamp;
     mint_config.updated_at = clock.unix_timestamp;
 
-    // Initialize bundle collection
-    let bundle_collection = &mut ctx.accounts.bundle_collection;
-    bundle_collection.bundle = bundle_key;
-    bundle_collection.collection_asset = ctx.accounts.collection_asset.key();
-    bundle_collection.creator = ctx.accounts.creator.key();
-    bundle_collection.created_at = clock.unix_timestamp;
+    // Store collection_asset directly in bundle
+    ctx.accounts.bundle.collection_asset = ctx.accounts.collection_asset.key();
 
     // Derive BundleRewardPool PDA for holder royalties
     let (holder_reward_pool, _) = Pubkey::find_program_address(
@@ -123,8 +115,9 @@ pub fn handle_configure_bundle_mint(
     );
 
     // Create the Metaplex Core Collection with Royalties plugin
+    // Collection metadata URI points to IPFS (on-chain accessible)
     let collection_name = "Handcraft Bundle Collection".to_string();
-    let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", ctx.accounts.bundle.metadata_cid);
+    let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", metadata_cid);
 
     // Calculate royalty shares (same logic as content)
     let total_royalty_bps = EcosystemConfig::total_secondary_royalty_bps(creator_royalty_bps);
@@ -156,11 +149,11 @@ pub fn handle_configure_bundle_mint(
         authority: None,
     };
 
-    // Create collection with bundle_collection as update authority
+    // Create collection with mint_config PDA as update authority
     CreateCollectionV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .collection(&ctx.accounts.collection_asset.to_account_info())
         .payer(&ctx.accounts.creator.to_account_info())
-        .update_authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+        .update_authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .system_program(&ctx.accounts.system_program.to_account_info())
         .name(collection_name)
         .uri(collection_uri)

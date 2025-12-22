@@ -1,9 +1,9 @@
 pub mod content;
-pub mod cid_registry;
+// NOTE: cid_registry removed - CID uniqueness enforced by ContentEntry PDA seed
 pub mod mint_config;
 pub mod ecosystem_config;
 pub mod reward_pool;
-pub mod collection;
+// NOTE: collection removed - collection_asset stored directly in ContentEntry
 pub mod rent;
 pub mod bundle;
 pub mod rarity;
@@ -12,7 +12,7 @@ pub mod profile;
 pub mod moderation;
 
 pub use content::{ContentEntry, ContentType};
-pub use cid_registry::{CidRegistry, CID_REGISTRY_SEED, hash_cid};
+// NOTE: CidRegistry removed - use hash_cid from crate::utils if needed
 pub use mint_config::{
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     FIXED_CREATOR_ROYALTY_BPS, MIN_PRICE_LAMPORTS, MIN_PRICE_USDC,
@@ -27,23 +27,25 @@ pub use reward_pool::{
     ContentRewardPool, WalletContentState,
     CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED, PRECISION,
 };
-pub use collection::{ContentCollection, CONTENT_COLLECTION_SEED};
+// NOTE: ContentCollection removed - collection_asset stored in ContentEntry
 pub use rent::{
-    RentConfig, RentEntry, RentTier,
-    RENT_CONFIG_SEED, RENT_ENTRY_SEED,
+    RentConfig, RentTier,
+    RENT_CONFIG_SEED,
     RENT_PERIOD_6H, RENT_PERIOD_1D, RENT_PERIOD_7D,
     MIN_RENT_FEE_LAMPORTS,
 };
+// NOTE: RentEntry removed - rental expiry stored in NFT Attributes
 pub use bundle::{
     Bundle, BundleItem, BundleType,
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
     // Bundle mint/rent types
-    BundleMintConfig, BundleRentConfig, BundleCollection,
-    BundleRewardPool, BundleWalletState, BundleRentEntry,
+    BundleMintConfig, BundleRentConfig,
+    BundleRewardPool, BundleWalletState,
     // Bundle mint/rent seeds
-    BUNDLE_MINT_CONFIG_SEED, BUNDLE_RENT_CONFIG_SEED, BUNDLE_COLLECTION_SEED,
-    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED, BUNDLE_RENT_ENTRY_SEED,
+    BUNDLE_MINT_CONFIG_SEED, BUNDLE_RENT_CONFIG_SEED,
+    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED,
 };
+// NOTE: BundleCollection, BundleRentEntry removed - data stored in Bundle and NFT Attributes
 pub use rarity::Rarity;
 // Subscription system types (Phase 1)
 pub use subscription::{

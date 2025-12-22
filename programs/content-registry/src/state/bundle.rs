@@ -10,11 +10,11 @@ pub const BUNDLE_ITEM_SEED: &[u8] = b"bundle_item";
 // Bundle mint/rent related seeds
 pub const BUNDLE_MINT_CONFIG_SEED: &[u8] = b"bundle_mint_config";
 pub const BUNDLE_RENT_CONFIG_SEED: &[u8] = b"bundle_rent_config";
-pub const BUNDLE_COLLECTION_SEED: &[u8] = b"bundle_collection";
+// NOTE: BUNDLE_COLLECTION_SEED removed - collection_asset stored in Bundle
 pub const BUNDLE_REWARD_POOL_SEED: &[u8] = b"bundle_reward_pool";
 // NOTE: BUNDLE_NFT_REWARD_STATE_SEED and BUNDLE_NFT_RARITY_SEED removed
 // Bundle NFT state is now stored in UnifiedNftRewardState
-pub const BUNDLE_RENT_ENTRY_SEED: &[u8] = b"bundle_rent_entry";
+// NOTE: BUNDLE_RENT_ENTRY_SEED removed - rental expiry stored in NFT Attributes
 pub const BUNDLE_WALLET_STATE_SEED: &[u8] = b"bundle_wallet";
 
 // Maximum items per bundle
@@ -39,7 +39,9 @@ pub enum BundleType {
     ProductPack,   // Assets/software sold together
 }
 
-/// Bundle account - stores bundle metadata reference and stats
+/// Bundle account - stores bundle state for on-chain logic
+/// Bundle metadata (CID, name, description) stored in Metaplex Core collection metadata
+/// PDA seeds: ["bundle", bundle_id_hash]
 #[account]
 #[derive(InitSpace)]
 pub struct Bundle {
@@ -50,9 +52,8 @@ pub struct Bundle {
     #[max_len(64)]
     pub bundle_id: String,
 
-    /// IPFS CID pointing to bundle metadata JSON
-    #[max_len(64)]
-    pub metadata_cid: String,
+    /// Metaplex Core collection asset for this bundle's NFTs
+    pub collection_asset: Pubkey,
 
     /// Type of bundle (determines semantics)
     pub bundle_type: BundleType,
@@ -110,7 +111,7 @@ impl Bundle {
         8 + // discriminator
         32 + // creator
         4 + 64 + // bundle_id (string with length prefix)
-        4 + 64 + // metadata_cid (string with length prefix)
+        32 + // collection_asset (Pubkey)
         1 + // bundle_type
         2 + // item_count
         1 + // is_active
@@ -238,21 +239,7 @@ impl BundleRentConfig {
     }
 }
 
-/// Bundle collection (mirrors ContentCollection)
-/// Tracks the Metaplex Core Collection for bundle NFTs
-/// PDA seeds: ["bundle_collection", bundle_pda]
-#[account]
-#[derive(InitSpace)]
-pub struct BundleCollection {
-    /// The bundle PDA this collection belongs to
-    pub bundle: Pubkey,
-    /// The Metaplex Core collection asset address
-    pub collection_asset: Pubkey,
-    /// The creator of the bundle/collection
-    pub creator: Pubkey,
-    /// Timestamp when collection was created
-    pub created_at: i64,
-}
+// NOTE: BundleCollection removed - collection_asset is now stored directly in Bundle
 
 /// Bundle reward pool (mirrors ContentRewardPool)
 /// Per-bundle reward pool with rarity-weighted distribution
@@ -402,40 +389,4 @@ impl BundleWalletState {
 // NOTE: BundleNftRewardState and BundleNftRarity removed
 // Use UnifiedNftRewardState from subscription.rs instead
 
-/// Bundle rent entry (mirrors RentEntry)
-/// Active rental tracking for bundle rentals
-/// PDA seeds: ["bundle_rent_entry", nft_asset]
-#[account]
-#[derive(InitSpace)]
-pub struct BundleRentEntry {
-    /// The renter's wallet
-    pub renter: Pubkey,
-    /// The bundle being rented
-    pub bundle: Pubkey,
-    /// The rental NFT asset (Metaplex Core)
-    pub nft_asset: Pubkey,
-    /// Timestamp when rental started
-    pub rented_at: i64,
-    /// Timestamp when rental expires
-    pub expires_at: i64,
-    /// Whether this rental is still active
-    pub is_active: bool,
-    /// Rent fee paid (for record keeping)
-    pub fee_paid: u64,
-}
-
-impl BundleRentEntry {
-    /// Check if this rental has expired
-    pub fn is_expired(&self, current_timestamp: i64) -> bool {
-        current_timestamp >= self.expires_at
-    }
-
-    /// Get remaining rental time in seconds
-    pub fn remaining_time(&self, current_timestamp: i64) -> i64 {
-        if current_timestamp >= self.expires_at {
-            0
-        } else {
-            self.expires_at - current_timestamp
-        }
-    }
-}
+// NOTE: BundleRentEntry removed - rental expiry is now stored in NFT Attributes plugin

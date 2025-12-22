@@ -4,6 +4,8 @@ use crate::state::profile::{UserProfile, USER_PROFILE_SEED};
 use crate::errors::ContentRegistryError;
 use crate::MPL_CORE_ID;
 
+/// Register content without mint config (basic registration)
+/// CID uniqueness is enforced by PDA seed ["content", cid_hash]
 #[derive(Accounts)]
 #[instruction(cid_hash: [u8; 32])]
 pub struct RegisterContent<'info> {
@@ -16,21 +18,15 @@ pub struct RegisterContent<'info> {
     )]
     pub content: Account<'info, ContentEntry>,
 
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + CidRegistry::INIT_SPACE,
-        seeds = [CID_REGISTRY_SEED, cid_hash.as_ref()],
-        bump
-    )]
-    pub cid_registry: Account<'info, CidRegistry>,
-
     #[account(mut)]
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
+/// Register content with mint config and Metaplex Core collection
+/// CID uniqueness enforced by PDA seed ["content", cid_hash]
+/// collection_asset stored directly in ContentEntry (no separate ContentCollection PDA)
 #[derive(Accounts)]
 #[instruction(cid_hash: [u8; 32])]
 pub struct RegisterContentWithMint<'info> {
@@ -46,32 +42,14 @@ pub struct RegisterContentWithMint<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + CidRegistry::INIT_SPACE,
-        seeds = [CID_REGISTRY_SEED, cid_hash.as_ref()],
-        bump
-    )]
-    pub cid_registry: Box<Account<'info, CidRegistry>>,
-
-    #[account(
-        init,
-        payer = authority,
         space = 8 + MintConfig::INIT_SPACE,
         seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
         bump
     )]
     pub mint_config: Box<Account<'info, MintConfig>>,
 
-    /// ContentCollection PDA to track the collection for this content
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + ContentCollection::INIT_SPACE,
-        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
-        bump
-    )]
-    pub content_collection: Box<Account<'info, ContentCollection>>,
-
     /// The Metaplex Core Collection asset (must be a new keypair)
+    /// Address stored in content.collection_asset
     #[account(mut)]
     pub collection_asset: Signer<'info>,
 
@@ -115,6 +93,7 @@ pub struct UpdateContent<'info> {
     pub creator: Signer<'info>,
 }
 
+/// Delete content (basic, no mint config)
 #[derive(Accounts)]
 pub struct DeleteContent<'info> {
     #[account(
@@ -124,16 +103,11 @@ pub struct DeleteContent<'info> {
     )]
     pub content: Account<'info, ContentEntry>,
 
-    #[account(
-        mut,
-        close = creator
-    )]
-    pub cid_registry: Account<'info, CidRegistry>,
-
     #[account(mut)]
     pub creator: Signer<'info>,
 }
 
+/// Delete content with mint config
 #[derive(Accounts)]
 pub struct DeleteContentWithMint<'info> {
     #[account(
@@ -142,12 +116,6 @@ pub struct DeleteContentWithMint<'info> {
         close = creator
     )]
     pub content: Account<'info, ContentEntry>,
-
-    #[account(
-        mut,
-        close = creator
-    )]
-    pub cid_registry: Account<'info, CidRegistry>,
 
     #[account(
         mut,

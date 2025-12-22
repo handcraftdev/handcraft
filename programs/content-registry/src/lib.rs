@@ -245,20 +245,20 @@ pub mod state;
 pub mod errors;
 pub mod contexts;
 pub mod events;
+pub mod utils;
 
 use state::{
-    ContentType, hash_cid,
-    MintConfig, PaymentCurrency,
+    MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     EcosystemConfig,
     ContentRewardPool, WalletContentState, PRECISION,
-    ContentCollection, CONTENT_COLLECTION_SEED,
-    RentConfig, RentEntry, RentTier, RENT_ENTRY_SEED,
-    BundleType,
+    RentConfig, RentTier,
+    BundleType, BUNDLE_MINT_CONFIG_SEED,
     Rarity,
     PatronTier,
     UnifiedNftRewardState, UNIFIED_NFT_REWARD_STATE_SEED,
     ReportCategory, VoteChoice,
 };
+use utils::hash_cid;
 use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
@@ -321,19 +321,17 @@ pub mod content_registry {
     // ============================================
 
     /// Register new content with CID uniqueness enforcement
+    /// CID uniqueness is enforced via PDA seed ["content", hash(cid)]
     pub fn register_content(
         ctx: Context<RegisterContent>,
         cid_hash: [u8; 32],
         content_cid: String,
-        metadata_cid: String,
-        content_type: ContentType,
         is_encrypted: bool,
         preview_cid: String,
         encryption_meta_cid: String,
         visibility_level: u8,
     ) -> Result<()> {
         require!(content_cid.len() <= 64, ContentRegistryError::CidTooLong);
-        require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(preview_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(encryption_meta_cid.len() <= 64, ContentRegistryError::CidTooLong);
         require!(visibility_level <= 3, ContentRegistryError::InvalidVisibilityLevel);
@@ -343,32 +341,27 @@ pub mod content_registry {
         require!(computed_hash == cid_hash, ContentRegistryError::CidHashMismatch);
 
         let content = &mut ctx.accounts.content;
-        let cid_registry = &mut ctx.accounts.cid_registry;
-        let timestamp = Clock::get()?.unix_timestamp;
 
         // Initialize content entry
+        // CID uniqueness enforced by PDA - if same CID is registered, init fails
         content.creator = ctx.accounts.authority.key();
-        content.content_cid = content_cid;
-        content.metadata_cid = metadata_cid;
-        content.content_type = content_type;
+        content.collection_asset = Pubkey::default(); // Set when mint is configured
         content.tips_received = 0;
-        content.created_at = timestamp;
         content.is_locked = false;
         content.minted_count = 0;
+        content.pending_count = 0;
         content.is_encrypted = is_encrypted;
         content.preview_cid = preview_cid;
         content.encryption_meta_cid = encryption_meta_cid;
         content.visibility_level = visibility_level;
 
-        // Initialize CID registry (ensures uniqueness)
-        cid_registry.owner = ctx.accounts.authority.key();
-        cid_registry.content_pda = content.key();
-        cid_registry.registered_at = timestamp;
-
         Ok(())
     }
 
     /// Register new content with optional NFT mint configuration
+    /// CID uniqueness is enforced via PDA seed ["content", hash(cid)]
+    /// collection_asset is stored directly in ContentEntry
+    /// metadata_cid: IPFS CID for collection metadata JSON (contains name, description, contentCid, contentType, etc.)
     /// collection_name: Optional collection name - if provided, collection is named "HC: <Username>: <CollectionName>"
     ///                  If not provided, collection is named "HC: <Username>"
     pub fn register_content_with_mint(
@@ -376,7 +369,6 @@ pub mod content_registry {
         cid_hash: [u8; 32],
         content_cid: String,
         metadata_cid: String,
-        content_type: ContentType,
         price: u64,
         max_supply: Option<u64>,
         creator_royalty_bps: u16,
@@ -411,28 +403,21 @@ pub mod content_registry {
         }
 
         let content = &mut ctx.accounts.content;
-        let cid_registry = &mut ctx.accounts.cid_registry;
         let mint_config = &mut ctx.accounts.mint_config;
         let timestamp = Clock::get()?.unix_timestamp;
 
         // Initialize content entry
+        // CID uniqueness enforced by PDA - if same CID is registered, init fails
         content.creator = ctx.accounts.authority.key();
-        content.content_cid = content_cid;
-        content.metadata_cid = metadata_cid;
-        content.content_type = content_type;
+        content.collection_asset = ctx.accounts.collection_asset.key(); // Store directly
         content.tips_received = 0;
-        content.created_at = timestamp;
         content.is_locked = false;
         content.minted_count = 0;
+        content.pending_count = 0;
         content.is_encrypted = is_encrypted;
         content.preview_cid = preview_cid;
         content.encryption_meta_cid = encryption_meta_cid;
         content.visibility_level = visibility_level;
-
-        // Initialize CID registry (ensures uniqueness)
-        cid_registry.owner = ctx.accounts.authority.key();
-        cid_registry.content_pda = content.key();
-        cid_registry.registered_at = timestamp;
 
         // Initialize mint config (SOL only)
         mint_config.content = content.key();
@@ -446,13 +431,6 @@ pub mod content_registry {
         mint_config.created_at = timestamp;
         mint_config.updated_at = timestamp;
 
-        // Initialize content collection tracker
-        let content_collection = &mut ctx.accounts.content_collection;
-        content_collection.content = content.key();
-        content_collection.collection_asset = ctx.accounts.collection_asset.key();
-        content_collection.creator = ctx.accounts.authority.key();
-        content_collection.created_at = timestamp;
-
         // Create Metaplex Core Collection for this content with Royalties plugin
         // NFT ownership is verified at claim time instead of using lifecycle hooks
         // Royalties are enforced on-chain via Metaplex Core plugin
@@ -462,7 +440,8 @@ pub mod content_registry {
             Some(name) => format!("HC: {}: {}", username, name),
             None => format!("HC: {}", username),
         };
-        let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+        // Collection metadata URI points to IPFS (on-chain accessible)
+        let collection_uri = format!("https://ipfs.filebase.io/ipfs/{}", metadata_cid);
 
         // Derive ContentRewardPool PDA for holder royalties
         let (holder_reward_pool, _) = Pubkey::find_program_address(
@@ -470,12 +449,12 @@ pub mod content_registry {
             ctx.program_id,
         );
 
-        // Use content_collection PDA as update_authority so program can sign mints
+        // Use mint_config PDA as update_authority so program can sign mints
         create_collection(
             &ctx.accounts.mpl_core_program.to_account_info(),
             &ctx.accounts.collection_asset.to_account_info(),
             &ctx.accounts.authority.to_account_info(),
-            &ctx.accounts.content_collection.to_account_info(),
+            &ctx.accounts.mint_config.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
             collection_name_str,
             collection_uri,
@@ -489,14 +468,16 @@ pub mod content_registry {
         Ok(())
     }
 
-    /// Update content metadata (creator only, not locked)
-    pub fn update_content(ctx: Context<UpdateContent>, metadata_cid: String) -> Result<()> {
-        require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
-
+    /// Update content settings (creator only, not locked)
+    /// Metadata is stored in IPFS/Metaplex, not on-chain
+    pub fn update_content(ctx: Context<UpdateContent>, preview_cid: Option<String>) -> Result<()> {
         let content = &mut ctx.accounts.content;
         require!(!content.is_locked, ContentRegistryError::ContentLocked);
 
-        content.metadata_cid = metadata_cid;
+        if let Some(cid) = preview_cid {
+            require!(cid.len() <= 64, ContentRegistryError::CidTooLong);
+            content.preview_cid = cid;
+        }
 
         Ok(())
     }
@@ -725,7 +706,7 @@ pub mod content_registry {
     ) -> Result<()> {
         let content_reward_pool = &mut ctx.accounts.content_reward_pool;
         let wallet_state = &mut ctx.accounts.wallet_content_state;
-        let content_collection = &ctx.accounts.content_collection;
+        let content = &ctx.accounts.content;
         let timestamp = Clock::get()?.unix_timestamp;
 
         // Auto-sync secondary sale royalties before calculating rewards
@@ -745,8 +726,8 @@ pub mod content_registry {
             });
         }
 
-        // Get the collection asset address from ContentCollection
-        let collection_asset = content_collection.collection_asset;
+        // Get the collection asset address from ContentEntry
+        let collection_asset = content.collection_asset;
         let content_key = content_reward_pool.content;
         let current_rps = content_reward_pool.reward_per_share;
 
@@ -1208,10 +1189,12 @@ pub mod content_registry {
     }
 
     /// Rent content with SOL payment
-    /// Creates a frozen (non-transferable) NFT that expires after the rental period
+    /// Creates a frozen (non-transferable) NFT with expiry stored in Attributes plugin
     /// User selects one of 3 tiers: 6 hours, 1 day, or 7 days
     /// Payment is distributed according to primary sale percentages
     pub fn rent_content_sol(ctx: Context<RentContentSol>, tier: RentTier) -> Result<()> {
+        use mpl_core::types::{Attributes, Attribute};
+
         let ecosystem = &ctx.accounts.ecosystem_config;
         let rent_config = &ctx.accounts.rent_config;
         let content = &ctx.accounts.content;
@@ -1221,18 +1204,7 @@ pub mod content_registry {
         // Check ecosystem not paused
         require!(!ecosystem.is_paused, ContentRegistryError::EcosystemPaused);
 
-        // Verify collection_asset matches what's stored in content_collection
-        {
-            let content_collection_info = ctx.accounts.content_collection.to_account_info();
-            let collection_data = content_collection_info.try_borrow_data()?;
-            let content_collection: ContentCollection = ContentCollection::try_deserialize(
-                &mut &collection_data[..]
-            )?;
-            require!(
-                content_collection.collection_asset == ctx.accounts.collection_asset.key(),
-                ContentRegistryError::ContentMismatch
-            );
-        }
+        // collection_asset is verified via constraint in struct (content.collection_asset)
 
         // Verify creator matches content
         require!(
@@ -1342,84 +1314,31 @@ pub mod content_registry {
             }
         }
 
-        // Create RentEntry PDA to track this rental
+        // Create frozen rental NFT (non-transferable) with expiry in Attributes
         let nft_asset_key = ctx.accounts.nft_asset.key();
-        let (rent_entry_pda, rent_entry_bump) = Pubkey::find_program_address(
-            &[RENT_ENTRY_SEED, nft_asset_key.as_ref()],
-            ctx.program_id,
-        );
-        require!(
-            ctx.accounts.rent_entry.key() == rent_entry_pda,
-            ContentRegistryError::InvalidRentEntry
-        );
-
-        // Create the RentEntry account
-        let space = 8 + RentEntry::INIT_SPACE;
-        let rent = Rent::get()?;
-        let lamports = rent.minimum_balance(space);
-
-        let seeds: &[&[u8]] = &[RENT_ENTRY_SEED, nft_asset_key.as_ref(), &[rent_entry_bump]];
-        let signer_seeds = &[seeds];
-
-        anchor_lang::system_program::create_account(
-            CpiContext::new_with_signer(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::CreateAccount {
-                    from: ctx.accounts.renter.to_account_info(),
-                    to: ctx.accounts.rent_entry.clone(),
-                },
-                signer_seeds,
-            ),
-            lamports,
-            space as u64,
-            ctx.program_id,
-        )?;
-
-        // Initialize RentEntry data
-        {
-            let mut data = ctx.accounts.rent_entry.try_borrow_mut_data()?;
-            let discriminator = RentEntry::DISCRIMINATOR;
-            data[0..8].copy_from_slice(&discriminator);
-
-            // Write renter (32 bytes)
-            data[8..40].copy_from_slice(&ctx.accounts.renter.key().to_bytes());
-            // Write content (32 bytes)
-            data[40..72].copy_from_slice(&content.key().to_bytes());
-            // Write nft_asset (32 bytes)
-            data[72..104].copy_from_slice(&nft_asset_key.to_bytes());
-            // Write rented_at (8 bytes)
-            data[104..112].copy_from_slice(&timestamp.to_le_bytes());
-            // Write expires_at (8 bytes)
-            data[112..120].copy_from_slice(&expires_at.to_le_bytes());
-            // Write is_active (1 byte)
-            data[120] = 1; // true
-            // Write fee_paid (8 bytes)
-            data[121..129].copy_from_slice(&rent_fee.to_le_bytes());
-        }
-
-        // Create frozen rental NFT (non-transferable to prevent resale of expired rentals)
         let rental_nft_name = format!("Rental Access #{}", rent_config.total_rentals + 1);
-        let rental_nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", content.metadata_cid);
+        let rental_nft_uri = format!("https://handcraft.art/api/content/{}/metadata", content.key());
 
-        // Derive content_collection PDA for signing
+        // Derive mint_config PDA for signing (update_authority for the collection)
         let content_key = content.key();
-        let (_, content_collection_bump) = Pubkey::find_program_address(
-            &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
+        let (_, mint_config_bump) = Pubkey::find_program_address(
+            &[MINT_CONFIG_SEED, content_key.as_ref()],
             ctx.program_id,
         );
 
         let signer_seeds: &[&[&[u8]]] = &[&[
-            CONTENT_COLLECTION_SEED,
+            MINT_CONFIG_SEED,
             content_key.as_ref(),
-            &[content_collection_bump],
+            &[mint_config_bump],
         ]];
 
-        // Step 1: Create rental NFT within the content's collection (no plugins yet)
+        // Step 1: Create rental NFT within the content's collection
+        // mint_config PDA is the update_authority and signs the creation
         create_core_nft(
             &ctx.accounts.mpl_core_program.to_account_info(),
             &ctx.accounts.nft_asset.to_account_info(),
             &ctx.accounts.collection_asset.to_account_info(),
-            &ctx.accounts.content_collection.to_account_info(),
+            &ctx.accounts.mint_config.to_account_info(),
             &ctx.accounts.renter.to_account_info(),
             &ctx.accounts.renter.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
@@ -1428,8 +1347,7 @@ pub mod content_registry {
             signer_seeds,
         )?;
 
-        // Step 2: Add FreezeDelegate plugin and freeze it
-        // Owner (renter) must be the authority to add plugins to their own asset
+        // Step 2: Add FreezeDelegate plugin and freeze it (non-transferable)
         AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
             .asset(&ctx.accounts.nft_asset.to_account_info())
             .collection(Some(&ctx.accounts.collection_asset.to_account_info()))
@@ -1437,7 +1355,34 @@ pub mod content_registry {
             .authority(Some(&ctx.accounts.renter.to_account_info()))
             .system_program(&ctx.accounts.system_program.to_account_info())
             .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: true }))
-            .init_authority(PluginAuthority::None)  // No one can unfreeze - permanently frozen
+            .init_authority(PluginAuthority::None)  // Permanently frozen
+            .invoke()?;
+
+        // Step 3: Add Attributes plugin with rental expiry info
+        // This stores the expiry on-chain in the NFT itself (no separate RentEntry PDA)
+        AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+            .asset(&ctx.accounts.nft_asset.to_account_info())
+            .collection(Some(&ctx.accounts.collection_asset.to_account_info()))
+            .payer(&ctx.accounts.renter.to_account_info())
+            .authority(Some(&ctx.accounts.renter.to_account_info()))
+            .system_program(&ctx.accounts.system_program.to_account_info())
+            .plugin(Plugin::Attributes(Attributes {
+                attribute_list: vec![
+                    Attribute {
+                        key: "expires_at".to_string(),
+                        value: expires_at.to_string(),
+                    },
+                    Attribute {
+                        key: "rented_at".to_string(),
+                        value: timestamp.to_string(),
+                    },
+                    Attribute {
+                        key: "tier".to_string(),
+                        value: format!("{:?}", tier),
+                    },
+                ],
+            }))
+            .init_authority(PluginAuthority::None)  // Immutable attributes
             .invoke()?;
 
         // Update rent config stats (manual update to avoid borrow issues)
@@ -1466,20 +1411,42 @@ pub mod content_registry {
     }
 
     /// Check if a rental has expired
-    /// Returns the rental status (can be used for access control)
+    /// Reads expiry from NFT's Attributes plugin
+    /// Returns error if expired, success if still valid
     pub fn check_rent_expiry(ctx: Context<CheckRentExpiry>) -> Result<()> {
-        let rent_entry = &ctx.accounts.rent_entry;
+        use mpl_core::accounts::BaseAssetV1;
+        use mpl_core::types::{PluginType, Attributes};
+        use mpl_core::fetch_plugin;
+
         let timestamp = Clock::get()?.unix_timestamp;
 
-        if rent_entry.is_expired(timestamp) {
-            msg!("Rental expired at {}, current time {}", rent_entry.expires_at, timestamp);
+        // Fetch the asset data
+        let asset_data = ctx.accounts.nft_asset.try_borrow_data()?;
+        let _asset = BaseAssetV1::from_bytes(&asset_data)?;
+
+        // Fetch the Attributes plugin
+        let (_, attributes, _) = fetch_plugin::<BaseAssetV1, Attributes>(
+            &ctx.accounts.nft_asset,
+            PluginType::Attributes,
+        ).map_err(|_| ContentRegistryError::RentalNotFound)?;
+
+        // Find expires_at in attributes
+        let expires_at = attributes
+            .attribute_list
+            .iter()
+            .find(|a| a.key == "expires_at")
+            .ok_or(ContentRegistryError::RentalNotFound)?
+            .value
+            .parse::<i64>()
+            .map_err(|_| ContentRegistryError::RentalNotFound)?;
+
+        if timestamp > expires_at {
+            msg!("Rental expired at {}, current time {}", expires_at, timestamp);
             return Err(ContentRegistryError::RentalExpired.into());
         }
 
-        msg!("Rental valid until {}, remaining {} seconds",
-            rent_entry.expires_at,
-            rent_entry.remaining_time(timestamp)
-        );
+        let remaining = expires_at - timestamp;
+        msg!("Rental valid until {}, remaining {} seconds", expires_at, remaining);
 
         Ok(())
     }
@@ -1490,17 +1457,18 @@ pub mod content_registry {
 
     /// Create a new bundle (album, series, playlist, course, etc.)
     /// Bundles group related content with ordering and shared metadata
+    /// Metadata is stored in IPFS/Metaplex, not on-chain
     pub fn create_bundle(
         ctx: Context<CreateBundle>,
         bundle_id: String,
-        metadata_cid: String,
         bundle_type: BundleType,
     ) -> Result<()> {
-        handle_create_bundle(ctx, bundle_id, metadata_cid, bundle_type)
+        handle_create_bundle(ctx, bundle_id, bundle_type)
     }
 
     /// Create a bundle with mint and rent configuration in a single transaction
     /// Bundle is created as published with mint and rent enabled by default
+    /// metadata_cid: IPFS CID for collection metadata JSON
     /// collection_name: Optional collection name - if provided, collection is named "HC: <Username>: <CollectionName>"
     pub fn create_bundle_with_mint_and_rent(
         ctx: Context<CreateBundleWithMintAndRent>,
@@ -1545,13 +1513,13 @@ pub mod content_registry {
         handle_remove_bundle_item(ctx)
     }
 
-    /// Update bundle metadata or active status
+    /// Update bundle active status
+    /// Metadata is stored in IPFS/Metaplex, not on-chain
     pub fn update_bundle(
         ctx: Context<UpdateBundle>,
-        metadata_cid: Option<String>,
         is_active: Option<bool>,
     ) -> Result<()> {
-        handle_update_bundle(ctx, metadata_cid, is_active)
+        handle_update_bundle(ctx, is_active)
     }
 
     /// Delete an empty bundle
@@ -1595,13 +1563,15 @@ pub mod content_registry {
 
     /// Configure NFT minting for a bundle (creator only)
     /// Creates mint config and Metaplex Core collection
+    /// metadata_cid: IPFS CID for collection metadata JSON
     pub fn configure_bundle_mint(
         ctx: Context<ConfigureBundleMint>,
+        metadata_cid: String,
         price: u64,
         max_supply: Option<u64>,
         creator_royalty_bps: u16,
     ) -> Result<()> {
-        handle_configure_bundle_mint(ctx, price, max_supply, creator_royalty_bps)
+        handle_configure_bundle_mint(ctx, metadata_cid, price, max_supply, creator_royalty_bps)
     }
 
     /// Update bundle mint settings (creator only)

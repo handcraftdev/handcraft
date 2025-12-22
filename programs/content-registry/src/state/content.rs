@@ -1,26 +1,31 @@
 use anchor_lang::prelude::*;
 
+/// Optimized ContentEntry - stores only data needed for on-chain logic
+/// Content metadata (CID, type) is stored in Metaplex Core collection/NFT metadata
+/// PDA seeds: ["content", cid_hash] - uniqueness enforced by PDA derivation
 #[account]
 #[derive(InitSpace)]
 pub struct ContentEntry {
+    /// Creator/owner of the content
     pub creator: Pubkey,
-    #[max_len(64)]
-    pub content_cid: String,
-    #[max_len(64)]
-    pub metadata_cid: String,
-    pub content_type: ContentType,
+    /// Metaplex Core collection asset for this content's NFTs
+    pub collection_asset: Pubkey,
+    /// Tips received (lamports)
     pub tips_received: u64,
-    pub created_at: i64,
-    // NFT mint tracking
-    pub is_locked: bool,       // Locked after first mint (no delete/edit metadata)
-    pub minted_count: u64,     // Number of NFTs successfully minted (used for edition numbering)
-    pub pending_count: u64,    // Number of pending VRF mints (for max_supply checking)
-    // Access control
-    pub is_encrypted: bool,    // Whether content is encrypted (requires NFT to access)
+    /// Locked after first mint (no delete/edit metadata)
+    pub is_locked: bool,
+    /// Number of NFTs successfully minted (used for edition numbering)
+    pub minted_count: u64,
+    /// Number of pending VRF mints (for max_supply checking)
+    pub pending_count: u64,
+    /// Whether content is encrypted (requires NFT to access)
+    pub is_encrypted: bool,
+    /// Preview CID for non-owners (empty if not gated)
     #[max_len(64)]
-    pub preview_cid: String,   // Preview CID for non-owners (empty if not gated)
+    pub preview_cid: String,
+    /// Encryption metadata CID (empty if not encrypted)
     #[max_len(64)]
-    pub encryption_meta_cid: String, // Encryption metadata CID (empty if not encrypted)
+    pub encryption_meta_cid: String,
     /// Visibility level for access control (4-tier model, default: 1)
     /// Level 0: Public - anyone can access (free content, samples, previews)
     /// Level 1: Ecosystem - ecosystem sub OR creator sub OR NFT/Rental

@@ -36,6 +36,7 @@ pub struct SimpleMint<'info> {
     #[account(mut)]
     pub content: Box<Account<'info, ContentEntry>>,
 
+    /// MintConfig PDA - authority for collection operations (signs NFT creation)
     #[account(
         seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
         bump
@@ -52,15 +53,12 @@ pub struct SimpleMint<'info> {
     )]
     pub content_reward_pool: Box<Account<'info, ContentRewardPool>>,
 
-    /// ContentCollection tracker PDA
+    /// The Metaplex Core Collection asset
+    /// CHECK: Verified via content.collection_asset
     #[account(
-        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
-        bump
+        mut,
+        constraint = collection_asset.key() == content.collection_asset @ ContentRegistryError::InvalidCollection
     )]
-    pub content_collection: Box<Account<'info, ContentCollection>>,
-
-    /// CHECK: The Metaplex Core Collection asset
-    #[account(mut)]
     pub collection_asset: AccountInfo<'info>,
 
     /// CHECK: Creator to receive payment
@@ -220,7 +218,6 @@ impl<'info> SimpleMint<'info> {
 
         let mint_price = ctx.accounts.mint_config.price;
         let had_existing_nfts = ctx.accounts.content_reward_pool.total_weight > 0;
-        let metadata_cid = ctx.accounts.content.metadata_cid.clone();
 
         // =====================================================================
         // STEP 1: Generate randomness from slot hashes
@@ -311,12 +308,13 @@ impl<'info> SimpleMint<'info> {
         let edition = ctx.accounts.content.minted_count + 1;
         // NFT name format: "<ContentName> (<R> #XXXXXX)" where R is single-letter rarity code
         let nft_name = format!("{} ({} #{:06})", content_name, rarity.code(), edition);
-        let nft_uri = format!("https://ipfs.io/ipfs/{}", metadata_cid);
+        // NFT metadata served from API (not stored on-chain)
+        let nft_uri = format!("https://handcraft.art/api/content/{}/metadata", content_key);
 
-        let content_collection_seeds = &[
-            CONTENT_COLLECTION_SEED,
+        let mint_config_seeds = &[
+            MINT_CONFIG_SEED,
             content_key.as_ref(),
-            &[ctx.bumps.content_collection],
+            &[ctx.bumps.mint_config],
         ];
 
         let nft_seeds = &[
@@ -327,19 +325,19 @@ impl<'info> SimpleMint<'info> {
             &[ctx.bumps.nft_asset],
         ];
 
-        // Create PermanentBurnDelegate plugin with content_collection PDA as authority
+        // Create PermanentBurnDelegate plugin with mint_config PDA as authority
         // This allows our program to burn NFTs via burn_nft_with_subscription instruction
         let burn_delegate_plugin = PluginAuthorityPair {
             plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
             authority: Some(PluginAuthority::Address {
-                address: ctx.accounts.content_collection.key()
+                address: ctx.accounts.mint_config.key()
             }),
         };
 
         CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
             .asset(&ctx.accounts.nft_asset)
             .collection(Some(&ctx.accounts.collection_asset))
-            .authority(Some(&ctx.accounts.content_collection.to_account_info()))
+            .authority(Some(&ctx.accounts.mint_config.to_account_info()))
             .payer(&ctx.accounts.payer.to_account_info())
             .owner(Some(&ctx.accounts.payer.to_account_info()))
             .system_program(&ctx.accounts.system_program.to_account_info())
@@ -347,7 +345,7 @@ impl<'info> SimpleMint<'info> {
             .uri(nft_uri)
             .data_state(DataState::AccountState)
             .plugins(vec![burn_delegate_plugin])
-            .invoke_signed(&[content_collection_seeds, nft_seeds])?;
+            .invoke_signed(&[mint_config_seeds, nft_seeds])?;
 
         // Update content minted count
         ctx.accounts.content.minted_count = edition;
@@ -550,6 +548,7 @@ pub struct SimpleMintBundle<'info> {
     #[account(mut)]
     pub bundle: Box<Account<'info, Bundle>>,
 
+    /// BundleMintConfig PDA - authority for collection operations (signs NFT creation)
     #[account(
         seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
@@ -566,15 +565,12 @@ pub struct SimpleMintBundle<'info> {
     )]
     pub bundle_reward_pool: Box<Account<'info, BundleRewardPool>>,
 
-    /// BundleCollection tracker PDA
+    /// The Metaplex Core Collection asset
+    /// CHECK: Verified via bundle.collection_asset
     #[account(
-        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
-        bump
+        mut,
+        constraint = collection_asset.key() == bundle.collection_asset @ ContentRegistryError::BundleMismatch
     )]
-    pub bundle_collection: Box<Account<'info, BundleCollection>>,
-
-    /// CHECK: The Metaplex Core Collection asset
-    #[account(mut)]
     pub collection_asset: AccountInfo<'info>,
 
     /// CHECK: Creator to receive payment
@@ -731,7 +727,6 @@ impl<'info> SimpleMintBundle<'info> {
 
         let mint_price = ctx.accounts.bundle_mint_config.price;
         let had_existing_nfts = ctx.accounts.bundle_reward_pool.total_weight > 0;
-        let metadata_cid = ctx.accounts.bundle.metadata_cid.clone();
 
         // Generate randomness
         let slot_hashes_data = ctx.accounts.slot_hashes.try_borrow_data()?;
@@ -796,12 +791,13 @@ impl<'info> SimpleMintBundle<'info> {
         let edition = ctx.accounts.bundle.minted_count + 1;
         // NFT name format: "<BundleName> (<R> #XXXXXX)" where R is single-letter rarity code
         let nft_name = format!("{} ({} #{:06})", bundle_name, rarity.code(), edition);
-        let nft_uri = format!("https://ipfs.io/ipfs/{}", metadata_cid);
+        // NFT metadata served from API (not stored on-chain)
+        let nft_uri = format!("https://handcraft.art/api/bundle/{}/metadata", ctx.accounts.bundle.bundle_id);
 
-        let bundle_collection_seeds = &[
-            BUNDLE_COLLECTION_SEED,
+        let bundle_mint_config_seeds = &[
+            BUNDLE_MINT_CONFIG_SEED,
             bundle_key.as_ref(),
-            &[ctx.bumps.bundle_collection],
+            &[ctx.bumps.bundle_mint_config],
         ];
 
         let nft_seeds = &[
@@ -812,19 +808,19 @@ impl<'info> SimpleMintBundle<'info> {
             &[ctx.bumps.nft_asset],
         ];
 
-        // Create PermanentBurnDelegate plugin with bundle_collection PDA as authority
+        // Create PermanentBurnDelegate plugin with bundle_mint_config PDA as authority
         // This allows our program to burn NFTs via burn_bundle_nft_with_subscription instruction
         let burn_delegate_plugin = PluginAuthorityPair {
             plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
             authority: Some(PluginAuthority::Address {
-                address: ctx.accounts.bundle_collection.key()
+                address: ctx.accounts.bundle_mint_config.key()
             }),
         };
 
         CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
             .asset(&ctx.accounts.nft_asset)
             .collection(Some(&ctx.accounts.collection_asset))
-            .authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+            .authority(Some(&ctx.accounts.bundle_mint_config.to_account_info()))
             .payer(&ctx.accounts.payer.to_account_info())
             .owner(Some(&ctx.accounts.payer.to_account_info()))
             .system_program(&ctx.accounts.system_program.to_account_info())
@@ -832,7 +828,7 @@ impl<'info> SimpleMintBundle<'info> {
             .uri(nft_uri)
             .data_state(DataState::AccountState)
             .plugins(vec![burn_delegate_plugin])
-            .invoke_signed(&[bundle_collection_seeds, nft_seeds])?;
+            .invoke_signed(&[bundle_mint_config_seeds, nft_seeds])?;
 
         // Update bundle state
         ctx.accounts.bundle.minted_count = edition;

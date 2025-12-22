@@ -13,19 +13,21 @@ use crate::MPL_CORE_ID;
 /// - Removes weight from all subscription pools
 /// - Does NOT reduce CreatorWeight.reward_debt (creator loses potential future rewards)
 /// - Closes UnifiedNftRewardState account (refunds rent to owner)
-/// - Burns the NFT via Metaplex Core CPI
+/// - Burns the NFT via Metaplex Core CPI (signed by mint_config PDA)
 #[derive(Accounts)]
 pub struct BurnNftWithSubscription<'info> {
     /// The content entry this NFT belongs to
+    #[account(
+        constraint = content.collection_asset == collection_asset.key() @ ContentRegistryError::ContentMismatch
+    )]
     pub content: Account<'info, ContentEntry>,
 
-    /// ContentCollection PDA - holds collection info and is the burn delegate authority
+    /// MintConfig PDA - authority for collection operations (signs burn)
     #[account(
-        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
-        bump,
-        constraint = content_collection.collection_asset == collection_asset.key() @ ContentRegistryError::ContentMismatch
+        seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
+        bump
     )]
-    pub content_collection: Account<'info, ContentCollection>,
+    pub mint_config: Account<'info, MintConfig>,
 
     /// Content's reward pool - needs to decrement weight
     #[account(
@@ -180,21 +182,21 @@ pub fn handle_burn_nft_with_subscription(ctx: Context<BurnNftWithSubscription>) 
     // STEP 5: Burn NFT via Metaplex Core CPI
     // =========================================================================
     let content_key = ctx.accounts.content.key();
-    let (_, content_collection_bump) = Pubkey::find_program_address(
-        &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
+    let (_, mint_config_bump) = Pubkey::find_program_address(
+        &[MINT_CONFIG_SEED, content_key.as_ref()],
         ctx.program_id,
     );
     let signer_seeds: &[&[&[u8]]] = &[&[
-        CONTENT_COLLECTION_SEED,
+        MINT_CONFIG_SEED,
         content_key.as_ref(),
-        &[content_collection_bump],
+        &[mint_config_bump],
     ]];
 
     BurnV1CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .asset(&ctx.accounts.nft_asset)
         .collection(Some(&ctx.accounts.collection_asset))
         .payer(&ctx.accounts.owner)
-        .authority(Some(&ctx.accounts.content_collection.to_account_info()))
+        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .invoke_signed(signer_seeds)?;
 
     msg!("NFT burned successfully with subscription reconciliation");
@@ -207,18 +209,21 @@ pub fn handle_burn_nft_with_subscription(ctx: Context<BurnNftWithSubscription>) 
 // ============================================================================
 
 /// Burn a bundle NFT with proper subscription pool reconciliation
+/// Burns via Metaplex Core CPI (signed by bundle_mint_config PDA)
 #[derive(Accounts)]
 pub struct BurnBundleNftWithSubscription<'info> {
     /// The bundle this NFT belongs to
+    #[account(
+        constraint = bundle.collection_asset == collection_asset.key() @ ContentRegistryError::BundleMismatch
+    )]
     pub bundle: Account<'info, Bundle>,
 
-    /// BundleCollection PDA - holds collection info and is the burn delegate authority
+    /// BundleMintConfig PDA - authority for collection operations (signs burn)
     #[account(
-        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
-        bump,
-        constraint = bundle_collection.collection_asset == collection_asset.key() @ ContentRegistryError::BundleMismatch
+        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        bump
     )]
-    pub bundle_collection: Account<'info, BundleCollection>,
+    pub bundle_mint_config: Account<'info, BundleMintConfig>,
 
     /// Bundle's reward pool - needs to decrement weight
     #[account(
@@ -352,21 +357,21 @@ pub fn handle_burn_bundle_nft_with_subscription(ctx: Context<BurnBundleNftWithSu
 
     // STEP 5: Burn NFT via Metaplex Core CPI
     let bundle_key = ctx.accounts.bundle.key();
-    let (_, bundle_collection_bump) = Pubkey::find_program_address(
-        &[BUNDLE_COLLECTION_SEED, bundle_key.as_ref()],
+    let (_, bundle_mint_config_bump) = Pubkey::find_program_address(
+        &[BUNDLE_MINT_CONFIG_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
     let signer_seeds: &[&[&[u8]]] = &[&[
-        BUNDLE_COLLECTION_SEED,
+        BUNDLE_MINT_CONFIG_SEED,
         bundle_key.as_ref(),
-        &[bundle_collection_bump],
+        &[bundle_mint_config_bump],
     ]];
 
     BurnV1CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .asset(&ctx.accounts.nft_asset)
         .collection(Some(&ctx.accounts.collection_asset))
         .payer(&ctx.accounts.owner)
-        .authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+        .authority(Some(&ctx.accounts.bundle_mint_config.to_account_info()))
         .invoke_signed(signer_seeds)?;
 
     msg!("Bundle NFT burned successfully with subscription reconciliation");

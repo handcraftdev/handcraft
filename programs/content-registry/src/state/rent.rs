@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 pub const RENT_CONFIG_SEED: &[u8] = b"rent_config";
-pub const RENT_ENTRY_SEED: &[u8] = b"rent_entry";
+// NOTE: RENT_ENTRY_SEED removed - rental expiry is now stored in NFT Attributes plugin
 
 /// Standard rental periods (in seconds)
 pub const RENT_PERIOD_6H: i64 = 6 * 3600;      // 6 hours = 21,600 seconds
@@ -74,40 +74,5 @@ impl RentConfig {
     }
 }
 
-/// Active rental entry tracking
-/// Created when user rents content, tracks expiry
-/// PDA seeds: ["rent_entry", nft_asset]
-#[account]
-#[derive(InitSpace)]
-pub struct RentEntry {
-    /// The renter's wallet
-    pub renter: Pubkey,
-    /// The content being rented
-    pub content: Pubkey,
-    /// The rental NFT asset (Metaplex Core)
-    pub nft_asset: Pubkey,
-    /// Timestamp when rental started
-    pub rented_at: i64,
-    /// Timestamp when rental expires
-    pub expires_at: i64,
-    /// Whether this rental is still active (not expired/burned)
-    pub is_active: bool,
-    /// Rent fee paid (for record keeping)
-    pub fee_paid: u64,
-}
-
-impl RentEntry {
-    /// Check if this rental has expired
-    pub fn is_expired(&self, current_timestamp: i64) -> bool {
-        current_timestamp >= self.expires_at
-    }
-
-    /// Get remaining rental time in seconds (0 if expired)
-    pub fn remaining_time(&self, current_timestamp: i64) -> i64 {
-        if current_timestamp >= self.expires_at {
-            0
-        } else {
-            self.expires_at - current_timestamp
-        }
-    }
-}
+// NOTE: RentEntry removed - rental expiry is now stored in NFT Attributes plugin
+// Rental access is checked by reading the NFT's expires_at attribute

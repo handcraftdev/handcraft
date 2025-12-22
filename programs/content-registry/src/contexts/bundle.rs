@@ -109,7 +109,6 @@ pub struct DeleteBundle<'info> {
 pub fn handle_create_bundle(
     ctx: Context<CreateBundle>,
     bundle_id: String,
-    metadata_cid: String,
     bundle_type: BundleType,
 ) -> Result<()> {
     let bundle = &mut ctx.accounts.bundle;
@@ -117,7 +116,7 @@ pub fn handle_create_bundle(
 
     bundle.creator = ctx.accounts.creator.key();
     bundle.bundle_id = bundle_id;
-    bundle.metadata_cid = metadata_cid;
+    bundle.collection_asset = Pubkey::default(); // Set when mint is configured
     bundle.bundle_type = bundle_type;
     bundle.item_count = 0;
     bundle.is_active = false; // Start as draft (unpublished)
@@ -180,15 +179,10 @@ pub fn handle_remove_bundle_item(ctx: Context<RemoveBundleItem>) -> Result<()> {
 
 pub fn handle_update_bundle(
     ctx: Context<UpdateBundle>,
-    metadata_cid: Option<String>,
     is_active: Option<bool>,
 ) -> Result<()> {
     let bundle = &mut ctx.accounts.bundle;
     let clock = Clock::get()?;
-
-    if let Some(cid) = metadata_cid {
-        bundle.metadata_cid = cid;
-    }
 
     if let Some(active) = is_active {
         bundle.is_active = active;

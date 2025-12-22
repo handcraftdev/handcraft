@@ -9,19 +9,21 @@ use crate::MPL_CORE_ID;
 /// - Verifies NFT ownership and collection membership
 /// - Decrements totalWeight and totalNfts in ContentRewardPool
 /// - Closes NftRewardState account (refunds rent to owner)
-/// - Burns the NFT via Metaplex Core CPI (signed by content_collection PDA)
+/// - Burns the NFT via Metaplex Core CPI (signed by mint_config PDA)
 #[derive(Accounts)]
 pub struct BurnNft<'info> {
     /// The content entry this NFT belongs to
+    #[account(
+        constraint = content.collection_asset == collection_asset.key() @ ContentRegistryError::ContentMismatch
+    )]
     pub content: Account<'info, ContentEntry>,
 
-    /// ContentCollection PDA - holds collection info and is the burn delegate authority
+    /// MintConfig PDA - authority for collection operations
     #[account(
-        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
-        bump,
-        constraint = content_collection.collection_asset == collection_asset.key() @ ContentRegistryError::ContentMismatch
+        seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
+        bump
     )]
-    pub content_collection: Account<'info, ContentCollection>,
+    pub mint_config: Account<'info, MintConfig>,
 
     /// The content's reward pool - needs to decrement totalWeight and totalNfts
     #[account(
@@ -48,7 +50,7 @@ pub struct BurnNft<'info> {
     pub nft_asset: AccountInfo<'info>,
 
     /// The collection the NFT belongs to
-    /// CHECK: Verified by Metaplex Core program
+    /// CHECK: Verified via content.collection_asset
     #[account(mut)]
     pub collection_asset: AccountInfo<'info>,
 
@@ -103,25 +105,25 @@ pub fn handle_burn_nft(ctx: Context<BurnNft>) -> Result<()> {
          content_reward_pool.total_nfts,
          content_reward_pool.total_weight);
 
-    // Derive content_collection PDA bump for signing
+    // Derive mint_config PDA bump for signing
     let content_key = ctx.accounts.content.key();
-    let (_, content_collection_bump) = Pubkey::find_program_address(
-        &[CONTENT_COLLECTION_SEED, content_key.as_ref()],
+    let (_, mint_config_bump) = Pubkey::find_program_address(
+        &[MINT_CONFIG_SEED, content_key.as_ref()],
         ctx.program_id,
     );
     let signer_seeds: &[&[&[u8]]] = &[&[
-        CONTENT_COLLECTION_SEED,
+        MINT_CONFIG_SEED,
         content_key.as_ref(),
-        &[content_collection_bump],
+        &[mint_config_bump],
     ]];
 
     // Burn NFT via Metaplex Core CPI
-    // content_collection PDA signs as the PermanentBurnDelegate authority
+    // mint_config PDA signs as the PermanentBurnDelegate authority
     BurnV1CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .asset(&ctx.accounts.nft_asset)
         .collection(Some(&ctx.accounts.collection_asset))
         .payer(&ctx.accounts.owner)
-        .authority(Some(&ctx.accounts.content_collection.to_account_info()))
+        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .invoke_signed(signer_seeds)?;
 
     msg!("NFT burned successfully, NftRewardState closed");

@@ -44,7 +44,7 @@ pub struct UpdateRentConfig<'info> {
 }
 
 /// Rent content with SOL payment
-/// Creates a frozen (non-transferable) NFT with expiry tracking
+/// Creates a frozen (non-transferable) NFT with expiry in Attributes plugin
 #[derive(Accounts)]
 pub struct RentContentSol<'info> {
     #[account(
@@ -53,6 +53,7 @@ pub struct RentContentSol<'info> {
     )]
     pub ecosystem_config: Box<Account<'info, EcosystemConfig>>,
 
+    /// Content entry - collection_asset stored here
     pub content: Box<Account<'info, ContentEntry>>,
 
     #[account(
@@ -63,17 +64,19 @@ pub struct RentContentSol<'info> {
     )]
     pub rent_config: Box<Account<'info, RentConfig>>,
 
-    /// Content collection for minting the rental NFT
-    /// CHECK: Deserialized manually to reduce stack
+    /// MintConfig PDA - authority for collection operations (signs NFT creation)
     #[account(
-        seeds = [CONTENT_COLLECTION_SEED, content.key().as_ref()],
+        seeds = [MINT_CONFIG_SEED, content.key().as_ref()],
         bump
     )]
-    pub content_collection: AccountInfo<'info>,
+    pub mint_config: Box<Account<'info, MintConfig>>,
 
     /// The collection asset for this content
-    /// CHECK: Verified via content_collection
-    #[account(mut)]
+    /// CHECK: Verified via content.collection_asset
+    #[account(
+        mut,
+        constraint = collection_asset.key() == content.collection_asset @ ContentRegistryError::InvalidCollection
+    )]
     pub collection_asset: AccountInfo<'info>,
 
     /// Content reward pool for holder rewards
@@ -87,13 +90,8 @@ pub struct RentContentSol<'info> {
     )]
     pub content_reward_pool: Box<Account<'info, ContentRewardPool>>,
 
-    /// Rental entry tracking expiry
-    /// PDA seeds: ["rent_entry", nft_asset]
-    /// CHECK: Initialized manually in instruction
-    #[account(mut)]
-    pub rent_entry: AccountInfo<'info>,
-
     /// The rental NFT asset (new keypair, signer)
+    /// Expiry stored in Attributes plugin (no separate RentEntry PDA)
     #[account(mut)]
     pub nft_asset: Signer<'info>,
 
@@ -124,14 +122,9 @@ pub struct RentContentSol<'info> {
 }
 
 /// Check if a rental has expired (for access control)
+/// Rental expiry is read from the NFT's Attributes plugin
 #[derive(Accounts)]
 pub struct CheckRentExpiry<'info> {
-    #[account(
-        seeds = [RENT_ENTRY_SEED, nft_asset.key().as_ref()],
-        bump
-    )]
-    pub rent_entry: Account<'info, RentEntry>,
-
-    /// CHECK: The NFT asset to check
+    /// CHECK: The NFT asset to check - expiry stored in Attributes plugin
     pub nft_asset: AccountInfo<'info>,
 }

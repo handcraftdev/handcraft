@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use mpl_core::instructions::{CreateV2CpiBuilder, AddPluginV1CpiBuilder};
 use mpl_core::types::{
     DataState, Plugin, PluginAuthority,
-    FreezeDelegate,
+    FreezeDelegate, Attributes, Attribute,
 };
 
 use crate::state::*;
@@ -182,15 +182,19 @@ pub struct RentBundleSol<'info> {
     )]
     pub bundle_reward_pool: Box<Account<'info, BundleRewardPool>>,
 
-    /// BundleCollection tracker PDA (must exist from configure_bundle_mint)
+    /// Mint config PDA - authority for collection operations
     #[account(
-        seeds = [BUNDLE_COLLECTION_SEED, bundle.key().as_ref()],
+        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_collection: Box<Account<'info, BundleCollection>>,
+    pub mint_config: Box<Account<'info, BundleMintConfig>>,
 
-    /// CHECK: The Metaplex Core Collection asset
-    #[account(mut)]
+    /// The Metaplex Core Collection asset
+    /// CHECK: Verified via bundle.collection_asset
+    #[account(
+        mut,
+        constraint = collection_asset.key() == bundle.collection_asset @ ContentRegistryError::BundleMismatch
+    )]
     pub collection_asset: AccountInfo<'info>,
 
     /// CHECK: Creator to receive payment
@@ -205,18 +209,10 @@ pub struct RentBundleSol<'info> {
     #[account(mut)]
     pub platform: Option<AccountInfo<'info>>,
 
-    /// CHECK: NFT asset for rental
+    /// The rental NFT asset (new keypair, signer)
+    /// Expiry stored in Attributes plugin (no separate RentEntry PDA)
     #[account(mut)]
     pub nft_asset: Signer<'info>,
-
-    /// Rent entry PDA to track this rental
-    /// CHECK: Manually created and initialized
-    #[account(
-        mut,
-        seeds = [BUNDLE_RENT_ENTRY_SEED, nft_asset.key().as_ref()],
-        bump
-    )]
-    pub rent_entry: AccountInfo<'info>,
 
     #[account(mut)]
     pub renter: Signer<'info>,
@@ -234,14 +230,9 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
     // Check ecosystem not paused
     require!(!ctx.accounts.ecosystem_config.is_paused, ContentRegistryError::EcosystemPaused);
 
-    // Verify collection_asset matches what's stored in bundle_collection
-    require!(
-        ctx.accounts.bundle_collection.collection_asset == ctx.accounts.collection_asset.key(),
-        ContentRegistryError::BundleMismatch
-    );
+    // collection_asset is verified via constraint in struct
 
     let bundle_key = ctx.accounts.bundle.key();
-    let nft_asset_key = ctx.accounts.nft_asset.key();
 
     // Initialize bundle reward pool if needed
     if ctx.accounts.bundle_reward_pool.bundle == Pubkey::default() {
@@ -335,81 +326,27 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
         }
     }
 
-    // Verify and create RentEntry PDA
-    let (rent_entry_pda, rent_entry_bump) = Pubkey::find_program_address(
-        &[BUNDLE_RENT_ENTRY_SEED, nft_asset_key.as_ref()],
-        ctx.program_id,
-    );
-    require!(
-        ctx.accounts.rent_entry.key() == rent_entry_pda,
-        ContentRegistryError::InvalidBundleRentEntry
-    );
-
-    // Create the RentEntry account
-    let space = 8 + BundleRentEntry::INIT_SPACE;
-    let rent = Rent::get()?;
-    let lamports = rent.minimum_balance(space);
-
-    let seeds: &[&[u8]] = &[BUNDLE_RENT_ENTRY_SEED, nft_asset_key.as_ref(), &[rent_entry_bump]];
-    let signer_seeds = &[seeds];
-
-    anchor_lang::system_program::create_account(
-        CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::CreateAccount {
-                from: ctx.accounts.renter.to_account_info(),
-                to: ctx.accounts.rent_entry.clone(),
-            },
-            signer_seeds,
-        ),
-        lamports,
-        space as u64,
-        ctx.program_id,
-    )?;
-
-    // Initialize RentEntry data
-    {
-        let mut data = ctx.accounts.rent_entry.try_borrow_mut_data()?;
-        let discriminator = BundleRentEntry::DISCRIMINATOR;
-        data[0..8].copy_from_slice(&discriminator);
-
-        // Write renter (32 bytes)
-        data[8..40].copy_from_slice(&ctx.accounts.renter.key().to_bytes());
-        // Write bundle (32 bytes)
-        data[40..72].copy_from_slice(&bundle_key.to_bytes());
-        // Write nft_asset (32 bytes)
-        data[72..104].copy_from_slice(&nft_asset_key.to_bytes());
-        // Write rented_at (8 bytes)
-        data[104..112].copy_from_slice(&clock.unix_timestamp.to_le_bytes());
-        // Write expires_at (8 bytes)
-        data[112..120].copy_from_slice(&expires_at.to_le_bytes());
-        // Write is_active (1 byte)
-        data[120] = 1; // true
-        // Write fee_paid (8 bytes)
-        data[121..129].copy_from_slice(&rent_fee.to_le_bytes());
-    }
-
-    // Create frozen rental NFT (non-transferable)
+    // Create frozen rental NFT (non-transferable) with expiry in Attributes
     let rental_nft_name = format!("Bundle Rental #{}", ctx.accounts.rent_config.total_rentals + 1);
-    let rental_nft_uri = format!("https://ipfs.filebase.io/ipfs/{}", ctx.accounts.bundle.metadata_cid);
+    let rental_nft_uri = format!("https://handcraft.art/api/bundle/{}/metadata", ctx.accounts.bundle.bundle_id);
 
-    // Derive bundle_collection PDA for signing
-    let (_, bundle_collection_bump) = Pubkey::find_program_address(
-        &[BUNDLE_COLLECTION_SEED, bundle_key.as_ref()],
+    // Derive mint_config PDA for signing
+    let (_, mint_config_bump) = Pubkey::find_program_address(
+        &[BUNDLE_MINT_CONFIG_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
 
     let signer_seeds: &[&[&[u8]]] = &[&[
-        BUNDLE_COLLECTION_SEED,
+        BUNDLE_MINT_CONFIG_SEED,
         bundle_key.as_ref(),
-        &[bundle_collection_bump],
+        &[mint_config_bump],
     ]];
 
     // Create rental NFT within the bundle's collection
     CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
         .asset(&ctx.accounts.nft_asset.to_account_info())
         .collection(Some(&ctx.accounts.collection_asset))
-        .authority(Some(&ctx.accounts.bundle_collection.to_account_info()))
+        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .payer(&ctx.accounts.renter.to_account_info())
         .owner(Some(&ctx.accounts.renter.to_account_info()))
         .system_program(&ctx.accounts.system_program.to_account_info())
@@ -427,6 +364,33 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
         .system_program(&ctx.accounts.system_program.to_account_info())
         .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: true }))
         .init_authority(PluginAuthority::None)  // Permanently frozen
+        .invoke()?;
+
+    // Add Attributes plugin with rental expiry info
+    // This stores the expiry on-chain in the NFT itself (no separate RentEntry PDA)
+    AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+        .asset(&ctx.accounts.nft_asset.to_account_info())
+        .collection(Some(&ctx.accounts.collection_asset))
+        .payer(&ctx.accounts.renter.to_account_info())
+        .authority(Some(&ctx.accounts.renter.to_account_info()))
+        .system_program(&ctx.accounts.system_program.to_account_info())
+        .plugin(Plugin::Attributes(Attributes {
+            attribute_list: vec![
+                Attribute {
+                    key: "expires_at".to_string(),
+                    value: expires_at.to_string(),
+                },
+                Attribute {
+                    key: "rented_at".to_string(),
+                    value: clock.unix_timestamp.to_string(),
+                },
+                Attribute {
+                    key: "tier".to_string(),
+                    value: format!("{:?}", tier),
+                },
+            ],
+        }))
+        .init_authority(PluginAuthority::None)  // Immutable attributes
         .invoke()?;
 
     // Update rent config stats
@@ -447,28 +411,50 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
 // CHECK BUNDLE RENT EXPIRY
 // ============================================================================
 
+/// Check if a bundle rental has expired
+/// Rental expiry is read from the NFT's Attributes plugin
 #[derive(Accounts)]
 pub struct CheckBundleRentExpiry<'info> {
-    #[account(
-        seeds = [BUNDLE_RENT_ENTRY_SEED, rent_entry.nft_asset.as_ref()],
-        bump
-    )]
-    pub rent_entry: Account<'info, BundleRentEntry>,
+    /// CHECK: The NFT asset to check - expiry stored in Attributes plugin
+    pub nft_asset: AccountInfo<'info>,
 }
 
+/// Check bundle rental expiry by reading from NFT Attributes
+/// Returns error if rental is expired, success if still valid
 pub fn handle_check_bundle_rent_expiry(ctx: Context<CheckBundleRentExpiry>) -> Result<()> {
-    let rent_entry = &ctx.accounts.rent_entry;
+    use mpl_core::accounts::BaseAssetV1;
+    use mpl_core::types::PluginType;
+    use mpl_core::fetch_plugin;
+
     let clock = Clock::get()?;
 
-    if rent_entry.is_expired(clock.unix_timestamp) {
-        msg!("Bundle rental expired at {}, current time {}", rent_entry.expires_at, clock.unix_timestamp);
+    // Fetch the asset data
+    let asset_data = ctx.accounts.nft_asset.try_borrow_data()?;
+    let asset = BaseAssetV1::from_bytes(&asset_data)?;
+
+    // Fetch the Attributes plugin
+    let (_, attributes, _) = fetch_plugin::<BaseAssetV1, Attributes>(
+        &ctx.accounts.nft_asset,
+        PluginType::Attributes,
+    ).map_err(|_| ContentRegistryError::RentalNotFound)?;
+
+    // Find expires_at in attributes
+    let expires_at = attributes
+        .attribute_list
+        .iter()
+        .find(|a| a.key == "expires_at")
+        .ok_or(ContentRegistryError::RentalNotFound)?
+        .value
+        .parse::<i64>()
+        .map_err(|_| ContentRegistryError::RentalNotFound)?;
+
+    if clock.unix_timestamp > expires_at {
+        msg!("Bundle rental expired at {}, current time {}", expires_at, clock.unix_timestamp);
         return Err(ContentRegistryError::RentalExpired.into());
     }
 
-    msg!("Bundle rental valid until {}, remaining {} seconds",
-        rent_entry.expires_at,
-        rent_entry.remaining_time(clock.unix_timestamp)
-    );
+    let remaining = expires_at - clock.unix_timestamp;
+    msg!("Bundle rental valid until {}, remaining {} seconds", expires_at, remaining);
 
     Ok(())
 }
