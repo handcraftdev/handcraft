@@ -664,22 +664,28 @@ export function useContentRegistry() {
     mutationFn: async ({
       contentCid,
       metadataCid,
+      collectionAsset,
     }: {
       contentCid: string;
       metadataCid: string;
+      collectionAsset: PublicKey;
     }) => {
       if (!publicKey) throw new Error("Wallet not connected");
       if (!client) throw new Error("Client not initialized");
+      if (!collectionAsset) throw new Error("Collection asset required to update metadata");
 
-      console.log("Updating content...", { contentCid, metadataCid });
+      console.log("Updating content metadata...", { contentCid, metadataCid, collectionAsset: collectionAsset.toBase58() });
 
-      const ix = await client.updateContentInstruction(
+      const tx = new Transaction();
+
+      // Update the Metaplex Core collection URI (metadata is stored there, not on ContentEntry)
+      const updateCollectionIx = await client.updateContentMetadataInstruction(
         publicKey,
         contentCid,
+        collectionAsset,
         metadataCid
       );
-
-      const tx = new Transaction().add(ix);
+      tx.add(updateCollectionIx);
 
       // Simulate transaction before prompting wallet
       console.log("Simulating transaction...");
