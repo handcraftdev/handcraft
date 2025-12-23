@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { ContentDraft } from "@/lib/supabase";
@@ -36,14 +36,24 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
   // Use access_token string as dependency, not the whole session object
   const accessToken = session?.access_token;
 
-  const fetchDrafts = useCallback(async () => {
+  // Stabilize excludeStatuses - use ref to store value without causing re-fetches
+  const excludeStatusesRef = useRef(excludeStatuses);
+  excludeStatusesRef.current = excludeStatuses;
+
+  // Track if initial fetch has completed to prevent loading flash on subsequent renders
+  const hasFetchedRef = useRef(false);
+
+  const fetchDrafts = useCallback(async (showLoading = true) => {
     if (!isAuthenticated || !accessToken) {
       setDrafts([]);
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    // Only show loading spinner if explicitly requested AND we haven't fetched yet
+    if (showLoading && !hasFetchedRef.current) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -61,20 +71,23 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
       const data = await response.json();
       const allDrafts = data.drafts || [];
-      const filteredDrafts = excludeStatuses.length > 0
-        ? allDrafts.filter((d: ContentDraft) => !excludeStatuses.includes(d.status))
+      const currentExcludeStatuses = excludeStatusesRef.current;
+      const filteredDrafts = currentExcludeStatuses.length > 0
+        ? allDrafts.filter((d: ContentDraft) => !currentExcludeStatuses.includes(d.status))
         : allDrafts;
       setDrafts(filteredDrafts);
+      hasFetchedRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load drafts");
       console.error("[DraftsList] Error fetching drafts:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, accessToken, excludeStatuses]);
+  }, [isAuthenticated, accessToken]);
 
+  // Fetch drafts when auth state changes
   useEffect(() => {
-    fetchDrafts();
+    fetchDrafts(true);
   }, [fetchDrafts]);
 
   const handleDeleteClick = (draftId: string, event: React.MouseEvent) => {
@@ -132,8 +145,8 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
         throw new Error("Failed to publish draft");
       }
 
-      // Refresh the list
-      fetchDrafts();
+      // Refresh the list without showing loading spinner
+      fetchDrafts(false);
     } catch (err) {
       console.error("Error publishing draft:", err);
       alert("Failed to publish draft");
