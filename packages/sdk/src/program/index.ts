@@ -1209,6 +1209,7 @@ export async function fetchContent(
     // These are now fetched from the Metaplex collection metadata URI
     const entry: ContentEntry = {
       pubkey: contentPda,
+      contentCid: contentCid, // Include the contentCid since we have it
       creator: decoded.creator,
       collectionAsset: decoded.collectionAsset,
       tipsReceived: BigInt(decoded.tipsReceived.toString()),
@@ -3172,10 +3173,11 @@ export async function fetchBundleWithItems(
 
     const items = await fetchBundleItems(connection, creator, bundleId);
 
-    // Fetch content for each item
+    // Fetch content for each item with metadata enrichment to get contentCid
     const itemsWithContent = await Promise.all(
       items.map(async (item) => {
-        const content = await fetchContentByPda(connection, item.content);
+        // Use enrichMetadata=true to get contentCid from Metaplex collection
+        const content = await fetchContentByPda(connection, item.content, true);
         return {
           item,
           content,
