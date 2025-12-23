@@ -37,6 +37,8 @@ export function ManageBundleModal({
   const [orderedItems, setOrderedItems] = useState<BundleMetadataItem[]>([]);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [hasOrderChanges, setHasOrderChanges] = useState(false);
+  const [addingItemCid, setAddingItemCid] = useState<string | null>(null);
+  const [removingItemCid, setRemovingItemCid] = useState<string | null>(null);
 
   // Mint config state
   const [mintPrice, setMintPrice] = useState("0.1");
@@ -180,6 +182,7 @@ export function ManageBundleModal({
 
   const handleAddItem = async (contentCid: string) => {
     setError(null);
+    setAddingItemCid(contentCid);
     try {
       await addBundleItem.mutateAsync({
         bundleId: bundle.bundleId,
@@ -188,15 +191,25 @@ export function ManageBundleModal({
       });
       // Don't manually update orderedItems - let the query refetch handle it
       // The useEffect that syncs orderedItems from onChainItems will update it
-      bundleWithItemsQuery.refetch();
+      await bundleWithItemsQuery.refetch();
       onSuccess?.();
     } catch (err) {
-      setError(getTransactionErrorMessage(err));
+      const errorMessage = getTransactionErrorMessage(err);
+      // If account already exists, the item was already added - just refetch
+      if (errorMessage.includes("already exists") || errorMessage.includes("AlreadyInUse") || errorMessage.includes("already registered")) {
+        await bundleWithItemsQuery.refetch();
+        // Don't show error, the refetch will update the UI
+      } else {
+        setError(errorMessage);
+      }
+    } finally {
+      setAddingItemCid(null);
     }
   };
 
   const handleRemoveItem = async (contentCid: string) => {
     setError(null);
+    setRemovingItemCid(contentCid);
     try {
       await removeBundleItem.mutateAsync({
         bundleId: bundle.bundleId,
@@ -204,10 +217,12 @@ export function ManageBundleModal({
       });
       // Manually remove from orderedItems since we need to update the UI immediately
       setOrderedItems(prev => prev.filter(i => i.contentCid !== contentCid));
-      bundleWithItemsQuery.refetch();
+      await bundleWithItemsQuery.refetch();
       onSuccess?.();
     } catch (err) {
       setError(getTransactionErrorMessage(err));
+    } finally {
+      setRemovingItemCid(null);
     }
   };
 
@@ -534,12 +549,19 @@ export function ManageBundleModal({
                             {!currentBundle.isLocked && (
                               <button
                                 onClick={() => handleRemoveItem(item.contentCid)}
-                                disabled={isLoading}
+                                disabled={removingItemCid !== null || addingItemCid !== null}
                                 className="p-2 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-300 disabled:opacity-30"
                               >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                {removingItemCid === item.contentCid ? (
+                                  <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                )}
                               </button>
                             )}
                           </div>
@@ -565,7 +587,8 @@ export function ManageBundleModal({
                     <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Add Content</h3>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
                       {addableContent.map((content) => {
-                        const contentKey = content.pubkey?.toBase58() || content.contentCid || "";
+                        const contentKey = content.contentCid || content.pubkey?.toBase58() || "";
+                        const isAddingThis = addingItemCid === content.contentCid;
                         return (
                           <div
                             key={contentKey}
@@ -576,10 +599,15 @@ export function ManageBundleModal({
                             </div>
                             <button
                               onClick={() => content.contentCid && handleAddItem(content.contentCid)}
-                              disabled={isLoading || !content.contentCid}
-                              className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300"
+                              disabled={addingItemCid !== null || !content.contentCid}
+                              className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 min-w-[60px]"
                             >
-                              Add
+                              {isAddingThis ? (
+                                <svg className="animate-spin w-4 h-4 mx-auto" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                              ) : "Add"}
                             </button>
                           </div>
                         );
