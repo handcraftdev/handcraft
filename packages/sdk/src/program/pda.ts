@@ -8,6 +8,8 @@ import {
   WALLET_CONTENT_STATE_SEED,
   USER_PROFILE_SEED,
   RENT_CONFIG_SEED,
+  REWARD_POOL_SEED,
+  WALLET_ITEM_STATE_SEED,
   PENDING_MINT_SEED,
   MB_MINT_REQUEST_SEED,
   MB_NFT_SEED,
@@ -210,23 +212,23 @@ export function getBundleItemPda(bundlePda: PublicKey, contentPda: PublicKey): [
 // ========== Bundle Mint/Rent PDAs ==========
 
 /**
- * Get the BundleMintConfig PDA for a bundle
+ * Get the MintConfig PDA for a bundle (uses unified MINT_CONFIG_SEED)
  * @param bundlePda - The bundle's PDA
  */
 export function getBundleMintConfigPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(BUNDLE_MINT_CONFIG_SEED), bundlePda.toBuffer()],
+    [Buffer.from(MINT_CONFIG_SEED), bundlePda.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Get the BundleRentConfig PDA for a bundle
+ * Get the RentConfig PDA for a bundle (uses unified RENT_CONFIG_SEED)
  * @param bundlePda - The bundle's PDA
  */
 export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(BUNDLE_RENT_CONFIG_SEED), bundlePda.toBuffer()],
+    [Buffer.from(RENT_CONFIG_SEED), bundlePda.toBuffer()],
     PROGRAM_ID
   );
 }
@@ -234,12 +236,12 @@ export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number
 // NOTE: BundleCollection PDA removed - collection_asset is now stored directly in Bundle
 
 /**
- * Get the BundleRewardPool PDA for a bundle
+ * Get the RewardPool PDA for a bundle (uses unified REWARD_POOL_SEED)
  * @param bundlePda - The bundle's PDA
  */
 export function getBundleRewardPoolPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from(BUNDLE_REWARD_POOL_SEED), bundlePda.toBuffer()],
+    [Buffer.from(REWARD_POOL_SEED), bundlePda.toBuffer()],
     PROGRAM_ID
   );
 }

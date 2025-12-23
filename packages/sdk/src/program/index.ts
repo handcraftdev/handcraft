@@ -628,6 +628,70 @@ export async function updateContentInstruction(
     .instruction();
 }
 
+/**
+ * Update content collection metadata (URI) via Metaplex Core CPI
+ * Only allowed before any NFTs are minted (is_locked = false)
+ * @param program - Anchor program instance
+ * @param creator - Creator's public key (must match content creator)
+ * @param contentCid - Content CID (used to derive content PDA)
+ * @param collectionAsset - Collection asset public key
+ * @param newMetadataCid - New metadata CID to update the collection URI
+ */
+export async function updateContentMetadataInstruction(
+  program: Program,
+  creator: PublicKey,
+  contentCid: string,
+  collectionAsset: PublicKey,
+  newMetadataCid: string
+): Promise<TransactionInstruction> {
+  const [contentPda] = getContentPda(contentCid);
+  const [mintConfigPda] = getMintConfigPda(contentPda);
+
+  return await program.methods
+    .updateContentMetadata(newMetadataCid)
+    .accounts({
+      content: contentPda,
+      mintConfig: mintConfigPda,
+      collectionAsset: collectionAsset,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      creator: creator,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Update bundle collection metadata (URI) via Metaplex Core CPI
+ * Only allowed before any NFTs are minted (is_locked = false)
+ * @param program - Anchor program instance
+ * @param creator - Creator's public key (must match bundle creator)
+ * @param bundleId - Bundle ID string
+ * @param collectionAsset - Collection asset public key
+ * @param newMetadataCid - New metadata CID to update the collection URI
+ */
+export async function updateBundleMetadataInstruction(
+  program: Program,
+  creator: PublicKey,
+  bundleId: string,
+  collectionAsset: PublicKey,
+  newMetadataCid: string
+): Promise<TransactionInstruction> {
+  const [bundlePda] = getBundlePda(creator, bundleId);
+  const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
+
+  return await program.methods
+    .updateBundleMetadata(newMetadataCid)
+    .accounts({
+      bundle: bundlePda,
+      mintConfig: mintConfigPda,
+      collectionAsset: collectionAsset,
+      mplCoreProgram: MPL_CORE_PROGRAM_ID,
+      creator: creator,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
 export async function deleteContentInstruction(
   program: Program,
   creator: PublicKey,
@@ -1248,9 +1312,14 @@ export async function fetchAllMintConfigs(
     const allConfigs = await (program.account as any).mintConfig.all();
 
     for (const { account } of allConfigs) {
-      const contentKey = account.content.toBase58();
+      // Skip if account data is malformed or missing required fields
+      if (!account || !account.item || !account.itemType) continue;
+      // Only include content mint configs (filter out bundle configs)
+      if (!account.itemType.content) continue;
+
+      const contentKey = account.item.toBase58();
       configs.set(contentKey, {
-        content: account.content,
+        content: account.item,
         creator: account.creator,
         priceSol: BigInt(account.price.toString()),
         maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
@@ -1279,10 +1348,15 @@ export async function fetchAllRentConfigs(
     const allConfigs = await (program.account as any).rentConfig.all();
 
     for (const { account } of allConfigs) {
-      const contentKey = account.content.toBase58();
+      // Skip if account data is malformed or missing required fields
+      if (!account || !account.item || !account.itemType) continue;
+      // Only include content rent configs (filter out bundle configs)
+      if (!account.itemType.content) continue;
+
+      const contentKey = account.item.toBase58();
       // Anchor converts rent_fee_6h -> rentFee6H (capital H, D)
       configs.set(contentKey, {
-        content: account.content,
+        content: account.item,
         creator: account.creator,
         rentFee6h: BigInt(account.rentFee6H.toString()),
         rentFee1d: BigInt(account.rentFee1D.toString()),
@@ -1317,12 +1391,17 @@ export async function fetchAllBundleRewardPools(
   try {
     const program = createProgram(connection);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allPools = await (program.account as any).bundleRewardPool.all();
+    const allPools = await (program.account as any).rewardPool.all();
 
     for (const { account } of allPools) {
-      const bundleKey = account.bundle.toBase58();
+      // Skip if account data is malformed or missing required fields
+      if (!account || !account.item || !account.itemType) continue;
+      // Only include bundle reward pools (itemType.bundle exists)
+      if (!account.itemType.bundle) continue;
+
+      const bundleKey = account.item.toBase58();
       pools.set(bundleKey, {
-        bundle: account.bundle,
+        bundle: account.item,
         rewardPerShare: BigInt(account.rewardPerShare.toString()),
         totalNfts: BigInt(account.totalNfts.toString()),
         totalWeight: BigInt(account.totalWeight?.toString() || "0"),
@@ -1502,12 +1581,17 @@ export async function fetchAllContentRewardPools(
   try {
     const program = createProgram(connection);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allPools = await (program.account as any).contentRewardPool.all();
+    const allPools = await (program.account as any).rewardPool.all();
 
     for (const { account } of allPools) {
-      const contentKey = account.content.toBase58();
+      // Skip if account data is malformed or missing required fields
+      if (!account || !account.item || !account.itemType) continue;
+      // Only include content reward pools (filter out bundle pools)
+      if (!account.itemType.content) continue;
+
+      const contentKey = account.item.toBase58();
       pools.set(contentKey, {
-        content: account.content,
+        content: account.item,
         rewardPerShare: BigInt(account.rewardPerShare.toString()),
         totalNfts: BigInt(account.totalNfts.toString()),
         totalWeight: BigInt(account.totalWeight?.toString() || "0"),
@@ -3360,8 +3444,8 @@ export async function simpleMintBundleInstruction(
     .accounts({
       ecosystemConfig: ecosystemConfigPda,
       bundle: bundlePda,
-      bundleMintConfig: mintConfigPda,
-      bundleRewardPool: bundleRewardPoolPda,
+      mintConfig: mintConfigPda,
+      rewardPool: bundleRewardPoolPda,
       // NOTE: bundleCollection removed - collection_asset now stored in Bundle
       collectionAsset,
       creator,
@@ -3621,8 +3705,8 @@ export async function rentBundleSolInstruction(
       ecosystemConfig: ecosystemConfigPda,
       bundle: bundlePda,
       rentConfig: rentConfigPda,
-      bundleRewardPool: bundleRewardPoolPda,
-      bundleMintConfig: bundleMintConfigPda,
+      rewardPool: bundleRewardPoolPda,
+      mintConfig: bundleMintConfigPda,
       collectionAsset,
       creator,
       treasury,
@@ -3657,7 +3741,7 @@ export async function claimBundleRewardsInstruction(
     .accounts({
       claimer,
       bundle: bundlePda,
-      bundleRewardPool: bundleRewardPoolPda,
+      rewardPool: bundleRewardPoolPda,
       nftAsset,
       nftRewardState: nftRewardStatePda,
       systemProgram: SystemProgram.programId,
@@ -3694,7 +3778,7 @@ export async function batchClaimBundleRewardsInstruction(
     .accounts({
       claimer,
       bundle: bundlePda,
-      bundleRewardPool: bundleRewardPoolPda,
+      rewardPool: bundleRewardPoolPda,
       systemProgram: SystemProgram.programId,
     })
     .remainingAccounts(remainingAccounts)
@@ -3715,10 +3799,10 @@ export async function fetchBundleMintConfig(
     const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).bundleMintConfig.fetch(mintConfigPda);
+    const decoded = await (program.account as any).mintConfig.fetch(mintConfigPda);
 
     return {
-      bundle: decoded.bundle,
+      bundle: decoded.item, // unified field name
       creator: decoded.creator,
       price: BigInt(decoded.price.toString()),
       maxSupply: decoded.maxSupply ? BigInt(decoded.maxSupply.toString()) : null,
@@ -3743,12 +3827,17 @@ export async function fetchAllBundleMintConfigs(
   try {
     const program = createProgram(connection);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allConfigs = await (program.account as any).bundleMintConfig.all();
+    const allConfigs = await (program.account as any).mintConfig.all();
 
     for (const { account } of allConfigs) {
-      const bundleKey = account.bundle.toBase58();
+      // Skip if account data is malformed or missing required fields
+      if (!account || !account.item || !account.itemType) continue;
+      // Only include bundle mint configs (itemType.bundle exists)
+      if (!account.itemType.bundle) continue;
+
+      const bundleKey = account.item.toBase58();
       configs.set(bundleKey, {
-        bundle: account.bundle,
+        bundle: account.item,
         creator: account.creator,
         price: BigInt(account.price.toString()),
         maxSupply: account.maxSupply ? BigInt(account.maxSupply.toString()) : null,
@@ -3785,12 +3874,12 @@ export async function fetchBundleRentConfig(
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).bundleRentConfig.fetch(rentConfigPda);
+    const decoded = await (program.account as any).rentConfig.fetch(rentConfigPda);
 
     console.log("[fetchBundleRentConfig] Found rent config:", decoded);
 
     return {
-      bundle: decoded.bundle,
+      bundle: decoded.item, // unified field name
       creator: decoded.creator,
       rentFee6h: BigInt(decoded.rentFee6H.toString()),
       rentFee1d: BigInt(decoded.rentFee1D.toString()),
@@ -3824,10 +3913,10 @@ export async function fetchBundleRewardPool(
     const [bundleRewardPoolPda] = getBundleRewardPoolPda(bundlePda);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decoded = await (program.account as any).bundleRewardPool.fetch(bundleRewardPoolPda);
+    const decoded = await (program.account as any).rewardPool.fetch(bundleRewardPoolPda);
 
     return {
-      bundle: decoded.bundle,
+      bundle: decoded.item, // unified field name
       rewardPerShare: BigInt(decoded.rewardPerShare.toString()),
       totalNfts: BigInt(decoded.totalNfts.toString()),
       totalWeight: BigInt(decoded.totalWeight.toString()),
@@ -4890,6 +4979,12 @@ export function createContentRegistryClient(connection: Connection) {
 
     updateContentInstruction: (creator: PublicKey, contentCid: string, metadataCid: string) =>
       updateContentInstruction(program, creator, contentCid, metadataCid),
+
+    updateContentMetadataInstruction: (creator: PublicKey, contentCid: string, collectionAsset: PublicKey, newMetadataCid: string) =>
+      updateContentMetadataInstruction(program, creator, contentCid, collectionAsset, newMetadataCid),
+
+    updateBundleMetadataInstruction: (creator: PublicKey, bundleId: string, collectionAsset: PublicKey, newMetadataCid: string) =>
+      updateBundleMetadataInstruction(program, creator, bundleId, collectionAsset, newMetadataCid),
 
     deleteContentInstruction: (creator: PublicKey, contentCid: string) =>
       deleteContentInstruction(program, creator, contentCid),

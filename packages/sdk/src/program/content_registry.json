@@ -1,5 +1,5 @@
 {
-  "address": "A73jzT8qnVsV86o2R9NLUmjFJsChAx81EY5wzHwaGUyh",
+  "address": "2ZDX86a1YmY3AvhFrq6CYQJr938qzhgMFytr9bCaoXS5",
   "metadata": {
     "name": "content_registry",
     "version": "0.1.0",
@@ -119,9 +119,9 @@
           ]
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "Bundle reward pool"
+            "Reward pool"
           ],
           "writable": true,
           "pda": {
@@ -129,13 +129,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -186,22 +179,15 @@
           ]
         },
         {
-          "name": "bundle_mint_config",
+          "name": "mint_config",
           "docs": [
-            "BundleMintConfig PDA - authority for collection operations (signs burn)"
+            "MintConfig PDA - authority for collection operations (signs burn)"
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -223,7 +209,7 @@
           }
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
             "Bundle's reward pool - needs to decrement weight"
           ],
@@ -233,13 +219,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -1728,9 +1707,9 @@
           ]
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "Bundle reward pool to claim from"
+            "Reward pool to claim from"
           ],
           "writable": true,
           "pda": {
@@ -1738,13 +1717,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -2761,7 +2733,7 @@
     {
       "name": "claim_unified_bundle_rewards",
       "docs": [
-        "Claim rewards from BundleRewardPool using UnifiedNftRewardState (immediate pool)"
+        "Claim rewards from RewardPool using UnifiedNftRewardState (immediate pool)"
       ],
       "discriminator": [
         87,
@@ -2781,9 +2753,9 @@
           ]
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "BundleRewardPool - holds SOL for this bundle's holder rewards"
+            "RewardPool - holds SOL for this bundle's holder rewards"
           ],
           "writable": true,
           "pda": {
@@ -2791,13 +2763,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -3042,13 +3007,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -3177,13 +3135,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   110,
@@ -3515,13 +3466,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -3553,13 +3497,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   110,
@@ -3926,9 +3863,9 @@
           ]
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "Bundle reward pool - source of pending content share"
+            "Reward pool - source of pending content share"
           ],
           "writable": true,
           "pda": {
@@ -3936,13 +3873,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -5874,9 +5804,9 @@
           }
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "BundleRewardPool - already exists, just need RPS"
+            "RewardPool - already exists, just need RPS"
           ],
           "writable": true,
           "pda": {
@@ -5884,13 +5814,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -7282,13 +7205,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   110,
@@ -7310,9 +7226,9 @@
           }
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "Bundle-specific reward pool"
+            "Bundle reward pool"
           ],
           "writable": true,
           "pda": {
@@ -7320,13 +7236,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -7357,13 +7266,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -8321,22 +8223,15 @@
           "writable": true
         },
         {
-          "name": "bundle_mint_config",
+          "name": "mint_config",
           "docs": [
-            "BundleMintConfig PDA - authority for collection operations (signs NFT creation)"
+            "MintConfig PDA - authority for collection operations (signs NFT creation)"
           ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -8358,9 +8253,9 @@
           }
         },
         {
-          "name": "bundle_reward_pool",
+          "name": "reward_pool",
           "docs": [
-            "Bundle-specific reward pool (IMMEDIATE distribution)"
+            "Bundle reward pool (IMMEDIATE distribution)"
           ],
           "writable": true,
           "pda": {
@@ -8368,13 +8263,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   119,
@@ -10242,6 +10130,78 @@
       ]
     },
     {
+      "name": "update_bundle_metadata",
+      "docs": [
+        "Update bundle collection metadata (URI) via Metaplex Core CPI",
+        "Only allowed before any NFTs are minted (is_locked = false)"
+      ],
+      "discriminator": [
+        249,
+        203,
+        173,
+        206,
+        73,
+        63,
+        93,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "bundle"
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bundle"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_metadata_cid",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "update_bundle_mint_settings",
       "docs": [
         "Update bundle mint settings (creator only)"
@@ -10277,13 +10237,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   109,
                   105,
                   110,
@@ -10370,13 +10323,6 @@
               {
                 "kind": "const",
                 "value": [
-                  98,
-                  117,
-                  110,
-                  100,
-                  108,
-                  101,
-                  95,
                   114,
                   101,
                   110,
@@ -10460,6 +10406,78 @@
           "type": {
             "option": "string"
           }
+        }
+      ]
+    },
+    {
+      "name": "update_content_metadata",
+      "docs": [
+        "Update content collection metadata (URI) via Metaplex Core CPI",
+        "Only allowed before any NFTs are minted (is_locked = false)"
+      ],
+      "discriminator": [
+        217,
+        154,
+        200,
+        136,
+        177,
+        51,
+        255,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "content"
+        },
+        {
+          "name": "mint_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "content"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collection_asset",
+          "writable": true
+        },
+        {
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_metadata_cid",
+          "type": "string"
         }
       ]
     },
@@ -11492,45 +11510,6 @@
       ]
     },
     {
-      "name": "BundleMintConfig",
-      "discriminator": [
-        120,
-        150,
-        46,
-        164,
-        194,
-        53,
-        30,
-        122
-      ]
-    },
-    {
-      "name": "BundleRentConfig",
-      "discriminator": [
-        16,
-        201,
-        128,
-        109,
-        49,
-        208,
-        238,
-        157
-      ]
-    },
-    {
-      "name": "BundleRewardPool",
-      "discriminator": [
-        184,
-        26,
-        80,
-        212,
-        177,
-        117,
-        148,
-        241
-      ]
-    },
-    {
       "name": "ContentEntry",
       "discriminator": [
         8,
@@ -11762,6 +11741,19 @@
         99,
         142,
         200
+      ]
+    },
+    {
+      "name": "RewardPool",
+      "discriminator": [
+        134,
+        121,
+        197,
+        211,
+        133,
+        154,
+        82,
+        32
       ]
     },
     {
@@ -12707,236 +12699,6 @@
             "name": "added_at",
             "docs": [
               "Timestamp when item was added"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "BundleMintConfig",
-      "docs": [
-        "Bundle mint configuration (mirrors MintConfig for content)",
-        "PDA seeds: [\"bundle_mint_config\", bundle_pda]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bundle",
-            "docs": [
-              "The bundle this config belongs to"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "Creator who owns this config"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "price",
-            "docs": [
-              "Price per NFT in lamports (minimum 0.001 SOL, free mint not allowed)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "max_supply",
-            "docs": [
-              "Maximum supply (None = unlimited)"
-            ],
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_royalty_bps",
-            "docs": [
-              "Creator royalty on secondary sales (basis points, e.g., 500 = 5%)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "is_active",
-            "docs": [
-              "Whether minting is currently enabled"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp when config was created"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "updated_at",
-            "docs": [
-              "Timestamp when config was last updated"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "BundleRentConfig",
-      "docs": [
-        "Bundle rent configuration (mirrors RentConfig for content)",
-        "PDA seeds: [\"bundle_rent_config\", bundle_pda]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bundle",
-            "docs": [
-              "The bundle this rent config belongs to"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "docs": [
-              "Creator who can update rent settings"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "rent_fee_6h",
-            "docs": [
-              "Rent fee for 6-hour access (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "rent_fee_1d",
-            "docs": [
-              "Rent fee for 1-day access (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "rent_fee_7d",
-            "docs": [
-              "Rent fee for 7-day access (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "is_active",
-            "docs": [
-              "Whether renting is currently enabled"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "total_rentals",
-            "docs": [
-              "Total number of times this bundle has been rented"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "total_fees_collected",
-            "docs": [
-              "Total fees collected from rentals (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp when config was created"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "updated_at",
-            "docs": [
-              "Timestamp when config was last updated"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "BundleRewardPool",
-      "docs": [
-        "Bundle reward pool (mirrors ContentRewardPool)",
-        "Per-bundle reward pool with rarity-weighted distribution",
-        "Secondary sale holder rewards split 50/50 between bundle holders and content holders",
-        "PDA seeds: [\"bundle_reward_pool\", bundle_pda]"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bundle",
-            "docs": [
-              "The bundle this pool belongs to"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "reward_per_share",
-            "docs": [
-              "Accumulated reward per weight unit (scaled by PRECISION)"
-            ],
-            "type": "u128"
-          },
-          {
-            "name": "total_nfts",
-            "docs": [
-              "Total NFTs minted for this bundle"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "total_weight",
-            "docs": [
-              "Total weight of all NFTs (sum of individual rarity weights)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "total_deposited",
-            "docs": [
-              "Total rewards ever deposited to this pool (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "total_claimed",
-            "docs": [
-              "Total rewards claimed from this pool (lamports)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "pending_content_share",
-            "docs": [
-              "Pending content share from secondary sales (50% of holder rewards)",
-              "Accumulated here until distributed to content pools via separate instruction"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "total_content_distributed",
-            "docs": [
-              "Total content share distributed to content pools"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "created_at",
-            "docs": [
-              "Timestamp when pool was created"
             ],
             "type": "i64"
           }
@@ -13894,18 +13656,46 @@
       }
     },
     {
+      "name": "ItemType",
+      "docs": [
+        "Discriminator for Content vs Bundle in unified structs"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Content"
+          },
+          {
+            "name": "Bundle"
+          }
+        ]
+      }
+    },
+    {
       "name": "MintConfig",
       "docs": [
-        "Mint configuration for a content entry",
-        "PDA seeds: [\"mint_config\", content_pda]"
+        "Unified mint configuration for content or bundle",
+        "PDA seeds: [\"mint_config\", item_pda] where item_pda is content or bundle"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "content",
+            "name": "item_type",
             "docs": [
-              "The content entry this config belongs to"
+              "Type of item (Content or Bundle)"
+            ],
+            "type": {
+              "defined": {
+                "name": "ItemType"
+              }
+            }
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The content or bundle this config belongs to"
             ],
             "type": "pubkey"
           },
@@ -14320,17 +14110,28 @@
     {
       "name": "RentConfig",
       "docs": [
-        "Rent configuration for a content piece",
+        "Unified rent configuration for content or bundle",
         "Uses 3-tier pricing: 6 hours, 1 day, 7 days",
-        "PDA seeds: [\"rent_config\", content_pda]"
+        "PDA seeds: [\"rent_config\", item_pda] where item_pda is content or bundle"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "content",
+            "name": "item_type",
             "docs": [
-              "The content this rent config belongs to"
+              "Type of item (Content or Bundle)"
+            ],
+            "type": {
+              "defined": {
+                "name": "ItemType"
+              }
+            }
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The content or bundle this rent config belongs to"
             ],
             "type": "pubkey"
           },
@@ -14372,7 +14173,7 @@
           {
             "name": "total_rentals",
             "docs": [
-              "Total number of times this content has been rented"
+              "Total number of times this item has been rented"
             ],
             "type": "u64"
           },
@@ -14766,6 +14567,94 @@
       }
     },
     {
+      "name": "RewardPool",
+      "docs": [
+        "Unified reward pool for content or bundle",
+        "Each content/bundle has its own pool tracking holder rewards",
+        "Rewards are distributed proportionally based on NFT weight (rarity)",
+        "PDA seeds: [\"reward_pool\", item_pda] where item_pda is content or bundle"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "item_type",
+            "docs": [
+              "Type of item (Content or Bundle)"
+            ],
+            "type": {
+              "defined": {
+                "name": "ItemType"
+              }
+            }
+          },
+          {
+            "name": "item",
+            "docs": [
+              "The content or bundle this pool belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_per_share",
+            "docs": [
+              "Accumulated reward per weight unit (scaled by PRECISION)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "total_nfts",
+            "docs": [
+              "Total NFTs minted for this item"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_weight",
+            "docs": [
+              "Total weight of all NFTs (sum of individual rarity weights)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_deposited",
+            "docs": [
+              "Total rewards ever deposited to this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "docs": [
+              "Total rewards claimed from this pool (lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when pool was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_content_share",
+            "docs": [
+              "Pending content share from secondary sales (50% of holder rewards for bundles)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_content_distributed",
+            "docs": [
+              "Total content share distributed to content pools"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "RewardTransferEvent",
       "docs": [
         "Emitted when rewards are transferred between accounts (e.g., on NFT transfer)"
@@ -15069,7 +14958,7 @@
           {
             "name": "content_or_bundle_debt",
             "docs": [
-              "Debt for ContentRewardPool OR BundleRewardPool (IMMEDIATE distribution)"
+              "Debt for ContentRewardPool OR RewardPool (IMMEDIATE distribution)"
             ],
             "type": "u128"
           },

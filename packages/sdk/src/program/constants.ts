@@ -17,6 +17,9 @@ export const MINT_CONFIG_SEED = "mint_config";
 export const CONTENT_REWARD_POOL_SEED = "content_reward_pool";
 export const WALLET_CONTENT_STATE_SEED = "wallet_content";
 export const USER_PROFILE_SEED = "user_profile";
+// Unified reward pool seed (for bundles that now use unified types)
+export const REWARD_POOL_SEED = "reward_pool";
+export const WALLET_ITEM_STATE_SEED = "wallet_item";
 
 // Rent seeds
 // NOTE: CONTENT_COLLECTION_SEED removed - collection_asset now stored in ContentEntry
