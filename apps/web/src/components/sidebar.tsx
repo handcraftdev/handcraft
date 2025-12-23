@@ -184,12 +184,10 @@ function SlideInSidebar({
       {/* Slide-in Panel */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 h-full w-72 z-50 transform transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"} ${overlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`fixed top-0 left-0 h-full w-72 z-50 bg-black/95 backdrop-blur-xl border-r border-white/10 transform transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"} ${overlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
-        {/* Glass background with subtle grain texture */}
-        <div className="absolute inset-0 bg-black/98 backdrop-blur-2xl" />
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
 
         {/* Content wrapper */}
         <div className="relative flex flex-col h-full">
