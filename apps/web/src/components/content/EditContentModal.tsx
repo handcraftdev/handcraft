@@ -115,10 +115,16 @@ export function EditContentModal({
         throw new Error("Content CID not available");
       }
 
+      // collectionAsset is required for on-chain update
+      if (!content.collectionAsset) {
+        throw new Error("Collection asset not available");
+      }
+
       // Update on-chain
       await updateContent({
         contentCid: content.contentCid,
         metadataCid,
+        collectionAsset: content.collectionAsset,
       });
 
       onSuccess?.();

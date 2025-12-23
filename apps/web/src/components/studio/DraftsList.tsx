@@ -191,7 +191,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
       <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
         <p className="text-sm text-red-400">Error loading drafts: {error}</p>
         <button
-          onClick={fetchDrafts}
+          onClick={() => fetchDrafts()}
           className="mt-2 text-sm text-red-400/80 hover:text-red-400 underline"
         >
           Retry
