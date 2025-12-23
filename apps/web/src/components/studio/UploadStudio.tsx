@@ -147,9 +147,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
   const { pauseUpload, resumeUpload, cancelUpload } = useFileUpload();
   const {
     registerContentWithMintAndRent,
-    updateContent,
-    updateMintSettings,
-    updateRentConfig,
+    updateContentFull,
     isUpdatingContent,
     ecosystemConfig,
     content,
@@ -549,43 +547,42 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         throw new Error('Collection asset not found - cannot update metadata');
       }
 
-      // Update on-chain (Metaplex Core collection URI)
-      console.log('[UploadStudio] Updating metadata on-chain...', { collectionAsset: collectionAsset.toBase58() });
-      await updateContent({
+      // Build update params
+      const rental = draft.rental_config || {};
+      const updateParams: {
+        contentCid: string;
+        metadataCid: string;
+        collectionAsset: typeof collectionAsset;
+        price?: bigint;
+        rentFee6h?: bigint;
+        rentFee1d?: bigint;
+        rentFee7d?: bigint;
+      } = {
         contentCid: editContentCid,
         metadataCid: metadataResult.cid,
         collectionAsset: collectionAsset,
-      });
-      console.log('[UploadStudio] Metadata update successful!');
+      };
 
-      // Update mint settings (price) if changed
+      // Add price if set
       if (draft.mint_price != null) {
-        console.log('[UploadStudio] Updating mint settings...', { price: draft.mint_price });
-        await updateMintSettings({
-          contentCid: editContentCid,
-          price: BigInt(Math.floor(draft.mint_price)),
-          maxSupply: null, // Don't change max supply
-          creatorRoyaltyBps: null, // Don't change royalty
-          isActive: null, // Don't change active status
-        });
-        console.log('[UploadStudio] Mint settings update successful!');
+        updateParams.price = BigInt(Math.floor(draft.mint_price));
       }
 
-      // Update rent config (rental prices) if changed
-      const rental = draft.rental_config || {};
+      // Add rent fees if all are set
       if (rental.rentFee6h && rental.rentFee1d && rental.rentFee7d) {
-        console.log('[UploadStudio] Updating rent config...', rental);
-        await updateRentConfig({
-          contentCid: editContentCid,
-          rentFee6h: BigInt(Math.floor(rental.rentFee6h)),
-          rentFee1d: BigInt(Math.floor(rental.rentFee1d)),
-          rentFee7d: BigInt(Math.floor(rental.rentFee7d)),
-          isActive: null, // Don't change active status
-        });
-        console.log('[UploadStudio] Rent config update successful!');
+        updateParams.rentFee6h = BigInt(Math.floor(rental.rentFee6h));
+        updateParams.rentFee1d = BigInt(Math.floor(rental.rentFee1d));
+        updateParams.rentFee7d = BigInt(Math.floor(rental.rentFee7d));
       }
 
-      console.log('[UploadStudio] All on-chain updates successful!');
+      // Update all in a single transaction
+      console.log('[UploadStudio] Updating on-chain (single tx)...', {
+        collectionAsset: collectionAsset.toBase58(),
+        hasPrice: !!updateParams.price,
+        hasRent: !!updateParams.rentFee6h,
+      });
+      await updateContentFull(updateParams);
+      console.log('[UploadStudio] On-chain update successful!');
 
       // Navigate back to studio
       router.push('/studio?tab=content');

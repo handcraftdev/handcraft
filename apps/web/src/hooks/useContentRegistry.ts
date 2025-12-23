@@ -704,6 +704,97 @@ export function useContentRegistry() {
     },
   });
 
+  // Update content with all settings in a single transaction (metadata + price + rent)
+  const updateContentFull = useMutation({
+    mutationFn: async ({
+      contentCid,
+      metadataCid,
+      collectionAsset,
+      price,
+      rentFee6h,
+      rentFee1d,
+      rentFee7d,
+    }: {
+      contentCid: string;
+      metadataCid: string;
+      collectionAsset: PublicKey;
+      price?: bigint;
+      rentFee6h?: bigint;
+      rentFee1d?: bigint;
+      rentFee7d?: bigint;
+    }) => {
+      if (!publicKey) throw new Error("Wallet not connected");
+      if (!client) throw new Error("Client not initialized");
+      if (!collectionAsset) throw new Error("Collection asset required to update metadata");
+
+      console.log("Updating content (full)...", {
+        contentCid,
+        metadataCid,
+        collectionAsset: collectionAsset.toBase58(),
+        price: price?.toString(),
+        rentFee6h: rentFee6h?.toString(),
+        rentFee1d: rentFee1d?.toString(),
+        rentFee7d: rentFee7d?.toString(),
+      });
+
+      const tx = new Transaction();
+
+      // 1. Update metadata (Metaplex Core collection URI)
+      const updateMetadataIx = await client.updateContentMetadataInstruction(
+        publicKey,
+        contentCid,
+        collectionAsset,
+        metadataCid
+      );
+      tx.add(updateMetadataIx);
+
+      // 2. Update mint settings (price) if provided
+      if (price !== undefined) {
+        const updateMintIx = await client.updateMintSettingsInstruction(
+          publicKey,
+          contentCid,
+          price,
+          null, // maxSupply - don't change
+          null, // creatorRoyaltyBps - don't change
+          null  // isActive - don't change
+        );
+        tx.add(updateMintIx);
+      }
+
+      // 3. Update rent config if all fees provided
+      if (rentFee6h !== undefined && rentFee1d !== undefined && rentFee7d !== undefined) {
+        const updateRentIx = await client.updateRentConfigInstruction(
+          publicKey,
+          contentCid,
+          rentFee6h,
+          rentFee1d,
+          rentFee7d,
+          null // isActive - don't change
+        );
+        tx.add(updateRentIx);
+      }
+
+      // Simulate transaction before prompting wallet
+      console.log("Simulating transaction with", tx.instructions.length, "instructions...");
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const signature = await sendTransaction(tx, connection);
+      console.log("Update content (full) tx sent:", signature);
+      await connection.confirmTransaction(signature, "confirmed");
+      console.log("Update content (full) confirmed!");
+      return signature;
+    },
+    onSuccess: (_, { contentCid }) => {
+      queryClient.invalidateQueries({ queryKey: ["content", publicKey?.toBase58()] });
+      queryClient.invalidateQueries({ queryKey: ["globalContent"] });
+      queryClient.invalidateQueries({ queryKey: ["mintConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["rentConfig", contentCid] });
+      queryClient.invalidateQueries({ queryKey: ["allMintConfigs"] });
+      queryClient.invalidateQueries({ queryKey: ["allRentConfigs"] });
+    },
+  });
+
   // Delete content mutation (only before first mint)
   const deleteContent = useMutation({
     mutationFn: async ({
@@ -2891,6 +2982,7 @@ export function useContentRegistry() {
     updateMintSettings: updateMintSettings.mutateAsync,
     mintNftSol: mintNftSol.mutateAsync,
     updateContent: updateContent.mutateAsync,
+    updateContentFull: updateContentFull.mutateAsync,
     deleteContent: deleteContent.mutateAsync,
     claimContentRewards: claimContentRewards.mutateAsync,
     claimRewardsVerified: claimRewardsVerified.mutateAsync,  // Recommended: verifies NFT ownership
@@ -2911,7 +3003,7 @@ export function useContentRegistry() {
     isConfiguringMint: configureMint.isPending,
     isUpdatingMintSettings: updateMintSettings.isPending,
     isMintingNft: mintNftSol.isPending,
-    isUpdatingContent: updateContent.isPending,
+    isUpdatingContent: updateContent.isPending || updateContentFull.isPending,
     isDeletingContent: deleteContent.isPending,
     isClaimingReward: claimContentRewards.isPending || claimRewardsVerified.isPending || claimAllRewards.isPending,
     isConfiguringRent: configureRent.isPending,
