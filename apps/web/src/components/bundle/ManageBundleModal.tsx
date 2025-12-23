@@ -5,6 +5,7 @@ import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getBundleTypeLabel, getIpfsUrl, BundleMetadata, BundleMetadataItem } from "@handcraft/sdk";
 import { useContentRegistry, Bundle, ContentEntry, MIN_PRICE_LAMPORTS, MIN_RENT_FEE_LAMPORTS, FIXED_CREATOR_ROYALTY_BPS } from "@/hooks/useContentRegistry";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 
 interface ManageBundleModalProps {
@@ -26,6 +27,7 @@ export function ManageBundleModal({
   onSuccess,
 }: ManageBundleModalProps) {
   const { publicKey } = useWallet();
+  const { session } = useSupabaseAuth();
   const [mainTab, setMainTab] = useState<MainTab>("content");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("details");
   const [error, setError] = useState<string | null>(null);
@@ -251,16 +253,25 @@ export function ManageBundleModal({
         updatedAt: new Date().toISOString(),
       };
 
+      if (!session?.access_token) {
+        throw new Error("Not authenticated");
+      }
       const metadataRes = await fetch("/api/upload/metadata", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           metadata: updatedMetadata,
           name: `bundle-${bundle.bundleId}-metadata`,
         }),
       });
 
-      if (!metadataRes.ok) throw new Error("Failed to upload metadata");
+      if (!metadataRes.ok) {
+        const errorData = await metadataRes.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to upload metadata");
+      }
 
       const { cid: newMetadataCid } = await metadataRes.json();
 

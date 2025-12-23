@@ -5,6 +5,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { BundleType, getBundleTypeLabel, getSuggestedBundleTypes, ContentDomain, getIpfsUrl } from "@handcraft/sdk";
 import { useContentRegistry, ContentEntry } from "@/hooks/useContentRegistry";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 interface CreateBundleModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export function CreateBundleModal({
   creatorDomain,
 }: CreateBundleModalProps) {
   const { publicKey } = useWallet();
+  const { session } = useSupabaseAuth();
   const [step, setStep] = useState<Step>("details");
 
   // Step 1: Details
@@ -201,11 +203,14 @@ export function CreateBundleModal({
 
       // Upload cover image if provided
       let coverImageCid: string | undefined;
-      if (coverImage) {
+      if (coverImage && session?.access_token) {
         const formData = new FormData();
         formData.append("file", coverImage);
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.access_token}`,
+          },
           body: formData,
         });
         if (uploadRes.ok) {
@@ -215,9 +220,15 @@ export function CreateBundleModal({
       }
 
       // Upload metadata to IPFS
+      if (!session?.access_token) {
+        throw new Error("Not authenticated");
+      }
       const metadataRes = await fetch("/api/upload/metadata", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           metadata: {
             ...metadata,
@@ -228,7 +239,9 @@ export function CreateBundleModal({
       });
 
       if (!metadataRes.ok) {
-        throw new Error("Failed to upload bundle metadata");
+        const errorData = await metadataRes.json().catch(() => ({}));
+        console.error("[CreateBundleModal] Metadata upload failed:", errorData);
+        throw new Error(errorData.error || "Failed to upload bundle metadata");
       }
 
       const { cid: metadataCid } = await metadataRes.json();
