@@ -41,21 +41,21 @@ pub struct CreateBundleWithMintAndRent<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + BundleMintConfig::INIT_SPACE,
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        space = 8 + MintConfig::INIT_SPACE,
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, BundleMintConfig>,
+    pub mint_config: Account<'info, MintConfig>,
 
     /// Rent config PDA for the bundle
     #[account(
         init,
         payer = creator,
-        space = 8 + BundleRentConfig::INIT_SPACE,
-        seeds = [BUNDLE_RENT_CONFIG_SEED, bundle.key().as_ref()],
+        space = 8 + RentConfig::INIT_SPACE,
+        seeds = [RENT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub rent_config: Account<'info, BundleRentConfig>,
+    pub rent_config: Account<'info, RentConfig>,
 
     /// CHECK: The Metaplex Core Collection asset to create
     /// Address stored in bundle.collection_asset
@@ -108,13 +108,13 @@ pub fn handle_create_bundle_with_mint_and_rent(
     require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
     // Validate mint price
     require!(
-        BundleMintConfig::validate_price(mint_price),
+        MintConfig::validate_price(mint_price, PaymentCurrency::Sol),
         ContentRegistryError::PriceTooLow
     );
 
     // Validate royalty
     require!(
-        BundleMintConfig::validate_royalty(creator_royalty_bps),
+        MintConfig::validate_royalty(creator_royalty_bps),
         ContentRegistryError::InvalidRoyalty
     );
 
@@ -125,15 +125,15 @@ pub fn handle_create_bundle_with_mint_and_rent(
 
     // Validate rent fees
     require!(
-        BundleRentConfig::validate_fee(rent_fee_6h),
+        RentConfig::validate_fee(rent_fee_6h),
         ContentRegistryError::RentFeeTooLow
     );
     require!(
-        BundleRentConfig::validate_fee(rent_fee_1d),
+        RentConfig::validate_fee(rent_fee_1d),
         ContentRegistryError::RentFeeTooLow
     );
     require!(
-        BundleRentConfig::validate_fee(rent_fee_7d),
+        RentConfig::validate_fee(rent_fee_7d),
         ContentRegistryError::RentFeeTooLow
     );
 
@@ -156,9 +156,11 @@ pub fn handle_create_bundle_with_mint_and_rent(
 
     // ========== 2. Initialize Mint Config ==========
     let mint_config = &mut ctx.accounts.mint_config;
-    mint_config.bundle = bundle_key;
+    mint_config.item_type = ItemType::Bundle;
+    mint_config.item = bundle_key;
     mint_config.creator = ctx.accounts.creator.key();
     mint_config.price = mint_price;
+    mint_config.currency = PaymentCurrency::Sol;
     // Default to DEFAULT_MAX_SUPPLY if not specified
     mint_config.max_supply = Some(mint_max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
     mint_config.creator_royalty_bps = creator_royalty_bps;
@@ -168,7 +170,8 @@ pub fn handle_create_bundle_with_mint_and_rent(
 
     // ========== 3. Initialize Rent Config ==========
     let rent_config = &mut ctx.accounts.rent_config;
-    rent_config.bundle = bundle_key;
+    rent_config.item_type = ItemType::Bundle;
+    rent_config.item = bundle_key;
     rent_config.creator = ctx.accounts.creator.key();
     rent_config.rent_fee_6h = rent_fee_6h;
     rent_config.rent_fee_1d = rent_fee_1d;
@@ -180,9 +183,9 @@ pub fn handle_create_bundle_with_mint_and_rent(
     rent_config.updated_at = clock.unix_timestamp;
 
     // ========== 4. Create Metaplex Core Collection ==========
-    // Derive BundleRewardPool PDA for holder royalties
+    // Derive RewardPool PDA for holder royalties
     let (holder_reward_pool, _) = Pubkey::find_program_address(
-        &[BUNDLE_REWARD_POOL_SEED, bundle_key.as_ref()],
+        &[REWARD_POOL_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
 

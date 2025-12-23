@@ -75,7 +75,7 @@ pub struct UnifiedNftRewardState {
     pub content_or_bundle: Pubkey,
 
     // Debt for each pool type (3 pools, 1 account)
-    /// Debt for ContentRewardPool OR BundleRewardPool (IMMEDIATE distribution)
+    /// Debt for ContentRewardPool OR RewardPool (IMMEDIATE distribution)
     pub content_or_bundle_debt: u128,
     /// Debt for CreatorPatronPool (LAZY distribution, uses virtual RPS at mint)
     pub patron_debt: u128,

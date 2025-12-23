@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::state::item_common::ItemType;
 
 pub const RENT_CONFIG_SEED: &[u8] = b"rent_config";
 // NOTE: RENT_ENTRY_SEED removed - rental expiry is now stored in NFT Attributes plugin
@@ -30,14 +31,16 @@ impl RentTier {
     }
 }
 
-/// Rent configuration for a content piece
+/// Unified rent configuration for content or bundle
 /// Uses 3-tier pricing: 6 hours, 1 day, 7 days
-/// PDA seeds: ["rent_config", content_pda]
+/// PDA seeds: ["rent_config", item_pda] where item_pda is content or bundle
 #[account]
 #[derive(InitSpace)]
 pub struct RentConfig {
-    /// The content this rent config belongs to
-    pub content: Pubkey,
+    /// Type of item (Content or Bundle)
+    pub item_type: ItemType,
+    /// The content or bundle this rent config belongs to
+    pub item: Pubkey,
     /// Creator who can update rent settings
     pub creator: Pubkey,
     /// Rent fee for 6-hour access (lamports)
@@ -48,7 +51,7 @@ pub struct RentConfig {
     pub rent_fee_7d: u64,
     /// Whether renting is currently enabled
     pub is_active: bool,
-    /// Total number of times this content has been rented
+    /// Total number of times this item has been rented
     pub total_rentals: u64,
     /// Total fees collected from rentals (lamports)
     pub total_fees_collected: u64,

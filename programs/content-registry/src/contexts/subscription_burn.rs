@@ -218,20 +218,20 @@ pub struct BurnBundleNftWithSubscription<'info> {
     )]
     pub bundle: Account<'info, Bundle>,
 
-    /// BundleMintConfig PDA - authority for collection operations (signs burn)
+    /// MintConfig PDA - authority for collection operations (signs burn)
     #[account(
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_mint_config: Account<'info, BundleMintConfig>,
+    pub mint_config: Account<'info, MintConfig>,
 
     /// Bundle's reward pool - needs to decrement weight
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     /// UnifiedNftRewardState - will be closed and rent refunded to owner
     #[account(
@@ -307,15 +307,15 @@ pub fn handle_burn_bundle_nft_with_subscription(ctx: Context<BurnBundleNftWithSu
     let nft_state = &ctx.accounts.unified_nft_state;
     let weight = nft_state.weight;
 
-    // STEP 1: Auto-claim pending rewards from BundleRewardPool
-    let bundle_pool = &mut ctx.accounts.bundle_reward_pool;
-    let weighted_rps = weight as u128 * bundle_pool.reward_per_share;
+    // STEP 1: Auto-claim pending rewards from RewardPool
+    let reward_pool = &mut ctx.accounts.reward_pool;
+    let weighted_rps = weight as u128 * reward_pool.reward_per_share;
     let bundle_pending = weighted_rps.saturating_sub(nft_state.content_or_bundle_debt) / PRECISION;
 
     if bundle_pending > 0 {
-        **bundle_pool.to_account_info().try_borrow_mut_lamports()? -= bundle_pending as u64;
+        **reward_pool.to_account_info().try_borrow_mut_lamports()? -= bundle_pending as u64;
         **ctx.accounts.owner.to_account_info().try_borrow_mut_lamports()? += bundle_pending as u64;
-        bundle_pool.total_claimed += bundle_pending as u64;
+        reward_pool.total_claimed += bundle_pending as u64;
         msg!("Auto-claimed {} lamports from bundle pool", bundle_pending);
     }
 
@@ -344,8 +344,8 @@ pub fn handle_burn_bundle_nft_with_subscription(ctx: Context<BurnBundleNftWithSu
     }
 
     // STEP 4: Remove weight from ALL pools
-    bundle_pool.total_weight = bundle_pool.total_weight.saturating_sub(weight as u64);
-    bundle_pool.total_nfts = bundle_pool.total_nfts.saturating_sub(1);
+    reward_pool.total_weight = reward_pool.total_weight.saturating_sub(weight as u64);
+    reward_pool.total_nfts = reward_pool.total_nfts.saturating_sub(1);
     patron_pool.total_weight = patron_pool.total_weight.saturating_sub(weight as u64);
     holder_pool.total_weight = holder_pool.total_weight.saturating_sub(weight as u64);
     ctx.accounts.creator_dist_pool.total_weight =
@@ -357,21 +357,21 @@ pub fn handle_burn_bundle_nft_with_subscription(ctx: Context<BurnBundleNftWithSu
 
     // STEP 5: Burn NFT via Metaplex Core CPI
     let bundle_key = ctx.accounts.bundle.key();
-    let (_, bundle_mint_config_bump) = Pubkey::find_program_address(
-        &[BUNDLE_MINT_CONFIG_SEED, bundle_key.as_ref()],
+    let (_, mint_config_bump) = Pubkey::find_program_address(
+        &[MINT_CONFIG_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
     let signer_seeds: &[&[&[u8]]] = &[&[
-        BUNDLE_MINT_CONFIG_SEED,
+        MINT_CONFIG_SEED,
         bundle_key.as_ref(),
-        &[bundle_mint_config_bump],
+        &[mint_config_bump],
     ]];
 
     BurnV1CpiBuilder::new(&ctx.accounts.mpl_core_program)
         .asset(&ctx.accounts.nft_asset)
         .collection(Some(&ctx.accounts.collection_asset))
         .payer(&ctx.accounts.owner)
-        .authority(Some(&ctx.accounts.bundle_mint_config.to_account_info()))
+        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
         .invoke_signed(signer_seeds)?;
 
     msg!("Bundle NFT burned successfully with subscription reconciliation");

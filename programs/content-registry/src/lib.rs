@@ -248,11 +248,12 @@ pub mod events;
 pub mod utils;
 
 use state::{
+    ItemType,
     MintConfig, PaymentCurrency, MINT_CONFIG_SEED,
     EcosystemConfig,
     ContentRewardPool, WalletContentState, PRECISION,
     RentConfig, RentTier,
-    BundleType, BUNDLE_MINT_CONFIG_SEED,
+    BundleType,
     Rarity,
     PatronTier,
     UnifiedNftRewardState, UNIFIED_NFT_REWARD_STATE_SEED,
@@ -263,7 +264,7 @@ use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
 
-declare_id!("A73jzT8qnVsV86o2R9NLUmjFJsChAx81EY5wzHwaGUyh");
+declare_id!("2ZDX86a1YmY3AvhFrq6CYQJr938qzhgMFytr9bCaoXS5");
 
 #[program]
 pub mod content_registry {
@@ -420,7 +421,8 @@ pub mod content_registry {
         content.visibility_level = visibility_level;
 
         // Initialize mint config (SOL only)
-        mint_config.content = content.key();
+        mint_config.item_type = ItemType::Content;
+        mint_config.item = content.key();
         mint_config.creator = ctx.accounts.authority.key();
         mint_config.price = price;
         mint_config.currency = PaymentCurrency::Sol;
@@ -480,6 +482,18 @@ pub mod content_registry {
         }
 
         Ok(())
+    }
+
+    /// Update content collection metadata (URI) via Metaplex Core CPI
+    /// Only allowed before any NFTs are minted (is_locked = false)
+    pub fn update_content_metadata(ctx: Context<UpdateContentMetadata>, new_metadata_cid: String) -> Result<()> {
+        update_metadata::update_content_metadata_handler(ctx, new_metadata_cid)
+    }
+
+    /// Update bundle collection metadata (URI) via Metaplex Core CPI
+    /// Only allowed before any NFTs are minted (is_locked = false)
+    pub fn update_bundle_metadata(ctx: Context<UpdateBundleMetadata>, new_metadata_cid: String) -> Result<()> {
+        update_metadata::update_bundle_metadata_handler(ctx, new_metadata_cid)
     }
 
     /// Delete content (creator only, not locked)
@@ -567,7 +581,8 @@ pub mod content_registry {
         let mint_config = &mut ctx.accounts.mint_config;
         let timestamp = Clock::get()?.unix_timestamp;
 
-        mint_config.content = ctx.accounts.content.key();
+        mint_config.item_type = ItemType::Content;
+        mint_config.item = ctx.accounts.content.key();
         mint_config.creator = ctx.accounts.creator.key();
         mint_config.price = price;
         mint_config.currency = PaymentCurrency::Sol;
@@ -1129,7 +1144,8 @@ pub mod content_registry {
         let rent_config = &mut ctx.accounts.rent_config;
         let timestamp = Clock::get()?.unix_timestamp;
 
-        rent_config.content = ctx.accounts.content.key();
+        rent_config.item_type = ItemType::Content;
+        rent_config.item = ctx.accounts.content.key();
         rent_config.creator = ctx.accounts.creator.key();
         rent_config.rent_fee_6h = rent_fee_6h;
         rent_config.rent_fee_1d = rent_fee_1d;
@@ -1681,7 +1697,7 @@ pub mod content_registry {
         handle_claim_unified_content_rewards(ctx)
     }
 
-    /// Claim rewards from BundleRewardPool using UnifiedNftRewardState (immediate pool)
+    /// Claim rewards from RewardPool using UnifiedNftRewardState (immediate pool)
     pub fn claim_unified_bundle_rewards(ctx: Context<ClaimUnifiedBundleRewards>) -> Result<()> {
         handle_claim_unified_bundle_rewards(ctx)
     }

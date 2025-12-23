@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::state::item_common::ItemType;
 
 pub const MINT_CONFIG_SEED: &[u8] = b"mint_config";
 
@@ -19,13 +20,15 @@ pub enum PaymentCurrency {
     Usdc,
 }
 
-/// Mint configuration for a content entry
-/// PDA seeds: ["mint_config", content_pda]
+/// Unified mint configuration for content or bundle
+/// PDA seeds: ["mint_config", item_pda] where item_pda is content or bundle
 #[account]
 #[derive(InitSpace)]
 pub struct MintConfig {
-    /// The content entry this config belongs to
-    pub content: Pubkey,
+    /// Type of item (Content or Bundle)
+    pub item_type: ItemType,
+    /// The content or bundle this config belongs to
+    pub item: Pubkey,
     /// Creator who owns this config
     pub creator: Pubkey,
     /// Price per NFT in lamports (minimum 0.001 SOL, free mint not allowed)

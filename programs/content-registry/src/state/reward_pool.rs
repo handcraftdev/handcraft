@@ -1,5 +1,11 @@
 use anchor_lang::prelude::*;
+use crate::state::item_common::ItemType;
 
+// Unified seeds (used for both content and bundle)
+pub const REWARD_POOL_SEED: &[u8] = b"reward_pool";
+pub const WALLET_ITEM_STATE_SEED: &[u8] = b"wallet_item";
+
+// Legacy seeds (kept for backwards compatibility during migration)
 pub const CONTENT_REWARD_POOL_SEED: &[u8] = b"content_reward_pool";
 pub const WALLET_CONTENT_STATE_SEED: &[u8] = b"wallet_content";
 
@@ -160,3 +166,170 @@ impl WalletContentState {
 
 // NOTE: Legacy NftRewardState and GlobalRewardPool removed
 // Use UnifiedNftRewardState from subscription.rs instead
+
+// ============================================================================
+// UNIFIED REWARD POOL (for both Content and Bundle)
+// ============================================================================
+
+/// Unified reward pool for content or bundle
+/// Each content/bundle has its own pool tracking holder rewards
+/// Rewards are distributed proportionally based on NFT weight (rarity)
+/// PDA seeds: ["reward_pool", item_pda] where item_pda is content or bundle
+#[account]
+#[derive(InitSpace)]
+pub struct RewardPool {
+    /// Type of item (Content or Bundle)
+    pub item_type: ItemType,
+    /// The content or bundle this pool belongs to
+    pub item: Pubkey,
+    /// Accumulated reward per weight unit (scaled by PRECISION)
+    pub reward_per_share: u128,
+    /// Total NFTs minted for this item
+    pub total_nfts: u64,
+    /// Total weight of all NFTs (sum of individual rarity weights)
+    pub total_weight: u64,
+    /// Total rewards ever deposited to this pool (lamports)
+    pub total_deposited: u64,
+    /// Total rewards claimed from this pool (lamports)
+    pub total_claimed: u64,
+    /// Timestamp when pool was created
+    pub created_at: i64,
+    // Bundle-specific fields (only used when item_type == Bundle)
+    /// Pending content share from secondary sales (50% of holder rewards for bundles)
+    pub pending_content_share: u64,
+    /// Total content share distributed to content pools
+    pub total_content_distributed: u64,
+}
+
+impl RewardPool {
+    /// Add rewards to the pool and update reward_per_share
+    pub fn add_rewards(&mut self, amount: u64) {
+        if self.total_weight == 0 || amount == 0 {
+            return;
+        }
+        self.reward_per_share += (amount as u128 * PRECISION) / self.total_weight as u128;
+        self.total_deposited += amount;
+    }
+
+    /// Add an NFT with its weight
+    pub fn add_nft(&mut self, weight: u16) {
+        self.total_nfts += 1;
+        self.total_weight += weight as u64;
+    }
+
+    /// Remove an NFT with its weight (on burn)
+    pub fn remove_nft(&mut self, weight: u16) {
+        self.total_nfts = self.total_nfts.saturating_sub(1);
+        self.total_weight = self.total_weight.saturating_sub(weight as u64);
+    }
+
+    /// Check if pool has any NFTs
+    pub fn has_nfts(&self) -> bool {
+        self.total_nfts > 0
+    }
+
+    /// Sync secondary sale royalties
+    /// For Content: all royalties go to pool
+    /// For Bundle: 50/50 split between bundle holders and content pools
+    pub fn sync_secondary_royalties(&mut self, current_lamports: u64, rent_lamports: u64) -> u64 {
+        let expected_balance = rent_lamports
+            .saturating_add(self.total_deposited)
+            .saturating_sub(self.total_claimed)
+            .saturating_add(self.pending_content_share);
+
+        if current_lamports > expected_balance {
+            let new_royalties = current_lamports - expected_balance;
+            if new_royalties > 0 {
+                if self.item_type == ItemType::Bundle {
+                    // Bundle: 50/50 split
+                    let bundle_share = new_royalties / 2;
+                    let content_share = new_royalties - bundle_share;
+
+                    if self.total_weight > 0 && bundle_share > 0 {
+                        self.reward_per_share += (bundle_share as u128 * PRECISION) / self.total_weight as u128;
+                        self.total_deposited += bundle_share;
+                    }
+                    self.pending_content_share += content_share;
+                } else {
+                    // Content: all to pool
+                    if self.total_weight > 0 {
+                        self.reward_per_share += (new_royalties as u128 * PRECISION) / self.total_weight as u128;
+                        self.total_deposited += new_royalties;
+                    }
+                }
+                return new_royalties;
+            }
+        }
+        0
+    }
+
+    /// Take pending content share for distribution (Bundle only)
+    pub fn take_pending_content_share(&mut self) -> u64 {
+        let amount = self.pending_content_share;
+        self.pending_content_share = 0;
+        self.total_content_distributed += amount;
+        amount
+    }
+}
+
+// ============================================================================
+// UNIFIED WALLET ITEM STATE
+// ============================================================================
+
+/// Unified wallet-item state tracking
+/// Tracks a wallet's position in a specific content/bundle's reward pool
+/// PDA seeds: ["wallet_item", wallet, item_pda]
+#[account]
+#[derive(InitSpace)]
+pub struct WalletItemState {
+    /// Type of item (Content or Bundle)
+    pub item_type: ItemType,
+    /// The wallet this state belongs to
+    pub wallet: Pubkey,
+    /// The content or bundle this state tracks
+    pub item: Pubkey,
+    /// Number of NFTs this wallet owns for this item
+    pub nft_count: u64,
+    /// Cumulative reward debt
+    pub reward_debt: u128,
+    /// Timestamp when first NFT was acquired
+    pub created_at: i64,
+    /// Timestamp of last update
+    pub updated_at: i64,
+}
+
+impl WalletItemState {
+    /// Calculate pending rewards
+    pub fn pending_reward(&self, current_reward_per_share: u128) -> u64 {
+        let entitled = self.nft_count as u128 * current_reward_per_share;
+        if entitled <= self.reward_debt {
+            return 0;
+        }
+        ((entitled - self.reward_debt) / PRECISION) as u64
+    }
+
+    /// Add an NFT to this wallet's position
+    pub fn add_nft(&mut self, current_rps: u128, timestamp: i64) {
+        self.nft_count += 1;
+        self.reward_debt += current_rps;
+        self.updated_at = timestamp;
+    }
+
+    /// Remove an NFT from this wallet's position
+    pub fn remove_nft(&mut self, current_rps: u128, timestamp: i64) {
+        if self.nft_count == 0 {
+            return;
+        }
+        self.reward_debt = self.reward_debt.saturating_sub(current_rps);
+        self.nft_count -= 1;
+        self.updated_at = timestamp;
+    }
+
+    /// Claim rewards
+    pub fn claim(&mut self, current_rps: u128, timestamp: i64) -> u64 {
+        let pending = self.pending_reward(current_rps);
+        self.reward_debt = self.nft_count as u128 * current_rps;
+        self.updated_at = timestamp;
+        pending
+    }
+}

@@ -1,3 +1,4 @@
+pub mod item_common;
 pub mod content;
 // NOTE: cid_registry removed - CID uniqueness enforced by ContentEntry PDA seed
 pub mod mint_config;
@@ -11,6 +12,7 @@ pub mod subscription;
 pub mod profile;
 pub mod moderation;
 
+pub use item_common::{ItemType, MintableItem};
 pub use content::{ContentEntry, ContentType};
 // NOTE: CidRegistry removed - use hash_cid from crate::utils if needed
 pub use mint_config::{
@@ -24,8 +26,13 @@ pub use ecosystem_config::{
     PLATFORM_FEE_SECONDARY_BPS, ECOSYSTEM_FEE_SECONDARY_BPS, HOLDER_REWARD_SECONDARY_BPS,
 };
 pub use reward_pool::{
+    // Legacy types (kept for migration)
     ContentRewardPool, WalletContentState,
-    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED, PRECISION,
+    CONTENT_REWARD_POOL_SEED, WALLET_CONTENT_STATE_SEED,
+    // Unified types
+    RewardPool, WalletItemState,
+    REWARD_POOL_SEED, WALLET_ITEM_STATE_SEED,
+    PRECISION,
 };
 // NOTE: ContentCollection removed - collection_asset stored in ContentEntry
 pub use rent::{
@@ -38,12 +45,6 @@ pub use rent::{
 pub use bundle::{
     Bundle, BundleItem, BundleType,
     BUNDLE_SEED, BUNDLE_ITEM_SEED, MAX_BUNDLE_ITEMS,
-    // Bundle mint/rent types
-    BundleMintConfig, BundleRentConfig,
-    BundleRewardPool, BundleWalletState,
-    // Bundle mint/rent seeds
-    BUNDLE_MINT_CONFIG_SEED, BUNDLE_RENT_CONFIG_SEED,
-    BUNDLE_REWARD_POOL_SEED, BUNDLE_WALLET_STATE_SEED,
 };
 // NOTE: BundleCollection, BundleRentEntry removed - data stored in Bundle and NFT Attributes
 pub use rarity::Rarity;

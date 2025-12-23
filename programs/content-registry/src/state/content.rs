@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::state::item_common::MintableItem;
 
 /// Optimized ContentEntry - stores only data needed for on-chain logic
 /// Content metadata (CID, type) is stored in Metaplex Core collection/NFT metadata
@@ -59,4 +60,46 @@ pub enum ContentType {
     Dataset,
     // Text domain (16)
     Post,
+}
+
+// ============================================================================
+// MINTABLE ITEM TRAIT IMPLEMENTATION
+// ============================================================================
+
+impl MintableItem for ContentEntry {
+    fn creator(&self) -> Pubkey {
+        self.creator
+    }
+
+    fn collection_asset(&self) -> Pubkey {
+        self.collection_asset
+    }
+
+    fn minted_count(&self) -> u64 {
+        self.minted_count
+    }
+
+    fn pending_count(&self) -> u64 {
+        self.pending_count
+    }
+
+    fn is_locked(&self) -> bool {
+        self.is_locked
+    }
+
+    fn visibility_level(&self) -> u8 {
+        self.visibility_level
+    }
+
+    fn set_minted_count(&mut self, count: u64) {
+        self.minted_count = count;
+    }
+
+    fn set_pending_count(&mut self, count: u64) {
+        self.pending_count = count;
+    }
+
+    fn set_is_locked(&mut self, locked: bool) {
+        self.is_locked = locked;
+    }
 }

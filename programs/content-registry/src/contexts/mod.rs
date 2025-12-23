@@ -24,6 +24,7 @@ pub mod submit_report;
 pub mod vote_on_report;
 pub mod resolve_moderation;
 pub mod moderation_admin;
+pub mod update_metadata;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -51,3 +52,4 @@ pub use submit_report::*;
 pub use vote_on_report::*;
 pub use resolve_moderation::*;
 pub use moderation_admin::*;
+pub use update_metadata::*;

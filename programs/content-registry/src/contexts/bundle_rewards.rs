@@ -18,13 +18,13 @@ pub struct ClaimBundleRewards<'info> {
     #[account()]
     pub bundle: Account<'info, Bundle>,
 
-    /// Bundle reward pool to claim from
+    /// Reward pool to claim from
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     /// CHECK: The NFT asset being claimed for
     #[account()]
@@ -45,11 +45,11 @@ pub struct ClaimBundleRewards<'info> {
 
 pub fn handle_claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<()> {
     // Get current rent lamports for reward pool PDA
-    let pool_rent = Rent::get()?.minimum_balance(8 + BundleRewardPool::INIT_SPACE);
-    let pool_lamports = ctx.accounts.bundle_reward_pool.to_account_info().lamports();
+    let pool_rent = Rent::get()?.minimum_balance(8 + RewardPool::INIT_SPACE);
+    let pool_lamports = ctx.accounts.reward_pool.to_account_info().lamports();
 
     // Sync secondary sale royalties first
-    let synced = ctx.accounts.bundle_reward_pool.sync_secondary_royalties(
+    let synced = ctx.accounts.reward_pool.sync_secondary_royalties(
         pool_lamports,
         pool_rent,
     );
@@ -76,7 +76,7 @@ pub fn handle_claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<(
     // - nft_reward_state can only be created by our program during minting
 
     // Calculate pending reward for this NFT
-    let reward_per_share = ctx.accounts.bundle_reward_pool.reward_per_share;
+    let reward_per_share = ctx.accounts.reward_pool.reward_per_share;
     let pending = ctx.accounts.nft_reward_state.pending_content_or_bundle_reward(reward_per_share);
 
     if pending == 0 {
@@ -89,10 +89,10 @@ pub fn handle_claim_bundle_rewards(ctx: Context<ClaimBundleRewards>) -> Result<(
     ctx.accounts.nft_reward_state.content_or_bundle_debt = (weight as u128) * reward_per_share;
 
     // Track total claimed in pool
-    ctx.accounts.bundle_reward_pool.total_claimed += pending;
+    ctx.accounts.reward_pool.total_claimed += pending;
 
     // Transfer rewards from pool to claimer
-    let pool_info = ctx.accounts.bundle_reward_pool.to_account_info();
+    let pool_info = ctx.accounts.reward_pool.to_account_info();
     let claimer_info = ctx.accounts.claimer.to_account_info();
 
     **pool_info.try_borrow_mut_lamports()? -= pending;
@@ -117,13 +117,13 @@ pub struct BatchClaimBundleRewards<'info> {
     #[account()]
     pub bundle: Account<'info, Bundle>,
 
-    /// Bundle reward pool
+    /// Reward pool
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     pub system_program: Program<'info, System>,
     // remaining_accounts: pairs of (nft_asset, nft_reward_state)
@@ -131,9 +131,9 @@ pub struct BatchClaimBundleRewards<'info> {
 
 pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) -> Result<()> {
     // Sync secondary sales first
-    let pool_rent = Rent::get()?.minimum_balance(8 + BundleRewardPool::INIT_SPACE);
-    let pool_lamports = ctx.accounts.bundle_reward_pool.to_account_info().lamports();
-    let synced = ctx.accounts.bundle_reward_pool.sync_secondary_royalties(
+    let pool_rent = Rent::get()?.minimum_balance(8 + RewardPool::INIT_SPACE);
+    let pool_lamports = ctx.accounts.reward_pool.to_account_info().lamports();
+    let synced = ctx.accounts.reward_pool.sync_secondary_royalties(
         pool_lamports,
         pool_rent,
     );
@@ -149,7 +149,7 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
 
     let bundle_key = ctx.accounts.bundle.key();
     let claimer_key = ctx.accounts.claimer.key();
-    let reward_per_share = ctx.accounts.bundle_reward_pool.reward_per_share;
+    let reward_per_share = ctx.accounts.reward_pool.reward_per_share;
 
     let mut total_claimed: u64 = 0;
 
@@ -232,10 +232,10 @@ pub fn handle_batch_claim_bundle_rewards(ctx: Context<BatchClaimBundleRewards>) 
 
     if total_claimed > 0 {
         // Track in pool
-        ctx.accounts.bundle_reward_pool.total_claimed += total_claimed;
+        ctx.accounts.reward_pool.total_claimed += total_claimed;
 
         // Transfer from pool to claimer
-        let pool_info = ctx.accounts.bundle_reward_pool.to_account_info();
+        let pool_info = ctx.accounts.reward_pool.to_account_info();
         let claimer_info = ctx.accounts.claimer.to_account_info();
 
         **pool_info.try_borrow_mut_lamports()? -= total_claimed;
@@ -263,13 +263,13 @@ pub struct DistributeBundleSecondaryToContent<'info> {
     #[account()]
     pub bundle: Account<'info, Bundle>,
 
-    /// Bundle reward pool - source of pending content share
+    /// Reward pool - source of pending content share
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     pub system_program: Program<'info, System>,
     // remaining_accounts: content_reward_pools for each content in bundle
@@ -279,9 +279,9 @@ pub fn handle_distribute_bundle_secondary_to_content(
     ctx: Context<DistributeBundleSecondaryToContent>
 ) -> Result<()> {
     // First sync any pending secondary royalties
-    let pool_rent = Rent::get()?.minimum_balance(8 + BundleRewardPool::INIT_SPACE);
-    let pool_lamports = ctx.accounts.bundle_reward_pool.to_account_info().lamports();
-    let synced = ctx.accounts.bundle_reward_pool.sync_secondary_royalties(
+    let pool_rent = Rent::get()?.minimum_balance(8 + RewardPool::INIT_SPACE);
+    let pool_lamports = ctx.accounts.reward_pool.to_account_info().lamports();
+    let synced = ctx.accounts.reward_pool.sync_secondary_royalties(
         pool_lamports,
         pool_rent,
     );
@@ -290,7 +290,7 @@ pub fn handle_distribute_bundle_secondary_to_content(
     }
 
     // Get pending content share
-    let pending = ctx.accounts.bundle_reward_pool.pending_content_share;
+    let pending = ctx.accounts.reward_pool.pending_content_share;
     if pending == 0 {
         msg!("No pending content share to distribute");
         return Ok(());
@@ -332,11 +332,11 @@ pub fn handle_distribute_bundle_secondary_to_content(
         return Ok(());
     }
 
-    // Take the pending content share from bundle pool
-    let distributed = ctx.accounts.bundle_reward_pool.take_pending_content_share();
+    // Take the pending content share from reward pool
+    let distributed = ctx.accounts.reward_pool.take_pending_content_share();
 
     // Second pass: distribute proportionally by weight
-    let bundle_pool_info = ctx.accounts.bundle_reward_pool.to_account_info();
+    let bundle_pool_info = ctx.accounts.reward_pool.to_account_info();
     let mut total_actually_distributed: u64 = 0;
 
     for (i, content_pool_info) in remaining.iter().enumerate() {

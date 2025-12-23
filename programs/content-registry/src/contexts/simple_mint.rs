@@ -347,8 +347,11 @@ impl<'info> SimpleMint<'info> {
             .plugins(vec![burn_delegate_plugin])
             .invoke_signed(&[mint_config_seeds, nft_seeds])?;
 
-        // Update content minted count
+        // Update content minted count and lock content after first mint
         ctx.accounts.content.minted_count = edition;
+        if !ctx.accounts.content.is_locked {
+            ctx.accounts.content.is_locked = true;
+        }
 
         // =====================================================================
         // STEP 4: Distribute payment (80/5/3/12 split)
@@ -548,22 +551,22 @@ pub struct SimpleMintBundle<'info> {
     #[account(mut)]
     pub bundle: Box<Account<'info, Bundle>>,
 
-    /// BundleMintConfig PDA - authority for collection operations (signs NFT creation)
+    /// MintConfig PDA - authority for collection operations (signs NFT creation)
     #[account(
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_mint_config: Box<Account<'info, BundleMintConfig>>,
+    pub mint_config: Box<Account<'info, MintConfig>>,
 
-    /// Bundle-specific reward pool (IMMEDIATE distribution)
+    /// Bundle reward pool (IMMEDIATE distribution)
     #[account(
         init_if_needed,
         payer = payer,
-        space = 8 + BundleRewardPool::INIT_SPACE,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        space = 8 + RewardPool::INIT_SPACE,
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Box<Account<'info, BundleRewardPool>>,
+    pub reward_pool: Box<Account<'info, RewardPool>>,
 
     /// The Metaplex Core Collection asset
     /// CHECK: Verified via bundle.collection_asset
@@ -717,16 +720,16 @@ impl<'info> SimpleMintBundle<'info> {
         let nft_asset_key = ctx.accounts.nft_asset.key();
 
         // Validation
-        require!(ctx.accounts.bundle_mint_config.is_active, ContentRegistryError::MintingNotActive);
+        require!(ctx.accounts.mint_config.is_active, ContentRegistryError::MintingNotActive);
         require!(!ctx.accounts.ecosystem_config.is_paused, ContentRegistryError::EcosystemPaused);
         require!(!ctx.accounts.bundle.is_locked || ctx.accounts.bundle.minted_count > 0, ContentRegistryError::BundleLocked);
 
-        if let Some(max_supply) = ctx.accounts.bundle_mint_config.max_supply {
+        if let Some(max_supply) = ctx.accounts.mint_config.max_supply {
             require!(ctx.accounts.bundle.minted_count < max_supply, ContentRegistryError::MaxSupplyReached);
         }
 
-        let mint_price = ctx.accounts.bundle_mint_config.price;
-        let had_existing_nfts = ctx.accounts.bundle_reward_pool.total_weight > 0;
+        let mint_price = ctx.accounts.mint_config.price;
+        let had_existing_nfts = ctx.accounts.reward_pool.total_weight > 0;
 
         // Generate randomness
         let slot_hashes_data = ctx.accounts.slot_hashes.try_borrow_data()?;
@@ -741,9 +744,10 @@ impl<'info> SimpleMintBundle<'info> {
         let (rarity, weight) = determine_rarity_from_bytes(randomness_seed.to_bytes());
 
         // Initialize pools if needed
-        if ctx.accounts.bundle_reward_pool.bundle == Pubkey::default() {
-            ctx.accounts.bundle_reward_pool.bundle = bundle_key;
-            ctx.accounts.bundle_reward_pool.created_at = timestamp;
+        if ctx.accounts.reward_pool.item == Pubkey::default() {
+            ctx.accounts.reward_pool.item_type = ItemType::Bundle;
+            ctx.accounts.reward_pool.item = bundle_key;
+            ctx.accounts.reward_pool.created_at = timestamp;
         }
 
         if ctx.accounts.creator_patron_pool.creator == Pubkey::default() {
@@ -794,10 +798,10 @@ impl<'info> SimpleMintBundle<'info> {
         // NFT metadata served from API (not stored on-chain)
         let nft_uri = format!("https://handcraft.art/api/bundle/{}/metadata", ctx.accounts.bundle.bundle_id);
 
-        let bundle_mint_config_seeds = &[
-            BUNDLE_MINT_CONFIG_SEED,
+        let mint_config_seeds = &[
+            MINT_CONFIG_SEED,
             bundle_key.as_ref(),
-            &[ctx.bumps.bundle_mint_config],
+            &[ctx.bumps.mint_config],
         ];
 
         let nft_seeds = &[
@@ -808,19 +812,19 @@ impl<'info> SimpleMintBundle<'info> {
             &[ctx.bumps.nft_asset],
         ];
 
-        // Create PermanentBurnDelegate plugin with bundle_mint_config PDA as authority
+        // Create PermanentBurnDelegate plugin with mint_config PDA as authority
         // This allows our program to burn NFTs via burn_bundle_nft_with_subscription instruction
         let burn_delegate_plugin = PluginAuthorityPair {
             plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
             authority: Some(PluginAuthority::Address {
-                address: ctx.accounts.bundle_mint_config.key()
+                address: ctx.accounts.mint_config.key()
             }),
         };
 
         CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program)
             .asset(&ctx.accounts.nft_asset)
             .collection(Some(&ctx.accounts.collection_asset))
-            .authority(Some(&ctx.accounts.bundle_mint_config.to_account_info()))
+            .authority(Some(&ctx.accounts.mint_config.to_account_info()))
             .payer(&ctx.accounts.payer.to_account_info())
             .owner(Some(&ctx.accounts.payer.to_account_info()))
             .system_program(&ctx.accounts.system_program.to_account_info())
@@ -828,7 +832,7 @@ impl<'info> SimpleMintBundle<'info> {
             .uri(nft_uri)
             .data_state(DataState::AccountState)
             .plugins(vec![burn_delegate_plugin])
-            .invoke_signed(&[bundle_mint_config_seeds, nft_seeds])?;
+            .invoke_signed(&[mint_config_seeds, nft_seeds])?;
 
         // Update bundle state
         ctx.accounts.bundle.minted_count = edition;
@@ -891,26 +895,26 @@ impl<'info> SimpleMintBundle<'info> {
 
             // =========================================================================
             // 50/50 HOLDER REWARD DISTRIBUTION
-            // 50% to BundleRewardPool (bundle NFT holders)
+            // 50% to RewardPool (bundle NFT holders)
             // 50% to ContentRewardPools (content NFT holders, via remaining_accounts)
             // =========================================================================
             if had_existing_nfts && holder_reward_amount > 0 {
                 let bundle_share = holder_reward_amount / 2;  // 6% of mint price
                 let content_share = holder_reward_amount - bundle_share;  // 6% of mint price
 
-                // Send 50% to BundleRewardPool
+                // Send 50% to RewardPool (bundle holders)
                 if bundle_share > 0 {
                     anchor_lang::system_program::transfer(
                         CpiContext::new(
                             ctx.accounts.system_program.to_account_info(),
                             anchor_lang::system_program::Transfer {
                                 from: ctx.accounts.payer.to_account_info(),
-                                to: ctx.accounts.bundle_reward_pool.to_account_info(),
+                                to: ctx.accounts.reward_pool.to_account_info(),
                             },
                         ),
                         bundle_share,
                     )?;
-                    ctx.accounts.bundle_reward_pool.add_rewards(bundle_share);
+                    ctx.accounts.reward_pool.add_rewards(bundle_share);
                 }
 
                 // Distribute 50% to ContentRewardPools (passed as remaining_accounts)
@@ -984,7 +988,7 @@ impl<'info> SimpleMintBundle<'info> {
 
         // Calculate debts BEFORE adding weight
         // Bundle pool debt (IMMEDIATE pool - use actual RPS)
-        let bundle_debt = (weight as u128) * ctx.accounts.bundle_reward_pool.reward_per_share;
+        let bundle_debt = (weight as u128) * ctx.accounts.reward_pool.reward_per_share;
 
         // Calculate virtual RPS for LAZY pools (includes undistributed treasury)
         let patron_treasury_balance = ctx.accounts.creator_patron_treasury.lamports();
@@ -1032,7 +1036,7 @@ impl<'info> SimpleMintBundle<'info> {
         ctx.accounts.unified_nft_state.created_at = timestamp;
 
         // Add weight to ALL pools
-        ctx.accounts.bundle_reward_pool.add_nft(weight);
+        ctx.accounts.reward_pool.add_nft(weight);
         ctx.accounts.creator_patron_pool.total_weight += weight as u64;
         ctx.accounts.global_holder_pool.total_weight += weight as u64;
         ctx.accounts.creator_dist_pool.total_weight += weight as u64;

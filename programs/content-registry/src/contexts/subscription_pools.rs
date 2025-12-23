@@ -284,21 +284,21 @@ pub fn handle_claim_unified_content_rewards(ctx: Context<ClaimUnifiedContentRewa
 // CLAIM UNIFIED BUNDLE REWARDS (Immediate Pool)
 // ============================================================================
 
-/// Claim rewards from BundleRewardPool using UnifiedNftRewardState
+/// Claim rewards from RewardPool using UnifiedNftRewardState
 /// This is for bundle NFTs minted after subscription system deployment
 #[derive(Accounts)]
 pub struct ClaimUnifiedBundleRewards<'info> {
     /// The bundle this NFT belongs to
-    /// CHECK: Verified by seed derivation of bundle_reward_pool
+    /// CHECK: Verified by seed derivation of reward_pool
     pub bundle: AccountInfo<'info>,
 
-    /// BundleRewardPool - holds SOL for this bundle's holder rewards
+    /// RewardPool - holds SOL for this bundle's holder rewards
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     /// UnifiedNftRewardState for this NFT
     #[account(
@@ -324,7 +324,7 @@ pub struct ClaimUnifiedBundleRewards<'info> {
 /// Handler for claim_unified_bundle_rewards
 pub fn handle_claim_unified_bundle_rewards(ctx: Context<ClaimUnifiedBundleRewards>) -> Result<()> {
     let nft_state = &mut ctx.accounts.nft_reward_state;
-    let pool = &mut ctx.accounts.bundle_reward_pool;
+    let pool = &mut ctx.accounts.reward_pool;
 
     // Calculate pending using weighted RPS with saturating subtraction
     let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
@@ -340,7 +340,7 @@ pub fn handle_claim_unified_bundle_rewards(ctx: Context<ClaimUnifiedBundleReward
     pool.total_claimed += pending as u64;
     nft_state.content_or_bundle_debt = weighted_rps;
 
-    msg!("Claimed {} lamports from bundle reward pool", pending);
+    msg!("Claimed {} lamports from reward pool", pending);
 
     Ok(())
 }

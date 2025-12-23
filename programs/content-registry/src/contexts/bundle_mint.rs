@@ -35,11 +35,11 @@ pub struct ConfigureBundleMint<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + BundleMintConfig::INIT_SPACE,
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        space = 8 + MintConfig::INIT_SPACE,
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, BundleMintConfig>,
+    pub mint_config: Account<'info, MintConfig>,
 
     /// CHECK: The Metaplex Core Collection asset to create
     /// Address stored in bundle.collection_asset
@@ -75,13 +75,13 @@ pub fn handle_configure_bundle_mint(
 
     // Validate price
     require!(
-        BundleMintConfig::validate_price(price),
+        MintConfig::validate_price(price, PaymentCurrency::Sol),
         ContentRegistryError::PriceTooLow
     );
 
     // Validate royalty
     require!(
-        BundleMintConfig::validate_royalty(creator_royalty_bps),
+        MintConfig::validate_royalty(creator_royalty_bps),
         ContentRegistryError::InvalidRoyalty
     );
 
@@ -95,9 +95,11 @@ pub fn handle_configure_bundle_mint(
 
     // Initialize mint config
     let mint_config = &mut ctx.accounts.mint_config;
-    mint_config.bundle = bundle_key;
+    mint_config.item_type = ItemType::Bundle;
+    mint_config.item = bundle_key;
     mint_config.creator = ctx.accounts.creator.key();
     mint_config.price = price;
+    mint_config.currency = PaymentCurrency::Sol;
     // Default to DEFAULT_MAX_SUPPLY if not specified
     mint_config.max_supply = Some(max_supply.unwrap_or(DEFAULT_MAX_SUPPLY));
     mint_config.creator_royalty_bps = creator_royalty_bps;
@@ -108,9 +110,9 @@ pub fn handle_configure_bundle_mint(
     // Store collection_asset directly in bundle
     ctx.accounts.bundle.collection_asset = ctx.accounts.collection_asset.key();
 
-    // Derive BundleRewardPool PDA for holder royalties
+    // Derive RewardPool PDA for holder royalties
     let (holder_reward_pool, _) = Pubkey::find_program_address(
-        &[BUNDLE_REWARD_POOL_SEED, bundle_key.as_ref()],
+        &[REWARD_POOL_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
 
@@ -183,10 +185,10 @@ pub struct UpdateBundleMintSettings<'info> {
     #[account(
         mut,
         has_one = creator,
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub mint_config: Account<'info, BundleMintConfig>,
+    pub mint_config: Account<'info, MintConfig>,
 }
 
 pub fn handle_update_bundle_mint_settings(
@@ -203,7 +205,7 @@ pub fn handle_update_bundle_mint_settings(
     // Price can always be updated
     if let Some(new_price) = price {
         require!(
-            BundleMintConfig::validate_price(new_price),
+            MintConfig::validate_price(new_price, PaymentCurrency::Sol),
             ContentRegistryError::PriceTooLow
         );
         mint_config.price = new_price;
@@ -240,7 +242,7 @@ pub fn handle_update_bundle_mint_settings(
     if let Some(new_royalty) = creator_royalty_bps {
         require!(bundle.minted_count == 0, ContentRegistryError::BundleLocked);
         require!(
-            BundleMintConfig::validate_royalty(new_royalty),
+            MintConfig::validate_royalty(new_royalty),
             ContentRegistryError::InvalidRoyalty
         );
         mint_config.creator_royalty_bps = new_royalty;

@@ -507,13 +507,13 @@ pub struct RegisterBundleNftInSubscriptionPools<'info> {
     )]
     pub unified_nft_state: Account<'info, UnifiedNftRewardState>,
 
-    /// BundleRewardPool - already exists, just need RPS
+    /// RewardPool - already exists, just need RPS
     #[account(
         mut,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Account<'info, BundleRewardPool>,
+    pub reward_pool: Account<'info, RewardPool>,
 
     /// CreatorPatronPool - lazy-init if needed
     #[account(
@@ -688,8 +688,8 @@ pub fn handle_register_bundle_nft_in_subscription_pools(
     nft_state.is_bundle = true;
     nft_state.content_or_bundle = bundle_key;
 
-    // Bundle uses BundleRewardPool for immediate rewards
-    nft_state.content_or_bundle_debt = weight as u128 * ctx.accounts.bundle_reward_pool.reward_per_share;
+    // Bundle uses RewardPool for immediate rewards
+    nft_state.content_or_bundle_debt = weight as u128 * ctx.accounts.reward_pool.reward_per_share;
     nft_state.patron_debt = weight as u128 * virtual_patron_rps;
     nft_state.global_debt = weight as u128 * virtual_global_rps;
     nft_state.created_at = now;

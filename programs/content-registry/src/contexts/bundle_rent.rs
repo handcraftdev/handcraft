@@ -32,11 +32,11 @@ pub struct ConfigureBundleRent<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + BundleRentConfig::INIT_SPACE,
-        seeds = [BUNDLE_RENT_CONFIG_SEED, bundle.key().as_ref()],
+        space = 8 + RentConfig::INIT_SPACE,
+        seeds = [RENT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub rent_config: Account<'info, BundleRentConfig>,
+    pub rent_config: Account<'info, RentConfig>,
 
     pub system_program: Program<'info, System>,
 }
@@ -49,22 +49,23 @@ pub fn handle_configure_bundle_rent(
 ) -> Result<()> {
     // Validate all rent fees meet minimum
     require!(
-        BundleRentConfig::validate_fee(rent_fee_6h),
+        RentConfig::validate_fee(rent_fee_6h),
         ContentRegistryError::RentFeeTooLow
     );
     require!(
-        BundleRentConfig::validate_fee(rent_fee_1d),
+        RentConfig::validate_fee(rent_fee_1d),
         ContentRegistryError::RentFeeTooLow
     );
     require!(
-        BundleRentConfig::validate_fee(rent_fee_7d),
+        RentConfig::validate_fee(rent_fee_7d),
         ContentRegistryError::RentFeeTooLow
     );
 
     let clock = Clock::get()?;
 
     let rent_config = &mut ctx.accounts.rent_config;
-    rent_config.bundle = ctx.accounts.bundle.key();
+    rent_config.item_type = ItemType::Bundle;
+    rent_config.item = ctx.accounts.bundle.key();
     rent_config.creator = ctx.accounts.creator.key();
     rent_config.rent_fee_6h = rent_fee_6h;
     rent_config.rent_fee_1d = rent_fee_1d;
@@ -98,10 +99,10 @@ pub struct UpdateBundleRentConfig<'info> {
     #[account(
         mut,
         has_one = creator,
-        seeds = [BUNDLE_RENT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [RENT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub rent_config: Account<'info, BundleRentConfig>,
+    pub rent_config: Account<'info, RentConfig>,
 }
 
 pub fn handle_update_bundle_rent_config(
@@ -116,7 +117,7 @@ pub fn handle_update_bundle_rent_config(
 
     if let Some(fee) = rent_fee_6h {
         require!(
-            BundleRentConfig::validate_fee(fee),
+            RentConfig::validate_fee(fee),
             ContentRegistryError::RentFeeTooLow
         );
         rent_config.rent_fee_6h = fee;
@@ -124,7 +125,7 @@ pub fn handle_update_bundle_rent_config(
 
     if let Some(fee) = rent_fee_1d {
         require!(
-            BundleRentConfig::validate_fee(fee),
+            RentConfig::validate_fee(fee),
             ContentRegistryError::RentFeeTooLow
         );
         rent_config.rent_fee_1d = fee;
@@ -132,7 +133,7 @@ pub fn handle_update_bundle_rent_config(
 
     if let Some(fee) = rent_fee_7d {
         require!(
-            BundleRentConfig::validate_fee(fee),
+            RentConfig::validate_fee(fee),
             ContentRegistryError::RentFeeTooLow
         );
         rent_config.rent_fee_7d = fee;
@@ -166,28 +167,28 @@ pub struct RentBundleSol<'info> {
 
     #[account(
         mut,
-        seeds = [BUNDLE_RENT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [RENT_CONFIG_SEED, bundle.key().as_ref()],
         bump,
         constraint = rent_config.is_active @ ContentRegistryError::RentingNotActive
     )]
-    pub rent_config: Box<Account<'info, BundleRentConfig>>,
+    pub rent_config: Box<Account<'info, RentConfig>>,
 
-    /// Bundle-specific reward pool
+    /// Bundle reward pool
     #[account(
         init_if_needed,
         payer = renter,
-        space = 8 + BundleRewardPool::INIT_SPACE,
-        seeds = [BUNDLE_REWARD_POOL_SEED, bundle.key().as_ref()],
+        space = 8 + RewardPool::INIT_SPACE,
+        seeds = [REWARD_POOL_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub bundle_reward_pool: Box<Account<'info, BundleRewardPool>>,
+    pub reward_pool: Box<Account<'info, RewardPool>>,
 
     /// Mint config PDA - authority for collection operations
     #[account(
-        seeds = [BUNDLE_MINT_CONFIG_SEED, bundle.key().as_ref()],
+        seeds = [MINT_CONFIG_SEED, bundle.key().as_ref()],
         bump
     )]
-    pub mint_config: Box<Account<'info, BundleMintConfig>>,
+    pub mint_config: Box<Account<'info, MintConfig>>,
 
     /// The Metaplex Core Collection asset
     /// CHECK: Verified via bundle.collection_asset
@@ -234,17 +235,18 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
 
     let bundle_key = ctx.accounts.bundle.key();
 
-    // Initialize bundle reward pool if needed
-    if ctx.accounts.bundle_reward_pool.bundle == Pubkey::default() {
-        ctx.accounts.bundle_reward_pool.bundle = bundle_key;
-        ctx.accounts.bundle_reward_pool.created_at = clock.unix_timestamp;
+    // Initialize reward pool if needed
+    if ctx.accounts.reward_pool.item == Pubkey::default() {
+        ctx.accounts.reward_pool.item_type = ItemType::Bundle;
+        ctx.accounts.reward_pool.item = bundle_key;
+        ctx.accounts.reward_pool.created_at = clock.unix_timestamp;
     }
 
     // Get fee and period based on selected tier
     let rent_fee = ctx.accounts.rent_config.get_fee_for_tier(tier);
-    let rent_period = BundleRentConfig::get_period_for_tier(tier);
+    let rent_period = tier.period_seconds();
     let expires_at = clock.unix_timestamp + rent_period;
-    let had_existing_nfts = ctx.accounts.bundle_reward_pool.total_weight > 0;
+    let had_existing_nfts = ctx.accounts.reward_pool.total_weight > 0;
 
     // Process payment using primary sale distribution
     if rent_fee > 0 {
@@ -272,21 +274,21 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
             )?;
         }
 
-        // Transfer holder reward to bundle reward pool (if existing NFTs)
+        // Transfer holder reward to reward pool (if existing NFTs)
         if had_existing_nfts && holder_reward_amount > 0 {
             anchor_lang::system_program::transfer(
                 CpiContext::new(
                     ctx.accounts.system_program.to_account_info(),
                     anchor_lang::system_program::Transfer {
                         from: ctx.accounts.renter.to_account_info(),
-                        to: ctx.accounts.bundle_reward_pool.to_account_info(),
+                        to: ctx.accounts.reward_pool.to_account_info(),
                     },
                 ),
                 holder_reward_amount,
             )?;
 
             // Update reward_per_share for existing holders
-            ctx.accounts.bundle_reward_pool.add_rewards(holder_reward_amount);
+            ctx.accounts.reward_pool.add_rewards(holder_reward_amount);
         }
 
         // Transfer to platform
@@ -332,12 +334,12 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
 
     // Derive mint_config PDA for signing
     let (_, mint_config_bump) = Pubkey::find_program_address(
-        &[BUNDLE_MINT_CONFIG_SEED, bundle_key.as_ref()],
+        &[MINT_CONFIG_SEED, bundle_key.as_ref()],
         ctx.program_id,
     );
 
     let signer_seeds: &[&[&[u8]]] = &[&[
-        BUNDLE_MINT_CONFIG_SEED,
+        MINT_CONFIG_SEED,
         bundle_key.as_ref(),
         &[mint_config_bump],
     ]];
