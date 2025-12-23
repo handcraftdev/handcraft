@@ -8,6 +8,7 @@ interface MusicMetadataFormProps {
   tags: string[];
   onUpdate: (field: string, value: any) => void;
   onBasicUpdate: (field: string, value: any) => void;
+  isEditMode?: boolean;
 }
 
 export function MusicMetadataForm({
@@ -18,6 +19,7 @@ export function MusicMetadataForm({
   tags,
   onUpdate,
   onBasicUpdate,
+  isEditMode = false,
 }: MusicMetadataFormProps) {
   const tagsString = tags.join(', ');
   const handleTagsChange = (value: string) => {
@@ -47,8 +49,10 @@ export function MusicMetadataForm({
             value={title}
             onChange={(e) => onBasicUpdate('title', e.target.value)}
             placeholder="Episode title"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            disabled={isEditMode}
+            className={`w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
+          {isEditMode && <p className="text-xs text-amber-400/70 mt-1">Title cannot be changed after publishing</p>}
         </div>
         <div>
           <label className="block text-sm font-medium mb-2 text-white/70">Host(s)</label>
@@ -95,8 +99,10 @@ export function MusicMetadataForm({
             value={title}
             onChange={(e) => onBasicUpdate('title', e.target.value)}
             placeholder="Book title"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            disabled={isEditMode}
+            className={`w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
+          {isEditMode && <p className="text-xs text-amber-400/70 mt-1">Title cannot be changed after publishing</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -154,8 +160,10 @@ export function MusicMetadataForm({
           value={title}
           onChange={(e) => onBasicUpdate('title', e.target.value)}
           placeholder="Song title"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          disabled={isEditMode}
+          className={`w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
         />
+        {isEditMode && <p className="text-xs text-amber-400/70 mt-1">Title cannot be changed after publishing</p>}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>

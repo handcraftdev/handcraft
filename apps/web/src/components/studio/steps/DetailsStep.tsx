@@ -55,6 +55,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
             tags={draft?.tags || []}
             onUpdate={handleMetadataUpdate}
             onBasicUpdate={handleBasicUpdate}
+            isEditMode={isEditMode}
           />
         );
       case 5: // Music
@@ -69,6 +70,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
             tags={draft?.tags || []}
             onUpdate={handleMetadataUpdate}
             onBasicUpdate={handleBasicUpdate}
+            isEditMode={isEditMode}
           />
         );
       case 8: // Photo
@@ -82,6 +84,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
             tags={draft?.tags || []}
             onUpdate={handleMetadataUpdate}
             onBasicUpdate={handleBasicUpdate}
+            isEditMode={isEditMode}
           />
         );
       case 10: // Book
@@ -95,6 +98,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
             tags={draft?.tags || []}
             onUpdate={handleMetadataUpdate}
             onBasicUpdate={handleBasicUpdate}
+            isEditMode={isEditMode}
           />
         );
       case 16: // Post
@@ -106,6 +110,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
             tags={draft?.tags || []}
             onUpdate={handleMetadataUpdate}
             onBasicUpdate={handleBasicUpdate}
+            isEditMode={isEditMode}
           />
         );
       default:

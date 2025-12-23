@@ -7,6 +7,7 @@ interface PostMetadataFormProps {
   tags: string[];
   onUpdate: (field: string, value: any) => void;
   onBasicUpdate: (field: string, value: any) => void;
+  isEditMode?: boolean;
 }
 
 export function PostMetadataForm({
@@ -16,6 +17,7 @@ export function PostMetadataForm({
   tags,
   onUpdate,
   onBasicUpdate,
+  isEditMode = false,
 }: PostMetadataFormProps) {
   const tagsString = tags.join(', ');
   const handleTagsChange = (value: string) => {
@@ -32,8 +34,10 @@ export function PostMetadataForm({
           value={title}
           onChange={(e) => onBasicUpdate('title', e.target.value)}
           placeholder="Post title"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          disabled={isEditMode}
+          className={`w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
         />
+        {isEditMode && <p className="text-xs text-amber-400/70 mt-1">Title cannot be changed after publishing</p>}
       </div>
       <div>
         <label className="block text-sm font-medium mb-2 text-white/70">Author</label>
