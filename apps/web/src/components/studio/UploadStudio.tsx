@@ -148,6 +148,8 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
   const {
     registerContentWithMintAndRent,
     updateContent,
+    updateMintSettings,
+    updateRentConfig,
     isUpdatingContent,
     ecosystemConfig,
     content,
@@ -539,13 +541,51 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
       }
       console.log('[UploadStudio] Metadata uploaded:', metadataResult.cid);
 
-      // Update on-chain
-      console.log('[UploadStudio] Updating on-chain...');
+      // Get the collection asset from content entry for metadata update
+      const contentEntry = content.find(c => c.contentCid === editContentCid);
+      const collectionAsset = contentEntry?.collectionAsset;
+
+      if (!collectionAsset) {
+        throw new Error('Collection asset not found - cannot update metadata');
+      }
+
+      // Update on-chain (Metaplex Core collection URI)
+      console.log('[UploadStudio] Updating metadata on-chain...', { collectionAsset: collectionAsset.toBase58() });
       await updateContent({
         contentCid: editContentCid,
         metadataCid: metadataResult.cid,
+        collectionAsset: collectionAsset,
       });
-      console.log('[UploadStudio] On-chain update successful!');
+      console.log('[UploadStudio] Metadata update successful!');
+
+      // Update mint settings (price) if changed
+      if (draft.mint_price != null) {
+        console.log('[UploadStudio] Updating mint settings...', { price: draft.mint_price });
+        await updateMintSettings({
+          contentCid: editContentCid,
+          price: BigInt(Math.floor(draft.mint_price)),
+          maxSupply: null, // Don't change max supply
+          creatorRoyaltyBps: null, // Don't change royalty
+          isActive: null, // Don't change active status
+        });
+        console.log('[UploadStudio] Mint settings update successful!');
+      }
+
+      // Update rent config (rental prices) if changed
+      const rental = draft.rental_config || {};
+      if (rental.rentFee6h && rental.rentFee1d && rental.rentFee7d) {
+        console.log('[UploadStudio] Updating rent config...', rental);
+        await updateRentConfig({
+          contentCid: editContentCid,
+          rentFee6h: BigInt(Math.floor(rental.rentFee6h)),
+          rentFee1d: BigInt(Math.floor(rental.rentFee1d)),
+          rentFee7d: BigInt(Math.floor(rental.rentFee7d)),
+          isActive: null, // Don't change active status
+        });
+        console.log('[UploadStudio] Rent config update successful!');
+      }
+
+      console.log('[UploadStudio] All on-chain updates successful!');
 
       // Navigate back to studio
       router.push('/studio?tab=content');
