@@ -1672,6 +1672,53 @@ export function useContentRegistry() {
     },
   });
 
+  // Add multiple content items to a bundle in a single transaction
+  const addBundleItemsBatch = useMutation({
+    mutationFn: async ({
+      bundleId,
+      contentCids,
+    }: {
+      bundleId: string;
+      contentCids: string[];
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+      if (contentCids.length === 0) throw new Error("No content items to add");
+
+      console.log(`Adding ${contentCids.length} items to bundle ${bundleId}...`);
+
+      const tx = new Transaction();
+
+      // Add all items in a single transaction
+      for (let i = 0; i < contentCids.length; i++) {
+        const instruction = await client.addBundleItemInstruction(
+          publicKey,
+          bundleId,
+          contentCids[i],
+          i // position
+        );
+        tx.add(instruction);
+      }
+
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      console.log(`Simulating batch add with ${tx.instructions.length} instructions...`);
+      await simulateTransaction(connection, tx, publicKey);
+      console.log("Simulation successful, sending to wallet...");
+
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
+
+      console.log(`Added ${contentCids.length} items to bundle`);
+      return { signature: sig };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["bundle", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundleWithItems", publicKey?.toBase58(), variables.bundleId] });
+      queryClient.invalidateQueries({ queryKey: ["bundles", "creator", publicKey?.toBase58()] });
+    },
+  });
+
   // Remove content from a bundle
   const removeBundleItem = useMutation({
     mutationFn: async ({
@@ -3047,12 +3094,13 @@ export function useContentRegistry() {
     createBundle,
     createBundleWithMintAndRent,
     addBundleItem,
+    addBundleItemsBatch,
     removeBundleItem,
     updateBundle,
     deleteBundle,
     isCreatingBundle: createBundle.isPending,
     isCreatingBundleWithMintAndRent: createBundleWithMintAndRent.isPending,
-    isAddingBundleItem: addBundleItem.isPending,
+    isAddingBundleItem: addBundleItem.isPending || addBundleItemsBatch.isPending,
     isRemovingBundleItem: removeBundleItem.isPending,
     isUpdatingBundle: updateBundle.isPending,
     isDeletingBundle: deleteBundle.isPending,

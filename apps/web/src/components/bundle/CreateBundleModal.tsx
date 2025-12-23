@@ -73,7 +73,7 @@ export function CreateBundleModal({
 
   const {
     createBundleWithMintAndRent,
-    addBundleItem,
+    addBundleItemsBatch,
     isCreatingBundleWithMintAndRent,
     isAddingBundleItem,
     content: userContent,
@@ -280,13 +280,11 @@ export function CreateBundleModal({
         platform: publicKey,
       });
 
-      // Add selected content items
-      for (let i = 0; i < selectedContentCids.length; i++) {
-        const contentCid = selectedContentCids[i];
-        await addBundleItem.mutateAsync({
+      // Add selected content items in a single transaction
+      if (selectedContentCids.length > 0) {
+        await addBundleItemsBatch.mutateAsync({
           bundleId,
-          contentCid,
-          position: i,
+          contentCids: selectedContentCids,
         });
       }
 
@@ -482,10 +480,13 @@ export function CreateBundleModal({
                     <p className="text-xs text-white/30 mt-1">Upload some content first to create a bundle</p>
                   </div>
                 ) : (
-                  userContent.map((content) => {
-                    // Use pubkey as identifier since contentCid may not be available from on-chain
-                    const contentKey = content.pubkey?.toBase58() || "";
-                    const meta = contentMetadata[contentKey];
+                  userContent
+                    .filter((content) => content.contentCid) // Only show content with CID available
+                    .map((content) => {
+                    // Use contentCid as identifier (required for bundle item instruction)
+                    const contentKey = content.contentCid!;
+                    const metaKey = content.pubkey?.toBase58() || contentKey;
+                    const meta = contentMetadata[metaKey];
                     const isSelected = selectedContentCids.includes(contentKey);
                     const selectionIndex = selectedContentCids.indexOf(contentKey);
 
