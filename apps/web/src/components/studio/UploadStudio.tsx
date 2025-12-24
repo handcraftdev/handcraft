@@ -20,9 +20,16 @@ import { isUserRejection, getTransactionErrorMessage } from '@/utils/wallet-erro
 import { ConfirmModal, AlertModal } from '@/components/ui/ConfirmModal';
 import { formatCollectionName } from '@/utils/nft-naming';
 
-const DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
-  ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
-  : null;
+// Lazy initialization to avoid SSR _bn issues
+let _DEFAULT_PLATFORM_WALLET: PublicKey | null | undefined = undefined;
+function getDefaultPlatformWallet(): PublicKey | null {
+  if (_DEFAULT_PLATFORM_WALLET === undefined) {
+    _DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
+      ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
+      : null;
+  }
+  return _DEFAULT_PLATFORM_WALLET;
+}
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -439,7 +446,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
       const maxSupplyValue = draft.supply_limit ? BigInt(draft.supply_limit) : null;
       const royaltyBps = 400; // Fixed 4% royalty
 
-      const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+      const platformWallet = getDefaultPlatformWallet() || ecosystemConfig.treasury;
 
       // Build rent fees if provided (already in lamports)
       const rental = draft.rental_config || {};

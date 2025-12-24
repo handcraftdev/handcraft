@@ -28,9 +28,26 @@ interface RentContentModalProps {
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
-// Platform addresses
-const TREASURY_ADDRESS = new PublicKey("3v8n7vBPDNR9xpJWPEQALmH9WxmqTLM9aQ3W5jKo4bXf");
-const PLATFORM_ADDRESS = new PublicKey("HCFiRpqFxh63z9BnJYP6LAv3YvLwuEwBCnUGh9xmzwAz");
+// Platform addresses - lazy initialization to avoid SSR _bn issues
+const TREASURY_ADDRESS_STR = "3v8n7vBPDNR9xpJWPEQALmH9WxmqTLM9aQ3W5jKo4bXf";
+const PLATFORM_ADDRESS_STR = "HCFiRpqFxh63z9BnJYP6LAv3YvLwuEwBCnUGh9xmzwAz";
+
+let _TREASURY_ADDRESS: PublicKey | null = null;
+let _PLATFORM_ADDRESS: PublicKey | null = null;
+
+function getTreasuryAddress(): PublicKey {
+  if (!_TREASURY_ADDRESS) {
+    _TREASURY_ADDRESS = new PublicKey(TREASURY_ADDRESS_STR);
+  }
+  return _TREASURY_ADDRESS;
+}
+
+function getPlatformAddress(): PublicKey {
+  if (!_PLATFORM_ADDRESS) {
+    _PLATFORM_ADDRESS = new PublicKey(PLATFORM_ADDRESS_STR);
+  }
+  return _PLATFORM_ADDRESS;
+}
 
 const TIER_OPTIONS = [
   { tier: RentTier.SixHours, label: "6 Hours", period: RENT_PERIOD_6H },
@@ -88,13 +105,13 @@ export function RentContentModal({
     }
 
     try {
-      const treasury = ecosystemConfig?.treasury || TREASURY_ADDRESS;
+      const treasury = ecosystemConfig?.treasury || getTreasuryAddress();
 
       await rentContentSol({
         contentCid,
         creator,
         treasury,
-        platform: PLATFORM_ADDRESS,
+        platform: getPlatformAddress(),
         tier: selectedTier,
       });
 

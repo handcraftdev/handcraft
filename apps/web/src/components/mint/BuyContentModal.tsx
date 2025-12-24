@@ -15,10 +15,16 @@ import { getTransactionErrorMessage } from "@/utils/wallet-errors";
 import { RarityBadge, RarityProbabilities, RARITY_STYLES } from "@/components/rarity";
 
 // Default platform wallet - if not set, use ecosystem treasury
-// This can be configured per-deployment or made dynamic
-const DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
-  ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
-  : null;
+// Lazy initialization to avoid SSR _bn issues
+let _DEFAULT_PLATFORM_WALLET: PublicKey | null | undefined = undefined;
+function getDefaultPlatformWallet(): PublicKey | null {
+  if (_DEFAULT_PLATFORM_WALLET === undefined) {
+    _DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
+      ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
+      : null;
+  }
+  return _DEFAULT_PLATFORM_WALLET;
+}
 
 interface BuyContentModalProps {
   isOpen: boolean;
@@ -86,7 +92,7 @@ export function BuyContentModal({
       throw new Error(`Insufficient balance. You need at least ${needed.toFixed(3)} more SOL.`);
     }
 
-    const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+    const platformWallet = getDefaultPlatformWallet() || ecosystemConfig.treasury;
 
     for (let i = 0; i < quantity; i++) {
       setMintingProgress(i + 1);

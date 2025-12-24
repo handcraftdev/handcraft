@@ -15,7 +15,16 @@ import {
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
 const PRECISION = BigInt(1_000_000_000_000); // 1e12
-const MPL_CORE_PROGRAM = new PublicKey("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
+const MPL_CORE_PROGRAM_ID = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
+
+// Lazy initialization to avoid SSR _bn issues
+let _MPL_CORE_PROGRAM: PublicKey | null = null;
+function getMplCoreProgram(): PublicKey {
+  if (!_MPL_CORE_PROGRAM) {
+    _MPL_CORE_PROGRAM = new PublicKey(MPL_CORE_PROGRAM_ID);
+  }
+  return _MPL_CORE_PROGRAM;
+}
 
 /**
  * Calculate virtual RPS for lazy pools (includes undistributed treasury balance)
@@ -134,7 +143,7 @@ export function useUnifiedRewards() {
       if (!publicKey || !client) return null;
 
       // 1. Fetch all user's MPL Core NFTs
-      const mplCoreAccounts = await connection.getProgramAccounts(MPL_CORE_PROGRAM, {
+      const mplCoreAccounts = await connection.getProgramAccounts(getMplCoreProgram(), {
         filters: [{ memcmp: { offset: 1, bytes: publicKey.toBase58() } }]
       });
       const nftAssets = mplCoreAccounts.map(acc => acc.pubkey);

@@ -7,9 +7,16 @@ import { useContentUpload } from "@/hooks/useUpload";
 import { useContentRegistry, ContentType as OnChainContentType } from "@/hooks/useContentRegistry";
 import { isUserRejection, getTransactionErrorMessage } from "@/utils/wallet-errors";
 
-const DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
-  ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
-  : null;
+// Lazy initialization to avoid SSR _bn issues
+let _DEFAULT_PLATFORM_WALLET: PublicKey | null | undefined = undefined;
+function getDefaultPlatformWallet(): PublicKey | null {
+  if (_DEFAULT_PLATFORM_WALLET === undefined) {
+    _DEFAULT_PLATFORM_WALLET = process.env.NEXT_PUBLIC_PLATFORM_WALLET
+      ? new PublicKey(process.env.NEXT_PUBLIC_PLATFORM_WALLET)
+      : null;
+  }
+  return _DEFAULT_PLATFORM_WALLET;
+}
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -654,7 +661,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           if (!ecosystemConfig) {
             throw new Error("Ecosystem config not loaded. Please try again.");
           }
-          const platformWallet = DEFAULT_PLATFORM_WALLET || ecosystemConfig.treasury;
+          const platformWallet = getDefaultPlatformWallet() || ecosystemConfig.treasury;
 
           // Build rent fees if provided (all three must be set)
           let rentFees: { rentFee6h: bigint; rentFee1d: bigint; rentFee7d: bigint } | undefined;

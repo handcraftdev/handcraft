@@ -45,10 +45,11 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
     return [];
   }, []);
 
-  // Don't render providers until mounted to avoid hydration issues
+  // Don't render ANYTHING until mounted - children contain components that use wallet context
+  // Rendering children without providers causes "WalletContext not found" errors
   if (!mounted) {
-    console.log("[SolanaProviders] Not mounted yet, returning children only");
-    return <>{children}</>;
+    console.log("[SolanaProviders] Not mounted yet, returning null");
+    return null;
   }
 
   console.log("[SolanaProviders] Rendering full provider tree");
