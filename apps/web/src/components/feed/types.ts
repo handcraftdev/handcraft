@@ -30,9 +30,10 @@ export interface UnifiedFeedItem {
   creator: PublicKey;
   createdAt: bigint;
 
-  // Shared metadata (from IPFS)
+  // Shared metadata (from IPFS + on-chain)
   metadata?: {
-    title?: string;
+    collectionName?: string;  // On-chain collection name (smaller, secondary)
+    title?: string;           // IPFS metadata title (main highlight)
     description?: string;
     image?: string;
     tags?: string[];

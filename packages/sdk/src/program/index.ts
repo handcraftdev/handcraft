@@ -162,25 +162,59 @@ export function extractMetadataCidFromUri(uri: string): string | null {
 }
 
 /**
- * Parse Metaplex Core collection asset data to extract the URI
+ * Parsed collection metadata from on-chain data
+ */
+export interface CollectionOnChainData {
+  name: string;
+  uri: string;
+}
+
+/**
+ * Parse Metaplex Core collection asset data to extract name and URI
  * Collection structure: key (1) + update_authority (32) + name (4+len) + uri (4+len) + ...
  */
-export function parseCollectionUri(data: Buffer): string | null {
+export function parseCollectionData(data: Buffer): CollectionOnChainData | null {
   try {
     // Skip key (1 byte) and update_authority (32 bytes raw pubkey)
     let offset = 1 + 32;
 
-    // Read name length (4 bytes)
+    // Read name length (4 bytes) and name string
     const nameLen = data.readUInt32LE(offset);
-    offset += 4 + nameLen;
+    offset += 4;
+    const name = data.slice(offset, offset + nameLen).toString("utf8");
+    offset += nameLen;
 
-    // Read uri length (4 bytes)
+    // Read uri length (4 bytes) and uri string
     const uriLen = data.readUInt32LE(offset);
     offset += 4;
-
-    // Read uri string
     const uri = data.slice(offset, offset + uriLen).toString("utf8");
-    return uri;
+
+    return { name, uri };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse Metaplex Core collection asset data to extract the URI
+ * @deprecated Use parseCollectionData for both name and URI
+ */
+export function parseCollectionUri(data: Buffer): string | null {
+  const result = parseCollectionData(data);
+  return result?.uri ?? null;
+}
+
+/**
+ * Fetch Metaplex Core collection and extract name and URI
+ */
+export async function fetchCollectionData(
+  connection: Connection,
+  collectionAsset: PublicKey
+): Promise<CollectionOnChainData | null> {
+  try {
+    const accountInfo = await connection.getAccountInfo(collectionAsset);
+    if (!accountInfo?.data) return null;
+    return parseCollectionData(accountInfo.data);
   } catch {
     return null;
   }
@@ -188,23 +222,19 @@ export function parseCollectionUri(data: Buffer): string | null {
 
 /**
  * Fetch Metaplex Core collection and extract its metadata URI
+ * @deprecated Use fetchCollectionData for both name and URI
  */
 export async function fetchCollectionUri(
   connection: Connection,
   collectionAsset: PublicKey
 ): Promise<string | null> {
-  try {
-    const accountInfo = await connection.getAccountInfo(collectionAsset);
-    if (!accountInfo?.data) return null;
-    return parseCollectionUri(accountInfo.data);
-  } catch {
-    return null;
-  }
+  const data = await fetchCollectionData(connection, collectionAsset);
+  return data?.uri ?? null;
 }
 
 /**
  * Enrich a ContentEntry with metadata from its Metaplex collection
- * Fetches the collection URI and parses the metadata JSON
+ * Fetches the collection name/URI and parses the metadata JSON
  */
 export async function enrichContentWithMetadata(
   connection: Connection,
@@ -216,17 +246,21 @@ export async function enrichContentWithMetadata(
       return content;
     }
 
-    // Get collection URI
-    const uri = await fetchCollectionUri(connection, content.collectionAsset);
-    if (!uri) return content;
+    // Get collection name and URI from on-chain data
+    const collectionData = await fetchCollectionData(connection, content.collectionAsset);
+    if (!collectionData) return content;
 
     // Extract metadata CID from URI
-    const metadataCid = extractMetadataCidFromUri(uri);
+    const metadataCid = extractMetadataCidFromUri(collectionData.uri);
 
     // Fetch metadata from IPFS
-    const metadata = await fetchCollectionMetadata(uri);
+    const metadata = await fetchCollectionMetadata(collectionData.uri);
     if (!metadata) {
-      return { ...content, metadataCid: metadataCid || undefined };
+      return {
+        ...content,
+        collectionName: collectionData.name || undefined,
+        metadataCid: metadataCid || undefined,
+      };
     }
 
     // Extract fields from metadata (check both camelCase and snake_case)
@@ -244,9 +278,17 @@ export async function enrichContentWithMetadata(
                       metadata.properties?.createdAt ??
                       metadata.properties?.created_at ??
                       undefined;
+    // Use collection_name from IPFS metadata (e.g., "Summer Photo") instead of on-chain name
+    const props = metadata.properties as Record<string, unknown> | undefined;
+    const collectionName = (props?.collection_name as string) ||
+                           (props?.collectionName as string) ||
+                           (metadata.collection_name as string) ||
+                           (metadata.collectionName as string) ||
+                           undefined;
 
     return {
       ...content,
+      collectionName,
       contentCid,
       metadataCid: metadataCid || undefined,
       contentType,
@@ -277,6 +319,89 @@ export async function enrichContentEntriesWithMetadata(
     const batch = entries.slice(i, i + concurrency);
     const enrichedBatch = await Promise.allSettled(
       batch.map(entry => enrichContentWithMetadata(connection, entry))
+    );
+
+    for (let j = 0; j < enrichedBatch.length; j++) {
+      const result = enrichedBatch[j];
+      if (result.status === "fulfilled") {
+        results.push(result.value);
+      } else {
+        // On failure, keep original entry
+        results.push(batch[j]);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Enrich a Bundle with metadata from its Metaplex collection
+ * Fetches the collection URI and extracts metadataCid and collection_name
+ * @param connection Solana connection
+ * @param bundle Bundle to enrich
+ */
+export async function enrichBundleWithMetadata(
+  connection: Connection,
+  bundle: Bundle
+): Promise<Bundle> {
+  try {
+    // Skip if already enriched or no collection asset
+    if (bundle.metadataCid && bundle.collectionName) {
+      return bundle;
+    }
+    if (!bundle.collectionAsset || bundle.collectionAsset.equals(PublicKey.default)) {
+      return bundle;
+    }
+
+    // Get collection name and URI from on-chain data
+    const collectionData = await fetchCollectionData(connection, bundle.collectionAsset);
+    if (!collectionData) return bundle;
+
+    // Extract metadata CID from URI
+    const metadataCid = extractMetadataCidFromUri(collectionData.uri);
+
+    // Fetch metadata from IPFS to get collection_name
+    const metadata = await fetchCollectionMetadata(collectionData.uri);
+
+    // Use collection_name from IPFS metadata (e.g., "Summer Photo") instead of on-chain name
+    const props = metadata?.properties as Record<string, unknown> | undefined;
+    const collectionName = (props?.collection_name as string) ||
+                           (props?.collectionName as string) ||
+                           (metadata?.collection_name as string) ||
+                           (metadata?.collectionName as string) ||
+                           undefined;
+
+    return {
+      ...bundle,
+      collectionName,
+      metadataCid: metadataCid || undefined,
+    };
+  } catch {
+    return bundle;
+  }
+}
+
+/**
+ * Batch enrich multiple Bundles with metadata from Metaplex collections
+ * Uses Promise.allSettled for resilience - failed enrichments return original bundle
+ * @param connection Solana connection
+ * @param bundles Array of Bundle objects to enrich
+ * @param concurrency Max concurrent metadata fetches (default 5)
+ */
+export async function enrichBundleEntriesWithMetadata(
+  connection: Connection,
+  bundles: Bundle[],
+  concurrency = 5
+): Promise<Bundle[]> {
+  if (bundles.length === 0) return [];
+
+  // Process in batches to limit concurrent requests
+  const results: Bundle[] = [];
+  for (let i = 0; i < bundles.length; i += concurrency) {
+    const batch = bundles.slice(i, i + concurrency);
+    const enrichedBatch = await Promise.allSettled(
+      batch.map(entry => enrichBundleWithMetadata(connection, entry))
     );
 
     for (let j = 0; j < enrichedBatch.length; j++) {
@@ -2912,7 +3037,7 @@ export async function fetchAllBundles(
       .map((acc: { account: Record<string, unknown> }) => ({
         creator: acc.account.creator as PublicKey,
         bundleId: acc.account.bundleId as string,
-        metadataCid: acc.account.metadataCid as string,
+        collectionAsset: acc.account.collectionAsset as PublicKey,
         bundleType: anchorToBundleType(acc.account.bundleType as object),
         itemCount: acc.account.itemCount as number,
         isActive: acc.account.isActive as boolean,
@@ -2954,7 +3079,7 @@ export async function fetchBundlesByCreator(
     return accounts.map((acc: { account: Record<string, unknown> }) => ({
       creator: acc.account.creator as PublicKey,
       bundleId: acc.account.bundleId as string,
-      metadataCid: acc.account.metadataCid as string,
+      collectionAsset: acc.account.collectionAsset as PublicKey,
       bundleType: anchorToBundleType(acc.account.bundleType as object),
       itemCount: acc.account.itemCount as number,
       isActive: acc.account.isActive as boolean,
@@ -5094,7 +5219,15 @@ export function createContentRegistryClient(connection: Connection) {
     fetchBundle: (creator: PublicKey, bundleId: string) => fetchBundle(connection, creator, bundleId),
     fetchBundleByPda: (bundlePda: PublicKey) => fetchBundleByPda(connection, bundlePda),
     fetchAllBundles: () => fetchAllBundles(connection),
+    async fetchAllBundlesWithMetadata(): Promise<Bundle[]> {
+      const bundles = await fetchAllBundles(connection);
+      return enrichBundleEntriesWithMetadata(connection, bundles);
+    },
     fetchBundlesByCreator: (creator: PublicKey) => fetchBundlesByCreator(connection, creator),
+    async fetchBundlesByCreatorWithMetadata(creator: PublicKey): Promise<Bundle[]> {
+      const bundles = await fetchBundlesByCreator(connection, creator);
+      return enrichBundleEntriesWithMetadata(connection, bundles);
+    },
     fetchBundleItems: (creator: PublicKey, bundleId: string) => fetchBundleItems(connection, creator, bundleId),
     fetchBundleWithItems: (creator: PublicKey, bundleId: string) => fetchBundleWithItems(connection, creator, bundleId),
     findBundlesForContent: (contentCid: string) => findBundlesForContent(connection, contentCid),

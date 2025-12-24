@@ -363,17 +363,19 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
     // Add content items
     for (const content of globalContent) {
       const contentId = content.contentCid ?? content.pubkey?.toBase58() ?? "";
+      const metadataTitle = content.metadata?.title || content.metadata?.name;
       items.push({
         id: contentId,
         type: "content",
         creator: content.creator,
         createdAt: content.createdAt ?? BigInt(0),
-        metadata: content.metadata ? {
-          title: content.metadata.title || content.metadata.name,
-          description: content.metadata.description,
+        metadata: {
+          collectionName: content.collectionName,
+          title: metadataTitle,
+          description: content.metadata?.description,
           image: content.previewCid ? getIpfsUrl(content.previewCid) : undefined,
-          tags: content.metadata.tags,
-        } : undefined,
+          tags: content.metadata?.tags,
+        },
         contentCid: content.contentCid ?? contentId,
         contentType: content.contentType,
         previewCid: content.previewCid,
@@ -393,12 +395,13 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         type: "bundle",
         creator: bundle.creator,
         createdAt: bundle.createdAt,
-        metadata: bundle.metadata ? {
-          title: bundle.metadata.name,
-          description: bundle.metadata.description,
-          image: bundle.metadata.image,
-          tags: bundle.metadata.tags,
-        } : undefined,
+        metadata: {
+          collectionName: bundle.collectionName,
+          title: bundle.metadata?.name,
+          description: bundle.metadata?.description,
+          image: bundle.metadata?.image,
+          tags: bundle.metadata?.tags,
+        },
         bundleId: bundle.bundleId,
         bundleType: bundle.bundleType,
         itemCount: bundle.itemCount,
@@ -859,7 +862,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
         {displayItems.map((item, index) => (
           item.type === "content" && item.contentEntry ? (
-            <ContentSlide key={item.id} content={item.contentEntry} index={index} isActive={index === currentIndex} onNavigateToContent={navigateToContent} onOverlayChange={handleOverlayChange} />
+            <ContentSlide key={item.id} content={item.contentEntry} index={index} isActive={index === currentIndex} onNavigateToContent={navigateToContent} onOverlayChange={handleOverlayChange} enrichedBundles={globalBundles} />
           ) : item.type === "bundle" && item.bundleEntry ? (
             <BundleFeedItem
               key={item.id}
@@ -883,9 +886,11 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 // ============== CONTENT SLIDE (immersive mode) ==============
 export interface BundleItemDisplay {
   contentCid: string;
+  collectionName?: string;
   title?: string;
   description?: string;
   previewCid?: string;
+  thumbnail?: string;
   position: number;
   contentType?: SDKContentType;
   isEncrypted?: boolean;
@@ -916,9 +921,11 @@ interface ContentSlideProps {
   onOverlayChange?: (visible: boolean) => void;
   // Skip rendering the data-feed-item wrapper (used when parent already provides it)
   skipFeedItemWrapper?: boolean;
+  // Enriched bundles for "part of bundle" display
+  enrichedBundles?: EnrichedBundle[];
 }
 
-export function ContentSlide({ content, index, isActive, rightPanelOpen = false, bundleContext, onNavigateToContent, onOverlayChange, skipFeedItemWrapper = false }: ContentSlideProps) {
+export function ContentSlide({ content, index, isActive, rightPanelOpen = false, bundleContext, onNavigateToContent, onOverlayChange, skipFeedItemWrapper = false, enrichedBundles = [] }: ContentSlideProps) {
   const [showOverlay, setShowOverlay] = useState(true);
 
   // Notify parent when overlay visibility changes or slide becomes active
@@ -1082,7 +1089,11 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const album = contextData.album || content.metadata?.album;
   const duration = contextData.duration;
 
-  const contentBundles = content.contentCid ? getBundlesForContent(content.contentCid) : [];
+  // Get bundle refs from hook, then find enriched versions with metadata
+  const bundleRefs = content.contentCid ? getBundlesForContent(content.contentCid) : [];
+  const contentBundles = bundleRefs.length > 0 && enrichedBundles.length > 0
+    ? bundleRefs.map(ref => enrichedBundles.find(b => b.bundleId === ref.bundleId && b.creator.toBase58() === ref.creator.toBase58())).filter((b): b is EnrichedBundle => !!b)
+    : bundleRefs;
   const ownsNftFromBundle = contentBundles.length > 0 && walletBundleNfts.some(nft => nft.bundleId && nft.creator && contentBundles.some(bundle => bundle.bundleId === nft.bundleId && bundle.creator.toBase58() === nft.creator?.toBase58()));
 
   const shortAddress = content.creatorAddress ? `${content.creatorAddress.slice(0, 4)}...${content.creatorAddress.slice(-4)}` : "Unknown";
@@ -1164,8 +1175,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
   // Wrapper props - only add data-feed-item when not skipping (parent provides it)
   const wrapperProps = skipFeedItemWrapper
-    ? { className: "h-full w-full relative flex items-center justify-center bg-black overflow-hidden" }
-    : { "data-feed-item": true, "data-index": index, className: "h-screen w-full snap-start snap-always relative flex items-center justify-center bg-black overflow-hidden" };
+    ? { className: "h-full w-full relative bg-black overflow-hidden" }
+    : { "data-feed-item": true, "data-index": index, className: "h-screen w-full snap-start snap-always relative bg-black overflow-hidden" };
 
   // Get thumbnail for blurred background
   // Use metadata.image if available, otherwise use content itself for images
@@ -1178,14 +1189,16 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       {thumbnailUrl && (
         <>
           <div
-            className="absolute inset-0 bg-cover bg-center blur scale-110"
+            className={`absolute top-0 bottom-0 left-0 bg-cover bg-center blur scale-110 transition-all duration-300 ${showBundleSidebar ? 'right-80' : 'right-0'}`}
             style={{ backgroundImage: `url(${thumbnailUrl})` }}
           />
-          <div className="absolute inset-0 bg-black/60" />
+          <div className={`absolute top-0 bottom-0 left-0 bg-black/60 transition-all duration-300 ${showBundleSidebar ? 'right-80' : 'right-0'}`} />
         </>
       )}
 
-      <div className={`absolute inset-0 transition-all duration-300 ${showBundleSidebar ? "right-80" : ""}`}>
+      {/* Main content area - uses flex to share space with sidebar */}
+      <div className="absolute inset-0 flex">
+        <div className={`flex-1 relative flex items-center justify-center transition-all duration-300 ${showBundleSidebar ? 'mr-80' : ''}`}>
         {showPlaceholder || !contentUrl ? (
           <div className="w-full h-full flex items-center justify-center">
             <ViewerPlaceholder contentType={content.contentType} />
@@ -1224,16 +1237,23 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
             </div>
           </div>
         )}
+        </div>
       </div>
 
 
       {/* Bottom Overlay */}
-      <div className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+      <div
+        className={`absolute bottom-0 left-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showBundleSidebar ? 'right-80' : 'right-0'} ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+      >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
           <div><p className="text-white font-medium">{displayName}</p>{timeAgo && <p className="text-white/40 text-xs">{timeAgo}</p>}</div>
         </div>
-        <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
+        {/* Show content's collection name */}
+        {content.collectionName && content.collectionName !== (content.metadata?.title || content.metadata?.name) && (
+          <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide mb-1">{content.collectionName}</p>
+        )}
+        <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || content.collectionName || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
         {(artist || album) && <p className="text-white/50 text-sm mb-2">{artist}{artist && album && " · "}{album}</p>}
         {content.metadata?.description && <p className="text-white/40 text-sm line-clamp-2 mb-4">{content.metadata.description}</p>}
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -1287,7 +1307,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
               <span className="text-white/30">·</span>
               <span className="text-white/60 text-sm">{bundleContext.currentIndex + 1} of {bundleContext.items.length}</span>
             </div>
-            <h3 className="text-white font-medium mb-1">{bundleContext.metadata?.title || bundleContext.bundle.bundleId}</h3>
+            {bundleContext.bundle.collectionName && bundleContext.bundle.collectionName !== bundleContext.metadata?.title && (
+              <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide">{bundleContext.bundle.collectionName}</p>
+            )}
+            <h3 className="text-white font-medium mb-1">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
             {bundleContext.metadata?.description && (
               <p className="text-white/40 text-sm line-clamp-1 mb-2">{bundleContext.metadata.description}</p>
             )}
@@ -1331,7 +1354,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
-                  {bundle.bundleId}
+                  {bundle.metadata?.name || bundle.collectionName || bundle.bundleId}
                 </button>
               ))}
               {contentBundles.length > 3 && (
@@ -1393,7 +1416,12 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
           {/* Sidebar Header */}
           <div className="p-4 border-b border-white/10">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-white font-medium truncate">{bundleContext.metadata?.title || bundleContext.bundle.bundleId}</h3>
+              <div className="min-w-0 flex-1">
+                {bundleContext.bundle.collectionName && bundleContext.bundle.collectionName !== bundleContext.metadata?.title && (
+                  <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide truncate">{bundleContext.bundle.collectionName}</p>
+                )}
+                <h3 className="text-white font-medium truncate">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
+              </div>
               <button onClick={() => setShowBundleSidebar(false)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                 <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
@@ -1425,8 +1453,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                       idx === bundleContext.currentIndex ? "bg-purple-500 text-white" : "bg-white/10 text-white/60"
                     }`}>{idx + 1}</span>
                     <div className="w-10 h-10 rounded bg-white/5 flex-shrink-0 overflow-hidden">
-                      {item.previewCid ? (
-                        <img src={getIpfsUrl(item.previewCid)} alt="" className="w-full h-full object-cover" />
+                      {item.thumbnail ? (
+                        <img src={getIpfsUrl(item.thumbnail)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1435,7 +1463,12 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                         </div>
                       )}
                     </div>
-                    <span className={`flex-1 text-left text-sm truncate ${idx === bundleContext.currentIndex ? "text-white" : "text-white/70"}`}>{item.title}</span>
+                    <div className="flex-1 min-w-0 text-left">
+                      {item.collectionName && item.collectionName !== item.title && (
+                        <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide truncate">{item.collectionName}</p>
+                      )}
+                      <span className={`text-sm truncate block ${idx === bundleContext.currentIndex ? "text-white" : "text-white/70"}`}>{item.title}</span>
+                    </div>
                     {idx === bundleContext.currentIndex && (
                       <div className="flex gap-0.5">
                         <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" />
@@ -1579,9 +1612,11 @@ function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1
 
               return {
                 contentCid: content?.contentCid || "",
+                collectionName: content?.collectionName,
                 title: itemTitle,
                 description: meta?.description as string | undefined,
                 previewCid: content?.previewCid,
+                thumbnail: meta?.image as string | undefined,
                 position: item.position,
                 contentType: content?.contentType,
                 isEncrypted: content?.isEncrypted,

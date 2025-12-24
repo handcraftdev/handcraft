@@ -17,7 +17,8 @@ export interface ContentEntry {
   previewCid: string;          // Preview CID for non-owners
   encryptionMetaCid: string;   // Encryption metadata CID
   visibilityLevel: number;     // 0=Public, 1=Ecosystem, 2=Subscriber, 3=NFT Only
-  // Optional metadata fields - populated from Metaplex collection metadata URI
+  // Optional metadata fields - populated from Metaplex collection
+  collectionName?: string;     // On-chain name from Metaplex collection (fast, no IPFS fetch)
   contentCid?: string;         // Content CID from collection metadata
   metadataCid?: string;        // Metadata CID (collection URI CID)
   contentType?: number;        // Content type enum value
@@ -184,7 +185,8 @@ export interface Bundle {
   mintedCount: bigint;       // Number of NFTs minted for this bundle
   pendingCount: bigint;      // Number of pending VRF mints
   isLocked: boolean;         // Locked after first mint
-  // Optional metadata fields - populated from Metaplex collection metadata URI
+  // Optional metadata fields - populated from Metaplex collection
+  collectionName?: string;   // On-chain name from Metaplex collection (fast, no IPFS fetch)
   metadataCid?: string;      // Extracted from collection URI (ipfs.filebase.io/ipfs/{cid})
 }
 

@@ -65,6 +65,7 @@ import {
 // - ContentCollection, RentEntry, BundleCollection
 // Collection assets are now stored directly in ContentEntry and Bundle
 import { simulateTransaction, simulatePartiallySignedTransaction } from "@/utils/transaction";
+import type { EnrichedBundle } from "@/components/feed/types";
 
 export {
   ContentType,
@@ -1408,12 +1409,12 @@ export function useContentRegistry() {
   // BUNDLE QUERIES
   // ============================================
 
-  // Fetch all bundles globally (for feed)
+  // Fetch all bundles globally (for feed) - enriched with metadata from collection
   const globalBundlesQuery = useQuery({
     queryKey: ["bundles", "global"],
     queryFn: async () => {
       if (!client) return [];
-      return client.fetchAllBundles();
+      return client.fetchAllBundlesWithMetadata();
     },
     enabled: !!client,
     staleTime: 60000,
@@ -1480,9 +1481,17 @@ export function useContentRegistry() {
     refetchOnWindowFocus: false,
   });
 
-  // Helper to get bundles for a specific content
-  const getBundlesForContent = (contentCid: string): Array<{ bundleId: string; creator: { toBase58(): string } }> => {
-    return contentToBundlesQuery.data?.get(contentCid) || [];
+  // Helper to get bundles for a specific content (returns enriched bundles with metadata)
+  const getBundlesForContent = (contentCid: string): EnrichedBundle[] => {
+    const bundleRefs = contentToBundlesQuery.data?.get(contentCid) || [];
+    const globalBundles = globalBundlesQuery.data || [];
+
+    // Look up full enriched bundle data from global bundles
+    return bundleRefs
+      .map((ref: { bundleId: string; creator: { toBase58(): string } }) => globalBundles.find(b =>
+        b.bundleId === ref.bundleId && b.creator.toBase58() === ref.creator.toBase58()
+      ))
+      .filter((b: EnrichedBundle | undefined): b is EnrichedBundle => b !== undefined);
   };
 
   // Fetch all bundles for the connected wallet
