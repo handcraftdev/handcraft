@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useQuery } from "@tanstack/react-query";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
+import { useStreamflow } from "@/hooks/useStreamflow";
+import { getCreatorPatronTreasuryPda } from "@handcraft/sdk";
 
 const EPOCHS_PER_PAGE = 5;
 
@@ -21,6 +23,7 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
   const [mounted, setMounted] = useState(false);
 
   const { client } = useContentRegistry();
+  const { streamflowClient } = useStreamflow();
 
   // Prevent hydration mismatch by deferring time-dependent calculations to client
   useEffect(() => {
@@ -43,7 +46,7 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
     staleTime: 60000,
   });
 
-  // Fetch creator patron treasury balance
+  // Fetch creator patron treasury WSOL ATA balance (withdrawn from escrow, ready to unwrap)
   const { data: treasuryBalance = BigInt(0), isLoading: isLoadingTreasury } = useQuery({
     queryKey: ["creatorPatronTreasuryBalance", creator.toBase58()],
     queryFn: () => client?.fetchCreatorPatronTreasuryBalance(creator) ?? BigInt(0),
@@ -51,7 +54,19 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
     staleTime: 30000,
   });
 
-  const isLoading = !mounted || isLoadingConfig || isLoadingPool || isLoadingTreasury;
+  // Fetch escrow balance (still in Streamflow, not yet withdrawn)
+  const { data: escrowBalance = BigInt(0), isLoading: isLoadingEscrow } = useQuery({
+    queryKey: ["creatorPatronEscrowBalance", creator.toBase58()],
+    queryFn: async () => {
+      if (!streamflowClient) return BigInt(0);
+      const [treasuryPda] = getCreatorPatronTreasuryPda(creator);
+      return streamflowClient.getTotalAvailableForRecipient(treasuryPda);
+    },
+    enabled: !!streamflowClient && !!patronConfig?.isActive,
+    staleTime: 30000,
+  });
+
+  const isLoading = !mounted || isLoadingConfig || isLoadingPool || isLoadingTreasury || isLoadingEscrow;
 
   // Calculate epoch-related values (must be before early returns to respect hooks rules)
   const now = mounted ? Math.floor(Date.now() / 1000) : 0;
@@ -373,18 +388,24 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
         )}
 
         {/* Summary Cards - Available vs Pending */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {/* Available to Claim - From Holder Pool */}
           <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-            <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider mb-1">Available to Claim</p>
+            <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider mb-1">Available</p>
             <p className="text-xl font-bold text-emerald-400">{formatSol(poolUnclaimed)} SOL</p>
-            <p className="text-[9px] text-white/30 mt-1">From holder pool</p>
+            <p className="text-[9px] text-white/30 mt-1">Holder pool</p>
           </div>
-          {/* Pending Distribution - From Treasury */}
+          {/* In Treasury - Withdrawn from Streamflow, ready for unwrap */}
           <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-            <p className="text-[10px] text-amber-400/70 uppercase tracking-wider mb-1">Pending Distribution</p>
+            <p className="text-[10px] text-amber-400/70 uppercase tracking-wider mb-1">Treasury</p>
             <p className="text-xl font-bold text-amber-400">{formatSol(treasuryBalance)} SOL</p>
-            <p className="text-[9px] text-white/30 mt-1">Next epoch</p>
+            <p className="text-[9px] text-white/30 mt-1">Ready to unwrap</p>
+          </div>
+          {/* In Escrow - Still in Streamflow */}
+          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <p className="text-[10px] text-blue-400/70 uppercase tracking-wider mb-1">Escrow</p>
+            <p className="text-xl font-bold text-blue-400">{formatSol(escrowBalance)} SOL</p>
+            <p className="text-[9px] text-white/30 mt-1">In Streamflow</p>
           </div>
         </div>
 
