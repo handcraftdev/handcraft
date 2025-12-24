@@ -8,10 +8,14 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { EcosystemMembershipCard } from "@/components/membership";
 import { useSession } from "@/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
-import { createContentRegistryClient } from "@handcraft/sdk";
+
+// Dynamically import SDK-dependent components to avoid SSR issues
+const EcosystemMembershipCard = dynamic(
+  () => import("@/components/membership").then((m) => m.EcosystemMembershipCard),
+  { ssr: false, loading: () => <div className="h-20 bg-white/5 rounded-xl animate-pulse" /> }
+);
 
 // Sidebar context for sharing state
 interface SidebarContextType {
@@ -48,6 +52,8 @@ function SlideInSidebar({
     queryKey: ["userProfile", publicKey?.toBase58()],
     queryFn: async () => {
       if (!publicKey) return null;
+      // Dynamically import SDK to avoid SSR issues
+      const { createContentRegistryClient } = await import("@handcraft/sdk");
       const client = createContentRegistryClient(connection);
       return client.fetchUserProfile(publicKey);
     },
