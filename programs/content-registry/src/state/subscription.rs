@@ -148,7 +148,7 @@ pub struct CreatorPatronPool {
     pub total_claimed: u64,
     /// Timestamp of last epoch distribution
     pub last_distribution_at: i64,
-    /// Epoch duration in seconds (default: 30 days)
+    /// Epoch duration in seconds (default: 1 day)
     pub epoch_duration: i64,
     /// Timestamp when pool was created
     pub created_at: i64,
@@ -288,7 +288,7 @@ impl CreatorDistPool {
 pub struct EcosystemEpochState {
     /// Timestamp of last ecosystem distribution
     pub last_distribution_at: i64,
-    /// Epoch duration in seconds (default: 30 days)
+    /// Epoch duration in seconds (default: 1 day)
     pub epoch_duration: i64,
 }
 
