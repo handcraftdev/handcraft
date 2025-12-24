@@ -23,6 +23,7 @@ export interface ContentEntry {
   metadataCid?: string;        // Metadata CID (collection URI CID)
   contentType?: number;        // Content type enum value
   createdAt?: bigint;          // Creation timestamp (from collection metadata or on-chain)
+  thumbnail?: string;          // Thumbnail image URL from IPFS metadata
 }
 
 /**
@@ -188,6 +189,7 @@ export interface Bundle {
   // Optional metadata fields - populated from Metaplex collection
   collectionName?: string;   // On-chain name from Metaplex collection (fast, no IPFS fetch)
   metadataCid?: string;      // Extracted from collection URI (ipfs.filebase.io/ipfs/{cid})
+  thumbnail?: string;        // Thumbnail image URL from IPFS metadata
 }
 
 /**

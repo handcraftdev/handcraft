@@ -285,6 +285,8 @@ export async function enrichContentWithMetadata(
                            (metadata.collection_name as string) ||
                            (metadata.collectionName as string) ||
                            undefined;
+    // Extract thumbnail from metadata.image
+    const thumbnail = metadata.image || undefined;
 
     return {
       ...content,
@@ -293,6 +295,7 @@ export async function enrichContentWithMetadata(
       metadataCid: metadataCid || undefined,
       contentType,
       createdAt: createdAt !== undefined ? BigInt(createdAt) : undefined,
+      thumbnail,
     };
   } catch {
     return content;
@@ -347,7 +350,7 @@ export async function enrichBundleWithMetadata(
 ): Promise<Bundle> {
   try {
     // Skip if already enriched or no collection asset
-    if (bundle.metadataCid && bundle.collectionName) {
+    if (bundle.metadataCid && bundle.collectionName && bundle.thumbnail) {
       return bundle;
     }
     if (!bundle.collectionAsset || bundle.collectionAsset.equals(PublicKey.default)) {
@@ -371,11 +374,14 @@ export async function enrichBundleWithMetadata(
                            (metadata?.collection_name as string) ||
                            (metadata?.collectionName as string) ||
                            undefined;
+    // Extract thumbnail from metadata.image
+    const thumbnail = metadata?.image || undefined;
 
     return {
       ...bundle,
       collectionName,
       metadataCid: metadataCid || undefined,
+      thumbnail,
     };
   } catch {
     return bundle;
