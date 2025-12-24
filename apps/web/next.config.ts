@@ -12,8 +12,13 @@ const nextConfig: NextConfig = {
     "@tamagui/config",
     "@tamagui/animations-css",
   ],
+  // Exclude Solana/Anchor packages from server bundling to prevent PublicKey issues
+  serverExternalPackages: [
+    "@solana/web3.js",
+    "@coral-xyz/anchor",
+  ],
   // Fix hot reload for pnpm workspace packages
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     if (dev) {
       // Use polling to detect changes in symlinked workspace packages
       config.watchOptions = {
@@ -22,6 +27,18 @@ const nextConfig: NextConfig = {
         aggregateTimeout: 300,
       };
     }
+
+    // Ensure @solana/web3.js is not broken by webpack optimization
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        os: false,
+        path: false,
+        crypto: false,
+      };
+    }
+
     return config;
   },
   images: {
