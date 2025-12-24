@@ -463,31 +463,31 @@ export default function ProfilePage() {
                 <p className="text-white/40 text-sm">This user hasn't uploaded any content</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {userContent.map((item) => {
-                  const metadata = (item as any).metadata;
-                  const title = metadata?.title || metadata?.name || "Untitled";
-                  const description = metadata?.description || "";
-                  const thumbnailUrl = metadata?.image || null;
+                  // Use enriched properties from SDK
+                  const title = item.collectionName || "Untitled";
+                  const thumbnailUrl = item.thumbnail || null;
 
                   return (
-                    <div
-                      key={item.pubkey?.toBase58() || item.collectionAsset?.toBase58() || Math.random()}
-                      className="group relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
+                    <Link
+                      key={item.pubkey?.toBase58() || item.collectionAsset?.toBase58() || Math.random().toString()}
+                      href={item.contentCid ? `/content/${item.contentCid}` : "#"}
+                      className="group relative rounded-xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
                     >
-                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-                      {/* Thumbnail */}
-                      <div className="aspect-video bg-white/5 relative">
+                      {/* Thumbnail - aspect-square for consistency */}
+                      <div className="aspect-square bg-white/5 relative">
                         {thumbnailUrl ? (
                           <img
                             src={thumbnailUrl}
                             alt={title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <svg className="w-12 h-12 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
@@ -503,16 +503,13 @@ export default function ProfilePage() {
                       </div>
 
                       {/* Info */}
-                      <div className="relative p-4">
-                        <h3 className="font-medium mb-1 truncate text-white/90">{title}</h3>
-                        {description && (
-                          <p className="text-sm text-white/40 line-clamp-2 mb-3">{description}</p>
-                        )}
-                        <div className="text-xs text-white/30">
-                          <span>{Number(item.mintedCount || 0)} sold</span>
+                      <div className="relative p-3">
+                        <h3 className="font-medium text-sm truncate text-white/90">{title}</h3>
+                        <div className="text-xs text-white/40 mt-1">
+                          {Number(item.mintedCount || 0)} sold
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
