@@ -2433,14 +2433,10 @@ export async function fetchWalletNftMetadataWithCollections(
           // Use default name
         }
 
-        // Use pre-fetched collection map instead of fetching for each NFT
-        const contentCid = collectionAsset
-          ? collectionToContentCid.get(collectionAsset.toBase58()) || null
-          : null;
-
-        // Include NFTs that have a collection asset (Handcraft content collections)
-        // contentCid may be null if the mapping isn't available yet
-        if (collectionAsset) {
+        // Only include NFTs whose collection is a Handcraft content collection
+        // Check if collectionAsset exists in our map of known content collections
+        if (collectionAsset && collectionToContentCid.has(collectionAsset.toBase58())) {
+          const contentCid = collectionToContentCid.get(collectionAsset.toBase58()) || null;
           results.push({
             nftAsset: pubkey,
             contentCid,
