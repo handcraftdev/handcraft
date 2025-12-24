@@ -416,8 +416,9 @@ export default function ProfilePage() {
 
         {/* Membership Banners */}
         {isOwnProfile ? (
-          <div className="mb-10">
+          <div className="mb-10 space-y-4">
             <EcosystemMembershipCard />
+            <CreatorPatronPoolCard creator={profileAddress} />
           </div>
         ) : (
           <div className="mb-10 space-y-4">
