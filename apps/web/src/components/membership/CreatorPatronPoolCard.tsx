@@ -166,7 +166,6 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
   const nextDistribution = lastDistribution + epochDuration;
   const timeRemaining = Math.max(0, nextDistribution - now);
   const epochProgress = epochDuration > 0 ? Math.min(100, ((now - lastDistribution) / epochDuration) * 100) : 0;
-  const currentEpoch = completedEpochs + 1;
 
   // Pagination for past epochs
   const totalPastEpochPages = Math.ceil(pastEpochDetails.length / EPOCHS_PER_PAGE);
@@ -213,10 +212,6 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
                 Ready
               </span>
             )}
-            <div className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
-              <span className="text-[10px] uppercase tracking-wider text-purple-400/60">Epoch</span>
-              <span className="ml-1.5 text-lg font-bold text-purple-400">#{isTestMode ? 1 : currentEpoch}</span>
-            </div>
           </div>
         </div>
       </div>
