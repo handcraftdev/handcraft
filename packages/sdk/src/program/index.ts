@@ -2432,8 +2432,9 @@ export async function fetchWalletNftMetadataWithCollections(
           ? collectionToContentCid.get(collectionAsset.toBase58()) || null
           : null;
 
-        // Only include NFTs that belong to Handcraft content collections
-        if (contentCid) {
+        // Include NFTs that have a collection asset (Handcraft content collections)
+        // contentCid may be null if the mapping isn't available yet
+        if (collectionAsset) {
           results.push({
             nftAsset: pubkey,
             contentCid,
