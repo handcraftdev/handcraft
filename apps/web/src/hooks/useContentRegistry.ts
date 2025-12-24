@@ -115,12 +115,51 @@ export function useContentRegistry() {
     setClient(createContentRegistryClient(connection));
   }, [connection]);
 
-  // Fetch global content (all creators) with Metaplex metadata enrichment
+  // Fetch global content (all creators) via API route
   // This fetches contentCid, metadataCid, contentType from collection metadata
   const globalContentQuery = useQuery({
     queryKey: ["globalContent"],
-    queryFn: () => client?.fetchGlobalContentWithMetadata() ?? [],
-    enabled: !!client,
+    queryFn: async (): Promise<ContentEntry[]> => {
+      const res = await fetch("/api/registry/content");
+      if (!res.ok) throw new Error("Failed to fetch global content");
+      const { data } = await res.json();
+      // Convert serialized response back to ContentEntry with PublicKey objects
+      return data.map((c: {
+        pubkey: string;
+        creator: string;
+        collectionAsset: string;
+        contentCid: string;
+        metadataCid: string | null;
+        previewCid: string | null;
+        encryptionMetaCid: string | null;
+        contentType: number;
+        tipsReceived: string;
+        isLocked: boolean;
+        mintedCount: string;
+        pendingCount: string;
+        isEncrypted: boolean;
+        visibilityLevel: number;
+        collectionName: string | null;
+        creatorAddress: string;
+      }) => ({
+        pubkey: c.pubkey ? new PublicKey(c.pubkey) : undefined,
+        creator: new PublicKey(c.creator),
+        collectionAsset: c.collectionAsset ? new PublicKey(c.collectionAsset) : undefined,
+        contentCid: c.contentCid,
+        metadataCid: c.metadataCid,
+        previewCid: c.previewCid,
+        encryptionMetaCid: c.encryptionMetaCid,
+        contentType: c.contentType,
+        tipsReceived: BigInt(c.tipsReceived),
+        isLocked: c.isLocked,
+        mintedCount: BigInt(c.mintedCount),
+        pendingCount: BigInt(c.pendingCount),
+        isEncrypted: c.isEncrypted,
+        visibilityLevel: c.visibilityLevel,
+        collectionName: c.collectionName,
+        creatorAddress: c.creatorAddress,
+      }));
+    },
     staleTime: 60000, // Cache for 60 seconds
     gcTime: 120000,
     refetchOnMount: false,
@@ -140,14 +179,24 @@ export function useContentRegistry() {
 
   const isLoadingUserContent = globalContentQuery.isLoading;
 
-  // Fetch user profile for the connected wallet
+  // Fetch user profile for the connected wallet via API route
   const userProfileQuery = useQuery({
     queryKey: ["userProfile", publicKey?.toBase58()],
-    queryFn: () => {
-      if (!client || !publicKey) return null;
-      return client.fetchUserProfile(publicKey);
+    queryFn: async (): Promise<UserProfile | null> => {
+      if (!publicKey) return null;
+      const res = await fetch(`/api/registry/profile?address=${publicKey.toBase58()}`);
+      if (!res.ok) throw new Error("Failed to fetch user profile");
+      const { data } = await res.json();
+      if (!data) return null;
+      // Convert serialized response back to UserProfile with PublicKey objects
+      return {
+        owner: new PublicKey(data.owner),
+        username: data.username,
+        createdAt: BigInt(data.createdAt),
+        updatedAt: BigInt(data.updatedAt),
+      };
     },
-    enabled: !!client && !!publicKey,
+    enabled: !!publicKey,
     staleTime: 300000, // Cache for 5 minutes
     gcTime: 600000,
     refetchOnMount: false,
@@ -1335,14 +1384,28 @@ export function useContentRegistry() {
     },
   });
 
-  // Batch fetch ALL mint configs in one RPC call (much more efficient)
+  // Batch fetch ALL mint configs via API route
   const allMintConfigsQuery = useQuery({
     queryKey: ["allMintConfigs"],
-    queryFn: async () => {
-      if (!client) return new Map<string, MintConfig>();
-      return client.fetchAllMintConfigs();
+    queryFn: async (): Promise<Map<string, MintConfig>> => {
+      const res = await fetch("/api/registry/configs?type=mint");
+      if (!res.ok) throw new Error("Failed to fetch mint configs");
+      const { data } = await res.json();
+      // Convert array to Map keyed by content pubkey
+      const map = new Map<string, MintConfig>();
+      for (const c of data.mintConfigs || []) {
+        map.set(c.content, {
+          content: new PublicKey(c.content),
+          creator: new PublicKey(c.creator),
+          priceSol: BigInt(c.priceSol),
+          maxSupply: c.maxSupply ? BigInt(c.maxSupply) : null,
+          creatorRoyaltyBps: c.creatorRoyaltyBps,
+          isActive: c.isActive,
+          createdAt: BigInt(c.createdAt),
+        });
+      }
+      return map;
     },
-    enabled: !!client,
     staleTime: 60000, // Cache for 60 seconds
     gcTime: 300000,
     refetchOnMount: false,
@@ -1353,14 +1416,29 @@ export function useContentRegistry() {
     },
   });
 
-  // Batch fetch ALL bundle mint configs in one RPC call
+  // Batch fetch ALL bundle mint configs via API route
   const allBundleMintConfigsQuery = useQuery({
     queryKey: ["allBundleMintConfigs"],
-    queryFn: async () => {
-      if (!client) return new Map<string, BundleMintConfig>();
-      return client.fetchAllBundleMintConfigs();
+    queryFn: async (): Promise<Map<string, BundleMintConfig>> => {
+      const res = await fetch("/api/registry/configs?type=bundleMint");
+      if (!res.ok) throw new Error("Failed to fetch bundle mint configs");
+      const { data } = await res.json();
+      // Convert array to Map keyed by bundle pubkey
+      const map = new Map<string, BundleMintConfig>();
+      for (const c of data.bundleMintConfigs || []) {
+        map.set(c.bundle, {
+          bundle: new PublicKey(c.bundle),
+          creator: new PublicKey(c.creator),
+          price: BigInt(c.price),
+          maxSupply: c.maxSupply ? BigInt(c.maxSupply) : null,
+          creatorRoyaltyBps: c.creatorRoyaltyBps,
+          isActive: c.isActive,
+          createdAt: BigInt(c.createdAt),
+          updatedAt: BigInt(c.updatedAt),
+        });
+      }
+      return map;
     },
-    enabled: !!client,
     staleTime: 60000, // Cache for 60 seconds
     gcTime: 300000,
     refetchOnMount: false,
@@ -1371,14 +1449,31 @@ export function useContentRegistry() {
     },
   });
 
-  // Batch fetch ALL rent configs in one RPC call (much more efficient)
+  // Batch fetch ALL rent configs via API route
   const allRentConfigsQuery = useQuery({
     queryKey: ["allRentConfigs"],
-    queryFn: async () => {
-      if (!client) return new Map<string, RentConfig>();
-      return client.fetchAllRentConfigs();
+    queryFn: async (): Promise<Map<string, RentConfig>> => {
+      const res = await fetch("/api/registry/configs?type=rent");
+      if (!res.ok) throw new Error("Failed to fetch rent configs");
+      const { data } = await res.json();
+      // Convert array to Map keyed by content pubkey
+      const map = new Map<string, RentConfig>();
+      for (const c of data.rentConfigs || []) {
+        map.set(c.content, {
+          content: new PublicKey(c.content),
+          creator: new PublicKey(c.creator),
+          rentFee6h: BigInt(c.rentFee6h),
+          rentFee1d: BigInt(c.rentFee1d),
+          rentFee7d: BigInt(c.rentFee7d),
+          isActive: c.isActive,
+          totalRentals: BigInt(c.totalRentals),
+          totalFeesCollected: BigInt(c.totalFeesCollected),
+          createdAt: BigInt(c.createdAt),
+          updatedAt: BigInt(c.updatedAt),
+        });
+      }
+      return map;
     },
-    enabled: !!client,
     staleTime: 60000, // Cache for 60 seconds
     gcTime: 300000,
     refetchOnMount: false,
@@ -1413,14 +1508,38 @@ export function useContentRegistry() {
   // BUNDLE QUERIES
   // ============================================
 
-  // Fetch all bundles globally (for feed) - enriched with metadata from collection
+  // Fetch all bundles globally (for feed) via API route - enriched with metadata
   const globalBundlesQuery = useQuery({
     queryKey: ["bundles", "global"],
-    queryFn: async () => {
-      if (!client) return [];
-      return client.fetchAllBundlesWithMetadata();
+    queryFn: async (): Promise<EnrichedBundle[]> => {
+      const res = await fetch("/api/registry/bundles");
+      if (!res.ok) throw new Error("Failed to fetch global bundles");
+      const { data } = await res.json();
+      // Convert serialized response back to Bundle with PublicKey objects
+      return data.map((b: {
+        pubkey: string;
+        creator: string;
+        bundleId: string;
+        bundleType: number;
+        collectionAsset: string | null;
+        itemCount: number;
+        isActive: boolean;
+        metadataCid: string | null;
+        creatorAddress: string;
+        collectionName: string | null;
+      }) => ({
+        pubkey: b.pubkey ? new PublicKey(b.pubkey) : undefined,
+        creator: new PublicKey(b.creator),
+        bundleId: b.bundleId,
+        bundleType: b.bundleType,
+        collectionAsset: b.collectionAsset ? new PublicKey(b.collectionAsset) : undefined,
+        itemCount: b.itemCount,
+        isActive: b.isActive,
+        metadataCid: b.metadataCid,
+        creatorAddress: b.creatorAddress,
+        collectionName: b.collectionName,
+      })) as EnrichedBundle[];
     },
-    enabled: !!client,
     staleTime: 60000,
     gcTime: 300000,
     refetchOnMount: false,
@@ -1443,15 +1562,39 @@ export function useContentRegistry() {
     return Array.from(addresses);
   }, [globalContentQuery.data, globalBundlesQuery.data]);
 
-  // Batch fetch all creator profiles
+  // Batch fetch all creator profiles via API route
   const creatorProfilesQuery = useQuery({
     queryKey: ["creatorProfiles", allCreatorAddresses.join(",")],
-    queryFn: async () => {
-      if (!client || allCreatorAddresses.length === 0) return new Map<string, UserProfile>();
-      const owners = allCreatorAddresses.map(addr => new PublicKey(addr));
-      return client.fetchUserProfilesBatch(owners);
+    queryFn: async (): Promise<Map<string, UserProfile>> => {
+      if (allCreatorAddresses.length === 0) return new Map<string, UserProfile>();
+      const res = await fetch("/api/registry/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addresses: allCreatorAddresses }),
+      });
+      if (!res.ok) throw new Error("Failed to fetch creator profiles");
+      const { data } = await res.json();
+      // Convert object to Map with UserProfile objects
+      const map = new Map<string, UserProfile>();
+      for (const [address, profile] of Object.entries(data)) {
+        if (profile) {
+          const p = profile as {
+            owner: string;
+            username: string;
+            createdAt: string;
+            updatedAt: string;
+          };
+          map.set(address, {
+            owner: new PublicKey(p.owner),
+            username: p.username,
+            createdAt: BigInt(p.createdAt),
+            updatedAt: BigInt(p.updatedAt),
+          });
+        }
+      }
+      return map;
     },
-    enabled: !!client && allCreatorAddresses.length > 0,
+    enabled: allCreatorAddresses.length > 0,
     staleTime: 300000, // Cache for 5 minutes
     gcTime: 600000,
     refetchOnMount: false,
