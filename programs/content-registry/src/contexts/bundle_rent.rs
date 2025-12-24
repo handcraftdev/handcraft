@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use mpl_core::instructions::{CreateV2CpiBuilder, AddPluginV1CpiBuilder};
+use mpl_core::instructions::CreateV2CpiBuilder;
 use mpl_core::types::{
-    DataState, Plugin, PluginAuthority,
-    FreezeDelegate, Attributes, Attribute,
+    DataState, Plugin, PluginAuthority, PluginAuthorityPair,
+    FreezeDelegate, Attributes, Attribute, PermanentBurnDelegate,
 };
 
 use crate::state::*;
@@ -344,39 +344,22 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
         &[mint_config_bump],
     ]];
 
-    // Create rental NFT within the bundle's collection
-    CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.nft_asset.to_account_info())
-        .collection(Some(&ctx.accounts.collection_asset))
-        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
-        .payer(&ctx.accounts.renter.to_account_info())
-        .owner(Some(&ctx.accounts.renter.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
-        .name(rental_nft_name)
-        .uri(rental_nft_uri)
-        .data_state(DataState::AccountState)
-        .invoke_signed(signer_seeds)?;
+    // Create rental NFT with all plugins in one call:
+    // - PermanentBurnDelegate: only our program can burn
+    // - FreezeDelegate(frozen=true): non-transferable rental
+    // - Attributes: stores expiry info on-chain
+    let burn_delegate_plugin = PluginAuthorityPair {
+        plugin: Plugin::PermanentBurnDelegate(PermanentBurnDelegate {}),
+        authority: Some(PluginAuthority::Address { address: ctx.accounts.mint_config.key() }),
+    };
 
-    // Add FreezeDelegate plugin and freeze it (non-transferable)
-    AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.nft_asset.to_account_info())
-        .collection(Some(&ctx.accounts.collection_asset))
-        .payer(&ctx.accounts.renter.to_account_info())
-        .authority(Some(&ctx.accounts.renter.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
-        .plugin(Plugin::FreezeDelegate(FreezeDelegate { frozen: true }))
-        .init_authority(PluginAuthority::None)  // Permanently frozen
-        .invoke()?;
+    let freeze_delegate_plugin = PluginAuthorityPair {
+        plugin: Plugin::FreezeDelegate(FreezeDelegate { frozen: true }),
+        authority: Some(PluginAuthority::None), // Permanently frozen, no one can unfreeze
+    };
 
-    // Add Attributes plugin with rental expiry info
-    // This stores the expiry on-chain in the NFT itself (no separate RentEntry PDA)
-    AddPluginV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-        .asset(&ctx.accounts.nft_asset.to_account_info())
-        .collection(Some(&ctx.accounts.collection_asset))
-        .payer(&ctx.accounts.renter.to_account_info())
-        .authority(Some(&ctx.accounts.renter.to_account_info()))
-        .system_program(&ctx.accounts.system_program.to_account_info())
-        .plugin(Plugin::Attributes(Attributes {
+    let attributes_plugin = PluginAuthorityPair {
+        plugin: Plugin::Attributes(Attributes {
             attribute_list: vec![
                 Attribute {
                     key: "expires_at".to_string(),
@@ -391,9 +374,22 @@ pub fn handle_rent_bundle_sol(ctx: Context<RentBundleSol>, tier: RentTier) -> Re
                     value: format!("{:?}", tier),
                 },
             ],
-        }))
-        .init_authority(PluginAuthority::None)  // Immutable attributes
-        .invoke()?;
+        }),
+        authority: Some(PluginAuthority::None), // Immutable attributes
+    };
+
+    CreateV2CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+        .asset(&ctx.accounts.nft_asset.to_account_info())
+        .collection(Some(&ctx.accounts.collection_asset))
+        .authority(Some(&ctx.accounts.mint_config.to_account_info()))
+        .payer(&ctx.accounts.renter.to_account_info())
+        .owner(Some(&ctx.accounts.renter.to_account_info()))
+        .system_program(&ctx.accounts.system_program.to_account_info())
+        .name(rental_nft_name)
+        .uri(rental_nft_uri)
+        .data_state(DataState::AccountState)
+        .plugins(vec![burn_delegate_plugin, freeze_delegate_plugin, attributes_plugin])
+        .invoke_signed(signer_seeds)?;
 
     // Update rent config stats
     {
