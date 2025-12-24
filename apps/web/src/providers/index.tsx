@@ -37,19 +37,29 @@ export function Providers({ children }: { children: ReactNode }) {
   // Empty array = auto-detect all Wallet Standard wallets (Phantom, Solflare, Jupiter, Backpack, etc.)
   const wallets = useMemo(() => [], []);
 
+  // Temporarily disable wallet providers for debugging
   return (
     <QueryClientProvider client={queryClient}>
       <TamaguiProvider config={config} defaultTheme="dark">
-        <ConnectionProvider endpoint={endpoint}>
-          <WalletProvider wallets={wallets} autoConnect={false}>
-            <WalletModalProvider>
-              <SupabaseAuthProvider>
-                {children}
-              </SupabaseAuthProvider>
-            </WalletModalProvider>
-          </WalletProvider>
-        </ConnectionProvider>
+        {children}
       </TamaguiProvider>
     </QueryClientProvider>
   );
+
+  // Original with wallet providers:
+  // return (
+  //   <QueryClientProvider client={queryClient}>
+  //     <TamaguiProvider config={config} defaultTheme="dark">
+  //       <ConnectionProvider endpoint={endpoint}>
+  //         <WalletProvider wallets={wallets} autoConnect={false}>
+  //           <WalletModalProvider>
+  //             <SupabaseAuthProvider>
+  //               {children}
+  //             </SupabaseAuthProvider>
+  //           </WalletModalProvider>
+  //         </WalletProvider>
+  //       </ConnectionProvider>
+  //     </TamaguiProvider>
+  //   </QueryClientProvider>
+  // );
 }
