@@ -12,26 +12,12 @@ import {
   createCloseAccountInstruction,
   NATIVE_MINT,
 } from "@solana/spl-token";
-import {
-  createContentRegistryClient,
-  NETWORKS,
-  getCreatorPatronConfigPda,
-  getCreatorPatronSubscriptionPda,
-  getCreatorPatronTreasuryPda,
-  getEcosystemConfigPda,
-  getEcosystemSubConfigPda,
-  getEcosystemSubscriptionPda,
-  getEcosystemStreamingTreasuryPda,
-  StreamflowClient,
-  createMonthlyStreamParams,
-  createYearlyStreamParams,
-  // CPI-based membership constants and enums
-  MembershipDurationType,
-  MembershipTier,
-} from "@handcraft/sdk";
 import { sendTransactionWithSimulation, sendTransactionWithSigners } from "@/lib/transaction";
 
-const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as keyof typeof NETWORKS;
+// SDK imports are done dynamically inside functions to avoid module-level PublicKey creation
+// which causes _bn errors during SSR
+
+const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as "mainnet" | "devnet" | "testnet";
 
 // Pre-flight validation error messages
 const PREFLIGHT_ERRORS = {
@@ -76,20 +62,25 @@ export interface EcosystemMembership {
   isValid: boolean;
 }
 
+// Helper to get SDK client dynamically
+async function getSDKClient(connection: any) {
+  const { createContentRegistryClient } = await import("@handcraft/sdk");
+  return createContentRegistryClient(connection);
+}
+
+// Helper to get Streamflow client dynamically
+async function getStreamflowClient(rpcUrl: string) {
+  const { StreamflowClient } = await import("@handcraft/sdk");
+  return new StreamflowClient({
+    cluster: SOLANA_NETWORK as "mainnet" | "devnet" | "testnet",
+    rpcUrl,
+  });
+}
+
 export function useMembership() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, wallet } = useWallet();
   const queryClient = useQueryClient();
-
-  const client = publicKey
-    ? createContentRegistryClient(connection)
-    : null;
-
-  // Create Streamflow client for payment streams
-  const streamflowClient = new StreamflowClient({
-    cluster: SOLANA_NETWORK as "mainnet" | "devnet" | "testnet",
-    rpcUrl: connection.rpcEndpoint,
-  });
 
   // =========================================================================
   // FETCH QUERIES
@@ -105,6 +96,7 @@ export function useMembership() {
       queryFn: async (): Promise<MembershipConfig | null> => {
         if (!targetCreator) return null;
 
+        const { getCreatorPatronConfigPda } = await import("@handcraft/sdk");
         const [configPda] = getCreatorPatronConfigPda(targetCreator);
         const accountInfo = await connection.getAccountInfo(configPda);
 
@@ -141,6 +133,9 @@ export function useMembership() {
         if (!publicKey || !creator) return null;
 
         try {
+          const { getCreatorPatronTreasuryPda } = await import("@handcraft/sdk");
+          const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+
           // Get creator's patron treasury PDA (where streams should go)
           const [treasuryPda] = getCreatorPatronTreasuryPda(creator);
 
@@ -201,6 +196,7 @@ export function useMembership() {
   const ecosystemConfigQuery = useQuery({
     queryKey: ["ecosystemMembershipConfig"],
     queryFn: async (): Promise<EcosystemMembershipConfig | null> => {
+      const { getEcosystemSubConfigPda } = await import("@handcraft/sdk");
       const [configPda] = getEcosystemSubConfigPda();
       const accountInfo = await connection.getAccountInfo(configPda);
 
@@ -232,6 +228,9 @@ export function useMembership() {
       if (!publicKey) return null;
 
       try {
+        const { getEcosystemStreamingTreasuryPda, getEcosystemSubscriptionPda } = await import("@handcraft/sdk");
+        const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+
         const [treasuryPda] = getEcosystemStreamingTreasuryPda();
         const [subscriptionPda] = getEcosystemSubscriptionPda(publicKey);
 
@@ -354,9 +353,11 @@ export function useMembership() {
     }: {
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction || !client) {
+      if (!publicKey || !signTransaction) {
         throw new Error("Wallet not connected");
       }
+
+      const client = await getSDKClient(connection);
 
       const monthlyLamports = BigInt(Math.floor(monthlyPrice * LAMPORTS_PER_SOL));
       // Set membershipPrice to 0 (deprecated) and subscriptionPrice to monthly rate
@@ -404,9 +405,11 @@ export function useMembership() {
     }: {
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction || !client) {
+      if (!publicKey || !signTransaction) {
         throw new Error("Wallet not connected");
       }
+
+      const client = await getSDKClient(connection);
 
       const monthlyLamports = BigInt(Math.floor(monthlyPrice * LAMPORTS_PER_SOL));
 
@@ -462,9 +465,18 @@ export function useMembership() {
       period: BillingPeriod;
       monthlyPrice: bigint;
     }) => {
-      if (!publicKey || !signTransaction || !client) {
+      if (!publicKey || !signTransaction) {
         throw new Error("Wallet not connected");
       }
+
+      const client = await getSDKClient(connection);
+      const {
+        getCreatorPatronConfigPda,
+        getCreatorPatronSubscriptionPda,
+        getEcosystemConfigPda,
+        MembershipDurationType,
+        MembershipTier,
+      } = await import("@handcraft/sdk");
 
       // PRE-FLIGHT CHECK: Validate before building transaction
       const [configPda] = getCreatorPatronConfigPda(creator);
@@ -596,6 +608,8 @@ export function useMembership() {
         throw new Error("Wallet not connected");
       }
 
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+
       console.log("=== CANCEL MEMBERSHIP ===");
       console.log("Stream ID:", streamId);
       console.log("Creator:", creator.toBase58());
@@ -680,9 +694,19 @@ export function useMembership() {
   // Program enforces treasury PDA as recipient - prevents fund redirection attacks
   const joinEcosystemMembership = useMutation({
     mutationFn: async ({ price, period = "monthly" }: { price: bigint; period?: BillingPeriod }) => {
-      if (!publicKey || !signTransaction || !client) {
+      if (!publicKey || !signTransaction) {
         throw new Error("Wallet not connected");
       }
+
+      const client = await getSDKClient(connection);
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+      const {
+        getEcosystemSubConfigPda,
+        getEcosystemSubscriptionPda,
+        getEcosystemConfigPda,
+        getEcosystemStreamingTreasuryPda,
+        MembershipDurationType,
+      } = await import("@handcraft/sdk");
 
       // PRE-FLIGHT CHECK: Validate before building transaction
       const [configPda] = getEcosystemSubConfigPda();
@@ -848,6 +872,8 @@ export function useMembership() {
         throw new Error("Wallet not connected");
       }
 
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+
       console.log("=== CANCEL ECOSYSTEM MEMBERSHIP ===");
       console.log("Stream ID:", streamId);
 
@@ -944,6 +970,8 @@ export function useMembership() {
         throw new Error("Wallet not connected");
       }
 
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+
       // Fetch existing stream to check original period
       const stream = await streamflowClient.getStream(streamId);
       if (!stream) {
@@ -1011,6 +1039,8 @@ export function useMembership() {
       if (!publicKey || !wallet?.adapter) {
         throw new Error("Wallet not connected");
       }
+
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
 
       console.log("=== RENEW ECOSYSTEM MEMBERSHIP ===");
       console.log("Period:", period);
@@ -1087,9 +1117,17 @@ export function useMembership() {
       tierName: string;
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction || !client || !wallet?.adapter) {
+      if (!publicKey || !signTransaction || !wallet?.adapter) {
         throw new Error("Wallet not connected");
       }
+
+      const client = await getSDKClient(connection);
+      const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
+      const {
+        getCreatorPatronConfigPda,
+        getCreatorPatronSubscriptionPda,
+        createMonthlyStreamParams,
+      } = await import("@handcraft/sdk");
 
       // PRE-FLIGHT CHECK: Validate before triggering Streamflow wallet popup
       const [configPda] = getCreatorPatronConfigPda(creator);
@@ -1168,6 +1206,7 @@ export function useMembership() {
       queryKey: ["streamInfo", streamId],
       queryFn: async () => {
         if (!streamId) return null;
+        const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
         const stream = await streamflowClient.getStream(streamId);
         return stream;
       },
