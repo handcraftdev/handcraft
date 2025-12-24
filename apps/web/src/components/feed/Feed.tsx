@@ -1398,8 +1398,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         )}
       </div>
 
-      {/* Right Actions - fixed position, sidebar overlays */}
-      <div className={`absolute bottom-6 right-4 z-40 flex flex-col items-center gap-4 transition-all duration-300 ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+      {/* Right Actions - shift when bundle sidebar opens */}
+      <div className={`absolute bottom-6 z-40 flex flex-col items-center gap-4 transition-all duration-300 ${showBundleSidebar ? "right-[340px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
         {/* Bundle Sidebar Toggle */}
         {bundleContext && bundleContext.items.length > 0 && (
           <button
