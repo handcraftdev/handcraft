@@ -257,7 +257,6 @@ use state::{
     Rarity,
     PatronTier,
     UnifiedNftRewardState, UNIFIED_NFT_REWARD_STATE_SEED,
-    ReportCategory, VoteChoice,
 };
 use utils::hash_cid;
 use errors::ContentRegistryError;
@@ -1924,80 +1923,6 @@ pub mod content_registry {
         ctx: Context<WithdrawCreatorStreamToTreasury>,
     ) -> Result<()> {
         handle_withdraw_creator_stream_to_treasury(ctx)
-    }
-
-    // =========================================================================
-    // CONTENT MODERATION SYSTEM (Solana Attestation Service Integration)
-    // =========================================================================
-
-    /// Initialize the moderator registry (one-time, admin only)
-    pub fn initialize_moderator_registry(
-        ctx: Context<InitializeModeratorRegistry>,
-    ) -> Result<()> {
-        handle_initialize_moderator_registry(ctx)
-    }
-
-    /// Register as a moderator by staking SOL
-    pub fn register_moderator(
-        ctx: Context<RegisterModerator>,
-        stake_amount: u64,
-    ) -> Result<()> {
-        handle_register_moderator(ctx, stake_amount)
-    }
-
-    /// Unregister as a moderator and withdraw stake
-    pub fn unregister_moderator(
-        ctx: Context<UnregisterModerator>,
-    ) -> Result<()> {
-        handle_unregister_moderator(ctx)
-    }
-
-    /// Slash a moderator for malicious behavior (admin only)
-    pub fn slash_moderator(
-        ctx: Context<SlashModerator>,
-    ) -> Result<()> {
-        handle_slash_moderator(ctx)
-    }
-
-    /// Submit a content moderation report
-    pub fn submit_report(
-        ctx: Context<SubmitReport>,
-        category: ReportCategory,
-        details_cid: String,
-        timestamp: i64,
-    ) -> Result<()> {
-        handle_submit_report(ctx, category, details_cid, timestamp)
-    }
-
-    /// Vote on a content moderation report (moderators only)
-    pub fn vote_on_report(
-        ctx: Context<VoteOnReport>,
-        choice: VoteChoice,
-    ) -> Result<()> {
-        handle_vote_on_report(ctx, choice)
-    }
-
-    /// Resolve a moderation report after voting period ends
-    pub fn resolve_moderation(
-        ctx: Context<ResolveModeration>,
-    ) -> Result<()> {
-        handle_resolve_moderation(ctx)
-    }
-
-    /// Resolve moderation with Solana Attestation Service (SAS) attestation
-    /// Links the on-chain moderation decision to a verifiable attestation
-    pub fn resolve_moderation_with_attestation(
-        ctx: Context<ResolveModerationWithAttestation>,
-        attestation_id: Pubkey,
-    ) -> Result<()> {
-        handle_resolve_moderation_with_attestation(ctx, attestation_id)
-    }
-
-    /// Allow creator to voluntarily remove reported content
-    pub fn voluntary_removal(
-        ctx: Context<VoluntaryRemoval>,
-    ) -> Result<()> {
-        handle_voluntary_removal(ctx)
     }
 }
 

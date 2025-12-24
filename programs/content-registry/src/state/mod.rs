@@ -10,7 +10,6 @@ pub mod bundle;
 pub mod rarity;
 pub mod subscription;
 pub mod profile;
-pub mod moderation;
 
 pub use item_common::{ItemType, MintableItem};
 pub use content::{ContentEntry, ContentType};
@@ -74,10 +73,3 @@ pub use subscription::{
     calculate_primary_split, calculate_ecosystem_split,
 };
 pub use profile::{UserProfile, USER_PROFILE_SEED, MAX_USERNAME_LENGTH};
-// Moderation system types
-pub use moderation::{
-    ContentReport, ModerationPool, ModeratorRegistry, ModeratorAccount, VoteRecord,
-    ReportCategory, ReportStatus, ResolutionOutcome, VoteChoice,
-    CONTENT_REPORT_SEED, MODERATION_POOL_SEED, MODERATOR_REGISTRY_SEED, VOTE_RECORD_SEED,
-    MIN_MODERATOR_STAKE, VOTING_PERIOD, QUORUM_THRESHOLD_BPS, APPROVAL_THRESHOLD_BPS,
-};

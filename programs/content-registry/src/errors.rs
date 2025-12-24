@@ -210,40 +210,4 @@ pub enum ContentRegistryError {
     InvalidOwner,
     #[msg("Invalid token mint - expected WSOL")]
     InvalidMint,
-
-    // Moderation errors
-    #[msg("Insufficient stake to become moderator")]
-    InsufficientStake,
-    #[msg("Moderator not found")]
-    ModeratorNotFound,
-    #[msg("Moderator is not active")]
-    ModeratorNotActive,
-    #[msg("Moderator has already voted on this report")]
-    AlreadyVoted,
-    #[msg("Voting period has ended")]
-    VotingEnded,
-    #[msg("Voting period has not ended yet")]
-    VotingNotEnded,
-    #[msg("Report not found")]
-    ReportNotFound,
-    #[msg("Report has already been resolved")]
-    ReportAlreadyResolved,
-    #[msg("Quorum not reached")]
-    QuorumNotReached,
-    #[msg("Invalid report category")]
-    InvalidReportCategory,
-    #[msg("Report details CID too long")]
-    ReportDetailsTooLong,
-    #[msg("Timestamp too far from current time")]
-    InvalidTimestamp,
-    #[msg("Invalid moderation pool PDA")]
-    InvalidModerationPool,
-    #[msg("Invalid content report PDA")]
-    InvalidContentReport,
-    #[msg("Invalid vote record PDA")]
-    InvalidVoteRecord,
-    #[msg("Invalid moderator account PDA")]
-    InvalidModeratorAccount,
-    #[msg("Only admin can perform this action")]
-    ModerationAdminOnly,
 }
