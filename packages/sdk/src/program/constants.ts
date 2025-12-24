@@ -7,23 +7,33 @@ export const PROGRAM_ID_STRING = idl.address;
 // Metaplex Core Program ID as string
 export const MPL_CORE_PROGRAM_ID_STRING = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
 
-// PublicKey instances - lazily initialized to avoid SSR/bundling issues
+// Lazy getters for PublicKey instances to avoid SSR/bundling issues
 let _PROGRAM_ID: PublicKey | null = null;
+export function getProgramId(): PublicKey {
+  if (!_PROGRAM_ID) _PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
+  return _PROGRAM_ID;
+}
+// Legacy export - calls getter
+export const PROGRAM_ID = {
+  toString: () => PROGRAM_ID_STRING,
+  toBase58: () => PROGRAM_ID_STRING,
+  toBuffer: () => getProgramId().toBuffer(),
+  toBytes: () => getProgramId().toBytes(),
+  equals: (other: PublicKey) => getProgramId().equals(other),
+} as unknown as PublicKey;
+
 let _MPL_CORE_PROGRAM_ID: PublicKey | null = null;
-
-export const PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
-  get(_, prop) {
-    if (!_PROGRAM_ID) _PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
-    return (_PROGRAM_ID as unknown as Record<string, unknown>)[prop as string];
-  },
-});
-
-export const MPL_CORE_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
-  get(_, prop) {
-    if (!_MPL_CORE_PROGRAM_ID) _MPL_CORE_PROGRAM_ID = new PublicKey(MPL_CORE_PROGRAM_ID_STRING);
-    return (_MPL_CORE_PROGRAM_ID as unknown as Record<string, unknown>)[prop as string];
-  },
-});
+export function getMplCoreProgramId(): PublicKey {
+  if (!_MPL_CORE_PROGRAM_ID) _MPL_CORE_PROGRAM_ID = new PublicKey(MPL_CORE_PROGRAM_ID_STRING);
+  return _MPL_CORE_PROGRAM_ID;
+}
+export const MPL_CORE_PROGRAM_ID = {
+  toString: () => MPL_CORE_PROGRAM_ID_STRING,
+  toBase58: () => MPL_CORE_PROGRAM_ID_STRING,
+  toBuffer: () => getMplCoreProgramId().toBuffer(),
+  toBytes: () => getMplCoreProgramId().toBytes(),
+  equals: (other: PublicKey) => getMplCoreProgramId().equals(other),
+} as unknown as PublicKey;
 
 // Seeds for PDA derivation
 export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
