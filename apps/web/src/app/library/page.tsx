@@ -203,8 +203,8 @@ export default function LibraryPage() {
         <SidebarPanel isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-4 left-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all"
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className={`fixed top-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
         >
           <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
@@ -231,8 +231,8 @@ export default function LibraryPage() {
       <SidebarPanel isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <button
-        onClick={() => setIsSidebarOpen(true)}
-        className="fixed top-4 left-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all"
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className={`fixed top-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
