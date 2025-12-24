@@ -372,37 +372,32 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
           </div>
         )}
 
-        {/* Treasury Balance */}
-        {treasuryBalance > BigInt(0) && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm text-amber-400">Pending Distribution</span>
-              </div>
-              <span className="text-lg font-bold text-amber-400">
-                {formatSol(treasuryBalance)} SOL
-              </span>
-            </div>
-            <p className="text-xs text-white/30 mt-2">
-              Accumulated from memberships, distributed at epoch end
-            </p>
+        {/* Summary Cards - Available vs Pending */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Available to Claim - From Holder Pool */}
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+            <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider mb-1">Available to Claim</p>
+            <p className="text-xl font-bold text-emerald-400">{formatSol(poolUnclaimed)} SOL</p>
+            <p className="text-[9px] text-white/30 mt-1">From holder pool</p>
           </div>
-        )}
+          {/* Pending Distribution - From Treasury */}
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+            <p className="text-[10px] text-amber-400/70 uppercase tracking-wider mb-1">Pending Distribution</p>
+            <p className="text-xl font-bold text-amber-400">{formatSol(treasuryBalance)} SOL</p>
+            <p className="text-[9px] text-white/30 mt-1">Next epoch</p>
+          </div>
+        </div>
 
-        {/* Pool Stats */}
+        {/* Pool Stats - Detailed breakdown */}
         <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-              <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <div className="w-6 h-6 bg-purple-500/20 rounded-lg flex items-center justify-center">
+              <svg className="w-3 h-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
-            <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Holder Pool</span>
+            <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Pool Details</span>
           </div>
-          <p className="text-xs text-white/40 mb-3">12% of memberships to NFT holders</p>
           <div className="space-y-1.5">
             <div className="flex justify-between text-sm">
               <span className="text-white/40">Total Distributed</span>
@@ -413,14 +408,8 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
               <span className="text-white/50">{formatSol(poolClaimed)} SOL</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-emerald-400/70">Unclaimed</span>
-              <span className="text-emerald-400 font-medium">{formatSol(poolUnclaimed)} SOL</span>
-            </div>
-            <div className="pt-2 border-t border-white/5 mt-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-white/30">Total NFT Weight</span>
-                <span className="text-white/50">{poolWeight.toString()}</span>
-              </div>
+              <span className="text-white/40">Total NFT Weight</span>
+              <span className="text-white/50">{poolWeight.toString()}</span>
             </div>
           </div>
         </div>
