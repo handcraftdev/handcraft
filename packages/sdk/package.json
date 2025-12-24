@@ -24,6 +24,7 @@
     "typescript": "^5.7.2"
   },
   "peerDependencies": {
-    "@handcraft/types": "workspace:*"
+    "@handcraft/types": "workspace:*",
+    "react": ">=18"
   }
 }
