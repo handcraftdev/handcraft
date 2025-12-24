@@ -62,6 +62,17 @@ export interface EcosystemMembership {
   isValid: boolean;
 }
 
+// Helper to safely reconstruct PublicKey (fixes _bn property loss during SSR/bundling)
+function safePublicKey(pk: PublicKey | null | undefined): PublicKey | null {
+  if (!pk) return null;
+  try {
+    // Reconstruct to ensure _bn property exists
+    return new PublicKey(pk.toBase58());
+  } catch {
+    return null;
+  }
+}
+
 // Helper to get SDK client dynamically
 async function getSDKClient(connection: any) {
   const { createContentRegistryClient } = await import("@handcraft/sdk");
@@ -225,14 +236,15 @@ export function useMembership() {
   const ecosystemMembershipQuery = useQuery({
     queryKey: ["ecosystemMembership", publicKey?.toBase58()],
     queryFn: async (): Promise<EcosystemMembership | null> => {
-      if (!publicKey) return null;
+      const safePk = safePublicKey(publicKey);
+      if (!safePk) return null;
 
       try {
         const { getEcosystemStreamingTreasuryPda, getEcosystemSubscriptionPda } = await import("@handcraft/sdk");
         const streamflowClient = await getStreamflowClient(connection.rpcEndpoint);
 
         const [treasuryPda] = getEcosystemStreamingTreasuryPda();
-        const [subscriptionPda] = getEcosystemSubscriptionPda(publicKey);
+        const [subscriptionPda] = getEcosystemSubscriptionPda(safePk);
 
         console.log("=== ECOSYSTEM MEMBERSHIP CHECK ===");
         console.log("Treasury PDA:", treasuryPda.toBase58());
@@ -278,7 +290,7 @@ export function useMembership() {
 
                 if (hasTimeRemaining && wasFunded && isNotCancelled && recipientMatches) {
                   return {
-                    subscriber: publicKey,
+                    subscriber: safePk,
                     streamId,
                     startedAt: BigInt(stream.startTime),
                     isActive: true,
@@ -290,7 +302,7 @@ export function useMembership() {
               console.log("Stream fetch error (may be indexer delay):", err);
               // If we can't fetch but account exists, still show as member
               return {
-                subscriber: publicKey,
+                subscriber: safePk,
                 streamId,
                 startedAt: BigInt(Number(startedAt)),
                 isActive: true,
@@ -303,7 +315,7 @@ export function useMembership() {
         }
 
         // FALLBACK: Check Streamflow directly (for legacy/non-CPI streams)
-        const streams = await streamflowClient.getStreamsForWallet(publicKey);
+        const streams = await streamflowClient.getStreamsForWallet(safePk);
         console.log("Fallback: checking", streams.length, "streams from Streamflow");
 
         const now = Math.floor(Date.now() / 1000);
@@ -318,7 +330,7 @@ export function useMembership() {
         if (activeStream) {
           console.log("Found active stream via fallback:", activeStream.id);
           return {
-            subscriber: publicKey,
+            subscriber: safePk,
             streamId: new PublicKey(activeStream.id),
             startedAt: BigInt(activeStream.startTime),
             isActive: true,
@@ -353,7 +365,8 @@ export function useMembership() {
     }: {
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction) {
         throw new Error("Wallet not connected");
       }
 
@@ -366,14 +379,14 @@ export function useMembership() {
       const tx = new Transaction();
 
       // Create creator's WSOL ATA if it doesn't exist (for receiving Streamflow payments)
-      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       const ataInfo = await connection.getAccountInfo(creatorWsolAta);
       if (!ataInfo) {
         tx.add(
           createAssociatedTokenAccountInstruction(
-            publicKey,
+            safePk,
             creatorWsolAta,
-            publicKey,
+            safePk,
             NATIVE_MINT
           )
         );
@@ -381,13 +394,13 @@ export function useMembership() {
 
       // Add patron config initialization
       const ix = await client.initPatronConfigInstruction(
-        publicKey,
+        safePk,
         membershipLamports,
         monthlyLamports
       );
       tx.add(ix);
 
-      tx.feePayer = publicKey;
+      tx.feePayer = safePk;
 
       const sig = await sendTransactionWithSimulation(connection, tx, signTransaction);
       return sig;
@@ -405,7 +418,8 @@ export function useMembership() {
     }: {
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction) {
         throw new Error("Wallet not connected");
       }
 
@@ -416,7 +430,7 @@ export function useMembership() {
       const tx = new Transaction();
 
       // Create creator's WSOL ATA if it doesn't exist (for receiving Streamflow payments)
-      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       console.log("Creator WSOL ATA address:", creatorWsolAta.toBase58());
       const ataInfo = await connection.getAccountInfo(creatorWsolAta);
       console.log("ATA exists?", !!ataInfo);
@@ -425,9 +439,9 @@ export function useMembership() {
         console.log("Creating WSOL ATA...");
         tx.add(
           createAssociatedTokenAccountInstruction(
-            publicKey,
+            safePk,
             creatorWsolAta,
-            publicKey,
+            safePk,
             NATIVE_MINT
           )
         );
@@ -436,14 +450,14 @@ export function useMembership() {
       }
 
       const ix = await client.updatePatronConfigInstruction(
-        publicKey,
+        safePk,
         null, // membershipPrice (deprecated)
         monthlyLamports,
         null // isActive unchanged
       );
       tx.add(ix);
 
-      tx.feePayer = publicKey;
+      tx.feePayer = safePk;
 
       const sig = await sendTransactionWithSimulation(connection, tx, signTransaction);
       return sig;
@@ -465,7 +479,8 @@ export function useMembership() {
       period: BillingPeriod;
       monthlyPrice: bigint;
     }) => {
-      if (!publicKey || !signTransaction) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction) {
         throw new Error("Wallet not connected");
       }
 
@@ -479,8 +494,9 @@ export function useMembership() {
       } = await import("@handcraft/sdk");
 
       // PRE-FLIGHT CHECK: Validate before building transaction
-      const [configPda] = getCreatorPatronConfigPda(creator);
-      const [subscriptionPda] = getCreatorPatronSubscriptionPda(publicKey, creator);
+      const safeCreator = safePublicKey(creator)!;
+      const [configPda] = getCreatorPatronConfigPda(safeCreator);
+      const [subscriptionPda] = getCreatorPatronSubscriptionPda(safePk, safeCreator);
 
       const [configAccount, subscriptionAccount] = await Promise.all([
         connection.getAccountInfo(configPda),
@@ -534,16 +550,16 @@ export function useMembership() {
       const tx = new Transaction();
 
       // Ensure subscriber has WSOL ATA with funds
-      const subscriberWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const subscriberWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       const subscriberAtaInfo = await connection.getAccountInfo(subscriberWsolAta);
 
       if (!subscriberAtaInfo) {
         // Create WSOL ATA
         tx.add(
           createAssociatedTokenAccountInstruction(
-            publicKey,
+            safePk,
             subscriberWsolAta,
-            publicKey,
+            safePk,
             NATIVE_MINT
           )
         );
@@ -555,7 +571,7 @@ export function useMembership() {
       const { SystemProgram } = await import("@solana/web3.js");
       tx.add(
         SystemProgram.transfer({
-          fromPubkey: publicKey,
+          fromPubkey: safePk,
           toPubkey: subscriberWsolAta,
           lamports: amountWithFee,
         }),
@@ -564,8 +580,8 @@ export function useMembership() {
 
       // Add the CPI instruction (program creates stream with enforced recipient)
       const ix = await client.joinCreatorMembershipInstruction(
-        publicKey,
-        creator,
+        safePk,
+        safeCreator,
         streamMetadata,
         partner,
         tier,
@@ -573,7 +589,7 @@ export function useMembership() {
       );
       tx.add(ix);
 
-      tx.feePayer = publicKey;
+      tx.feePayer = safePk;
 
       // Send with additional signer (stream metadata keypair)
       const signature = await sendTransactionWithSigners(
@@ -604,7 +620,8 @@ export function useMembership() {
   // After cancel, unwraps WSOL back to native SOL
   const cancelMembership = useMutation({
     mutationFn: async ({ creator, streamId }: { creator: PublicKey; streamId: string }) => {
-      if (!publicKey || !signTransaction || !wallet?.adapter) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction || !wallet?.adapter) {
         throw new Error("Wallet not connected");
       }
 
@@ -640,7 +657,7 @@ export function useMembership() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Unwrap WSOL back to native SOL by closing the WSOL ATA
-      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       const ataInfo = await connection.getAccountInfo(wsolAta);
 
       if (ataInfo) {
@@ -650,11 +667,11 @@ export function useMembership() {
         unwrapTx.add(
           createCloseAccountInstruction(
             wsolAta,      // WSOL ATA to close
-            publicKey,    // Destination for SOL (owner)
-            publicKey     // Authority (owner)
+            safePk,    // Destination for SOL (owner)
+            safePk     // Authority (owner)
           )
         );
-        unwrapTx.feePayer = publicKey;
+        unwrapTx.feePayer = safePk;
 
         try {
           const unwrapSig = await sendTransactionWithSimulation(connection, unwrapTx, signTransaction);
@@ -694,7 +711,8 @@ export function useMembership() {
   // Program enforces treasury PDA as recipient - prevents fund redirection attacks
   const joinEcosystemMembership = useMutation({
     mutationFn: async ({ price, period = "monthly" }: { price: bigint; period?: BillingPeriod }) => {
-      if (!publicKey || !signTransaction) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction) {
         throw new Error("Wallet not connected");
       }
 
@@ -710,7 +728,7 @@ export function useMembership() {
 
       // PRE-FLIGHT CHECK: Validate before building transaction
       const [configPda] = getEcosystemSubConfigPda();
-      const [subscriptionPda] = getEcosystemSubscriptionPda(publicKey);
+      const [subscriptionPda] = getEcosystemSubscriptionPda(safePk);
 
       const [configAccount, subscriptionAccount] = await Promise.all([
         connection.getAccountInfo(configPda),
@@ -779,16 +797,16 @@ export function useMembership() {
       const tx = new Transaction();
 
       // Ensure subscriber has WSOL ATA with funds
-      const subscriberWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const subscriberWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       const subscriberAtaInfo = await connection.getAccountInfo(subscriberWsolAta);
 
       if (!subscriberAtaInfo) {
         // Create WSOL ATA
         tx.add(
           createAssociatedTokenAccountInstruction(
-            publicKey,
+            safePk,
             subscriberWsolAta,
-            publicKey,
+            safePk,
             NATIVE_MINT
           )
         );
@@ -800,7 +818,7 @@ export function useMembership() {
       const { SystemProgram } = await import("@solana/web3.js");
       tx.add(
         SystemProgram.transfer({
-          fromPubkey: publicKey,
+          fromPubkey: safePk,
           toPubkey: subscriberWsolAta,
           lamports: amountWithFee,
         }),
@@ -809,14 +827,14 @@ export function useMembership() {
 
       // Add the CPI instruction (program creates stream with enforced recipient)
       const ix = await client.joinEcosystemMembershipInstruction(
-        publicKey,
+        safePk,
         streamMetadata,
         partner,
         durationType
       );
       tx.add(ix);
 
-      tx.feePayer = publicKey;
+      tx.feePayer = safePk;
 
       // Send with additional signer (stream metadata keypair)
       const signature = await sendTransactionWithSigners(
@@ -868,7 +886,8 @@ export function useMembership() {
   // After cancel, unwraps WSOL back to native SOL
   const cancelEcosystemMembership = useMutation({
     mutationFn: async ({ streamId }: { streamId: string }) => {
-      if (!publicKey || !signTransaction || !wallet?.adapter) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction || !wallet?.adapter) {
         throw new Error("Wallet not connected");
       }
 
@@ -903,7 +922,7 @@ export function useMembership() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Unwrap WSOL back to native SOL by closing the WSOL ATA
-      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, publicKey);
+      const wsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safePk);
       const ataInfo = await connection.getAccountInfo(wsolAta);
 
       if (ataInfo) {
@@ -913,11 +932,11 @@ export function useMembership() {
         unwrapTx.add(
           createCloseAccountInstruction(
             wsolAta,      // WSOL ATA to close
-            publicKey,    // Destination for SOL (owner)
-            publicKey     // Authority (owner)
+            safePk,    // Destination for SOL (owner)
+            safePk     // Authority (owner)
           )
         );
-        unwrapTx.feePayer = publicKey;
+        unwrapTx.feePayer = safePk;
 
         try {
           const unwrapSig = await sendTransactionWithSimulation(connection, unwrapTx, signTransaction);
@@ -1117,7 +1136,8 @@ export function useMembership() {
       tierName: string;
       monthlyPrice: number;
     }) => {
-      if (!publicKey || !signTransaction || !wallet?.adapter) {
+      const safePk = safePublicKey(publicKey);
+      if (!safePk || !signTransaction || !wallet?.adapter) {
         throw new Error("Wallet not connected");
       }
 
@@ -1130,8 +1150,9 @@ export function useMembership() {
       } = await import("@handcraft/sdk");
 
       // PRE-FLIGHT CHECK: Validate before triggering Streamflow wallet popup
-      const [configPda] = getCreatorPatronConfigPda(creator);
-      const [subscriptionPda] = getCreatorPatronSubscriptionPda(publicKey, creator);
+      const safeCreator = safePublicKey(creator)!;
+      const [configPda] = getCreatorPatronConfigPda(safeCreator);
+      const [subscriptionPda] = getCreatorPatronSubscriptionPda(safePk, safeCreator);
 
       const [configAccount, subscriptionAccount] = await Promise.all([
         connection.getAccountInfo(configPda),
@@ -1153,7 +1174,7 @@ export function useMembership() {
       }
 
       // Check creator's WSOL ATA exists (created during their membership init)
-      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, creator);
+      const creatorWsolAta = await getAssociatedTokenAddress(NATIVE_MINT, safeCreator);
       const creatorAtaInfo = await connection.getAccountInfo(creatorWsolAta);
       console.log("Creator WSOL ATA:", creatorWsolAta.toBase58(), "exists:", !!creatorAtaInfo);
 
@@ -1179,7 +1200,7 @@ export function useMembership() {
       );
 
       const streamResult = await streamflowClient.createMembershipStream(
-        { ...streamParams, sender: publicKey },
+        { ...streamParams, sender: safePk },
         walletSigner as any
       );
 
