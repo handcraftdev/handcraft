@@ -236,7 +236,7 @@ export function CreatorPatronPoolCard({ creator }: CreatorPatronPoolCardProps) {
         {/* Epoch Progress */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Current Epoch Progress</span>
+            <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Treasury Distribution Cycle</span>
             <span className="text-sm text-white/70">{formatTimeRemaining(timeRemaining)}</span>
           </div>
           <div className="h-2 bg-white/5 rounded-full overflow-hidden">

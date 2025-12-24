@@ -132,15 +132,6 @@ export function EpochStatusCard() {
                 <p className="text-sm text-white/40">Treasury waiting for epoch end</p>
               </div>
             </div>
-            {epochEnded ? (
-              <span className="px-3 py-1.5 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
-                Ready to Distribute
-              </span>
-            ) : (
-              <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white/60">
-                {formatTimeRemaining(timeRemaining)} left
-              </span>
-            )}
           </div>
 
           {/* Treasury Balance - Main Display */}
@@ -184,25 +175,25 @@ export function EpochStatusCard() {
             )}
           </div>
 
-          {/* Epoch Progress */}
+          {/* Treasury Distribution Cycle */}
           <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-            <div className="flex items-center justify-between mb-2 text-xs">
-              <span className="text-white/40">Last Distribution</span>
-              <span className="text-white/60">{formatTimestamp(lastDistribution)}</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Treasury Distribution Cycle</span>
+              <span className="text-sm text-white/70">{formatTimeRemaining(timeRemaining)}</span>
             </div>
-            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-2">
+            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   epochEnded
                     ? "bg-emerald-500/70"
-                    : "bg-gradient-to-r from-white/20 to-white/40"
+                    : "bg-gradient-to-r from-amber-500/50 to-amber-400/70"
                 }`}
                 style={{ width: `${Math.min(100, epochProgress)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Next eligible</span>
-              <span className="text-white/60">{formatTimestamp(nextDistribution)}</span>
+            <div className="flex items-center justify-between mt-2 text-xs text-white/30">
+              <span>Last: {formatTimestamp(lastDistribution)}</span>
+              <span>Next: {formatTimestamp(nextDistribution)}</span>
             </div>
           </div>
 
