@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,10 +16,14 @@ import Link from "next/link";
 
 const SOLANA_NETWORK = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet") as keyof typeof NETWORKS;
 
-type Tab = "content" | "collected" | "members";
+type Tab = "overview" | "content" | "collected" | "memberships";
+
+const VALID_TABS: Tab[] = ["overview", "content", "collected", "memberships"];
 
 export default function ProfilePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const addressParam = params.address as string;
   const { publicKey: connectedWallet } = useWallet();
   const { connection } = useConnection();
@@ -36,7 +40,27 @@ export default function ProfilePage() {
     rpcUrl: connection.rpcEndpoint,
   }), [connection.rpcEndpoint]);
 
-  const [activeTab, setActiveTab] = useState<Tab>("content");
+  // Get initial tab from URL or default to overview
+  const tabFromUrl = searchParams.get("tab") as Tab | null;
+  const initialTab = tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : "overview";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  // Sync tab state with URL
+  useEffect(() => {
+    const urlTab = searchParams.get("tab") as Tab | null;
+    if (urlTab && VALID_TABS.includes(urlTab) && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [searchParams]);
+
+  // Update URL when tab changes
+  const handleTabChange = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+    const newUrl = tab === "overview"
+      ? `/profile/${addressParam}`
+      : `/profile/${addressParam}?tab=${tab}`;
+    router.push(newUrl, { scroll: false });
+  }, [addressParam, router]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [burnModalData, setBurnModalData] = useState<{
     nftAsset: PublicKey;
@@ -408,46 +432,161 @@ export default function ProfilePage() {
                     <p className="text-2xl font-bold tracking-tight">{stats.totalMints}</p>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Sold</p>
                   </div>
+                  <div>
+                    <p className="text-2xl font-bold tracking-tight">{stats.membershipCount}</p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-white/40">Memberships</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Membership Banners */}
-        {isOwnProfile ? (
-          <div className="mb-10 space-y-4">
-            <EcosystemMembershipCard />
-            <CreatorPatronPoolCard creator={profileAddress} />
-          </div>
-        ) : (
-          <div className="mb-10 space-y-4">
-            <CreatorMembershipBanner creator={profileAddress} />
-            <CustomMembershipCard creator={profileAddress} />
-            <CreatorPatronPoolCard creator={profileAddress} />
+        {/* Tabs */}
+        <div className="flex gap-2 mb-8 overflow-x-auto">
+          {["Overview", "Created", "Collected", "Memberships"].map((label) => {
+            const key = label.toLowerCase() === "created" ? "content" : label.toLowerCase();
+            return (
+              <button
+                key={key}
+                onClick={() => handleTabChange(key as Tab)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap ${
+                  activeTab === key
+                    ? "bg-white text-black"
+                    : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/10"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {/* Membership Cards */}
+            {isOwnProfile ? (
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-white/60 uppercase tracking-wider">Your Membership</h3>
+                <EcosystemMembershipCard />
+                <CreatorPatronPoolCard creator={profileAddress} />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-white/60 uppercase tracking-wider">Creator Membership</h3>
+                <CreatorMembershipBanner creator={profileAddress} />
+                <CustomMembershipCard creator={profileAddress} />
+                <CreatorPatronPoolCard creator={profileAddress} />
+              </div>
+            )}
+
+            {/* Recent Activity Preview */}
+            {userContent.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-white/60 uppercase tracking-wider">Recent Creations</h3>
+                  <button
+                    onClick={() => handleTabChange("content")}
+                    className="text-xs text-white/40 hover:text-white/60 transition-colors"
+                  >
+                    View all →
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {userContent.slice(0, 4).map((item) => {
+                    const title = item.collectionName || "Untitled";
+                    const thumbnailUrl = item.thumbnail || null;
+
+                    return (
+                      <Link
+                        key={item.pubkey?.toBase58() || item.collectionAsset?.toBase58() || Math.random().toString()}
+                        href={item.contentCid ? `/content/${item.contentCid}` : "#"}
+                        className="group relative rounded-xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
+                      >
+                        <div className="aspect-square bg-white/5 relative">
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <svg className="w-8 h-8 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <h3 className="font-medium text-xs truncate text-white/90">{title}</h3>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recent Collections Preview */}
+            {(ownedNfts.length > 0 || ownedBundleNfts.length > 0) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-white/60 uppercase tracking-wider">Recent Collections</h3>
+                  <button
+                    onClick={() => handleTabChange("collected")}
+                    className="text-xs text-white/40 hover:text-white/60 transition-colors"
+                  >
+                    View all →
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[...ownedNfts, ...ownedBundleNfts].slice(0, 4).map((nft) => {
+                    const contentData = nft.collectionAsset
+                      ? globalContent.find(c => c.collectionAsset?.toBase58() === nft.collectionAsset?.toBase58())
+                      : undefined;
+                    const metadata = (contentData as any)?.metadata;
+                    const title = nft.name || "Untitled";
+                    const thumbnailUrl = metadata?.image || null;
+                    const rarity = nftRarities.get(nft.nftAsset.toBase58()) || bundleNftRarities.get(nft.nftAsset.toBase58());
+
+                    return (
+                      <div
+                        key={nft.nftAsset.toBase58()}
+                        className="group relative rounded-xl bg-white/[0.02] border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300"
+                      >
+                        <div className="aspect-square bg-white/5 relative">
+                          {thumbnailUrl ? (
+                            <img
+                              src={thumbnailUrl}
+                              alt={title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <svg className="w-8 h-8 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                          )}
+                          {rarity !== undefined && (
+                            <div className="absolute top-2 left-2">
+                              <RarityBadge rarity={rarity} size="sm" showGlow />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <h3 className="font-medium text-xs truncate text-white/90">{title}</h3>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8">
-          {[
-            { key: "content", label: "Created", count: stats.contentCount },
-            { key: "collected", label: "Collected", count: stats.collectedCount },
-            { key: "members", label: "Members", count: stats.membershipCount },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as Tab)}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${
-                activeTab === tab.key
-                  ? "bg-white text-black"
-                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/10"
-              }`}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
-        </div>
 
         {/* Content Grid */}
         {activeTab === "content" && (
@@ -681,8 +820,8 @@ export default function ProfilePage() {
           </>
         )}
 
-        {/* Members Tab - Creators this user has active memberships with */}
-        {activeTab === "members" && (
+        {/* Memberships Tab - Creators this user has active memberships with */}
+        {activeTab === "memberships" && (
           <>
             {isLoadingMemberships ? (
               <div className="flex items-center justify-center py-16">
