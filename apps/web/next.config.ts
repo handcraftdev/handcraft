@@ -11,19 +11,9 @@ const nextConfig: NextConfig = {
     "@tamagui/core",
     "@tamagui/config",
     "@tamagui/animations-css",
-    // Solana packages - transpile to fix PublicKey prototype issues
-    "@solana/web3.js",
-    "@solana/wallet-adapter-base",
-    "@solana/wallet-adapter-react",
-    "@solana/wallet-adapter-react-ui",
-    "@solana/wallet-adapter-wallets",
-  ],
-  // Exclude Anchor from server bundling
-  serverExternalPackages: [
-    "@coral-xyz/anchor",
   ],
   // Fix hot reload for pnpm workspace packages
-  webpack: (config, { dev, isServer }) => {
+  webpack: (config, { dev }) => {
     if (dev) {
       // Use polling to detect changes in symlinked workspace packages
       config.watchOptions = {
@@ -32,18 +22,6 @@ const nextConfig: NextConfig = {
         aggregateTimeout: 300,
       };
     }
-
-    // Ensure @solana/web3.js is not broken by webpack optimization
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        os: false,
-        path: false,
-        crypto: false,
-      };
-    }
-
     return config;
   },
   images: {
@@ -53,10 +31,6 @@ const nextConfig: NextConfig = {
         hostname: "**",
       },
     ],
-  },
-  experimental: {
-    // Don't optimize Solana packages - it breaks PublicKey prototype chain
-    optimizePackageImports: ["tamagui"],
   },
 };
 
