@@ -974,8 +974,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
-  // Bundle-specific state - default to open when viewing bundle
-  const [showBundleSidebar, setShowBundleSidebar] = useState(!!bundleContext);
+  // Bundle-specific state - user manually opens playlist
+  const [showBundleSidebar, setShowBundleSidebar] = useState(false);
   const [showBuyBundleModal, setShowBuyBundleModal] = useState(false);
   const [showRentBundleModal, setShowRentBundleModal] = useState(false);
   // Swipe gesture tracking for bundle navigation
@@ -1220,16 +1220,16 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       {thumbnailUrl && (
         <>
           <div
-            className={`absolute top-0 bottom-0 left-0 bg-cover bg-center blur scale-110 transition-all duration-300 ${showBundleSidebar ? 'right-80' : 'right-0'}`}
+            className="absolute inset-0 bg-cover bg-center blur scale-110"
             style={{ backgroundImage: `url(${thumbnailUrl})` }}
           />
-          <div className={`absolute top-0 bottom-0 left-0 bg-black/60 transition-all duration-300 ${showBundleSidebar ? 'right-80' : 'right-0'}`} />
+          <div className="absolute inset-0 bg-black/60" />
         </>
       )}
 
-      {/* Main content area - uses flex to share space with sidebar */}
+      {/* Main content area - full width, sidebar overlays */}
       <div className="absolute inset-0 flex">
-        <div className={`flex-1 relative flex items-center justify-center transition-all duration-300 ${showBundleSidebar ? 'mr-80' : ''}`}>
+        <div className="flex-1 relative flex items-center justify-center">
         {showPlaceholder || !contentUrl ? (
           <div className="w-full h-full flex items-center justify-center">
             <ViewerPlaceholder contentType={content.contentType} />
@@ -1274,7 +1274,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
       {/* Bottom Overlay */}
       <div
-        className={`absolute bottom-0 left-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showBundleSidebar ? 'right-80' : 'right-0'} ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+        className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
@@ -1398,8 +1398,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         )}
       </div>
 
-      {/* Right Actions - shift inside when sidebar opens */}
-      <div className={`absolute bottom-6 z-20 flex flex-col items-center gap-4 transition-all duration-300 ${rightPanelOpen || showBundleSidebar ? "right-[340px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+      {/* Right Actions - fixed position, sidebar overlays */}
+      <div className={`absolute bottom-6 right-4 z-40 flex flex-col items-center gap-4 transition-all duration-300 ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
         {/* Bundle Sidebar Toggle */}
         {bundleContext && bundleContext.items.length > 0 && (
           <button
