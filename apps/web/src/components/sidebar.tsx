@@ -397,7 +397,9 @@ function SlideInSidebar({
                 )}
               </div>
             ) : mounted ? (
-              <WalletMultiButton className="!w-full !bg-white/[0.06] hover:!bg-white/[0.1] !text-white/80 hover:!text-white !rounded-lg !py-3 !text-[13px] !font-medium !justify-center !border !border-white/10 hover:!border-white/20 !transition-all !duration-200" />
+              <div className="w-full">
+                <WalletMultiButton className="!w-full !bg-white/[0.06] hover:!bg-white/[0.1] !text-white/80 hover:!text-white !rounded-lg !py-3 !text-[13px] !font-medium !justify-center !border !border-white/10 hover:!border-white/20 !transition-all !duration-200" />
+              </div>
             ) : (
               <div className="h-11 bg-white/[0.04] rounded-xl animate-pulse" />
             )}
