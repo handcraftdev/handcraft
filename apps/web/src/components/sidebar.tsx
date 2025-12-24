@@ -311,7 +311,7 @@ function SlideInSidebar({
             <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
             <div className="py-2">
               <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-4" />
-              <p className="px-2 mb-3 text-[10px] text-white/25 uppercase tracking-[0.12em] font-medium">Membership</p>
+              <p className="px-2 mb-3 text-[10px] text-white/25 uppercase tracking-[0.12em] font-medium">Subscription</p>
               <EcosystemMembershipCard compact />
             </div>
           </div>
