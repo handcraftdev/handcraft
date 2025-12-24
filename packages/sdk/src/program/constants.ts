@@ -7,9 +7,23 @@ export const PROGRAM_ID_STRING = idl.address;
 // Metaplex Core Program ID as string
 export const MPL_CORE_PROGRAM_ID_STRING = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
 
-// PublicKey instances - only use these client-side, not during SSR
-export const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
-export const MPL_CORE_PROGRAM_ID = new PublicKey(MPL_CORE_PROGRAM_ID_STRING);
+// PublicKey instances - lazily initialized to avoid SSR/bundling issues
+let _PROGRAM_ID: PublicKey | null = null;
+let _MPL_CORE_PROGRAM_ID: PublicKey | null = null;
+
+export const PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
+  get(_, prop) {
+    if (!_PROGRAM_ID) _PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
+    return (_PROGRAM_ID as unknown as Record<string, unknown>)[prop as string];
+  },
+});
+
+export const MPL_CORE_PROGRAM_ID: PublicKey = new Proxy({} as PublicKey, {
+  get(_, prop) {
+    if (!_MPL_CORE_PROGRAM_ID) _MPL_CORE_PROGRAM_ID = new PublicKey(MPL_CORE_PROGRAM_ID_STRING);
+    return (_MPL_CORE_PROGRAM_ID as unknown as Record<string, unknown>)[prop as string];
+  },
+});
 
 // Seeds for PDA derivation
 export const ECOSYSTEM_CONFIG_SEED = "ecosystem";
@@ -207,11 +221,21 @@ export const BUNDLE_RENTAL_NFT_SEED = "bundle_rental_nft";
 
 // MagicBlock VRF Program ID
 export const MAGICBLOCK_VRF_PROGRAM_ID_STRING = "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz";
-export const MAGICBLOCK_VRF_PROGRAM_ID = new PublicKey(MAGICBLOCK_VRF_PROGRAM_ID_STRING);
+let _MAGICBLOCK_VRF_PROGRAM_ID: PublicKey | null = null;
+export const MAGICBLOCK_VRF_PROGRAM_ID = {
+  get toBase58() { return () => { if (!_MAGICBLOCK_VRF_PROGRAM_ID) _MAGICBLOCK_VRF_PROGRAM_ID = new PublicKey(MAGICBLOCK_VRF_PROGRAM_ID_STRING); return _MAGICBLOCK_VRF_PROGRAM_ID.toBase58(); }; },
+  get toBuffer() { return () => { if (!_MAGICBLOCK_VRF_PROGRAM_ID) _MAGICBLOCK_VRF_PROGRAM_ID = new PublicKey(MAGICBLOCK_VRF_PROGRAM_ID_STRING); return _MAGICBLOCK_VRF_PROGRAM_ID.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_MAGICBLOCK_VRF_PROGRAM_ID) _MAGICBLOCK_VRF_PROGRAM_ID = new PublicKey(MAGICBLOCK_VRF_PROGRAM_ID_STRING); return _MAGICBLOCK_VRF_PROGRAM_ID.equals(other); }; },
+} as unknown as PublicKey;
 
 // MagicBlock Default Queue
 export const MAGICBLOCK_DEFAULT_QUEUE_STRING = "Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh";
-export const MAGICBLOCK_DEFAULT_QUEUE = new PublicKey(MAGICBLOCK_DEFAULT_QUEUE_STRING);
+let _MAGICBLOCK_DEFAULT_QUEUE: PublicKey | null = null;
+export const MAGICBLOCK_DEFAULT_QUEUE = {
+  get toBase58() { return () => { if (!_MAGICBLOCK_DEFAULT_QUEUE) _MAGICBLOCK_DEFAULT_QUEUE = new PublicKey(MAGICBLOCK_DEFAULT_QUEUE_STRING); return _MAGICBLOCK_DEFAULT_QUEUE.toBase58(); }; },
+  get toBuffer() { return () => { if (!_MAGICBLOCK_DEFAULT_QUEUE) _MAGICBLOCK_DEFAULT_QUEUE = new PublicKey(MAGICBLOCK_DEFAULT_QUEUE_STRING); return _MAGICBLOCK_DEFAULT_QUEUE.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_MAGICBLOCK_DEFAULT_QUEUE) _MAGICBLOCK_DEFAULT_QUEUE = new PublicKey(MAGICBLOCK_DEFAULT_QUEUE_STRING); return _MAGICBLOCK_DEFAULT_QUEUE.equals(other); }; },
+} as unknown as PublicKey;
 
 // MagicBlock seeds for PDA derivation
 export const MB_MINT_REQUEST_SEED = "mb_mint_request";
@@ -366,23 +390,48 @@ export const SUBSCRIPTION_RARITY_WEIGHT_LEGENDARY = 120;
 
 // Streamflow Program ID (devnet - production uses same ID)
 export const STREAMFLOW_PROGRAM_ID_STRING = "HqDGZjaVRXJ9MGRQEw7qDc2rAr6iH1n1kAQdCZaCMfMZ";
-export const STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING);
+let _STREAMFLOW_PROGRAM_ID: PublicKey | null = null;
+export const STREAMFLOW_PROGRAM_ID = {
+  get toBase58() { return () => { if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING); return _STREAMFLOW_PROGRAM_ID.toBase58(); }; },
+  get toBuffer() { return () => { if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING); return _STREAMFLOW_PROGRAM_ID.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING); return _STREAMFLOW_PROGRAM_ID.equals(other); }; },
+} as unknown as PublicKey;
 
 // Streamflow Treasury (for their 0.25% fee)
 export const STREAMFLOW_TREASURY_STRING = "5SEpbdjFK5FxwTvfsGMXVQTD2v4M2c5tyRTxhdsPkgDw";
-export const STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING);
+let _STREAMFLOW_TREASURY: PublicKey | null = null;
+export const STREAMFLOW_TREASURY = {
+  get toBase58() { return () => { if (!_STREAMFLOW_TREASURY) _STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING); return _STREAMFLOW_TREASURY.toBase58(); }; },
+  get toBuffer() { return () => { if (!_STREAMFLOW_TREASURY) _STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING); return _STREAMFLOW_TREASURY.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_STREAMFLOW_TREASURY) _STREAMFLOW_TREASURY = new PublicKey(STREAMFLOW_TREASURY_STRING); return _STREAMFLOW_TREASURY.equals(other); }; },
+} as unknown as PublicKey;
 
 // Streamflow Withdrawor (for automatic withdrawals - not used by us)
 export const STREAMFLOW_WITHDRAWOR_STRING = "wdrwhnCv4pzW8beKsbPa4S2UDZrXenjg16KJdKSpb5u";
-export const STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING);
+let _STREAMFLOW_WITHDRAWOR: PublicKey | null = null;
+export const STREAMFLOW_WITHDRAWOR = {
+  get toBase58() { return () => { if (!_STREAMFLOW_WITHDRAWOR) _STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING); return _STREAMFLOW_WITHDRAWOR.toBase58(); }; },
+  get toBuffer() { return () => { if (!_STREAMFLOW_WITHDRAWOR) _STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING); return _STREAMFLOW_WITHDRAWOR.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_STREAMFLOW_WITHDRAWOR) _STREAMFLOW_WITHDRAWOR = new PublicKey(STREAMFLOW_WITHDRAWOR_STRING); return _STREAMFLOW_WITHDRAWOR.equals(other); }; },
+} as unknown as PublicKey;
 
 // Streamflow Fee Oracle
 export const STREAMFLOW_FEE_ORACLE_STRING = "B743wFVk2pCYhV91cn287e1xY7f1vt4gdY48hhNiuQmT";
-export const STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING);
+let _STREAMFLOW_FEE_ORACLE: PublicKey | null = null;
+export const STREAMFLOW_FEE_ORACLE = {
+  get toBase58() { return () => { if (!_STREAMFLOW_FEE_ORACLE) _STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING); return _STREAMFLOW_FEE_ORACLE.toBase58(); }; },
+  get toBuffer() { return () => { if (!_STREAMFLOW_FEE_ORACLE) _STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING); return _STREAMFLOW_FEE_ORACLE.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_STREAMFLOW_FEE_ORACLE) _STREAMFLOW_FEE_ORACLE = new PublicKey(STREAMFLOW_FEE_ORACLE_STRING); return _STREAMFLOW_FEE_ORACLE.equals(other); }; },
+} as unknown as PublicKey;
 
 // WSOL Mint (Native SOL wrapped)
 export const WSOL_MINT_STRING = "So11111111111111111111111111111111111111112";
-export const WSOL_MINT = new PublicKey(WSOL_MINT_STRING);
+let _WSOL_MINT: PublicKey | null = null;
+export const WSOL_MINT = {
+  get toBase58() { return () => { if (!_WSOL_MINT) _WSOL_MINT = new PublicKey(WSOL_MINT_STRING); return _WSOL_MINT.toBase58(); }; },
+  get toBuffer() { return () => { if (!_WSOL_MINT) _WSOL_MINT = new PublicKey(WSOL_MINT_STRING); return _WSOL_MINT.toBuffer(); }; },
+  get equals() { return (other: PublicKey) => { if (!_WSOL_MINT) _WSOL_MINT = new PublicKey(WSOL_MINT_STRING); return _WSOL_MINT.equals(other); }; },
+} as unknown as PublicKey;
 
 // Note: SECONDS_PER_DAY, SECONDS_PER_MONTH, SECONDS_PER_YEAR are exported from ./streamflow
 

@@ -14,16 +14,26 @@ export const NETWORKS = {
   },
 } as const;
 
-// Token mints (will be updated with actual addresses)
-export const TOKEN_MINTS = {
-  // USDC on devnet/mainnet
-  USDC_DEVNET: new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
-  USDC_MAINNET: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-
-  // $CRAFT token (placeholder - will be deployed)
-  CRAFT_DEVNET: new PublicKey("11111111111111111111111111111111"), // placeholder
-  CRAFT_MAINNET: new PublicKey("11111111111111111111111111111111"), // placeholder
+// Token mint addresses as strings (to avoid SSR/bundling issues)
+export const TOKEN_MINT_STRINGS = {
+  USDC_DEVNET: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  USDC_MAINNET: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  CRAFT_DEVNET: "11111111111111111111111111111111",
+  CRAFT_MAINNET: "11111111111111111111111111111111",
 } as const;
+
+// Token mints - lazily create PublicKey objects
+export function getTokenMint(key: keyof typeof TOKEN_MINT_STRINGS): PublicKey {
+  return new PublicKey(TOKEN_MINT_STRINGS[key]);
+}
+
+// Legacy export for backwards compatibility (lazy)
+export const TOKEN_MINTS = {
+  get USDC_DEVNET() { return getTokenMint("USDC_DEVNET"); },
+  get USDC_MAINNET() { return getTokenMint("USDC_MAINNET"); },
+  get CRAFT_DEVNET() { return getTokenMint("CRAFT_DEVNET"); },
+  get CRAFT_MAINNET() { return getTokenMint("CRAFT_MAINNET"); },
+};
 
 // IPFS/Storage configuration
 export const STORAGE = {

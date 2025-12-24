@@ -65,3 +65,4 @@ target
 
 # Claude
 **/.claude/settings.local.json
+supabase/.temp/
