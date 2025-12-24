@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
     "@tamagui/core",
     "@tamagui/config",
     "@tamagui/animations-css",
+    // Solana packages - transpile to fix PublicKey prototype issues
+    "@solana/web3.js",
+    "@solana/wallet-adapter-base",
+    "@solana/wallet-adapter-react",
+    "@solana/wallet-adapter-react-ui",
+    "@solana/wallet-adapter-wallets",
   ],
   // Exclude Solana/Anchor packages from server bundling to prevent PublicKey issues
   serverExternalPackages: [
@@ -50,7 +56,8 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ["@solana/wallet-adapter-react-ui", "tamagui"],
+    // Don't optimize Solana packages - it breaks PublicKey prototype chain
+    optimizePackageImports: ["tamagui"],
   },
 };
 
