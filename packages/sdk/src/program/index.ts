@@ -1660,7 +1660,18 @@ export async function getBundlePendingRewardsOptimized(
 
     const rewardPool = bundleRewardPools.get(bundleKey);
     if (!rewardPool) {
-      results.push({ bundleId, creator, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: [] });
+      // No reward pool yet - still show NFTs with 0 pending but use actual weight from reward state
+      const nftRewardsNoPool = nfts.map(nft => {
+        const nftRewardState = nftRewardStates.get(nft.nftAsset.toBase58());
+        return {
+          nftAsset: nft.nftAsset,
+          pending: BigInt(0),
+          rewardDebt: nftRewardState?.rewardDebt || BigInt(0),
+          weight: nftRewardState?.weight || 100,
+          createdAt: nftRewardState?.createdAt || BigInt(0)
+        };
+      });
+      results.push({ bundleId, creator, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: nftRewardsNoPool });
       continue;
     }
 
@@ -1683,6 +1694,16 @@ export async function getBundlePendingRewardsOptimized(
           rewardDebt: nftRewardState.rewardDebt,
           weight: nftRewardState.weight,
           createdAt: nftRewardState.createdAt,
+        });
+      } else {
+        // NFT exists but no reward state found - add with 0 pending
+        // This can happen for NFTs minted before reward tracking or if decode failed
+        nftRewards.push({
+          nftAsset: nft.nftAsset,
+          pending: BigInt(0),
+          rewardDebt: BigInt(0),
+          weight: 100, // Default Common weight
+          createdAt: BigInt(0)
         });
       }
     }
@@ -1712,24 +1733,23 @@ export async function fetchAllContentRewardPools(
   const pools = new Map<string, ContentRewardPool>();
   try {
     const program = createProgram(connection);
+    // Fetch ContentRewardPool accounts (not RewardPool which is for bundles)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allPools = await (program.account as any).rewardPool.all();
+    const allPools = await (program.account as any).contentRewardPool.all();
 
     for (const { account } of allPools) {
       // Skip if account data is malformed or missing required fields
-      if (!account || !account.item || !account.itemType) continue;
-      // Only include content reward pools (filter out bundle pools)
-      if (!account.itemType.content) continue;
+      if (!account || !account.content) continue;
 
-      const contentKey = account.item.toBase58();
+      const contentKey = account.content.toBase58();
       pools.set(contentKey, {
-        content: account.item,
+        content: account.content,
         rewardPerShare: BigInt(account.rewardPerShare.toString()),
-        totalNfts: BigInt(account.totalNfts.toString()),
+        totalNfts: BigInt(account.totalNfts?.toString() || "0"),
         totalWeight: BigInt(account.totalWeight?.toString() || "0"),
-        totalDeposited: BigInt(account.totalDeposited.toString()),
-        totalClaimed: BigInt(account.totalClaimed.toString()),
-        createdAt: BigInt(account.createdAt.toString()),
+        totalDeposited: BigInt(account.totalDeposited?.toString() || "0"),
+        totalClaimed: BigInt(account.totalClaimed?.toString() || "0"),
+        createdAt: BigInt(account.createdAt?.toString() || "0"),
       });
     }
   } catch (err) {
@@ -1775,9 +1795,12 @@ export async function fetchNftRewardStatesBatch(
             weight: decoded.weight || 100,
             createdAt: BigInt(decoded.createdAt.toString()),
           });
-        } catch {
-          // Skip invalid account data
+        } catch (err) {
+          // Log decode errors for debugging
+          console.error("[fetchNftRewardStatesBatch] Failed to decode NFT reward state:", nftAssets[i].toBase58(), err);
         }
+      } else {
+        console.log("[fetchNftRewardStatesBatch] No account found for NFT:", nftAssets[i].toBase58());
       }
     }
   } catch (err) {
@@ -2300,7 +2323,18 @@ export async function getPendingRewardsOptimized(
 
     const rewardPool = rewardPools.get(contentKey);
     if (!rewardPool) {
-      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: [] });
+      // No reward pool yet - still show NFTs with 0 pending but use actual weight from reward state
+      const nftRewardsNoPool = nfts.map(nft => {
+        const nftRewardState = nftRewardStates.get(nft.nftAsset.toBase58());
+        return {
+          nftAsset: nft.nftAsset,
+          pending: BigInt(0),
+          rewardDebt: nftRewardState?.rewardDebt || BigInt(0),
+          weight: nftRewardState?.weight || 100,
+          createdAt: nftRewardState?.createdAt || BigInt(0)
+        };
+      });
+      results.push({ contentCid, pending: BigInt(0), nftCount: BigInt(nfts.length), nftRewards: nftRewardsNoPool });
       continue;
     }
 
@@ -2323,6 +2357,16 @@ export async function getPendingRewardsOptimized(
           rewardDebt: nftRewardState.rewardDebt,
           weight: nftRewardState.weight,
           createdAt: nftRewardState.createdAt
+        });
+      } else {
+        // NFT exists but no reward state found - add with 0 pending
+        // This can happen for NFTs minted before reward tracking or if decode failed
+        nftRewards.push({
+          nftAsset: nft.nftAsset,
+          pending: BigInt(0),
+          rewardDebt: BigInt(0),
+          weight: 100, // Default Common weight
+          createdAt: BigInt(0)
         });
       }
     }
