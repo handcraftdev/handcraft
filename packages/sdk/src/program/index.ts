@@ -4411,6 +4411,74 @@ export async function fetchCreatorPatronTreasuryBalance(
   }
 }
 
+/**
+ * Result for creator patron pending distribution
+ */
+export interface CreatorPatronPendingDistributionResult {
+  /** WSOL in treasury's WSOL ATA (withdrawn from escrow, ready to unwrap) */
+  inTreasuryWsolAta: bigint;
+  /** WSOL in stream escrows (released but not yet withdrawn) */
+  inStreamEscrows: bigint;
+  /** Total pending = inTreasuryWsolAta + inStreamEscrows */
+  totalPending: bigint;
+  /** Active stream IDs that have available funds to withdraw */
+  streamsWithFunds: Array<{
+    streamId: string;
+    available: bigint;
+  }>;
+}
+
+/**
+ * Fetch complete creator patron pending distribution including both:
+ * 1. WSOL in treasury's WSOL ATA (already withdrawn from escrow)
+ * 2. WSOL in stream escrows (released but not yet withdrawn)
+ *
+ * @param connection Solana connection
+ * @param creator Creator's public key
+ * @param streamflowClient StreamflowClient instance for querying streams
+ */
+export async function fetchCreatorPatronPendingDistribution(
+  connection: Connection,
+  creator: PublicKey,
+  streamflowClient: { getIncomingStreams: (recipient: PublicKey) => Promise<Array<{ id: string; depositedAmount: { toString(): string }; withdrawnAmount: { toString(): string }; startTime: number; cliff: number; period: number; amountPerPeriod: { toString(): string }; cliffAmount: { toString(): string }; canceledAt: number }>> }
+): Promise<CreatorPatronPendingDistributionResult> {
+  const [treasuryPda] = getCreatorPatronTreasuryPda(creator);
+
+  // Fetch WSOL ATA balance
+  const wsolAta = getWsolAtaAddress(treasuryPda);
+  const inTreasuryWsolAta = await fetchTokenAccountBalance(connection, wsolAta);
+
+  // Fetch all incoming streams for the treasury
+  const streams = await streamflowClient.getIncomingStreams(treasuryPda);
+  const now = Math.floor(Date.now() / 1000);
+
+  // Calculate available for each stream
+  const streamsWithFunds: Array<{ streamId: string; available: bigint }> = [];
+  let inStreamEscrows = BigInt(0);
+
+  for (const stream of streams) {
+    // Skip cancelled streams
+    if (stream.canceledAt > 0) continue;
+
+    // Calculate available
+    const available = calculateStreamAvailableAmount(stream, now);
+    if (available > BigInt(0)) {
+      streamsWithFunds.push({
+        streamId: stream.id,
+        available,
+      });
+      inStreamEscrows += available;
+    }
+  }
+
+  return {
+    inTreasuryWsolAta,
+    inStreamEscrows,
+    totalPending: inTreasuryWsolAta + inStreamEscrows,
+    streamsWithFunds,
+  };
+}
+
 // ============================================
 // SUBSCRIPTION INSTRUCTIONS
 // ============================================
@@ -5500,6 +5568,10 @@ export function createContentRegistryClient(connection: Connection) {
     fetchCreatorPatronPool: (creator: PublicKey) => fetchCreatorPatronPool(connection, creator),
     fetchCreatorPatronConfig: (creator: PublicKey) => fetchCreatorPatronConfig(connection, creator),
     fetchCreatorPatronTreasuryBalance: (creator: PublicKey) => fetchCreatorPatronTreasuryBalance(connection, creator),
+    fetchCreatorPatronPendingDistribution: (
+      creator: PublicKey,
+      streamflowClient: Parameters<typeof fetchCreatorPatronPendingDistribution>[2]
+    ) => fetchCreatorPatronPendingDistribution(connection, creator, streamflowClient),
 
     fetchContentRewardPool: (contentCid: string) => fetchContentRewardPool(connection, contentCid),
     // NOTE: fetchContentCollection removed - access collectionAsset via fetchContent
