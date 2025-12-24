@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useState, useEffect, useMemo } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -9,7 +10,15 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-// Minimal provider - matches tribunalcraft exactly
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 export function Providers({ children }: { children: ReactNode }) {
   const [endpoint, setEndpoint] = useState<string | null>(null);
 
@@ -29,12 +38,14 @@ export function Providers({ children }: { children: ReactNode }) {
   console.log("[Providers] Rendering with endpoint:", endpoint);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect={false}>
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <QueryClientProvider client={queryClient}>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect={false}>
+          <WalletModalProvider>
+            {children}
+          </WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </QueryClientProvider>
   );
 }
