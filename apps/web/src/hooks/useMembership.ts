@@ -13,6 +13,7 @@ import {
   NATIVE_MINT,
 } from "@solana/spl-token";
 import { sendTransactionWithSimulation, sendTransactionWithSigners } from "@/lib/transaction";
+import { useState, useEffect } from "react";
 
 // SDK imports are done dynamically inside functions to avoid module-level PublicKey creation
 // which causes _bn errors during SSR
@@ -79,8 +80,12 @@ async function getSDKClient(connection: any) {
   return createContentRegistryClient(connection);
 }
 
-// Helper to get Streamflow client dynamically
+// Helper to get Streamflow client dynamically (only on client side)
 async function getStreamflowClient(rpcUrl: string) {
+  // Ensure we're on client side before loading Streamflow SDK
+  if (typeof window === "undefined") {
+    throw new Error("StreamflowClient can only be used on client side");
+  }
   const { StreamflowClient } = await import("@handcraft/sdk");
   return new StreamflowClient({
     cluster: SOLANA_NETWORK as "mainnet" | "devnet" | "testnet",
@@ -92,6 +97,13 @@ export function useMembership() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, wallet } = useWallet();
   const queryClient = useQueryClient();
+
+  // Track client-side mount to prevent SSR from triggering Streamflow SDK
+  // Streamflow SDK creates PublicKey instances internally which causes _bn errors during SSR
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // =========================================================================
   // FETCH QUERIES
@@ -195,7 +207,7 @@ export function useMembership() {
           return null;
         }
       },
-      enabled: !!publicKey && !!creator,
+      enabled: !!publicKey && !!creator && isMounted,
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
       gcTime: 10 * 60 * 1000,
       refetchOnWindowFocus: false,
@@ -345,7 +357,7 @@ export function useMembership() {
         return null;
       }
     },
-    enabled: !!publicKey,
+    enabled: !!publicKey && isMounted,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -1231,7 +1243,7 @@ export function useMembership() {
         const stream = await streamflowClient.getStream(streamId);
         return stream;
       },
-      enabled: !!streamId,
+      enabled: !!streamId && isMounted,
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
       gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
       refetchOnWindowFocus: false,
