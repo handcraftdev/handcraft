@@ -81,9 +81,9 @@ export default function LibraryPage() {
           title,
           thumbnail: content.thumbnail, // Use enriched thumbnail from SDK
           previewCid: content.previewCid,
-          // NOTE: contentType and createdAt removed from on-chain struct
-          domain: "file" as ContentDomain,
-          createdAt: BigInt(0), // Not available from on-chain anymore
+          // contentType comes from IPFS metadata enrichment
+          domain: content.contentType !== undefined ? getContentDomain(content.contentType) : "file" as ContentDomain,
+          createdAt: content.createdAt ?? BigInt(0),
           count: countMap.get(collectionKey) || 1,
         };
       })
