@@ -1,5 +1,7 @@
 "use client";
 
+console.log("[Module Load] providers/index.tsx");
+
 import { ReactNode, useState, useEffect, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {

@@ -1,3 +1,5 @@
+console.log("[Module Load] components/feed/index.ts");
+
 export * from "./types";
 export * from "./cache";
 export * from "./helpers";

@@ -1,5 +1,7 @@
 "use client";
 
+console.log("[Module Load] hooks/useContentRegistry.ts");
+
 import { useMemo, useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Transaction, PublicKey, TransactionInstruction } from "@solana/web3.js";

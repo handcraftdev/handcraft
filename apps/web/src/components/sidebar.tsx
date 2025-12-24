@@ -1,5 +1,7 @@
 "use client";
 
+console.log("[Module Load] components/sidebar.tsx");
+
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";

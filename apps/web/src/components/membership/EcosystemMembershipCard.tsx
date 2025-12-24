@@ -1,5 +1,7 @@
 "use client";
 
+console.log("[Module Load] components/membership/EcosystemMembershipCard.tsx");
+
 import { useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useMembership, formatSol, getDaysRemaining, formatMemberSince, calculateYearlyPrice, getStreamBillingPeriod, BillingPeriod } from "@/hooks/useMembership";

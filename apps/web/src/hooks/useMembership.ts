@@ -1,5 +1,7 @@
 "use client";
 
+console.log("[Module Load] hooks/useMembership.ts");
+
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
