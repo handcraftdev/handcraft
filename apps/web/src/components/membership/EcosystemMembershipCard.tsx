@@ -146,7 +146,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
             <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
-            <span className="text-emerald-400 font-medium">Platform Subscriber</span>
+            <span className="text-emerald-400 font-medium">Ecosystem Subscriber</span>
           </div>
           <p className="text-white/40 text-xs mt-1 text-center">{daysRemaining} days remaining</p>
         </div>
@@ -163,7 +163,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
           <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
           </svg>
-          <span className="text-blue-400 font-medium">Join Platform</span>
+          <span className="text-blue-400 font-medium">Join Ecosystem</span>
         </div>
         {config && (
           <p className="text-white/40 text-xs mt-1">{formatSol(config.price)} SOL/month</p>
@@ -185,7 +185,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Platform Subscription</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Ecosystem Subscription</h2>
             <p className="text-sm text-white/40">Access all "Subscriber Only" tier content</p>
           </div>
         </div>
@@ -380,7 +380,7 @@ export function EcosystemMembershipCard({ compact = false }: EcosystemMembership
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="bg-black border border-white/10 rounded-2xl p-6 max-w-sm mx-4">
-            <h3 className="text-lg font-bold mb-2 tracking-tight">Cancel Platform Subscription?</h3>
+            <h3 className="text-lg font-bold mb-2 tracking-tight">Cancel Ecosystem Subscription?</h3>
             <p className="text-sm text-white/40 mb-4">
               You'll lose access to all "Subscriber Only" tier content across the platform. This cannot be undone.
             </p>

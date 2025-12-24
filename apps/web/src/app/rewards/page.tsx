@@ -686,7 +686,7 @@ function EcosystemTab() {
           Ecosystem subscription fees are split:{" "}
           <span className="text-cyan-400/80">12% to NFT holders</span>,{" "}
           <span className="text-purple-400/80">80% to creators</span>, and{" "}
-          <span className="text-white/50">8% to platform</span>.
+          <span className="text-white/50">8% to ecosystem</span>.
         </p>
       </div>
 

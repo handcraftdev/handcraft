@@ -168,7 +168,7 @@ export function EpochStatusCard() {
                   <p className="text-amber-400 font-medium">{formatSol(totalPending * BigInt(80) / BigInt(100))} SOL</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-amber-400/60">→ Platform (8%)</p>
+                  <p className="text-amber-400/60">→ Ecosystem (8%)</p>
                   <p className="text-amber-400 font-medium">{formatSol(totalPending * BigInt(8) / BigInt(100))} SOL</p>
                 </div>
               </div>
