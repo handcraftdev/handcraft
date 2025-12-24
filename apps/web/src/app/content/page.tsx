@@ -1,8 +1,14 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
-import { Feed } from "@/components/feed";
+import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import { SidebarPanel } from "@/components/sidebar";
+
+// Dynamically import Feed to avoid SDK loading during SSR
+const Feed = dynamic(() => import("@/components/feed").then((m) => m.Feed), {
+  ssr: false,
+  loading: () => <FeedLoadingFallback />,
+});
 
 function FeedLoadingFallback() {
   return (
@@ -49,16 +55,14 @@ export default function ContentPage() {
         </svg>
       </button>
 
-      {/* Feed Content - loads separately */}
-      <Suspense fallback={<FeedLoadingFallback />}>
-        <Feed
-          isSidebarOpen={isSidebarOpen}
-          onCloseSidebar={() => setIsSidebarOpen(false)}
-          showFilters={showFilters}
-          setShowFilters={setShowFilters}
-          onOverlayChange={handleOverlayChange}
-        />
-      </Suspense>
+      {/* Feed Content - dynamically loaded client-side only */}
+      <Feed
+        isSidebarOpen={isSidebarOpen}
+        onCloseSidebar={() => setIsSidebarOpen(false)}
+        showFilters={showFilters}
+        setShowFilters={setShowFilters}
+        onOverlayChange={handleOverlayChange}
+      />
     </div>
   );
 }
