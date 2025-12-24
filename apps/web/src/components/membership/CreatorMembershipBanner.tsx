@@ -107,7 +107,7 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
   const getStreamProgress = () => {
     if (!streamInfo) return null;
     const now = Math.floor(Date.now() / 1000);
-    const depositedLamports = streamInfo.depositedAmount.toNumber();
+    const depositedLamports = Number(streamInfo.depositedAmount);
 
     // Calculate actual streamed amount based on time elapsed (not withdrawnAmount)
     // withdrawnAmount only reflects what recipient has claimed, not what's been released
