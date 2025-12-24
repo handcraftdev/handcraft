@@ -41,7 +41,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <TamaguiProvider config={config} defaultTheme="dark">
         <ConnectionProvider endpoint={endpoint}>
-          <WalletProvider wallets={wallets} autoConnect>
+          <WalletProvider wallets={wallets} autoConnect={false}>
             <WalletModalProvider>
               <SupabaseAuthProvider>
                 {children}
