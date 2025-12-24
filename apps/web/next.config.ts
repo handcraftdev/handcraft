@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import { withTamagui } from "@tamagui/next-plugin";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -7,10 +6,6 @@ const nextConfig: NextConfig = {
     "@handcraft/ui",
     "@handcraft/sdk",
     "@handcraft/types",
-    "tamagui",
-    "@tamagui/core",
-    "@tamagui/config",
-    "@tamagui/animations-css",
   ],
   // Fix hot reload for pnpm workspace packages
   webpack: (config, { dev }) => {
@@ -34,12 +29,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-const tamaguiPlugin = withTamagui({
-  config: "../../packages/ui/src/tamagui.config.ts",
-  components: ["tamagui"],
-  appDir: true,
-  outputCSS: "./public/tamagui.css",
-  disableExtraction: process.env.NODE_ENV === "development",
-});
-
-export default tamaguiPlugin(nextConfig);
+export default nextConfig;
