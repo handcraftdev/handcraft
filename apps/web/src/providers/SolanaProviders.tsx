@@ -11,6 +11,12 @@ import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 
 console.log("[SolanaProviders] Module loaded successfully");
 
+// Log env vars on module load (safe - only NEXT_PUBLIC_ vars are exposed)
+console.log("[ENV] NEXT_PUBLIC_SOLANA_RPC_URL:", process.env.NEXT_PUBLIC_SOLANA_RPC_URL ? "SET (" + process.env.NEXT_PUBLIC_SOLANA_RPC_URL.substring(0, 30) + "...)" : "NOT SET");
+console.log("[ENV] NEXT_PUBLIC_SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET (" + process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 30) + "...)" : "NOT SET");
+console.log("[ENV] NEXT_PUBLIC_SUPABASE_ANON_KEY:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET (length: " + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ")" : "NOT SET");
+console.log("[ENV] NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL || "NOT SET");
+
 export function SolanaProviders({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
