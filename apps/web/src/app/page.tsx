@@ -45,7 +45,7 @@ export default function Home() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/content">
+              <Link prefetch={false} href="/content">
                 <button className="group relative px-8 py-4 overflow-hidden rounded-xl">
                   <div className="absolute inset-0 bg-white transition-opacity duration-300 group-hover:opacity-90" />
                   <span className="relative text-black font-semibold tracking-wide flex items-center gap-2">
@@ -56,7 +56,7 @@ export default function Home() {
                   </span>
                 </button>
               </Link>
-              <Link href="/studio">
+              <Link prefetch={false} href="/studio">
                 <button className="group px-8 py-4 rounded-xl border border-white/20 hover:border-white/40 backdrop-blur-sm transition-all duration-300">
                   <span className="text-white/80 group-hover:text-white font-medium tracking-wide">
                     Start Creating
@@ -170,7 +170,7 @@ export default function Home() {
                     ))}
                   </ul>
 
-                  <Link href="/studio">
+                  <Link prefetch={false} href="/studio">
                     <button className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-white/80 hover:text-white text-sm font-medium transition-all duration-300">
                       Start Creating
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +212,7 @@ export default function Home() {
                     ))}
                   </ul>
 
-                  <Link href="/content">
+                  <Link prefetch={false} href="/content">
                     <button className="inline-flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl text-white/80 hover:text-white text-sm font-medium transition-all duration-300">
                       Start Collecting
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,7 +258,7 @@ export default function Home() {
                   Connect your wallet and join the future of digital content ownership.
                 </p>
 
-                <Link href="/content">
+                <Link prefetch={false} href="/content">
                   <button className="group relative px-10 py-4 overflow-hidden rounded-xl">
                     <div className="absolute inset-0 bg-white transition-opacity duration-300 group-hover:opacity-90" />
                     <span className="relative text-black font-semibold tracking-wide flex items-center gap-2">
