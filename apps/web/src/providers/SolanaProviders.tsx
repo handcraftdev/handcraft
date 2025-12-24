@@ -17,6 +17,32 @@ console.log("[ENV] NEXT_PUBLIC_SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_
 console.log("[ENV] NEXT_PUBLIC_SUPABASE_ANON_KEY:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET (length: " + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ")" : "NOT SET");
 console.log("[ENV] NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL || "NOT SET");
 
+// Wrapper components with logging
+function LoggedConnectionProvider({ endpoint, children }: { endpoint: string; children: ReactNode }) {
+  console.log("[SolanaProviders] ConnectionProvider rendering with endpoint:", endpoint.substring(0, 30) + "...");
+  return <ConnectionProvider endpoint={endpoint}>{children}</ConnectionProvider>;
+}
+
+function LoggedWalletProvider({ children }: { children: ReactNode }) {
+  console.log("[SolanaProviders] WalletProvider rendering");
+  return <WalletProvider wallets={[]} autoConnect={false}>{children}</WalletProvider>;
+}
+
+function LoggedWalletModalProvider({ children }: { children: ReactNode }) {
+  console.log("[SolanaProviders] WalletModalProvider rendering");
+  return <WalletModalProvider>{children}</WalletModalProvider>;
+}
+
+function LoggedSupabaseAuthProvider({ children }: { children: ReactNode }) {
+  console.log("[SolanaProviders] SupabaseAuthProvider rendering");
+  return <SupabaseAuthProvider>{children}</SupabaseAuthProvider>;
+}
+
+function ChildrenWrapper({ children }: { children: ReactNode }) {
+  console.log("[SolanaProviders] Children rendering");
+  return <>{children}</>;
+}
+
 export function SolanaProviders({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
@@ -39,12 +65,6 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
     return clusterApiUrl("devnet");
   }, []);
 
-  // Empty array = auto-detect all Wallet Standard wallets
-  const wallets = useMemo(() => {
-    console.log("[SolanaProviders] Creating wallets array");
-    return [];
-  }, []);
-
   // Don't render ANYTHING until mounted - children contain components that use wallet context
   // Rendering children without providers causes "WalletContext not found" errors
   if (!mounted) {
@@ -55,14 +75,16 @@ export function SolanaProviders({ children }: { children: ReactNode }) {
   console.log("[SolanaProviders] Rendering full provider tree");
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect={false}>
-        <WalletModalProvider>
-          <SupabaseAuthProvider>
-            {children}
-          </SupabaseAuthProvider>
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <LoggedConnectionProvider endpoint={endpoint}>
+      <LoggedWalletProvider>
+        <LoggedWalletModalProvider>
+          <LoggedSupabaseAuthProvider>
+            <ChildrenWrapper>
+              {children}
+            </ChildrenWrapper>
+          </LoggedSupabaseAuthProvider>
+        </LoggedWalletModalProvider>
+      </LoggedWalletProvider>
+    </LoggedConnectionProvider>
   );
 }
