@@ -3,7 +3,38 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
+
+// Helper to safely convert a PublicKey-like object to base58 string
+// This handles cases where PublicKey objects lose their prototype during bundling/serialization
+function safeToBase58(pk: PublicKey | { toBase58?: () => string } | undefined | null): string {
+  if (!pk) return "";
+  // If it's a proper PublicKey instance, use toBase58 directly
+  if (pk instanceof PublicKey) {
+    return pk.toBase58();
+  }
+  // If it has toBase58 method, try using it
+  if (typeof pk.toBase58 === "function") {
+    try {
+      return pk.toBase58();
+    } catch {
+      // Fall through to reconstruction
+    }
+  }
+  // Try to reconstruct from the object's internal bytes
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyPk = pk as any;
+    if (anyPk._bn) {
+      return new PublicKey(anyPk._bn.toArray()).toBase58();
+    }
+    // Try to create from the object directly (might be serialized bytes)
+    return new PublicKey(pk as unknown as Uint8Array).toBase58();
+  } catch {
+    return "";
+  }
+}
 import { useSession } from "@/hooks/useSession";
 import { getIpfsUrl, getContentDomain, getDomainLabel, getContentTypeLabel as getSDKContentTypeLabel, ContentType as SDKContentType, getContentPda, VisibilityLevel, getVisibilityLevelLabel, BundleType, getBundlePda } from "@handcraft/sdk";
 import { BuyContentModal, SellNftModal } from "@/components/mint";
@@ -269,7 +300,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
       try {
         const enriched = await Promise.all(
           rawGlobalContent.map(async (item) => {
-            const creatorAddress = item.creator.toBase58();
+            const creatorAddress = safeToBase58(item.creator);
             let metadata: EnrichedContent["metadata"] | undefined;
 
             // Fetch metadata from IPFS if metadataCid is available

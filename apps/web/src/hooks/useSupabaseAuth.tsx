@@ -1,6 +1,28 @@
 import { useEffect, useCallback, createContext, useContext, useState, useMemo, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
+
+// Helper to safely convert PublicKey to base58 (handles prototype loss during SSR/hydration)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safePublicKeyToBase58(pk: any): string | null {
+  if (!pk) return null;
+  try {
+    if (pk instanceof PublicKey) {
+      return pk.toBase58();
+    }
+    if (typeof pk.toBase58 === 'function') {
+      return pk.toBase58();
+    }
+    // Reconstruct if prototype was lost
+    if (pk._bn) {
+      return new PublicKey(pk._bn.toArray()).toBase58();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -73,7 +95,7 @@ interface SupabaseAuthProviderProps {
  */
 export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const wallet = useWallet();
-  const walletAddress = wallet.publicKey?.toBase58() ?? null;
+  const walletAddress = safePublicKeyToBase58(wallet.publicKey);
 
   // Track previous wallet to detect changes
   const prevWalletRef = useRef<string | null>(null);
