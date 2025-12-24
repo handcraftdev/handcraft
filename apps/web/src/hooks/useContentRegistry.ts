@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Transaction, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -104,11 +104,13 @@ export function useContentRegistry() {
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
 
-  // Memoize client to prevent recreating on every render
-  // Only create client on client-side to avoid SSR issues with @solana/web3.js PublicKey._bn
-  const client = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    return createContentRegistryClient(connection);
+  // Use useState + useEffect to ensure client is only created after mount (client-side only)
+  // This avoids SSR issues with @solana/web3.js PublicKey._bn
+  const [client, setClient] = useState<ReturnType<typeof createContentRegistryClient> | null>(null);
+
+  useEffect(() => {
+    // Only create client on client-side after component mounts
+    setClient(createContentRegistryClient(connection));
   }, [connection]);
 
   // Fetch global content (all creators) with Metaplex metadata enrichment
