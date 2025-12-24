@@ -1438,10 +1438,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         )}
       </div>
 
-      {/* Bundle Sidebar */}
+      {/* Bundle Sidebar - hidden/shown with overlay */}
       {bundleContext && (
         <div
-          className={`absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 transform transition-transform duration-300 z-30 ${showBundleSidebar ? "translate-x-0" : "translate-x-full"}`}
+          className={`absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 transform transition-all duration-300 z-30 ${showBundleSidebar && showOverlay ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"}`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Sidebar Header */}
