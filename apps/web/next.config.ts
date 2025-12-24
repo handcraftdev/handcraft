@@ -18,9 +18,8 @@ const nextConfig: NextConfig = {
     "@solana/wallet-adapter-react-ui",
     "@solana/wallet-adapter-wallets",
   ],
-  // Exclude Solana/Anchor packages from server bundling to prevent PublicKey issues
+  // Exclude Anchor from server bundling
   serverExternalPackages: [
-    "@solana/web3.js",
     "@coral-xyz/anchor",
   ],
   // Fix hot reload for pnpm workspace packages
