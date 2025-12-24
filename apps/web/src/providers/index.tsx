@@ -47,7 +47,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClientRef.current}>
       <ConnectionProvider endpoint={endpoint}>
-        <WalletProvider wallets={wallets} autoConnect={false}>
+        <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>
             <SupabaseAuthProvider>
               {children}
