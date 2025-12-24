@@ -2563,10 +2563,21 @@ export function useContentRegistry() {
     queryKey: ["walletNfts", publicKey?.toBase58()],
     queryFn: async () => {
       if (!publicKey || !client) return [];
-      // Fetch all NFT metadata for wallet once
-      return client.fetchWalletNftMetadata(publicKey);
+
+      // Build collectionAsset -> contentCid map from enriched global content
+      // This uses the proper contentCid from IPFS metadata (not previewCid)
+      const globalContent = globalContentQuery.data || [];
+      const collectionToContentCid = new Map<string, string>();
+      for (const content of globalContent) {
+        if (content.collectionAsset && content.contentCid) {
+          collectionToContentCid.set(content.collectionAsset.toBase58(), content.contentCid);
+        }
+      }
+
+      // Use the optimized version with pre-built collection map
+      return client.fetchWalletNftMetadataWithCollections(publicKey, collectionToContentCid);
     },
-    enabled: !!publicKey && !!client,
+    enabled: !!publicKey && !!client && globalContentQuery.isSuccess,
     staleTime: 300000, // Cache for 5 minutes (expensive query)
     gcTime: 600000, // Keep in cache for 10 minutes
     refetchOnMount: false, // Don't refetch on component remount (Fast Refresh)
