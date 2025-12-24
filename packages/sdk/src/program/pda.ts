@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { sha256 } from "js-sha256";
 import {
-  PROGRAM_ID,
+  getProgramId,
   ECOSYSTEM_CONFIG_SEED,
   MINT_CONFIG_SEED,
   CONTENT_REWARD_POOL_SEED,
@@ -42,7 +42,7 @@ import {
   ECOSYSTEM_SUB_SEED,
   SIMPLE_NFT_SEED,
   // Streamflow constants
-  STREAMFLOW_PROGRAM_ID,
+  getStreamflowProgramId,
 } from "./constants";
 
 export function hashCid(cid: string): Uint8Array {
@@ -54,7 +54,7 @@ export function getContentPda(contentCid: string): [PublicKey, number] {
   const cidHash = hashCid(contentCid);
   return PublicKey.findProgramAddressSync(
     [Buffer.from("content"), cidHash],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -64,28 +64,28 @@ export function getContentPda(contentCid: string): [PublicKey, number] {
 export function getEcosystemConfigPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_CONFIG_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
 export function getMintConfigPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MINT_CONFIG_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
 export function getContentRewardPoolPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CONTENT_REWARD_POOL_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
 export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(WALLET_CONTENT_STATE_SEED), wallet.toBuffer(), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -95,7 +95,7 @@ export function getWalletContentStatePda(wallet: PublicKey, contentPda: PublicKe
 export function getUserProfilePda(owner: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(USER_PROFILE_SEED), owner.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -122,7 +122,7 @@ export function calculatePendingRewardForNft(rewardPerShare: bigint, nftRewardDe
 export function getRentConfigPda(contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(RENT_CONFIG_SEED), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -132,7 +132,7 @@ export function getRentConfigPda(contentPda: PublicKey): [PublicKey, number] {
 export function getPendingMintPda(buyer: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(PENDING_MINT_SEED), buyer.toBuffer(), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -168,7 +168,7 @@ export function getMbMintRequestPda(buyer: PublicKey, contentPda: PublicKey, edi
 
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MB_MINT_REQUEST_SEED), buyer.toBuffer(), contentPda.toBuffer(), editionBytes],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -179,7 +179,7 @@ export function getMbMintRequestPda(buyer: PublicKey, contentPda: PublicKey, edi
 export function getMbNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MB_NFT_SEED), mintRequestPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -193,7 +193,7 @@ export function getMbNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number]
 export function getBundlePda(creator: PublicKey, bundleId: string): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BUNDLE_SEED), creator.toBuffer(), Buffer.from(bundleId)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -205,7 +205,7 @@ export function getBundlePda(creator: PublicKey, bundleId: string): [PublicKey, 
 export function getBundleItemPda(bundlePda: PublicKey, contentPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BUNDLE_ITEM_SEED), bundlePda.toBuffer(), contentPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -218,7 +218,7 @@ export function getBundleItemPda(bundlePda: PublicKey, contentPda: PublicKey): [
 export function getBundleMintConfigPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MINT_CONFIG_SEED), bundlePda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -229,7 +229,7 @@ export function getBundleMintConfigPda(bundlePda: PublicKey): [PublicKey, number
 export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(RENT_CONFIG_SEED), bundlePda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -242,7 +242,7 @@ export function getBundleRentConfigPda(bundlePda: PublicKey): [PublicKey, number
 export function getBundleRewardPoolPda(bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(REWARD_POOL_SEED), bundlePda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -254,7 +254,7 @@ export function getBundleRewardPoolPda(bundlePda: PublicKey): [PublicKey, number
 export function getBundleWalletStatePda(wallet: PublicKey, bundlePda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BUNDLE_WALLET_STATE_SEED), wallet.toBuffer(), bundlePda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -278,7 +278,7 @@ export function getBundleDirectNftPda(buyer: PublicKey, bundlePda: PublicKey, ed
 
   return PublicKey.findProgramAddressSync(
     [Buffer.from(BUNDLE_DIRECT_NFT_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -302,7 +302,7 @@ export function getMbBundleMintRequestPda(buyer: PublicKey, bundlePda: PublicKey
 
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MB_BUNDLE_MINT_REQUEST_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -313,7 +313,7 @@ export function getMbBundleMintRequestPda(buyer: PublicKey, bundlePda: PublicKey
 export function getMbBundleNftAssetPda(mintRequestPda: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(MB_BUNDLE_NFT_SEED), mintRequestPda.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -327,7 +327,7 @@ export function getMbBundleNftAssetPda(mintRequestPda: PublicKey): [PublicKey, n
 export function getUnifiedNftRewardStatePda(nftAsset: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(UNIFIED_NFT_REWARD_STATE_SEED), nftAsset.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -339,7 +339,7 @@ export function getUnifiedNftRewardStatePda(nftAsset: PublicKey): [PublicKey, nu
 export function getCreatorPatronPoolPda(creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_PATRON_POOL_SEED), creator.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -351,7 +351,7 @@ export function getCreatorPatronPoolPda(creator: PublicKey): [PublicKey, number]
 export function getCreatorPatronTreasuryPda(creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_PATRON_TREASURY_SEED), creator.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -363,7 +363,7 @@ export function getCreatorPatronTreasuryPda(creator: PublicKey): [PublicKey, num
 export function getCreatorPatronConfigPda(creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_PATRON_CONFIG_SEED), creator.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -376,7 +376,7 @@ export function getCreatorPatronConfigPda(creator: PublicKey): [PublicKey, numbe
 export function getCreatorPatronSubscriptionPda(subscriber: PublicKey, creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_PATRON_SUB_SEED), subscriber.toBuffer(), creator.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -387,7 +387,7 @@ export function getCreatorPatronSubscriptionPda(subscriber: PublicKey, creator: 
 export function getGlobalHolderPoolPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(GLOBAL_HOLDER_POOL_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -398,7 +398,7 @@ export function getGlobalHolderPoolPda(): [PublicKey, number] {
 export function getCreatorDistPoolPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_DIST_POOL_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -409,7 +409,7 @@ export function getCreatorDistPoolPda(): [PublicKey, number] {
 export function getEcosystemEpochStatePda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_EPOCH_STATE_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -421,7 +421,7 @@ export function getEcosystemEpochStatePda(): [PublicKey, number] {
 export function getCreatorWeightPda(creator: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(CREATOR_WEIGHT_SEED), creator.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -432,7 +432,7 @@ export function getCreatorWeightPda(creator: PublicKey): [PublicKey, number] {
 export function getEcosystemStreamingTreasuryPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_STREAMING_TREASURY_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -443,7 +443,7 @@ export function getEcosystemStreamingTreasuryPda(): [PublicKey, number] {
 export function getEcosystemSubConfigPda(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_SUB_CONFIG_SEED)],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -455,7 +455,7 @@ export function getEcosystemSubConfigPda(): [PublicKey, number] {
 export function getEcosystemSubscriptionPda(subscriber: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(ECOSYSTEM_SUB_SEED), subscriber.toBuffer()],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -479,7 +479,7 @@ export function getSimpleNftPda(buyer: PublicKey, contentPda: PublicKey, edition
 
   return PublicKey.findProgramAddressSync(
     [Buffer.from(SIMPLE_NFT_SEED), buyer.toBuffer(), contentPda.toBuffer(), editionBytes],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -501,7 +501,7 @@ export function getSimpleBundleNftPda(buyer: PublicKey, bundlePda: PublicKey, ed
 
   return PublicKey.findProgramAddressSync(
     [Buffer.from(SIMPLE_NFT_SEED), buyer.toBuffer(), bundlePda.toBuffer(), editionBytes],
-    PROGRAM_ID
+    getProgramId()
   );
 }
 
@@ -515,6 +515,6 @@ export function getSimpleBundleNftPda(buyer: PublicKey, bundlePda: PublicKey, ed
 export function getStreamflowEscrowTokensPda(streamMetadata: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("strm"), streamMetadata.toBuffer()],
-    STREAMFLOW_PROGRAM_ID
+    getStreamflowProgramId()
   );
 }

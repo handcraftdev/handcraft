@@ -401,6 +401,10 @@ export const SUBSCRIPTION_RARITY_WEIGHT_LEGENDARY = 120;
 // Streamflow Program ID (devnet - production uses same ID)
 export const STREAMFLOW_PROGRAM_ID_STRING = "HqDGZjaVRXJ9MGRQEw7qDc2rAr6iH1n1kAQdCZaCMfMZ";
 let _STREAMFLOW_PROGRAM_ID: PublicKey | null = null;
+export function getStreamflowProgramId(): PublicKey {
+  if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING);
+  return _STREAMFLOW_PROGRAM_ID;
+}
 export const STREAMFLOW_PROGRAM_ID = {
   get toBase58() { return () => { if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING); return _STREAMFLOW_PROGRAM_ID.toBase58(); }; },
   get toBuffer() { return () => { if (!_STREAMFLOW_PROGRAM_ID) _STREAMFLOW_PROGRAM_ID = new PublicKey(STREAMFLOW_PROGRAM_ID_STRING); return _STREAMFLOW_PROGRAM_ID.toBuffer(); }; },
