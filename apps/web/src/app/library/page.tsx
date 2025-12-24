@@ -79,6 +79,7 @@ export default function LibraryPage() {
           id: contentCid,
           type: "content" as const,
           title,
+          thumbnail: content.thumbnail, // Use enriched thumbnail from SDK
           previewCid: content.previewCid,
           // NOTE: contentType and createdAt removed from on-chain struct
           domain: "file" as ContentDomain,
@@ -122,7 +123,8 @@ export default function LibraryPage() {
           id: bundle.bundleId,
           type: "bundle" as const,
           title,
-          previewCid: undefined, // Bundle metadata would need to be fetched separately
+          thumbnail: bundle.thumbnail, // Use enriched thumbnail from SDK
+          previewCid: undefined,
           domain: "bundle" as string,
           bundleType: bundle.bundleType,
           createdAt: bundle.createdAt,
@@ -139,6 +141,7 @@ export default function LibraryPage() {
       id: string;
       type: "content" | "bundle";
       title: string;
+      thumbnail?: string;
       previewCid?: string;
       domain: ContentDomain | "bundle";
       contentType?: number;
@@ -339,9 +342,9 @@ export default function LibraryPage() {
                         href={`/content/${item.id}`}
                         className="group relative aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 hover:border-white/20 transition-all"
                       >
-                        {item.previewCid ? (
+                        {(item.thumbnail || item.previewCid) ? (
                           <img
-                            src={getIpfsUrl(item.previewCid)}
+                            src={item.thumbnail || (item.previewCid ? getIpfsUrl(item.previewCid) : '')}
                             alt={item.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
@@ -396,9 +399,9 @@ export default function LibraryPage() {
                         className="flex items-center gap-4 p-3 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all"
                       >
                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
-                          {item.previewCid ? (
+                          {(item.thumbnail || item.previewCid) ? (
                             <img
-                              src={getIpfsUrl(item.previewCid)}
+                              src={item.thumbnail || (item.previewCid ? getIpfsUrl(item.previewCid) : '')}
                               alt={item.title}
                               className="w-full h-full object-cover"
                             />
