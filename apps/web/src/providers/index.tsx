@@ -9,6 +9,7 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -48,7 +49,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <ConnectionProvider endpoint={endpoint}>
         <WalletProvider wallets={wallets} autoConnect={false}>
           <WalletModalProvider>
-            {children}
+            <SupabaseAuthProvider>
+              {children}
+            </SupabaseAuthProvider>
           </WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>
