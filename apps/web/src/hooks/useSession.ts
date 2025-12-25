@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 const SESSION_STORAGE_KEY = "handcraft_session";
+const SESSION_CHANGE_EVENT = "handcraft_session_change";
 
 interface StoredSession {
   token: string;
@@ -29,8 +30,8 @@ export function useSession() {
     isCreating: false,
   });
 
-  // Load session from storage on mount and when wallet changes
-  useEffect(() => {
+  // Load session from storage
+  const loadSessionFromStorage = useCallback(() => {
     if (!publicKey) {
       setSession({ token: null, isValid: false, isCreating: false });
       return;
@@ -40,13 +41,29 @@ export function useSession() {
     const stored = getStoredSession();
 
     if (stored && stored.wallet === walletAddress && stored.expiresAt > Date.now()) {
-      setSession({ token: stored.token, isValid: true, isCreating: false });
+      setSession((prev) => prev.token === stored.token ? prev : { token: stored.token, isValid: true, isCreating: false });
     } else {
-      // Clear invalid/expired session
       clearStoredSession();
       setSession({ token: null, isValid: false, isCreating: false });
     }
   }, [publicKey]);
+
+  // Load session from storage on mount and when wallet changes
+  useEffect(() => {
+    loadSessionFromStorage();
+  }, [loadSessionFromStorage]);
+
+  // Listen for session changes from other components
+  useEffect(() => {
+    const handleSessionChange = () => {
+      loadSessionFromStorage();
+    };
+
+    window.addEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
+    return () => {
+      window.removeEventListener(SESSION_CHANGE_EVENT, handleSessionChange);
+    };
+  }, [loadSessionFromStorage]);
 
   // Create a new session by signing
   const createSession = useCallback(async (): Promise<string | null> => {
@@ -80,9 +97,10 @@ export function useSession() {
       const { token, expiresIn } = await response.json();
       const expiresAt = Date.now() + expiresIn;
 
-      // Store session
+      // Store session and notify other components
       storeSession({ token, wallet: walletAddress, expiresAt });
       setSession({ token, isValid: true, isCreating: false });
+      notifySessionChange();
 
       return token;
     } catch (error) {
@@ -96,6 +114,7 @@ export function useSession() {
   const clearSession = useCallback(() => {
     clearStoredSession();
     setSession({ token: null, isValid: false, isCreating: false });
+    notifySessionChange();
   }, []);
 
   // Get or create session (returns existing if valid, creates new if not)
@@ -144,4 +163,9 @@ function clearStoredSession(): void {
   } catch {
     // Ignore
   }
+}
+
+function notifySessionChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SESSION_CHANGE_EVENT));
 }
