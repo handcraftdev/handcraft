@@ -94,8 +94,10 @@ function DisputeCard({
   });
 
   const votingEndsAt = dispute.votingEndsAt.toNumber() * 1000;
-  const totalBond = subject.availableBond.toNumber() / 1e9;
+  const bondAtRisk = dispute.bondAtRisk.toNumber() / 1e9;
   const totalStake = dispute.totalStake.toNumber() / 1e9;
+  const totalPool = totalStake + bondAtRisk;
+  const jurorReward = totalPool * 0.19; // 19% to jurors
 
   return (
     <div className="bg-[#0a0a0c] border border-white/10 rounded-xl p-4 space-y-3">
@@ -114,6 +116,10 @@ function DisputeCard({
             </span>
           </div>
         </div>
+        <div className="text-right">
+          <p className="text-xs text-white/40">Juror Reward</p>
+          <p className="text-sm font-medium text-purple-400">{jurorReward.toFixed(4)} SOL</p>
+        </div>
       </div>
 
       {/* Report Reason */}
@@ -122,18 +128,6 @@ function DisputeCard({
           {reportDetails.details}
         </p>
       )}
-
-      {/* Stats */}
-      <div className="flex items-center gap-4 text-xs">
-        <div>
-          <span className="text-white/40">Bond: </span>
-          <span className="text-sky-400">{totalBond.toFixed(4)} SOL</span>
-        </div>
-        <div>
-          <span className="text-white/40">Stake: </span>
-          <span className="text-red-400">{totalStake.toFixed(4)} SOL</span>
-        </div>
-      </div>
 
       {/* Links */}
       <div className="flex items-center gap-2 pt-2 border-t border-white/5">
