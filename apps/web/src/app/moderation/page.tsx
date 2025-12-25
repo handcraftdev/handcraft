@@ -14,6 +14,7 @@ import {
 } from "@tribunalcraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
 import { useTribunalcraft } from "@/hooks/useTribunalcraft";
+import { getIpfsUrl } from "@handcraft/sdk";
 
 type Tab = "disputes" | "juror";
 
@@ -45,6 +46,20 @@ function Countdown({ endTime }: { endTime: number }) {
   return <span className={isUrgent ? "text-red-400" : "text-orange-400"}>{timeLeft}</span>;
 }
 
+// Types for IPFS content
+interface SubjectDetails {
+  title?: string;
+  description?: string;
+  terms?: string;
+}
+
+interface ReportDetails {
+  disputeType?: string;
+  details?: string;
+  timestamp?: number;
+  contentCid?: string;
+}
+
 // Dispute Card Component - Tribunalcraft SubjectModal style
 function DisputeCard({
   subject,
@@ -61,6 +76,32 @@ function DisputeCard({
   const [error, setError] = useState<string | null>(null);
 
   const { client, isConnected } = useTribunalcraft();
+
+  // Fetch subject details from IPFS
+  const { data: subjectDetails } = useQuery<SubjectDetails>({
+    queryKey: ["subject-details", subject.detailsCid],
+    queryFn: async () => {
+      if (!subject.detailsCid) return {};
+      const res = await fetch(getIpfsUrl(subject.detailsCid));
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: !!subject.detailsCid,
+    staleTime: Infinity,
+  });
+
+  // Fetch report details from IPFS
+  const { data: reportDetails } = useQuery<ReportDetails>({
+    queryKey: ["report-details", dispute.detailsCid],
+    queryFn: async () => {
+      if (!dispute.detailsCid) return {};
+      const res = await fetch(getIpfsUrl(dispute.detailsCid));
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: !!dispute.detailsCid,
+    staleTime: Infinity,
+  });
 
   const now = Date.now();
   const votingEndsAt = dispute.votingEndsAt.toNumber() * 1000;
@@ -157,7 +198,9 @@ function DisputeCard({
           {/* Subject Info */}
           <div className="p-3 bg-black/50 border border-white/5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-sky-400 font-medium">Untitled Subject</span>
+              <span className="text-sm text-sky-400 font-medium truncate max-w-[180px]">
+                {subjectDetails?.title || "Content"}
+              </span>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-white/50">Match</span>
                 <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">Disputed</span>
@@ -207,12 +250,19 @@ function DisputeCard({
           {/* Dispute Info */}
           <div className="p-3 bg-black/50 border border-white/5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-red-400 font-medium">Untitled Dispute</span>
+              <span className="text-sm text-red-400 font-medium">
+                {reportDetails?.disputeType || getDisputeTypeName(dispute.disputeType)}
+              </span>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-white/60 rounded">{getDisputeTypeName(dispute.disputeType)}</span>
                 <span className="text-[10px] text-white/40">{(100 - defenderPercent).toFixed(1)}%</span>
               </div>
             </div>
+            {reportDetails?.details && (
+              <p className="text-xs text-white/50 line-clamp-2">
+                {reportDetails.details}
+              </p>
+            )}
             <div className="space-y-1 text-xs">
               <div><span className="text-white/40">Stake: </span><span className="text-red-400">{totalStake.toFixed(6)}</span></div>
               <div><span className="text-white/40">Challengers: </span><span className="text-red-400">{dispute.challengerCount}</span></div>
