@@ -6,17 +6,40 @@ import {
   TribunalCraftClient,
   type Subject,
   type Dispute,
-  isSubjectDormant,
-  isSubjectValid,
-  isSubjectDisputed,
-  isSubjectInvalid,
-  isSubjectRestoring,
+  type SubjectStatus,
+  type DisputeStatus,
+  type ResolutionOutcome,
   isDisputePending,
   isDisputeResolved,
   isChallengerWins,
-  isDefenderWins,
 } from "@tribunalcraft/sdk";
 import { deriveSubjectId } from "@/lib/tribunalcraft";
+
+// Local helper functions that handle both lowercase and capitalized status keys
+// (IDL uses Dormant/Valid, but Anchor may deserialize as dormant/valid)
+function hasStatusKey(status: SubjectStatus, key: string): boolean {
+  return key in status || key.charAt(0).toUpperCase() + key.slice(1) in status;
+}
+
+function isSubjectDormant(status: SubjectStatus): boolean {
+  return hasStatusKey(status, "dormant");
+}
+
+function isSubjectValid(status: SubjectStatus): boolean {
+  return hasStatusKey(status, "valid");
+}
+
+function isSubjectDisputed(status: SubjectStatus): boolean {
+  return hasStatusKey(status, "disputed");
+}
+
+function isSubjectInvalid(status: SubjectStatus): boolean {
+  return hasStatusKey(status, "invalid");
+}
+
+function isSubjectRestoring(status: SubjectStatus): boolean {
+  return hasStatusKey(status, "restoring");
+}
 
 export type ModerationStatus =
   | "none"      // No subject exists (not registered with Tribunalcraft)

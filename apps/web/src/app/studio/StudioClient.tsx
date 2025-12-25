@@ -11,8 +11,8 @@ import { ManageContentModal } from "@/components/content";
 import { CreatorMembershipSettings, CustomMembershipManager } from "@/components/membership";
 import { UserProfileSettings } from "@/components/profile";
 import { DraftsList } from "@/components/studio/DraftsList";
-import { ModerationStatusBadge } from "@/components/moderation/ModerationBadge";
-import { getIpfsUrl, VisibilityLevel, getContentTypeLabel, ContentType, ModerationStatus } from "@handcraft/sdk";
+import { ModerationBadge } from "@/components/moderation/ModerationBadge";
+import { getIpfsUrl, VisibilityLevel, getContentTypeLabel, ContentType } from "@handcraft/sdk";
 
 type StudioTab = "overview" | "content" | "bundles" | "membership";
 
@@ -87,9 +87,7 @@ function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: 
         <span className="text-white/30">{contentType}</span>
         <span className="text-white/60 font-medium">{Number(item.mintedCount || 0)} sold</span>
         {/* Moderation Status Badge */}
-        {item.moderationStatus && (
-          <ModerationStatusBadge status={item.moderationStatus as ModerationStatus} size="sm" />
-        )}
+        {item.contentCid && <ModerationBadge contentCid={item.contentCid} size="sm" />}
         {/* Visibility Badge */}
         {item.visibilityLevel !== undefined && item.visibilityLevel > 0 && (
           <span className={`px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${

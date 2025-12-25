@@ -10,14 +10,18 @@ interface ModerationBadgeProps {
 
 const statusConfig: Record<ModerationStatus, { label: string; color: string; icon: string } | null> = {
   none: null, // No badge for unregistered content
-  clean: null, // No badge for clean content
+  clean: {
+    label: "Valid",
+    color: "green",
+    icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+  },
   dormant: {
     label: "Archived",
     color: "yellow",
     icon: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4",
   },
   disputed: {
-    label: "Under Review",
+    label: "In Review",
     color: "orange",
     icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
   },
