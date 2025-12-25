@@ -1166,8 +1166,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const hasAccessViaBundle = bundleContext && ownsBundleNft;
   // Don't show locked overlay for public content (level 0) - anyone can access
   const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft && !ownsNftFromBundle && !hasAccessViaBundle && !isPublicContent;
-  // Need session if: encrypted AND (has access OR public content) AND no decrypted URL AND no session token
-  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent) && !decryptedUrl && !sessionToken;
+  // Need session if: encrypted AND (has access OR public content) AND no decrypted URL AND no session token AND no preview playing
+  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent) && !decryptedUrl && !sessionToken && !previewUrl;
   const showPlaceholder = isEncrypted && !contentUrl;
 
   const requestDecryptedContent = useCallback(async () => {
