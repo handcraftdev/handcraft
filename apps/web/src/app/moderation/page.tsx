@@ -46,7 +46,7 @@ function Countdown({ endTime }: { endTime: number }) {
   return <span className={isUrgent ? "text-red-400" : "text-orange-400"}>{timeLeft}</span>;
 }
 
-// Dispute Card Component - similar to SubjectModal layout
+// Dispute Card Component - Tribunalcraft SubjectModal style
 function DisputeCard({
   subject,
   dispute,
@@ -56,10 +56,10 @@ function DisputeCard({
   dispute: Dispute;
   onVoteSuccess?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [stakeAmount, setStakeAmount] = useState("0.01");
-  const [isVoting, setIsVoting] = useState(false);
-  const [votingChoice, setVotingChoice] = useState<"challenger" | "defender" | null>(null);
+  const [defenderAmount, setDefenderAmount] = useState("0.1");
+  const [challengerAmount, setChallengerAmount] = useState("0.05");
+  const [jurorAmount, setJurorAmount] = useState("0.01");
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { client, isConnected } = useTribunalcraft();
@@ -67,16 +67,26 @@ function DisputeCard({
   const now = Date.now();
   const votingEndsAt = dispute.votingEndsAt.toNumber() * 1000;
   const isActive = isDisputePending(dispute.status) && votingEndsAt > now;
+  const votingPeriodHours = Math.floor(subject.votingPeriod.toNumber() / 3600);
+
+  // Bond/Stake values
+  const totalBond = subject.availableBond.toNumber() / 1e9;
+  const bondAtRisk = dispute.bondAtRisk.toNumber() / 1e9;
+  const safeBond = totalBond - bondAtRisk;
+  const totalStake = dispute.totalStake.toNumber() / 1e9;
 
   // Vote counts
-  const challengerVotes = dispute.votesForChallenger.toNumber() / 1e9;
   const defenderVotes = dispute.votesForDefender.toNumber() / 1e9;
-  const totalVotes = challengerVotes + defenderVotes;
-  const challengerPercent = totalVotes > 0 ? (challengerVotes / totalVotes) * 100 : 50;
+  const challengerVotes = dispute.votesForChallenger.toNumber() / 1e9;
+  const totalVotes = defenderVotes + challengerVotes;
+  const defenderPercent = totalVotes > 0 ? (defenderVotes / totalVotes) * 100 : 50;
 
-  // Stakes
-  const totalStake = (dispute.totalStake.toNumber() / 1e9).toFixed(4);
-  const bondAtRisk = (dispute.bondAtRisk.toNumber() / 1e9).toFixed(4);
+  // Reward distribution (20% fee, 80% winners, 19% jurors, 1% protocol)
+  const totalPool = totalStake + bondAtRisk;
+  const protocolFee = totalPool * 0.20;
+  const winnersPool = protocolFee * 0.80;
+  const jurorsPool = protocolFee * 0.19;
+  const protocolPool = protocolFee * 0.01;
 
   const handleVote = async (choice: "challenger" | "defender") => {
     if (!isConnected || !client) {
@@ -84,14 +94,14 @@ function DisputeCard({
       return;
     }
 
-    const stakeLamports = Math.floor(parseFloat(stakeAmount || "0") * 1e9);
+    const amount = choice === "defender" ? defenderAmount : challengerAmount;
+    const stakeLamports = Math.floor(parseFloat(amount || "0") * 1e9);
     if (stakeLamports < 0.01 * 1e9) {
-      setError("Minimum stake is 0.01 SOL");
+      setError("Minimum is 0.01 SOL");
       return;
     }
 
-    setIsVoting(true);
-    setVotingChoice(choice);
+    setIsLoading(true);
     setError(null);
 
     try {
@@ -103,179 +113,211 @@ function DisputeCard({
       onVoteSuccess?.();
     } catch (err) {
       console.error("Vote failed:", err);
-      setError(err instanceof Error ? err.message : "Vote failed");
+      setError(err instanceof Error ? err.message : "Failed");
     } finally {
-      setIsVoting(false);
-      setVotingChoice(null);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="border border-white/10 rounded-xl overflow-hidden bg-white/[0.02]">
-      {/* Clickable Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full p-4 hover:bg-white/[0.02] transition-colors text-left"
-      >
-        <div className="flex items-center justify-between mb-3">
+    <div className="bg-[#0a0a0c] border border-white/10 rounded-lg overflow-hidden">
+      {/* Two Column Layout: Defender | Challenger */}
+      <div className="grid grid-cols-2 divide-x divide-white/10">
+        {/* DEFENDER Section */}
+        <div className="p-4 space-y-4">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full border border-orange-500/30">
-              {getDisputeTypeName(dispute.disputeType)}
-            </span>
-            {isActive ? (
-              <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
-                Voting
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 bg-white/10 text-white/50 text-xs rounded-full border border-white/20">
-                Ended
-              </span>
-            )}
-            <span className="text-xs text-white/40">R{dispute.round}</span>
+            <div className="w-1 h-5 bg-sky-500 rounded" />
+            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Defender</span>
           </div>
-          <div className="flex items-center gap-3">
-            {isActive && (
-              <div className="flex items-center gap-1.5 text-xs">
-                <svg className="w-3.5 h-3.5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <Countdown endTime={votingEndsAt} />
-              </div>
-            )}
-            <svg
-              className={`w-4 h-4 text-white/40 transition-transform ${expanded ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
+          <p className="text-[10px] text-white/40 font-mono truncate">{subject.subjectId.toBase58()}</p>
 
-        {/* Stats Row */}
-        <div className="flex items-center gap-4 text-xs">
-          <span className="text-white/50">
-            <span className="text-orange-400">{dispute.challengerCount}</span> challengers
-          </span>
-          <span className="text-white/50">
-            <span className="text-blue-400">{dispute.defenderCount}</span> defenders
-          </span>
-          <span className="text-white/50">
-            <span className="text-purple-400">{dispute.voteCount}</span> votes
-          </span>
-          <span className="text-white/30">·</span>
-          <span className="text-orange-400/70">{totalStake} SOL</span>
-          <span className="text-white/30">vs</span>
-          <span className="text-blue-400/70">{bondAtRisk} SOL</span>
-        </div>
-
-        {/* Mini Vote Progress Bar */}
-        <div className="mt-3 h-1.5 bg-white/5 rounded-full overflow-hidden flex">
-          <div
-            className="h-full bg-orange-500/60 transition-all duration-500"
-            style={{ width: `${challengerPercent}%` }}
-          />
-          <div
-            className="h-full bg-blue-500/60 transition-all duration-500"
-            style={{ width: `${100 - challengerPercent}%` }}
-          />
-        </div>
-      </button>
-
-      {/* Expanded Content */}
-      {expanded && (
-        <div className="border-t border-white/5 p-4 space-y-4">
           {/* Subject Info */}
-          <div className="p-3 bg-black/30 rounded-lg border border-white/5">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1 h-4 bg-blue-500 rounded" />
-              <span className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">Subject</span>
-            </div>
-            <p className="text-xs text-white/60 font-mono truncate">{subject.subjectId.toBase58()}</p>
-            <div className="flex items-center gap-2 mt-2 text-xs">
-              <span className="text-white/40">Bond:</span>
-              <span className="text-blue-400">{(subject.availableBond.toNumber() / 1e9).toFixed(4)} SOL</span>
-              <span className="text-white/30">·</span>
-              <span className="text-white/40">Defenders:</span>
-              <span className="text-blue-400">{subject.defenderCount}</span>
-            </div>
-          </div>
-
-          {/* Vote Progress Details */}
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-orange-400 font-medium">Challenger ({challengerVotes.toFixed(2)} SOL)</span>
-                <span className="text-white/50">{challengerPercent.toFixed(1)}%</span>
-              </div>
-              <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-orange-500/80 to-orange-400/60 rounded-full transition-all duration-500"
-                  style={{ width: `${challengerPercent}%` }}
-                />
+          <div className="p-3 bg-black/50 border border-white/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-sky-400 font-medium">Untitled Subject</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-white/50">Match</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">Disputed</span>
+                <span className="text-[10px] text-white/40">{votingPeriodHours}h</span>
               </div>
             </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-blue-400 font-medium">Defender ({defenderVotes.toFixed(2)} SOL)</span>
-                <span className="text-white/50">{(100 - challengerPercent).toFixed(1)}%</span>
-              </div>
-              <div className="h-2.5 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500/80 to-blue-400/60 rounded-full transition-all duration-500"
-                  style={{ width: `${100 - challengerPercent}%` }}
-                />
-              </div>
+            <div className="space-y-1 text-xs">
+              <div><span className="text-white/40">Total Bond: </span><span className="text-sky-400">{totalBond.toFixed(6)}</span></div>
+              <div><span className="text-white/40">At Risk: </span><span className="text-red-400">{bondAtRisk.toFixed(6)}</span></div>
+              <div><span className="text-white/40">Safe: </span><span className="text-green-400">{safeBond.toFixed(6)}</span></div>
+              <div><span className="text-white/40">Defenders: </span><span className="text-sky-400">{subject.defenderCount}</span></div>
             </div>
           </div>
 
-          {/* Voting Actions */}
+          {/* Join Defenders */}
           {isActive && (
-            <div className="pt-3 border-t border-white/5 space-y-3">
-              <div>
-                <label className="block text-[10px] text-white/50 uppercase tracking-wider mb-1.5">
-                  Stake Allocation (SOL)
-                </label>
+            <div className="space-y-2">
+              <div className="flex items-center bg-black/50 border border-white/10 rounded">
                 <input
                   type="number"
                   step="0.01"
-                  min="0.01"
-                  value={stakeAmount}
-                  onChange={(e) => setStakeAmount(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
-                  placeholder="Min: 0.01 SOL"
+                  value={defenderAmount}
+                  onChange={(e) => setDefenderAmount(e.target.value)}
+                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
                 />
+                <span className="px-3 text-white/40 text-sm">SOL</span>
               </div>
-
-              {error && (
-                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleVote("challenger")}
-                  disabled={isVoting || !isConnected}
-                  className="flex-1 py-2.5 bg-orange-500/20 hover:bg-orange-500/30 rounded-lg font-medium transition-colors border border-orange-500/30 text-orange-400 text-sm disabled:opacity-50"
-                >
-                  {votingChoice === "challenger" ? "Voting..." : "Vote Challenger"}
-                </button>
-                <button
-                  onClick={() => handleVote("defender")}
-                  disabled={isVoting || !isConnected}
-                  className="flex-1 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg font-medium transition-colors border border-blue-500/30 text-blue-400 text-sm disabled:opacity-50"
-                >
-                  {votingChoice === "defender" ? "Voting..." : "Vote Defender"}
-                </button>
-              </div>
-
-              {!isConnected && (
-                <p className="text-xs text-white/40 text-center">Connect wallet to vote</p>
-              )}
+              <button
+                onClick={() => handleVote("defender")}
+                disabled={isLoading || !isConnected}
+                className="w-full py-3 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                {isLoading ? "..." : "Join Defenders"}
+              </button>
             </div>
           )}
+        </div>
+
+        {/* CHALLENGER Section */}
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-5 bg-red-500 rounded" />
+            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Challenger</span>
+          </div>
+          <p className="text-[10px] text-white/40 font-mono truncate">{dispute.subjectId.toBase58()}</p>
+
+          {/* Dispute Info */}
+          <div className="p-3 bg-black/50 border border-white/5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-red-400 font-medium">Untitled Dispute</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-white/60 rounded">{getDisputeTypeName(dispute.disputeType)}</span>
+                <span className="text-[10px] text-white/40">{(100 - defenderPercent).toFixed(1)}%</span>
+              </div>
+            </div>
+            <div className="space-y-1 text-xs">
+              <div><span className="text-white/40">Stake: </span><span className="text-red-400">{totalStake.toFixed(6)}</span></div>
+              <div><span className="text-white/40">Challengers: </span><span className="text-red-400">{dispute.challengerCount}</span></div>
+            </div>
+          </div>
+
+          {/* Join Challengers */}
+          {isActive && (
+            <div className="space-y-2">
+              <div className="flex items-center bg-black/50 border border-white/10 rounded">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={challengerAmount}
+                  onChange={(e) => setChallengerAmount(e.target.value)}
+                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
+                />
+                <span className="px-3 text-white/40 text-sm">SOL</span>
+              </div>
+              <button
+                onClick={() => handleVote("challenger")}
+                disabled={isLoading || !isConnected}
+                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                {isLoading ? "..." : "Join Challengers"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Vote Progress Section */}
+      <div className="border-t border-white/10 p-4 space-y-3">
+        {/* Labels */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-sky-400 font-semibold uppercase">{dispute.defenderCount} Defender{dispute.defenderCount !== 1 ? 's' : ''}</span>
+          <span className="text-white/30">VS</span>
+          <span className="text-red-400 font-semibold uppercase">{dispute.challengerCount} Challenger{dispute.challengerCount !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden flex">
+          <div
+            className="h-full bg-sky-500 transition-all duration-500"
+            style={{ width: `${defenderPercent}%` }}
+          />
+          <div
+            className="h-full bg-red-500 transition-all duration-500"
+            style={{ width: `${100 - defenderPercent}%` }}
+          />
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex items-center justify-between text-[10px]">
+          <div className="text-sky-400">
+            {defenderVotes.toFixed(6)} · {dispute.voteCount > 0 ? Math.round(defenderPercent) : 0} · {defenderPercent.toFixed(1)}%
+          </div>
+          <div className="flex items-center gap-1 text-white/50">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <Countdown endTime={votingEndsAt} />
+          </div>
+          <div className="text-red-400">
+            {(100 - defenderPercent).toFixed(1)}% · {dispute.voteCount > 0 ? Math.round(100 - defenderPercent) : 0} · {challengerVotes.toFixed(6)}
+          </div>
+        </div>
+
+        {/* Reward Distribution */}
+        <div className="pt-3 border-t border-white/5">
+          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">
+            Reward Distribution ({totalPool.toFixed(4)} SOL)
+          </p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-sm font-semibold text-amber-400">{winnersPool.toFixed(4)}</p>
+              <p className="text-[10px] text-white/40">Winners (80%)</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-purple-400">{jurorsPool.toFixed(4)}</p>
+              <p className="text-[10px] text-white/40">Jurors (19%)</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white/60">{protocolPool.toFixed(4)}</p>
+              <p className="text-[10px] text-white/40">Protocol (1%)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Juror Section */}
+      {isActive && (
+        <div className="border-t border-white/10 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-5 bg-amber-500 rounded" />
+            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Juror</span>
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2 mb-3">
+              {error}
+            </div>
+          )}
+
+          <div className="p-3 bg-black/50 border border-white/5 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/50">Your Vote:</span>
+              <span className="text-sky-400">FOR DEFENDER – 0.010000 SOL</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center bg-black/50 border border-white/10 rounded">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={jurorAmount}
+                  onChange={(e) => setJurorAmount(e.target.value)}
+                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
+                />
+                <span className="px-3 text-white/40 text-sm">SOL</span>
+              </div>
+              <button
+                disabled={isLoading || !isConnected}
+                className="px-6 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Add Stake
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
