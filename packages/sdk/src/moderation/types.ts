@@ -1,38 +1,42 @@
 import { PublicKey } from "@solana/web3.js";
 
 // ============================================================================
-// ENUMS
+// ENUMS - using const objects for Turbopack compatibility
 // ============================================================================
 
-export enum ReportCategory {
-  Copyright = "Copyright",
-  Illegal = "Illegal",
-  Spam = "Spam",
-  AdultContent = "AdultContent",
-  Harassment = "Harassment",
-  Fraud = "Fraud",
-  Other = "Other",
-}
+export const ReportCategory = {
+  Copyright: "Copyright",
+  Illegal: "Illegal",
+  Spam: "Spam",
+  AdultContent: "AdultContent",
+  Harassment: "Harassment",
+  Fraud: "Fraud",
+  Other: "Other",
+} as const;
+export type ReportCategory = typeof ReportCategory[keyof typeof ReportCategory];
 
-export enum ReportStatus {
-  Pending = "Pending",
-  VotingEnded = "VotingEnded",
-  Resolved = "Resolved",
-  Expired = "Expired",
-}
+export const ReportStatus = {
+  Pending: "Pending",
+  VotingEnded: "VotingEnded",
+  Resolved: "Resolved",
+  Expired: "Expired",
+} as const;
+export type ReportStatus = typeof ReportStatus[keyof typeof ReportStatus];
 
-export enum ResolutionOutcome {
-  ContentRemoved = "ContentRemoved",
-  Dismissed = "Dismissed",
-  NoQuorum = "NoQuorum",
-  VoluntaryRemoval = "VoluntaryRemoval",
-}
+export const ResolutionOutcome = {
+  ContentRemoved: "ContentRemoved",
+  Dismissed: "Dismissed",
+  NoQuorum: "NoQuorum",
+  VoluntaryRemoval: "VoluntaryRemoval",
+} as const;
+export type ResolutionOutcome = typeof ResolutionOutcome[keyof typeof ResolutionOutcome];
 
-export enum VoteChoice {
-  Remove = "Remove",
-  Keep = "Keep",
-  Abstain = "Abstain",
-}
+export const VoteChoice = {
+  Remove: "Remove",
+  Keep: "Keep",
+  Abstain: "Abstain",
+} as const;
+export type VoteChoice = typeof VoteChoice[keyof typeof VoteChoice];
 
 // ============================================================================
 // ACCOUNT TYPES

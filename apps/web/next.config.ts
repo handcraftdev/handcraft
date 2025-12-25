@@ -7,18 +7,8 @@ const nextConfig: NextConfig = {
     "@handcraft/sdk",
     "@handcraft/types",
   ],
-  // Fix hot reload for pnpm workspace packages
-  webpack: (config, { dev }) => {
-    if (dev) {
-      // Use polling to detect changes in symlinked workspace packages
-      config.watchOptions = {
-        ...config.watchOptions,
-        poll: 1000,
-        aggregateTimeout: 300,
-      };
-    }
-    return config;
-  },
+  // Enable Turbopack (Next.js 16 default)
+  turbopack: {},
   images: {
     remotePatterns: [
       {

@@ -41,14 +41,14 @@ export interface UnifiedFeedItem {
 
   // Content-specific fields
   contentCid?: string;
-  contentType?: ContentType;
+  contentType?: number;
   previewCid?: string;
   isEncrypted?: boolean;
   visibilityLevel?: number;
 
   // Bundle-specific fields
   bundleId?: string;
-  bundleType?: BundleType;
+  bundleType?: number;
   itemCount?: number;
 
   // Shared commerce fields

@@ -1,7 +1,7 @@
 "use client";
 
 import { IndexedContent, IndexedBundle } from "@/lib/supabase";
-import { getContentTypeLabel, getBundleTypeLabel } from "@handcraft/sdk";
+import { getContentTypeLabel, getBundleTypeLabel, ContentType, BundleType } from "@handcraft/sdk";
 
 export interface SearchResultsProps {
   results: (IndexedContent | IndexedBundle)[];
@@ -91,8 +91,8 @@ export function SearchResults({
               <div className="absolute top-2 right-2">
                 <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-500 text-white">
                   {isContent
-                    ? getContentTypeLabel(content!.content_type)
-                    : getBundleTypeLabel(bundle!.bundle_type)}
+                    ? getContentTypeLabel(content!.content_type as ContentType)
+                    : getBundleTypeLabel(bundle!.bundle_type as BundleType)}
                 </span>
               </div>
             </div>

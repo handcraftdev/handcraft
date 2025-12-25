@@ -7,6 +7,7 @@
     "lint": "turbo lint",
     "clean": "turbo clean && rm -rf node_modules",
     "dev:web": "turbo dev --filter=@handcraft/web",
+    "dev:web:prod": "turbo build --filter=@handcraft/web && pnpm --filter=@handcraft/web start",
     "dev:mobile": "turbo dev --filter=@handcraft/mobile",
     "build:web": "turbo build --filter=@handcraft/web",
     "build:mobile": "turbo build --filter=@handcraft/mobile",
@@ -16,7 +17,7 @@
     "test:e2e:debug": "pnpm --filter=@handcraft/web test:e2e:debug"
   },
   "devDependencies": {
-    "next": "15.0.4",
+    "next": "^16.1.0",
     "@metaplex-foundation/mpl-core": "^1.7.0",
     "@metaplex-foundation/umi": "^1.4.1",
     "@metaplex-foundation/umi-bundle-defaults": "^1.4.1",

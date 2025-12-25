@@ -32,7 +32,7 @@ interface EnrichedContent {
   // Optional metadata fields - populated from Metaplex collection or database
   contentCid?: string;
   metadataCid?: string;
-  contentType?: ContentType;
+  contentType?: number;
   createdAt?: bigint;
   metadata?: ContentMetadata;
   moderationStatus?: string;
@@ -495,7 +495,7 @@ function ContentResultCard({ content, getCreatorUsername }: { content: EnrichedC
         </p>
         <div className="flex items-center gap-3 mt-2">
           <span className="px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-white/5 text-white/50 border border-white/10">
-            {content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content"}
+            {content.contentType !== undefined ? getContentTypeLabel(content.contentType as ContentType) : "Content"}
           </span>
           <Link href={`/profile/${content.creator}`} className="text-white/30 hover:text-white/50 text-xs transition-colors">
             {displayName}
