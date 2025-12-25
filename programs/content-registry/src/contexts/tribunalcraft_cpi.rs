@@ -15,7 +15,7 @@ pub const HANDCRAFT_SEED: &[u8] = b"handcraft";
 
 // Default moderation settings for content subjects
 pub const DEFAULT_MATCH_MODE: bool = true;  // Match mode: bond_at_risk = min(stake, bond)
-pub const DEFAULT_VOTING_PERIOD: i64 = 7 * 24 * 60 * 60;  // 7 days in seconds
+pub const DEFAULT_VOTING_PERIOD: i64 = 1 * 24 * 60 * 60;  // 1 day in seconds
 pub const DEFAULT_INITIAL_BOND: u64 = 0;  // No initial bond required (creator can add later)
 
 /// Derive a deterministic subject ID from content CID
@@ -74,7 +74,7 @@ pub fn create_tribunalcraft_subject<'info>(
     defender_record: &AccountInfo<'info>,
     system_program: &AccountInfo<'info>,
     subject_id: Pubkey,
-    content_cid: &str,
+    details_cid: &str,
     initial_bond: u64,
 ) -> Result<()> {
     // Build CPI accounts
@@ -90,18 +90,18 @@ pub fn create_tribunalcraft_subject<'info>(
 
     let cpi_ctx = CpiContext::new(tribunalcraft_program.clone(), cpi_accounts);
 
-    // Call Tribunalcraft create_subject with default moderation settings
-    // details_cid is the content CID for reference in the subject
+    // Call Tribunalcraft create_subject with moderation settings
+    // details_cid contains content metadata (title, description, etc.)
     tribunalcraft_create_subject(
         cpi_ctx,
         subject_id,
-        content_cid.to_string(),  // Store content CID in subject for reference
+        details_cid.to_string(),
         DEFAULT_MATCH_MODE,
         DEFAULT_VOTING_PERIOD,
         initial_bond,
     )?;
 
-    msg!("Created Tribunalcraft subject for content: {}", content_cid);
+    msg!("Created Tribunalcraft subject with details: {}", details_cid);
     Ok(())
 }
 

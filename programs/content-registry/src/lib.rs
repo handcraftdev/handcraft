@@ -525,6 +525,7 @@ pub mod content_registry {
         )?;
 
         // Execute CPI to create the Tribunalcraft subject
+        // Use metadata_cid as details - contains title, description, content info
         create_tribunalcraft_subject(
             &ctx.accounts.tribunalcraft_program.to_account_info(),
             &ctx.accounts.authority.to_account_info(),
@@ -535,7 +536,7 @@ pub mod content_registry {
             &ctx.accounts.tc_defender_record.to_account_info(),
             &ctx.accounts.system_program.to_account_info(),
             subject_id,
-            &content_cid,
+            &metadata_cid,
             DEFAULT_INITIAL_BOND,
         )?;
 
