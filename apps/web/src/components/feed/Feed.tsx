@@ -365,12 +365,9 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
                   const metadataUrl = getIpfsUrl(bundle.metadataCid);
                   const res = await fetch(metadataUrl);
                   metadata = await res.json();
-                  console.log(`[Bundle Enrichment] ${bundle.bundleId}: fetched metadata`, { metadataCid: bundle.metadataCid, name: metadata?.name });
-                } catch (e) {
-                  console.error(`[Bundle Enrichment] ${bundle.bundleId}: failed to fetch metadata`, e);
+                } catch {
+                  // Keep metadata undefined
                 }
-              } else {
-                console.log(`[Bundle Enrichment] ${bundle.bundleId}: no metadataCid, collectionName=${bundle.collectionName}`);
               }
               return { ...bundle, metadata, creatorAddress } as EnrichedBundle;
             })
@@ -428,8 +425,6 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
     // Add bundle items
     for (const bundle of globalBundles) {
-      const bundleMetadataTitle = bundle.metadata?.name;
-      console.log(`[UnifiedFeed] Bundle ${bundle.bundleId}: metadata.name=${bundleMetadataTitle}, collectionName=${bundle.collectionName}, metadataCid=${bundle.metadataCid}`);
       items.push({
         id: bundle.bundleId,
         type: "bundle",
@@ -437,7 +432,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         createdAt: bundle.createdAt,
         metadata: {
           collectionName: bundle.collectionName,
-          title: bundleMetadataTitle,
+          title: bundle.metadata?.name,
           description: bundle.metadata?.description,
           image: bundle.metadata?.image,
           tags: bundle.metadata?.tags,

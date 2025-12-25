@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch all bundles
-    const bundles = await client.fetchAllBundles();
+    // Fetch all bundles with metadata (includes metadataCid and collectionName from Metaplex)
+    const bundles = await client.fetchAllBundlesWithMetadata();
 
     // Filter by creator if specified
     let filteredBundles = bundles;
