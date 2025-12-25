@@ -21,6 +21,7 @@ pub mod streamflow_membership;
 pub mod profile;
 pub mod treasury_unwrap;
 pub mod update_metadata;
+pub mod tribunalcraft_cpi;
 
 pub use ecosystem::*;
 pub use content::*;
@@ -45,3 +46,4 @@ pub use streamflow_membership::*;
 pub use profile::*;
 pub use treasury_unwrap::*;
 pub use update_metadata::*;
+pub use tribunalcraft_cpi::*;

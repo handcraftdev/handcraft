@@ -42,6 +42,7 @@ import { EditContentModal, DeleteContentModal } from "@/components/content";
 import { RentContentModal } from "@/components/rent";
 import { BuyBundleModal } from "@/components/bundle/BuyBundleModal";
 import { RentBundleModal } from "@/components/bundle/RentBundleModal";
+import { ReportDialog, ModerationStatusBadge } from "@/components/moderation";
 import { RarityBadge } from "@/components/rarity";
 import { Rarity } from "@handcraft/sdk";
 import { type EnrichedContent, type UnifiedFeedItem, type NftTypeFilter, NFT_TYPE_FILTERS, type EnrichedBundle, type BundleFeedMetadata } from "./types";
@@ -393,8 +394,14 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
   const unifiedFeed = useMemo((): UnifiedFeedItem[] => {
     const items: UnifiedFeedItem[] = [];
 
-    // Add content items
+    // Add content items (filter out disputed/flagged content from public feed)
     for (const content of globalContent) {
+      // Hide content that is under review or dismissed
+      const status = content.moderationStatus;
+      if (status === "disputed" || status === "flagged") {
+        continue;
+      }
+
       const contentId = content.contentCid ?? content.pubkey?.toBase58() ?? "";
       const metadataTitle = content.metadata?.title || content.metadata?.name;
       items.push({
@@ -972,6 +979,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRentModal, setShowRentModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null);
   const [isDecrypting, setIsDecrypting] = useState(false);
@@ -1314,6 +1322,10 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                 : "Subscriber Only"}
             </span>
           )}
+          {/* Moderation Status Badge */}
+          {content.moderationStatus && content.moderationStatus !== "none" && (
+            <ModerationStatusBadge status={content.moderationStatus} />
+          )}
         </div>
         <div className="flex items-center gap-4 text-white/40 text-sm">
           {hasMintConfig && <span className="flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>{actualMintedCount} sold</span>}
@@ -1433,6 +1445,18 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/content/${content.contentCid}`).then(() => { setShowCopied(true); setTimeout(() => setShowCopied(false), 2000); }); }} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Share">
           {showCopied ? <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" /></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>}
         </button>
+        {/* Report button - for non-creators */}
+        {!isCreator && !bundleContext && content.contentCid && (
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors border border-white/10"
+            title="Report Content"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+            </svg>
+          </button>
+        )}
         {isCreator && !bundleContext && (
           <>
             <button onClick={() => setShowEditModal(true)} disabled={!canEdit} className={`w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center transition-colors border border-white/10 ${canEdit ? "text-white hover:bg-white/20" : "text-white/30 cursor-not-allowed"}`} title={canEdit ? "Edit" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
@@ -1524,6 +1548,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       {showDeleteModal && content.contentCid && <DeleteContentModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} hasMintConfig={!!mintConfig} />}
       {showRentModal && rentConfig && content.contentCid && <RentContentModal isOpen={showRentModal} onClose={() => setShowRentModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} creator={content.creator} rentConfig={rentConfig} activeRental={activeRental} onSuccess={() => { refetchRentConfig(); refetchOwnership(); refetchActiveRental(); }} onBuyClick={mintConfig ? () => setShowBuyContentModal(true) : undefined} />}
       {showSellModal && content.contentCid && <SellNftModal isOpen={showSellModal} onClose={() => setShowSellModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} ownedCount={ownedNftCount} userNfts={walletNfts} />}
+      {showReportModal && content.contentCid && <ReportDialog isOpen={showReportModal} onClose={() => setShowReportModal(false)} contentCid={content.contentCid} contentTitle={content.metadata?.title || content.metadata?.name} />}
 
       {/* Bundle Modals */}
       {showBuyBundleModal && bundleContext && bundleMintConfig && (

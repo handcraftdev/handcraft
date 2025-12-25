@@ -43,6 +43,14 @@ import {
   SIMPLE_NFT_SEED,
   // Streamflow constants
   getStreamflowProgramId,
+  // Tribunalcraft constants
+  TRIBUNALCRAFT_PROGRAM_ID,
+  TC_SUBJECT_SEED,
+  TC_DISPUTE_SEED,
+  TC_ESCROW_SEED,
+  TC_DEFENDER_POOL_SEED,
+  TC_DEFENDER_RECORD_SEED,
+  HANDCRAFT_TC_SEED,
 } from "./constants";
 
 export function hashCid(cid: string): Uint8Array {
@@ -517,4 +525,116 @@ export function getStreamflowEscrowTokensPda(streamMetadata: PublicKey): [Public
     [Buffer.from("strm"), streamMetadata.toBuffer()],
     getStreamflowProgramId()
   );
+}
+
+// ========== TRIBUNALCRAFT PDAs (for CPI content moderation) ==========
+
+/**
+ * Derive a deterministic subject ID from content CID
+ * Uses [HANDCRAFT_TC_SEED, sha256(content_cid)] to create a unique Pubkey
+ * This is the subject_id passed to Tribunalcraft's create_subject
+ * @param contentCid - The content's CID
+ */
+export function deriveTribunalcraftSubjectId(contentCid: string): [PublicKey, number] {
+  const cidHash = hashCid(contentCid);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(HANDCRAFT_TC_SEED), cidHash],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Tribunalcraft Subject PDA
+ * @param subjectId - The subject ID (derived from content CID)
+ */
+export function getTribunalcraftSubjectPda(subjectId: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(TC_SUBJECT_SEED), subjectId.toBuffer()],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Tribunalcraft Dispute PDA
+ * @param subjectId - The subject ID (derived from content CID)
+ */
+export function getTribunalcraftDisputePda(subjectId: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(TC_DISPUTE_SEED), subjectId.toBuffer()],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Tribunalcraft Escrow PDA
+ * @param subjectId - The subject ID (derived from content CID)
+ */
+export function getTribunalcraftEscrowPda(subjectId: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(TC_ESCROW_SEED), subjectId.toBuffer()],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Tribunalcraft Defender Pool PDA
+ * @param creator - The content creator's public key
+ */
+export function getTribunalcraftDefenderPoolPda(creator: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(TC_DEFENDER_POOL_SEED), creator.toBuffer()],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Get the Tribunalcraft Defender Record PDA (for round 0)
+ * @param subjectId - The subject ID (derived from content CID)
+ * @param creator - The content creator's public key
+ */
+export function getTribunalcraftDefenderRecordPda(subjectId: PublicKey, creator: PublicKey): [PublicKey, number] {
+  // Round 0 as little-endian u32 bytes
+  const roundBytes = new Uint8Array(4);
+  roundBytes.fill(0); // round 0
+
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(TC_DEFENDER_RECORD_SEED), subjectId.toBuffer(), creator.toBuffer(), roundBytes],
+    TRIBUNALCRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * Interface for all Tribunalcraft CPI accounts needed for content registration
+ */
+export interface TribunalcraftCpiAccounts {
+  tribunalcraftProgram: PublicKey;
+  tcSubject: PublicKey;
+  tcDispute: PublicKey;
+  tcEscrow: PublicKey;
+  tcDefenderPool: PublicKey;
+  tcDefenderRecord: PublicKey;
+}
+
+/**
+ * Get all Tribunalcraft CPI accounts needed for content registration
+ * This derives all the PDAs required for the CPI call
+ * @param contentCid - The content's CID
+ * @param creator - The content creator's public key
+ */
+export function getTribunalcraftCpiAccounts(contentCid: string, creator: PublicKey): TribunalcraftCpiAccounts {
+  const [subjectId] = deriveTribunalcraftSubjectId(contentCid);
+  const [tcSubject] = getTribunalcraftSubjectPda(subjectId);
+  const [tcDispute] = getTribunalcraftDisputePda(subjectId);
+  const [tcEscrow] = getTribunalcraftEscrowPda(subjectId);
+  const [tcDefenderPool] = getTribunalcraftDefenderPoolPda(creator);
+  const [tcDefenderRecord] = getTribunalcraftDefenderRecordPda(subjectId, creator);
+
+  return {
+    tribunalcraftProgram: TRIBUNALCRAFT_PROGRAM_ID,
+    tcSubject,
+    tcDispute,
+    tcEscrow,
+    tcDefenderPool,
+    tcDefenderRecord,
+  };
 }

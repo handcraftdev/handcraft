@@ -26,3 +26,5 @@ switchboard-on-demand = "0.11.3"
 ephemeral-vrf-sdk = { version = "0.2", features = ["anchor"] }
 # Streamflow SDK for CPI (program-controlled stream creation)
 streamflow-sdk = { version = "0.10", features = ["cpi", "devnet"] }
+# Tribunalcraft for content moderation CPI
+tribunalcraft = { path = "../../../tribunalcraft/programs/tribunalcraft", features = ["cpi"] }

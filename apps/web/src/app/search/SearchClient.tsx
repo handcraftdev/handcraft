@@ -35,6 +35,7 @@ interface EnrichedContent {
   contentType?: ContentType;
   createdAt?: bigint;
   metadata?: ContentMetadata;
+  moderationStatus?: string;
 }
 
 interface EnrichedBundle {
@@ -142,6 +143,7 @@ function SearchContent() {
           contentType: item.contentType,
           createdAt: item.createdAt,
           metadata,
+          moderationStatus: item.moderationStatus,
         };
       });
 
@@ -189,6 +191,11 @@ function SearchContent() {
     const lowerQuery = query.toLowerCase();
 
     const matchedContent = enrichedContent.filter((item) => {
+      // Hide content that is under review or dismissed
+      if (item.moderationStatus === "disputed" || item.moderationStatus === "flagged") {
+        return false;
+      }
+
       const name = item.metadata?.name?.toLowerCase() || "";
       const description = item.metadata?.description?.toLowerCase() || "";
       const tags = item.metadata?.tags?.map((t) => t.toLowerCase()) || [];

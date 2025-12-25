@@ -262,6 +262,10 @@ use utils::hash_cid;
 use errors::ContentRegistryError;
 use contexts::*;
 use events::*;
+use contexts::tribunalcraft_cpi::{
+    derive_subject_id, create_tribunalcraft_subject, verify_subject_pdas,
+    DEFAULT_INITIAL_BOND,
+};
 
 declare_id!("2ZDX86a1YmY3AvhFrq6CYQJr938qzhgMFytr9bCaoXS5");
 
@@ -322,6 +326,7 @@ pub mod content_registry {
 
     /// Register new content with CID uniqueness enforcement
     /// CID uniqueness is enforced via PDA seed ["content", hash(cid)]
+    /// Also creates a Tribunalcraft subject for content moderation via CPI
     pub fn register_content(
         ctx: Context<RegisterContent>,
         cid_hash: [u8; 32],
@@ -351,9 +356,43 @@ pub mod content_registry {
         content.minted_count = 0;
         content.pending_count = 0;
         content.is_encrypted = is_encrypted;
-        content.preview_cid = preview_cid;
+        content.preview_cid = preview_cid.clone();
         content.encryption_meta_cid = encryption_meta_cid;
         content.visibility_level = visibility_level;
+
+        // === Create Tribunalcraft Subject via CPI ===
+        // This ensures every content has a moderation subject on-chain
+        let tribunalcraft_program_id = ctx.accounts.tribunalcraft_program.key();
+
+        // Derive the subject_id from content CID (deterministic)
+        let (subject_id, _) = derive_subject_id(&content_cid, &tribunalcraft_program_id);
+
+        // Verify the provided Tribunalcraft PDAs match expected addresses
+        verify_subject_pdas(
+            &subject_id,
+            &ctx.accounts.authority.key(),
+            &ctx.accounts.tc_subject.key(),
+            &ctx.accounts.tc_dispute.key(),
+            &ctx.accounts.tc_escrow.key(),
+            &ctx.accounts.tc_defender_pool.key(),
+            &ctx.accounts.tc_defender_record.key(),
+            &tribunalcraft_program_id,
+        )?;
+
+        // Execute CPI to create the Tribunalcraft subject
+        create_tribunalcraft_subject(
+            &ctx.accounts.tribunalcraft_program.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.tc_subject.to_account_info(),
+            &ctx.accounts.tc_dispute.to_account_info(),
+            &ctx.accounts.tc_escrow.to_account_info(),
+            &ctx.accounts.tc_defender_pool.to_account_info(),
+            &ctx.accounts.tc_defender_record.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            subject_id,
+            &content_cid,
+            DEFAULT_INITIAL_BOND,
+        )?;
 
         Ok(())
     }
@@ -464,6 +503,40 @@ pub mod content_registry {
             ctx.accounts.ecosystem_config.treasury,    // Ecosystem treasury receives 1%
             holder_reward_pool,                        // Holder reward pool receives 8%
             creator_royalty_bps,                       // Creator royalty percentage
+        )?;
+
+        // === Create Tribunalcraft Subject via CPI ===
+        // This ensures every content has a moderation subject on-chain
+        let tribunalcraft_program_id = ctx.accounts.tribunalcraft_program.key();
+
+        // Derive the subject_id from content CID (deterministic)
+        let (subject_id, _) = derive_subject_id(&content_cid, &tribunalcraft_program_id);
+
+        // Verify the provided Tribunalcraft PDAs match expected addresses
+        verify_subject_pdas(
+            &subject_id,
+            &ctx.accounts.authority.key(),
+            &ctx.accounts.tc_subject.key(),
+            &ctx.accounts.tc_dispute.key(),
+            &ctx.accounts.tc_escrow.key(),
+            &ctx.accounts.tc_defender_pool.key(),
+            &ctx.accounts.tc_defender_record.key(),
+            &tribunalcraft_program_id,
+        )?;
+
+        // Execute CPI to create the Tribunalcraft subject
+        create_tribunalcraft_subject(
+            &ctx.accounts.tribunalcraft_program.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.tc_subject.to_account_info(),
+            &ctx.accounts.tc_dispute.to_account_info(),
+            &ctx.accounts.tc_escrow.to_account_info(),
+            &ctx.accounts.tc_defender_pool.to_account_info(),
+            &ctx.accounts.tc_defender_record.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            subject_id,
+            &content_cid,
+            DEFAULT_INITIAL_BOND,
         )?;
 
         Ok(())

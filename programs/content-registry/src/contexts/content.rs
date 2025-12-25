@@ -3,9 +3,11 @@ use crate::state::*;
 use crate::state::profile::{UserProfile, USER_PROFILE_SEED};
 use crate::errors::ContentRegistryError;
 use crate::MPL_CORE_ID;
+use crate::contexts::tribunalcraft_cpi::Tribunalcraft;
 
 /// Register content without mint config (basic registration)
 /// CID uniqueness is enforced by PDA seed ["content", cid_hash]
+/// Also creates a Tribunalcraft subject for moderation via CPI
 #[derive(Accounts)]
 #[instruction(cid_hash: [u8; 32])]
 pub struct RegisterContent<'info> {
@@ -22,11 +24,43 @@ pub struct RegisterContent<'info> {
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+
+    // === Tribunalcraft CPI Accounts ===
+    // These enable atomic subject creation for content moderation
+
+    /// The Tribunalcraft program for CPI
+    pub tribunalcraft_program: Program<'info, Tribunalcraft>,
+
+    /// Subject account to be initialized (PDA: [SUBJECT_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_subject: UncheckedAccount<'info>,
+
+    /// Dispute account to be initialized (PDA: [DISPUTE_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_dispute: UncheckedAccount<'info>,
+
+    /// Escrow account to be initialized (PDA: [ESCROW_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_escrow: UncheckedAccount<'info>,
+
+    /// Defender pool (PDA: [DEFENDER_POOL_SEED, authority.key()])
+    /// CHECK: Initialized or loaded by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_defender_pool: UncheckedAccount<'info>,
+
+    /// Defender record for round 0 (PDA: [DEFENDER_RECORD_SEED, subject_id, authority.key(), 0u32])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_defender_record: UncheckedAccount<'info>,
 }
 
 /// Register content with mint config and Metaplex Core collection
 /// CID uniqueness enforced by PDA seed ["content", cid_hash]
 /// collection_asset stored directly in ContentEntry (no separate ContentCollection PDA)
+/// Also creates a Tribunalcraft subject for moderation via CPI
 #[derive(Accounts)]
 #[instruction(cid_hash: [u8; 32])]
 pub struct RegisterContentWithMint<'info> {
@@ -80,6 +114,37 @@ pub struct RegisterContentWithMint<'info> {
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+
+    // === Tribunalcraft CPI Accounts ===
+    // These enable atomic subject creation for content moderation
+
+    /// The Tribunalcraft program for CPI
+    pub tribunalcraft_program: Program<'info, Tribunalcraft>,
+
+    /// Subject account to be initialized (PDA: [SUBJECT_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_subject: UncheckedAccount<'info>,
+
+    /// Dispute account to be initialized (PDA: [DISPUTE_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_dispute: UncheckedAccount<'info>,
+
+    /// Escrow account to be initialized (PDA: [ESCROW_SEED, subject_id])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_escrow: UncheckedAccount<'info>,
+
+    /// Defender pool (PDA: [DEFENDER_POOL_SEED, authority.key()])
+    /// CHECK: Initialized or loaded by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_defender_pool: UncheckedAccount<'info>,
+
+    /// Defender record for round 0 (PDA: [DEFENDER_RECORD_SEED, subject_id, authority.key(), 0u32])
+    /// CHECK: Initialized by Tribunalcraft CPI
+    #[account(mut)]
+    pub tc_defender_record: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]

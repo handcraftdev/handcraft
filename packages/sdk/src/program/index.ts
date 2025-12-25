@@ -116,6 +116,9 @@ import {
   getUserProfilePda,
   // Streamflow PDAs
   getStreamflowEscrowTokensPda,
+  // Tribunalcraft PDAs for CPI
+  getTribunalcraftCpiAccounts,
+  type TribunalcraftCpiAccounts,
 } from "./pda";
 
 // NOTE: getCidRegistryPda, getContentCollectionPda, getRentEntryPda,
@@ -641,11 +644,15 @@ export async function registerContentInstruction(
   const cidHash = hashCid(contentCid);
   const [contentPda] = getContentPda(contentCid);
 
+  // Get Tribunalcraft CPI accounts for atomic subject creation
+  const tcAccounts = getTribunalcraftCpiAccounts(contentCid, authority);
+
   // NOTE: CidRegistry removed - uniqueness now enforced by ContentEntry PDA seed
   // NOTE: metadataCid and contentType removed - stored in Metaplex metadata
   return await program.methods
     .registerContent(
       Array.from(cidHash),
+      contentCid,  // Pass content CID for Tribunalcraft subject
       isEncrypted,
       previewCid,
       encryptionMetaCid,
@@ -655,6 +662,13 @@ export async function registerContentInstruction(
       content: contentPda,
       authority: authority,
       systemProgram: SystemProgram.programId,
+      // Tribunalcraft CPI accounts
+      tribunalcraftProgram: tcAccounts.tribunalcraftProgram,
+      tcSubject: tcAccounts.tcSubject,
+      tcDispute: tcAccounts.tcDispute,
+      tcEscrow: tcAccounts.tcEscrow,
+      tcDefenderPool: tcAccounts.tcDefenderPool,
+      tcDefenderRecord: tcAccounts.tcDefenderRecord,
     })
     .instruction();
 }
@@ -686,12 +700,17 @@ export async function registerContentWithMintInstruction(
   const [ecosystemConfigPda] = getEcosystemConfigPda();
   const [userProfilePda] = getUserProfilePda(authority);
 
+  // Get Tribunalcraft CPI accounts for atomic subject creation
+  const tcAccounts = getTribunalcraftCpiAccounts(contentCid, authority);
+
   // NOTE: CidRegistry and ContentCollection PDAs removed
   // - collection_asset now stored in ContentEntry
   // - mintConfig PDA used as update_authority for collection
 
   const collectionAssetKeypair = Keypair.generate();
 
+  // Note: mplCoreProgram, systemProgram, tribunalcraftProgram have static addresses in IDL
+  // so we don't need to pass them explicitly
   const instruction = await program.methods
     .registerContentWithMint(
       Array.from(cidHash),
@@ -710,12 +729,16 @@ export async function registerContentWithMintInstruction(
       content: contentPda,
       mintConfig: mintConfigPda,
       collectionAsset: collectionAssetKeypair.publicKey,
-      mplCoreProgram: MPL_CORE_PROGRAM_ID,
       ecosystemConfig: ecosystemConfigPda,
       platform: platform,
       userProfile: userProfilePda,
       authority: authority,
-      systemProgram: SystemProgram.programId,
+      // Tribunalcraft CPI accounts
+      tcSubject: tcAccounts.tcSubject,
+      tcDispute: tcAccounts.tcDispute,
+      tcEscrow: tcAccounts.tcEscrow,
+      tcDefenderPool: tcAccounts.tcDefenderPool,
+      tcDefenderRecord: tcAccounts.tcDefenderRecord,
     })
     .instruction();
 

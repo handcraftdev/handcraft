@@ -546,9 +546,8 @@ export default function ProfileClient() {
                     const contentData = nft.collectionAsset
                       ? globalContent.find(c => c.collectionAsset?.toBase58() === nft.collectionAsset?.toBase58())
                       : undefined;
-                    const metadata = (contentData as any)?.metadata;
                     const title = nft.name || "Untitled";
-                    const thumbnailUrl = metadata?.image || null;
+                    const thumbnailUrl = contentData?.thumbnail || null;
                     const rarity = nftRarities.get(nft.nftAsset.toBase58()) || bundleNftRarities.get(nft.nftAsset.toBase58());
 
                     return (
@@ -681,9 +680,8 @@ export default function ProfileClient() {
                   const contentData = nft.collectionAsset
                     ? globalContent.find(c => c.collectionAsset?.toBase58() === nft.collectionAsset?.toBase58())
                     : undefined;
-                  const metadata = (contentData as any)?.metadata;
                   const title = nft.name || "Untitled";
-                  const thumbnailUrl = metadata?.image || null;
+                  const thumbnailUrl = contentData?.thumbnail || null;
                   const rarity = nftRarities.get(nft.nftAsset.toBase58());
                   const editionMatch = nft.name?.match(/\(([CURLE])\s*#(\d+)\)\s*$/);
                   const edition = editionMatch ? editionMatch[2] : null;

@@ -463,3 +463,32 @@ export const MembershipTier = {
   Subscription: 1, // Support + Level 2 content access
 } as const;
 export type MembershipTier = typeof MembershipTier[keyof typeof MembershipTier];
+
+// ========== TRIBUNALCRAFT CONSTANTS (for CPI-based content moderation) ==========
+
+// Tribunalcraft Program ID (devnet)
+export const TRIBUNALCRAFT_PROGRAM_ID_STRING = "YxF3CEwUr5Nhk8FjzZDhKFcSHfgRHYA31Ccm3vd2Mrz";
+// Lazy getter to avoid SSR _bn issues
+let _TRIBUNALCRAFT_PROGRAM_ID: PublicKey | null = null;
+export function getTribunalcraftProgramId(): PublicKey {
+  if (!_TRIBUNALCRAFT_PROGRAM_ID) _TRIBUNALCRAFT_PROGRAM_ID = new PublicKey(TRIBUNALCRAFT_PROGRAM_ID_STRING);
+  return _TRIBUNALCRAFT_PROGRAM_ID;
+}
+export const TRIBUNALCRAFT_PROGRAM_ID = {
+  toString: () => TRIBUNALCRAFT_PROGRAM_ID_STRING,
+  toBase58: () => TRIBUNALCRAFT_PROGRAM_ID_STRING,
+  toBuffer: () => getTribunalcraftProgramId().toBuffer(),
+  toBytes: () => getTribunalcraftProgramId().toBytes(),
+  equals: (other: PublicKey) => getTribunalcraftProgramId().equals(other),
+} as unknown as PublicKey;
+
+// Tribunalcraft PDA seeds
+export const TC_SUBJECT_SEED = "subject";
+export const TC_DISPUTE_SEED = "dispute";
+export const TC_ESCROW_SEED = "escrow";
+export const TC_DEFENDER_POOL_SEED = "defender_pool";
+export const TC_DEFENDER_RECORD_SEED = "defender_record";
+
+// Handcraft namespace seed for deriving Tribunalcraft subject IDs
+// This ensures Handcraft content subjects are unique to our platform
+export const HANDCRAFT_TC_SEED = "handcraft";

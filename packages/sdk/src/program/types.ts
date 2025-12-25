@@ -24,7 +24,21 @@ export interface ContentEntry {
   contentType?: number;        // Content type enum value
   createdAt?: bigint;          // Creation timestamp (from collection metadata or on-chain)
   thumbnail?: string;          // Thumbnail image URL from IPFS metadata
+  // Moderation status from Tribunalcraft (batch fetched with content)
+  moderationStatus?: ModerationStatus;
 }
+
+/**
+ * Moderation status from Tribunalcraft
+ * Maps directly to TC SubjectStatus enum
+ */
+export type ModerationStatus =
+  | "none"      // No TC subject exists
+  | "clean"     // valid - Subject protected, no disputes
+  | "disputed"  // disputed - Active dispute in progress
+  | "flagged"   // invalid - Challenger won, content removed
+  | "restoring" // restoring - Restoration in progress
+  | "dormant";  // dormant - Subject exists but no bond
 
 /**
  * Collection metadata JSON structure (stored on IPFS, referenced by collection URI)
