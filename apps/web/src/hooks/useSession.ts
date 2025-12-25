@@ -16,6 +16,7 @@ interface SessionState {
   token: string | null;
   isValid: boolean;
   isCreating: boolean;
+  isLoading: boolean; // True while checking localStorage
 }
 
 /**
@@ -28,12 +29,13 @@ export function useSession() {
     token: null,
     isValid: false,
     isCreating: false,
+    isLoading: true, // Start as loading until we check localStorage
   });
 
   // Load session from storage
   const loadSessionFromStorage = useCallback(() => {
     if (!publicKey) {
-      setSession({ token: null, isValid: false, isCreating: false });
+      setSession({ token: null, isValid: false, isCreating: false, isLoading: false });
       return;
     }
 
@@ -41,10 +43,10 @@ export function useSession() {
     const stored = getStoredSession();
 
     if (stored && stored.wallet === walletAddress && stored.expiresAt > Date.now()) {
-      setSession((prev) => prev.token === stored.token ? prev : { token: stored.token, isValid: true, isCreating: false });
+      setSession((prev) => prev.token === stored.token ? prev : { token: stored.token, isValid: true, isCreating: false, isLoading: false });
     } else {
       clearStoredSession();
-      setSession({ token: null, isValid: false, isCreating: false });
+      setSession({ token: null, isValid: false, isCreating: false, isLoading: false });
     }
   }, [publicKey]);
 
@@ -99,7 +101,7 @@ export function useSession() {
 
       // Store session and notify other components
       storeSession({ token, wallet: walletAddress, expiresAt });
-      setSession({ token, isValid: true, isCreating: false });
+      setSession({ token, isValid: true, isCreating: false, isLoading: false });
       notifySessionChange();
 
       return token;
@@ -113,7 +115,7 @@ export function useSession() {
   // Clear the current session
   const clearSession = useCallback(() => {
     clearStoredSession();
-    setSession({ token: null, isValid: false, isCreating: false });
+    setSession({ token: null, isValid: false, isCreating: false, isLoading: false });
     notifySessionChange();
   }, []);
 
@@ -129,10 +131,12 @@ export function useSession() {
     token: session.token,
     isValid: session.isValid,
     isCreating: session.isCreating,
+    isLoading: session.isLoading,
     createSession,
     clearSession,
     getOrCreateSession,
-    needsSession: connected && !session.isValid,
+    // Don't show needsSession until loading is complete to prevent flash
+    needsSession: connected && !session.isLoading && !session.isValid,
   };
 }
 
