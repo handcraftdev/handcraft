@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@solana/wallet-adapter-react";
-import { BN } from "@coral-xyz/anchor";
+import Link from "next/link";
 import {
   TribunalCraftClient,
   isDisputePending,
@@ -13,7 +13,6 @@ import {
   type Subject,
 } from "@tribunalcraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
-import { useTribunalcraft } from "@/hooks/useTribunalcraft";
 import { getIpfsUrl } from "@handcraft/sdk";
 
 type Tab = "disputes" | "juror";
@@ -60,23 +59,14 @@ interface ReportDetails {
   contentCid?: string;
 }
 
-// Dispute Card Component - Tribunalcraft SubjectModal style
+// Simple Dispute Card - links to content and Tribunalcraft for voting
 function DisputeCard({
   subject,
   dispute,
-  onVoteSuccess,
 }: {
   subject: Subject;
   dispute: Dispute;
-  onVoteSuccess?: () => void;
 }) {
-  const [defenderAmount, setDefenderAmount] = useState("0.1");
-  const [challengerAmount, setChallengerAmount] = useState("0.05");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const { client, isConnected } = useTribunalcraft();
-
   // Fetch subject details from IPFS
   const { data: subjectDetails } = useQuery<SubjectDetails>({
     queryKey: ["subject-details", subject.detailsCid],
@@ -103,264 +93,74 @@ function DisputeCard({
     staleTime: Infinity,
   });
 
-  const now = Date.now();
   const votingEndsAt = dispute.votingEndsAt.toNumber() * 1000;
-  const isActive = isDisputePending(dispute.status) && votingEndsAt > now;
-  const votingPeriodHours = Math.floor(subject.votingPeriod.toNumber() / 3600);
-
-  // Bond/Stake values
   const totalBond = subject.availableBond.toNumber() / 1e9;
-  const bondAtRisk = dispute.bondAtRisk.toNumber() / 1e9;
-  const safeBond = totalBond - bondAtRisk;
   const totalStake = dispute.totalStake.toNumber() / 1e9;
 
-  // Vote counts
-  const defenderVotes = dispute.votesForDefender.toNumber() / 1e9;
-  const challengerVotes = dispute.votesForChallenger.toNumber() / 1e9;
-  const totalVotes = defenderVotes + challengerVotes;
-  const defenderPercent = totalVotes > 0 ? (defenderVotes / totalVotes) * 100 : 50;
-
-  // Reward distribution (20% fee, 80% winners, 19% jurors, 1% protocol)
-  const totalPool = totalStake + bondAtRisk;
-  const protocolFee = totalPool * 0.20;
-  const winnersPool = protocolFee * 0.80;
-  const jurorsPool = protocolFee * 0.19;
-  const protocolPool = protocolFee * 0.01;
-
-  const handleDefend = async () => {
-    if (!isConnected || !client) {
-      setError("Please connect your wallet");
-      return;
-    }
-
-    const stakeLamports = Math.floor(parseFloat(defenderAmount || "0") * 1e9);
-    if (stakeLamports < 0.01 * 1e9) {
-      setError("Minimum is 0.01 SOL");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await client.addBondDirect(subject.subjectId, new BN(stakeLamports));
-      onVoteSuccess?.();
-    } catch (err) {
-      console.error("Add bond failed:", err);
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleChallenge = async () => {
-    if (!isConnected || !client) {
-      setError("Please connect your wallet");
-      return;
-    }
-
-    const stakeLamports = Math.floor(parseFloat(challengerAmount || "0") * 1e9);
-    if (stakeLamports < 0.01 * 1e9) {
-      setError("Minimum is 0.01 SOL");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      await client.joinChallengers({
-        subjectId: subject.subjectId,
-        stake: new BN(stakeLamports),
-        detailsCid: "",
-      });
-      onVoteSuccess?.();
-    } catch (err) {
-      console.error("Join challengers failed:", err);
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
-    <div className="bg-[#0a0a0c] border border-white/10 rounded-lg overflow-hidden">
-      {/* Two Column Layout: Defender | Challenger */}
-      <div className="grid grid-cols-2 divide-x divide-white/10">
-        {/* DEFENDER Section */}
-        <div className="p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-5 bg-sky-500 rounded" />
-            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Defender</span>
-          </div>
-          <p className="text-[10px] text-white/40 font-mono truncate">{subject.subjectId.toBase58()}</p>
-
-          {/* Subject Info */}
-          <div className="p-3 bg-black/50 border border-white/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-sky-400 font-medium truncate max-w-[180px]">
-                {subjectDetails?.title || "Content"}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-white/50">Match</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">Disputed</span>
-                <span className="text-[10px] text-white/40">{votingPeriodHours}h</span>
-              </div>
-            </div>
-            <div className="space-y-1 text-xs">
-              <div><span className="text-white/40">Total Bond: </span><span className="text-sky-400">{totalBond.toFixed(6)}</span></div>
-              <div><span className="text-white/40">At Risk: </span><span className="text-red-400">{bondAtRisk.toFixed(6)}</span></div>
-              <div><span className="text-white/40">Safe: </span><span className="text-green-400">{safeBond.toFixed(6)}</span></div>
-              <div><span className="text-white/40">Defenders: </span><span className="text-sky-400">{subject.defenderCount}</span></div>
-            </div>
-          </div>
-
-          {/* Join Defenders */}
-          {isActive && (
-            <div className="space-y-2">
-              <div className="flex items-center bg-black/50 border border-white/10 rounded">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={defenderAmount}
-                  onChange={(e) => setDefenderAmount(e.target.value)}
-                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
-                />
-                <span className="px-3 text-white/40 text-sm">SOL</span>
-              </div>
-              <button
-                onClick={handleDefend}
-                disabled={isLoading || !isConnected}
-                className="w-full py-3 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
-              >
-                {isLoading ? "..." : "Add Bond"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* CHALLENGER Section */}
-        <div className="p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-5 bg-red-500 rounded" />
-            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Challenger</span>
-          </div>
-          <p className="text-[10px] text-white/40 font-mono truncate">{dispute.subjectId.toBase58()}</p>
-
-          {/* Dispute Info */}
-          <div className="p-3 bg-black/50 border border-white/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-red-400 font-medium">
-                {reportDetails?.disputeType || getDisputeTypeName(dispute.disputeType)}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-white/60 rounded">{getDisputeTypeName(dispute.disputeType)}</span>
-                <span className="text-[10px] text-white/40">{(100 - defenderPercent).toFixed(1)}%</span>
-              </div>
-            </div>
-            {reportDetails?.details && (
-              <p className="text-xs text-white/50 line-clamp-2">
-                {reportDetails.details}
-              </p>
-            )}
-            <div className="space-y-1 text-xs">
-              <div><span className="text-white/40">Stake: </span><span className="text-red-400">{totalStake.toFixed(6)}</span></div>
-              <div><span className="text-white/40">Challengers: </span><span className="text-red-400">{dispute.challengerCount}</span></div>
-            </div>
-          </div>
-
-          {/* Join Challengers */}
-          {isActive && (
-            <div className="space-y-2">
-              <div className="flex items-center bg-black/50 border border-white/10 rounded">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={challengerAmount}
-                  onChange={(e) => setChallengerAmount(e.target.value)}
-                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
-                />
-                <span className="px-3 text-white/40 text-sm">SOL</span>
-              </div>
-              <button
-                onClick={handleChallenge}
-                disabled={isLoading || !isConnected}
-                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
-              >
-                {isLoading ? "..." : "Join Challengers"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Vote Progress Section */}
-      <div className="border-t border-white/10 p-4 space-y-3">
-        {/* Labels */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-sky-400 font-semibold uppercase">{dispute.defenderCount} Defender{dispute.defenderCount !== 1 ? 's' : ''}</span>
-          <span className="text-white/30">VS</span>
-          <span className="text-red-400 font-semibold uppercase">{dispute.challengerCount} Challenger{dispute.challengerCount !== 1 ? 's' : ''}</span>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="h-2 bg-white/5 rounded-full overflow-hidden flex">
-          <div
-            className="h-full bg-sky-500 transition-all duration-500"
-            style={{ width: `${defenderPercent}%` }}
-          />
-          <div
-            className="h-full bg-red-500 transition-all duration-500"
-            style={{ width: `${100 - defenderPercent}%` }}
-          />
-        </div>
-
-        {/* Stats Row */}
-        <div className="flex items-center justify-between text-[10px]">
-          <div className="text-sky-400">
-            {defenderVotes.toFixed(6)} · {dispute.voteCount > 0 ? Math.round(defenderPercent) : 0} · {defenderPercent.toFixed(1)}%
-          </div>
-          <div className="flex items-center gap-1 text-white/50">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <Countdown endTime={votingEndsAt} />
-          </div>
-          <div className="text-red-400">
-            {(100 - defenderPercent).toFixed(1)}% · {dispute.voteCount > 0 ? Math.round(100 - defenderPercent) : 0} · {challengerVotes.toFixed(6)}
-          </div>
-        </div>
-
-        {/* Reward Distribution */}
-        <div className="pt-3 border-t border-white/5">
-          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">
-            Reward Distribution ({totalPool.toFixed(4)} SOL)
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-sm font-semibold text-amber-400">{winnersPool.toFixed(4)}</p>
-              <p className="text-[10px] text-white/40">Winners (80%)</p>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-purple-400">{jurorsPool.toFixed(4)}</p>
-              <p className="text-[10px] text-white/40">Jurors (19%)</p>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/60">{protocolPool.toFixed(4)}</p>
-              <p className="text-[10px] text-white/40">Protocol (1%)</p>
-            </div>
+    <div className="bg-[#0a0a0c] border border-white/10 rounded-xl p-4 space-y-3">
+      {/* Title and Status */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium text-white truncate">
+            {subjectDetails?.title || "Disputed Content"}
+          </h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded">
+              {getDisputeTypeName(dispute.disputeType)}
+            </span>
+            <span className="text-xs text-white/40">
+              <Countdown endTime={votingEndsAt} />
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="border-t border-white/10 p-4">
-          <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
-            {error}
-          </div>
-        </div>
+      {/* Report Reason */}
+      {reportDetails?.details && (
+        <p className="text-xs text-white/50 line-clamp-2">
+          {reportDetails.details}
+        </p>
       )}
+
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-xs">
+        <div>
+          <span className="text-white/40">Bond: </span>
+          <span className="text-sky-400">{totalBond.toFixed(4)} SOL</span>
+        </div>
+        <div>
+          <span className="text-white/40">Stake: </span>
+          <span className="text-red-400">{totalStake.toFixed(4)} SOL</span>
+        </div>
+      </div>
+
+      {/* Links */}
+      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+        {reportDetails?.contentCid && (
+          <Link
+            href={`/content/${reportDetails.contentCid}`}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Content
+          </Link>
+        )}
+        <a
+          href={`https://tribunalcraft.io/subject/${subject.subjectId.toBase58()}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Vote on Tribunalcraft
+        </a>
+      </div>
     </div>
   );
 }
@@ -542,7 +342,6 @@ export default function ModerationPage() {
                   key={subject.subjectId.toBase58()}
                   subject={subject}
                   dispute={dispute}
-                  onVoteSuccess={() => refetch()}
                 />
               ))
             )}
