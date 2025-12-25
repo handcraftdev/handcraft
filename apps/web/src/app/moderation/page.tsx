@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@solana/wallet-adapter-react";
 import Link from "next/link";
@@ -159,7 +158,6 @@ function DisputeCard({
 }
 
 export default function ModerationPage() {
-  const { connected } = useWallet();
   const { connection } = useConnection();
   const [activeTab, setActiveTab] = useState<Tab>("disputes");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -199,24 +197,6 @@ export default function ModerationPage() {
     refetchOnWindowFocus: false, // Don't refetch on window focus
     // No refetchInterval - manual refresh only
   });
-
-  if (!connected) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-purple-500/20 flex items-center justify-center">
-            <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-semibold text-white mb-2">Connect Wallet</h1>
-          <p className="text-white/50 text-sm">
-            Connect your wallet to access moderation
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-black text-white">
