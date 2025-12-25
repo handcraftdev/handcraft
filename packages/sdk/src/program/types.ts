@@ -151,23 +151,25 @@ export interface RentConfig {
 /**
  * Bundle types define what kind of collection this is.
  * Each type has different semantics for how content is organized and consumed.
+ * Using const object instead of enum for Turbopack compatibility.
  */
-export enum BundleType {
+export const BundleType = {
   // Entertainment bundles
-  Album = 0,        // Music album (ordered tracks)
-  Series = 1,       // TV series (seasons/episodes)
-  Playlist = 2,     // User-curated collection (any order)
+  Album: 0,        // Music album (ordered tracks)
+  Series: 1,       // TV series (seasons/episodes)
+  Playlist: 2,     // User-curated collection (any order)
 
   // Educational bundles
-  Course = 3,       // Learning content (ordered lessons)
+  Course: 3,       // Learning content (ordered lessons)
 
   // Publication bundles
-  Newsletter = 4,   // Recurring posts (chronological)
-  Collection = 5,   // Photo/art collection (any order)
+  Newsletter: 4,   // Recurring posts (chronological)
+  Collection: 5,   // Photo/art collection (any order)
 
   // Product bundles
-  ProductPack = 6,  // Assets/software sold together
-}
+  ProductPack: 6,  // Assets/software sold together
+} as const;
+export type BundleType = typeof BundleType[keyof typeof BundleType];
 
 /**
  * Optimized Bundle account
@@ -264,26 +266,29 @@ export interface BundleWithItems {
 /**
  * NFT Rarity tiers with associated weights for reward distribution
  * Must match on-chain enum in programs/content-registry/src/state/rarity.rs
+ * Using const object instead of enum for Turbopack compatibility.
  */
-export enum Rarity {
-  Common = 0,      // 55% probability, weight 1
-  Uncommon = 1,    // 27% probability, weight 5
-  Rare = 2,        // 13% probability, weight 20
-  Epic = 3,        //  4% probability, weight 60
-  Legendary = 4,   //  1% probability, weight 120
-}
+export const Rarity = {
+  Common: 0,      // 55% probability, weight 1
+  Uncommon: 1,    // 27% probability, weight 5
+  Rare: 2,        // 13% probability, weight 20
+  Epic: 3,        //  4% probability, weight 60
+  Legendary: 4,   //  1% probability, weight 120
+} as const;
+export type Rarity = typeof Rarity[keyof typeof Rarity];
 
 /**
  * Get the weight for a rarity tier
  * Must match on-chain weights in programs/content-registry/src/state/rarity.rs
  */
+// Using numeric values to avoid Turbopack module initialization issues
 export function getRarityWeight(rarity: Rarity): number {
   switch (rarity) {
-    case Rarity.Common: return 1;
-    case Rarity.Uncommon: return 5;
-    case Rarity.Rare: return 20;
-    case Rarity.Epic: return 60;
-    case Rarity.Legendary: return 120;
+    case 0: return 1;   // Common
+    case 1: return 5;   // Uncommon
+    case 2: return 20;  // Rare
+    case 3: return 60;  // Epic
+    case 4: return 120; // Legendary
     default: return 1;
   }
 }
@@ -293,11 +298,11 @@ export function getRarityWeight(rarity: Rarity): number {
  */
 export function getRarityName(rarity: Rarity): string {
   switch (rarity) {
-    case Rarity.Common: return "Common";
-    case Rarity.Uncommon: return "Uncommon";
-    case Rarity.Rare: return "Rare";
-    case Rarity.Epic: return "Epic";
-    case Rarity.Legendary: return "Legendary";
+    case 0: return "Common";
+    case 1: return "Uncommon";
+    case 2: return "Rare";
+    case 3: return "Epic";
+    case 4: return "Legendary";
     default: return "Unknown";
   }
 }
@@ -307,11 +312,11 @@ export function getRarityName(rarity: Rarity): string {
  * Must match on-chain weights in programs/content-registry/src/state/rarity.rs
  */
 export function getRarityFromWeight(weight: number): Rarity {
-  if (weight >= 120) return Rarity.Legendary;
-  if (weight >= 60) return Rarity.Epic;
-  if (weight >= 20) return Rarity.Rare;
-  if (weight >= 5) return Rarity.Uncommon;
-  return Rarity.Common;
+  if (weight >= 120) return 4; // Legendary
+  if (weight >= 60) return 3;  // Epic
+  if (weight >= 20) return 2;  // Rare
+  if (weight >= 5) return 1;   // Uncommon
+  return 0; // Common
 }
 
 /**
@@ -331,18 +336,18 @@ export function parseAnchorRarity(anchorRarity: unknown): Rarity {
     if (keys.length > 0) {
       const key = keys[0].toLowerCase();
       switch (key) {
-        case "common": return Rarity.Common;
-        case "uncommon": return Rarity.Uncommon;
-        case "rare": return Rarity.Rare;
-        case "epic": return Rarity.Epic;
-        case "legendary": return Rarity.Legendary;
+        case "common": return 0;
+        case "uncommon": return 1;
+        case "rare": return 2;
+        case "epic": return 3;
+        case "legendary": return 4;
       }
     }
   }
 
   // Default to Common if parsing fails
   console.warn("Failed to parse rarity, defaulting to Common:", anchorRarity);
-  return Rarity.Common;
+  return 0; // Common
 }
 
 /**

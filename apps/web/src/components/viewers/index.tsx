@@ -27,24 +27,25 @@ const DatasetViewer = lazy(() => import("./file/DatasetViewer"));
 const PostViewer = lazy(() => import("./text/PostViewer"));
 
 // Viewer registry mapping content type to viewer component
+// Using numeric keys to avoid Turbopack module initialization issues
 const VIEWER_REGISTRY: Record<ContentType, ComponentType<ViewerProps>> = {
-  [ContentType.Video]: VideoViewer,
-  [ContentType.Short]: ShortViewer,
-  [ContentType.Movie]: MovieViewer,
-  [ContentType.Television]: TelevisionViewer,
-  [ContentType.MusicVideo]: MusicVideoViewer,
-  [ContentType.Music]: MusicViewer,
-  [ContentType.Podcast]: PodcastViewer,
-  [ContentType.Audiobook]: AudiobookViewer,
-  [ContentType.Photo]: PhotoViewer,
-  [ContentType.Artwork]: ArtworkViewer,
-  [ContentType.Book]: BookViewer,
-  [ContentType.Comic]: ComicViewer,
-  [ContentType.Asset]: AssetViewer,
-  [ContentType.Game]: GameViewer,
-  [ContentType.Software]: SoftwareViewer,
-  [ContentType.Dataset]: DatasetViewer,
-  [ContentType.Post]: PostViewer,
+  0: VideoViewer,      // Video
+  4: ShortViewer,      // Short
+  1: MovieViewer,      // Movie
+  2: TelevisionViewer, // Television
+  3: MusicVideoViewer, // MusicVideo
+  5: MusicViewer,      // Music
+  6: PodcastViewer,    // Podcast
+  7: AudiobookViewer,  // Audiobook
+  8: PhotoViewer,      // Photo
+  9: ArtworkViewer,    // Artwork
+  10: BookViewer,      // Book
+  11: ComicViewer,     // Comic
+  12: AssetViewer,     // Asset
+  13: GameViewer,      // Game
+  14: SoftwareViewer,  // Software
+  15: DatasetViewer,   // Dataset
+  16: PostViewer,      // Post
 };
 
 /**
@@ -65,20 +66,26 @@ const DOMAIN_ICONS: Record<string, string> = {
 };
 
 // Map content types to domains for placeholder icons
+// Using numeric values to avoid Turbopack module initialization issues
 function getContentDomain(contentType: ContentType): string {
-  if ([ContentType.Video, ContentType.Movie, ContentType.Television, ContentType.MusicVideo, ContentType.Short].includes(contentType)) {
+  // Video: 0, Movie: 1, Television: 2, MusicVideo: 3, Short: 4
+  if (([0, 1, 2, 3, 4] as number[]).includes(contentType)) {
     return "video";
   }
-  if ([ContentType.Music, ContentType.Podcast, ContentType.Audiobook].includes(contentType)) {
+  // Music: 5, Podcast: 6, Audiobook: 7
+  if (([5, 6, 7] as number[]).includes(contentType)) {
     return "audio";
   }
-  if ([ContentType.Photo, ContentType.Artwork].includes(contentType)) {
+  // Photo: 8, Artwork: 9
+  if (([8, 9] as number[]).includes(contentType)) {
     return "image";
   }
-  if ([ContentType.Book, ContentType.Comic].includes(contentType)) {
+  // Book: 10, Comic: 11
+  if (([10, 11] as number[]).includes(contentType)) {
     return "document";
   }
-  if ([ContentType.Asset, ContentType.Game, ContentType.Software, ContentType.Dataset].includes(contentType)) {
+  // Asset: 12, Game: 13, Software: 14, Dataset: 15
+  if (([12, 13, 14, 15] as number[]).includes(contentType)) {
     return "file";
   }
   return "text";

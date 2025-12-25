@@ -3,32 +3,33 @@
 import { Rarity, getRarityName } from "@handcraft/sdk";
 
 // Rarity colors for display - used across the app
+// Using numeric keys to avoid module initialization order issues with Turbopack
 export const RARITY_STYLES: Record<Rarity, { bg: string; text: string; border: string; glow: string }> = {
-  [Rarity.Common]: {
+  0: { // Common
     bg: "bg-gray-500/20",
     text: "text-gray-300",
     border: "border-gray-500",
     glow: ""
   },
-  [Rarity.Uncommon]: {
+  1: { // Uncommon
     bg: "bg-green-500/20",
     text: "text-green-400",
     border: "border-green-500",
     glow: "shadow-green-500/20"
   },
-  [Rarity.Rare]: {
+  2: { // Rare
     bg: "bg-blue-500/20",
     text: "text-blue-400",
     border: "border-blue-500",
     glow: "shadow-blue-500/30"
   },
-  [Rarity.Epic]: {
+  3: { // Epic
     bg: "bg-purple-500/20",
     text: "text-purple-400",
     border: "border-purple-500",
     glow: "shadow-purple-500/40"
   },
-  [Rarity.Legendary]: {
+  4: { // Legendary
     bg: "bg-yellow-500/20",
     text: "text-yellow-400",
     border: "border-yellow-500",
@@ -39,11 +40,11 @@ export const RARITY_STYLES: Record<Rarity, { bg: string; text: string; border: s
 // Get rarity icon
 function getRarityIcon(rarity: Rarity): string {
   switch (rarity) {
-    case Rarity.Common: return ""; // No icon for common
-    case Rarity.Uncommon: return ""; // Leaf
-    case Rarity.Rare: return ""; // Diamond
-    case Rarity.Epic: return ""; // Lightning
-    case Rarity.Legendary: return ""; // Star
+    case 0: return ""; // Common - No icon
+    case 1: return ""; // Uncommon - Leaf
+    case 2: return ""; // Rare - Diamond
+    case 3: return ""; // Epic - Lightning
+    case 4: return ""; // Legendary - Star
     default: return "";
   }
 }
@@ -140,11 +141,11 @@ export function RarityReveal({ rarity, onClose }: RarityRevealProps) {
         shadow-2xl transform animate-bounce-subtle
       `}>
         <div className="text-6xl mb-4">
-          {rarity === Rarity.Legendary && ""}
-          {rarity === Rarity.Epic && ""}
-          {rarity === Rarity.Rare && ""}
-          {rarity === Rarity.Uncommon && ""}
-          {rarity === Rarity.Common && ""}
+          {rarity === 4 && ""}{/* Legendary */}
+          {rarity === 3 && ""}{/* Epic */}
+          {rarity === 2 && ""}{/* Rare */}
+          {rarity === 1 && ""}{/* Uncommon */}
+          {rarity === 0 && ""}{/* Common */}
         </div>
         <h2 className={`text-4xl font-bold mb-2 ${styles.text}`}>
           {name}!
@@ -152,7 +153,7 @@ export function RarityReveal({ rarity, onClose }: RarityRevealProps) {
         <p className="text-gray-400">
           Your NFT was assigned {name.toLowerCase()} rarity
         </p>
-        {rarity >= Rarity.Rare && (
+        {rarity >= 2 && ( /* Rare or higher */
           <p className="text-sm text-gray-500 mt-2">
             Higher rarity = More rewards from the holder pool!
           </p>
@@ -174,12 +175,12 @@ export function RarityReveal({ rarity, onClose }: RarityRevealProps) {
 
 // Probability display for the mint modal
 export function RarityProbabilities({ className = "" }: { className?: string }) {
-  const probabilities = [
-    { rarity: Rarity.Common, prob: "55%" },
-    { rarity: Rarity.Uncommon, prob: "27%" },
-    { rarity: Rarity.Rare, prob: "13%" },
-    { rarity: Rarity.Epic, prob: "4%" },
-    { rarity: Rarity.Legendary, prob: "1%" },
+  const probabilities: { rarity: Rarity; prob: string }[] = [
+    { rarity: 0, prob: "55%" }, // Common
+    { rarity: 1, prob: "27%" }, // Uncommon
+    { rarity: 2, prob: "13%" }, // Rare
+    { rarity: 3, prob: "4%" },  // Epic
+    { rarity: 4, prob: "1%" },  // Legendary
   ];
 
   return (

@@ -58,28 +58,31 @@ export const RENT_PERIOD_7D = 7 * 24 * 3600;   // 7 days = 604,800 seconds
 // Rent fee minimum
 export const MIN_RENT_FEE_LAMPORTS = 1_000_000; // 0.001 SOL
 
-// Rent tier enum (matches program)
-export enum RentTier {
-  SixHours = 0,
-  OneDay = 1,
-  SevenDays = 2,
-}
+// Rent tier (matches program) - using const object for Turbopack compatibility
+export const RentTier = {
+  SixHours: 0,
+  OneDay: 1,
+  SevenDays: 2,
+} as const;
+export type RentTier = typeof RentTier[keyof typeof RentTier];
 
 // Helper to get period seconds for a tier
 export function getRentTierPeriod(tier: RentTier): number {
   switch (tier) {
-    case RentTier.SixHours: return RENT_PERIOD_6H;
-    case RentTier.OneDay: return RENT_PERIOD_1D;
-    case RentTier.SevenDays: return RENT_PERIOD_7D;
+    case 0: return RENT_PERIOD_6H;  // SixHours
+    case 1: return RENT_PERIOD_1D;  // OneDay
+    case 2: return RENT_PERIOD_7D;  // SevenDays
+    default: return RENT_PERIOD_1D;
   }
 }
 
 // Helper to get tier label
 export function getRentTierLabel(tier: RentTier): string {
   switch (tier) {
-    case RentTier.SixHours: return "6 Hours";
-    case RentTier.OneDay: return "1 Day";
-    case RentTier.SevenDays: return "7 Days";
+    case 0: return "6 Hours";  // SixHours
+    case 1: return "1 Day";    // OneDay
+    case 2: return "7 Days";   // SevenDays
+    default: return "1 Day";
   }
 }
 
@@ -102,82 +105,77 @@ export const MIN_PRICE_LAMPORTS = 1_000_000;   // 0.001 SOL
 // Precision for reward_per_share calculations (matches program)
 export const PRECISION = BigInt("1000000000000"); // 1e12
 
-export enum ContentType {
+// Using const object for Turbopack compatibility
+export const ContentType = {
   // Video domain (0-4)
-  Video = 0,
-  Movie = 1,
-  Television = 2,
-  MusicVideo = 3,
-  Short = 4,
+  Video: 0,
+  Movie: 1,
+  Television: 2,
+  MusicVideo: 3,
+  Short: 4,
   // Audio domain (5-7)
-  Music = 5,
-  Podcast = 6,
-  Audiobook = 7,
+  Music: 5,
+  Podcast: 6,
+  Audiobook: 7,
   // Image domain (8-9)
-  Photo = 8,
-  Artwork = 9,
+  Photo: 8,
+  Artwork: 9,
   // Document domain (10-11)
-  Book = 10,
-  Comic = 11,
+  Book: 10,
+  Comic: 11,
   // File domain (12-15)
-  Asset = 12,
-  Game = 13,
-  Software = 14,
-  Dataset = 15,
+  Asset: 12,
+  Game: 13,
+  Software: 14,
+  Dataset: 15,
   // Text domain (16)
-  Post = 16,
-}
+  Post: 16,
+} as const;
+export type ContentType = typeof ContentType[keyof typeof ContentType];
 
 // Domain helpers
 export type ContentDomain = "video" | "audio" | "image" | "document" | "file" | "text";
 
+// Using numeric values for Turbopack compatibility
 export function getContentDomain(type: ContentType): ContentDomain {
   switch (type) {
-    case ContentType.Video:
-    case ContentType.Movie:
-    case ContentType.Television:
-    case ContentType.MusicVideo:
-    case ContentType.Short:
+    case 0: case 1: case 2: case 3: case 4: // Video, Movie, Television, MusicVideo, Short
       return "video";
-    case ContentType.Music:
-    case ContentType.Podcast:
-    case ContentType.Audiobook:
+    case 5: case 6: case 7: // Music, Podcast, Audiobook
       return "audio";
-    case ContentType.Photo:
-    case ContentType.Artwork:
+    case 8: case 9: // Photo, Artwork
       return "image";
-    case ContentType.Book:
-    case ContentType.Comic:
+    case 10: case 11: // Book, Comic
       return "document";
-    case ContentType.Asset:
-    case ContentType.Game:
-    case ContentType.Software:
-    case ContentType.Dataset:
+    case 12: case 13: case 14: case 15: // Asset, Game, Software, Dataset
       return "file";
-    case ContentType.Post:
+    case 16: // Post
       return "text";
+    default:
+      return "video";
   }
 }
 
 export function getContentTypeLabel(type: ContentType): string {
   switch (type) {
-    case ContentType.Video: return "Video";
-    case ContentType.Movie: return "Movie";
-    case ContentType.Television: return "Television";
-    case ContentType.MusicVideo: return "Music Video";
-    case ContentType.Short: return "Short";
-    case ContentType.Music: return "Music";
-    case ContentType.Podcast: return "Podcast";
-    case ContentType.Audiobook: return "Audiobook";
-    case ContentType.Photo: return "Photo";
-    case ContentType.Artwork: return "Artwork";
-    case ContentType.Book: return "Book";
-    case ContentType.Comic: return "Comic";
-    case ContentType.Asset: return "Asset";
-    case ContentType.Game: return "Game";
-    case ContentType.Software: return "Software";
-    case ContentType.Dataset: return "Dataset";
-    case ContentType.Post: return "Post";
+    case 0: return "Video";
+    case 1: return "Movie";
+    case 2: return "Television";
+    case 3: return "Music Video";
+    case 4: return "Short";
+    case 5: return "Music";
+    case 6: return "Podcast";
+    case 7: return "Audiobook";
+    case 8: return "Photo";
+    case 9: return "Artwork";
+    case 10: return "Book";
+    case 11: return "Comic";
+    case 12: return "Asset";
+    case 13: return "Game";
+    case 14: return "Software";
+    case 15: return "Dataset";
+    case 16: return "Post";
+    default: return "Content";
   }
 }
 
@@ -192,10 +190,11 @@ export function getDomainLabel(domain: ContentDomain): string {
   }
 }
 
-// Payment currency enum (SOL only now)
-export enum PaymentCurrency {
-  Sol = 0,
-}
+// Payment currency (SOL only now) - using const object for Turbopack compatibility
+export const PaymentCurrency = {
+  Sol: 0,
+} as const;
+export type PaymentCurrency = typeof PaymentCurrency[keyof typeof PaymentCurrency];
 
 // ========== RARITY CONSTANTS ==========
 export const PENDING_MINT_SEED = "pending_mint";
@@ -264,57 +263,54 @@ export const MB_FALLBACK_TIMEOUT_SECONDS = 5;
 // Re-export BundleType from types for convenience
 export { BundleType } from "./types";
 
-// Bundle type labels
+// Bundle type labels - using numeric values for Turbopack compatibility
 export function getBundleTypeLabel(type: import("./types").BundleType): string {
-  const { BundleType } = require("./types");
   switch (type) {
-    case BundleType.Album: return "Album";
-    case BundleType.Series: return "Series";
-    case BundleType.Playlist: return "Playlist";
-    case BundleType.Course: return "Course";
-    case BundleType.Newsletter: return "Newsletter";
-    case BundleType.Collection: return "Collection";
-    case BundleType.ProductPack: return "Product Pack";
+    case 0: return "Album";       // Album
+    case 1: return "Series";      // Series
+    case 2: return "Playlist";    // Playlist
+    case 3: return "Course";      // Course
+    case 4: return "Newsletter";  // Newsletter
+    case 5: return "Collection";  // Collection
+    case 6: return "Product Pack"; // ProductPack
     default: return "Unknown";
   }
 }
 
-// Get bundle type from string
+// Get bundle type from string - using numeric values for Turbopack compatibility
 export function getBundleTypeFromString(str: string): import("./types").BundleType {
-  const { BundleType } = require("./types");
   const normalized = str.toLowerCase();
   switch (normalized) {
-    case "album": return BundleType.Album;
-    case "series": return BundleType.Series;
-    case "playlist": return BundleType.Playlist;
-    case "course": return BundleType.Course;
-    case "newsletter": return BundleType.Newsletter;
-    case "collection": return BundleType.Collection;
+    case "album": return 0;       // Album
+    case "series": return 1;      // Series
+    case "playlist": return 2;    // Playlist
+    case "course": return 3;      // Course
+    case "newsletter": return 4;  // Newsletter
+    case "collection": return 5;  // Collection
     case "productpack":
     case "product_pack":
-    case "product-pack": return BundleType.ProductPack;
-    default: return BundleType.Collection;
+    case "product-pack": return 6; // ProductPack
+    default: return 5; // Collection
   }
 }
 
-// Suggested bundle types per content domain
+// Suggested bundle types per content domain - using numeric values for Turbopack compatibility
 export function getSuggestedBundleTypes(domain: ContentDomain): import("./types").BundleType[] {
-  const { BundleType } = require("./types");
   switch (domain) {
     case "audio":
-      return [BundleType.Album, BundleType.Playlist];
+      return [0, 2];  // Album, Playlist
     case "video":
-      return [BundleType.Series, BundleType.Playlist, BundleType.Course];
+      return [1, 2, 3];  // Series, Playlist, Course
     case "image":
-      return [BundleType.Collection];
+      return [5];  // Collection
     case "document":
-      return [BundleType.Course, BundleType.Collection];
+      return [3, 5];  // Course, Collection
     case "file":
-      return [BundleType.ProductPack, BundleType.Course];
+      return [6, 3];  // ProductPack, Course
     case "text":
-      return [BundleType.Newsletter, BundleType.Course];
+      return [4, 3];  // Newsletter, Course
     default:
-      return [BundleType.Collection, BundleType.Playlist];
+      return [5, 2];  // Collection, Playlist
   }
 }
 
@@ -345,46 +341,51 @@ export const ECOSYSTEM_SUB_SEED = "ecosystem_sub";
 // Default epoch duration: 30 days in seconds
 export const DEFAULT_EPOCH_DURATION = 30 * 24 * 60 * 60; // 2,592,000 seconds
 
-// Patron tier enum (matches program)
-export enum PatronTier {
-  Membership = 0,   // Support only, no content access
-  Subscription = 1, // Support + Level 2 content access
-}
+// Patron tier (matches program) - using const object for Turbopack compatibility
+export const PatronTier = {
+  Membership: 0,   // Support only, no content access
+  Subscription: 1, // Support + Level 2 content access
+} as const;
+export type PatronTier = typeof PatronTier[keyof typeof PatronTier];
 
-// Visibility levels (matches program)
+// Visibility levels (matches program) - using const object for Turbopack compatibility
 // Access is CUMULATIVE: higher levels grant access to all lower levels
 // Level 0: Anyone can access
 // Level 1: Ecosystem sub OR Creator sub OR NFT/Rental
 // Level 2: Creator sub OR NFT/Rental (ecosystem sub NOT enough)
 // Level 3: NFT/Rental ONLY (no subscription grants access)
-export enum VisibilityLevel {
-  Public = 0,           // No access requirement (free content)
-  Ecosystem = 1,        // Ecosystem sub + Creator sub + NFT/Rental can access
-  Subscriber = 2,       // Creator sub + NFT/Rental only (ecosystem sub NOT enough)
-  NftOnly = 3,          // ONLY NFT owners or active renters (no subscribers)
-}
+export const VisibilityLevel = {
+  Public: 0,           // No access requirement (free content)
+  Ecosystem: 1,        // Ecosystem sub + Creator sub + NFT/Rental can access
+  Subscriber: 2,       // Creator sub + NFT/Rental only (ecosystem sub NOT enough)
+  NftOnly: 3,          // ONLY NFT owners or active renters (no subscribers)
+} as const;
+export type VisibilityLevel = typeof VisibilityLevel[keyof typeof VisibilityLevel];
 
-// Helper to get visibility level label
+// Helper to get visibility level label - using numeric values for Turbopack compatibility
 export function getVisibilityLevelLabel(level: VisibilityLevel): string {
   switch (level) {
-    case VisibilityLevel.Public: return "Public";
-    case VisibilityLevel.Ecosystem: return "Ecosystem Access";
-    case VisibilityLevel.Subscriber: return "Subscriber Only";
-    case VisibilityLevel.NftOnly: return "NFT/Rental Only";
+    case 0: return "Public";           // Public
+    case 1: return "Ecosystem Access"; // Ecosystem
+    case 2: return "Subscriber Only";  // Subscriber
+    case 3: return "NFT/Rental Only";  // NftOnly
+    default: return "Public";
   }
 }
 
-// Helper to get visibility level description
+// Helper to get visibility level description - using numeric values for Turbopack compatibility
 export function getVisibilityLevelDescription(level: VisibilityLevel): string {
   switch (level) {
-    case VisibilityLevel.Public:
+    case 0: // Public
       return "Anyone can access this content for free";
-    case VisibilityLevel.Ecosystem:
+    case 1: // Ecosystem
       return "Requires ecosystem subscription, creator subscription, or NFT ownership";
-    case VisibilityLevel.Subscriber:
+    case 2: // Subscriber
       return "Requires creator subscription or NFT ownership (ecosystem sub not enough)";
-    case VisibilityLevel.NftOnly:
+    case 3: // NftOnly
       return "Only NFT owners or active renters can access (subscriptions don't grant access)";
+    default:
+      return "Anyone can access this content for free";
   }
 }
 
@@ -449,14 +450,16 @@ export const WSOL_MINT = {
 
 // Note: SECONDS_PER_DAY, SECONDS_PER_MONTH, SECONDS_PER_YEAR are exported from ./streamflow
 
-// Duration type enum (matches program)
-export enum MembershipDurationType {
-  Monthly = 0,
-  Yearly = 1,
-}
+// Duration type (matches program) - using const object for Turbopack compatibility
+export const MembershipDurationType = {
+  Monthly: 0,
+  Yearly: 1,
+} as const;
+export type MembershipDurationType = typeof MembershipDurationType[keyof typeof MembershipDurationType];
 
-// Membership tier enum (matches program - for creator membership)
-export enum MembershipTier {
-  Membership = 0,   // Support only, no content access
-  Subscription = 1, // Support + Level 2 content access
-}
+// Membership tier (matches program - for creator membership) - using const object for Turbopack compatibility
+export const MembershipTier = {
+  Membership: 0,   // Support only, no content access
+  Subscription: 1, // Support + Level 2 content access
+} as const;
+export type MembershipTier = typeof MembershipTier[keyof typeof MembershipTier];

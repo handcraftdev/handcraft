@@ -353,11 +353,11 @@ export function BuyBundleModal({
                   : "border-emerald-500/30 bg-emerald-500/10"
               }`}>
                 <div className="text-5xl mb-3">
-                  {revealedRarity === Rarity.Legendary && <span className="animate-pulse">⭐</span>}
-                  {revealedRarity === Rarity.Epic && <span className="animate-bounce">💎</span>}
-                  {revealedRarity === Rarity.Rare && "💠"}
-                  {revealedRarity === Rarity.Uncommon && "🌿"}
-                  {revealedRarity === Rarity.Common && "⚪"}
+                  {revealedRarity === 4 && <span className="animate-pulse">⭐</span>}{/* Legendary */}
+                  {revealedRarity === 3 && <span className="animate-bounce">💎</span>}{/* Epic */}
+                  {revealedRarity === 2 && "💠"}{/* Rare */}
+                  {revealedRarity === 1 && "🌿"}{/* Uncommon */}
+                  {revealedRarity === 0 && "⚪"}{/* Common */}
                   {(revealedRarity === null || !RARITY_STYLES[revealedRarity]) && "🎉"}
                 </div>
                 {revealedRarity !== null && RARITY_STYLES[revealedRarity] ? (

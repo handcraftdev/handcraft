@@ -88,18 +88,18 @@ function PublishedContentItem({ item, onClick }: { item: ContentEntry; onClick: 
         {/* Visibility Badge */}
         {item.visibilityLevel !== undefined && item.visibilityLevel > 0 && (
           <span className={`px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
-            item.visibilityLevel === VisibilityLevel.NftOnly
+            item.visibilityLevel === 3 /* NftOnly */
               ? "bg-amber-500/10 text-amber-400/80 border border-amber-500/20"
-              : item.visibilityLevel === VisibilityLevel.Subscriber
+              : item.visibilityLevel === 2 /* Subscriber */
               ? "bg-purple-500/10 text-purple-400/80 border border-purple-500/20"
               : "bg-blue-500/10 text-blue-400/80 border border-blue-500/20"
           }`}>
             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
             </svg>
-            {item.visibilityLevel === VisibilityLevel.NftOnly
+            {item.visibilityLevel === 3 /* NftOnly */
               ? "Buy/Rent"
-              : item.visibilityLevel === VisibilityLevel.Subscriber
+              : item.visibilityLevel === 2 /* Subscriber */
               ? "Members"
               : "Subscribers"}
           </span>

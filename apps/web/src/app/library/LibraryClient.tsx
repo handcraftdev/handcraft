@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
-import { getIpfsUrl, getContentDomain, getDomainLabel, BundleType, ContentDomain } from "@handcraft/sdk";
+import { getIpfsUrl, getContentDomain, getDomainLabel, BundleType, ContentDomain, ContentType } from "@handcraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
 import Link from "next/link";
 
@@ -11,15 +11,15 @@ type SortOption = "recent" | "name" | "type";
 type GroupOption = "none" | "type" | "domain";
 type ViewMode = "grid" | "list";
 
-// Bundle type labels
+// Bundle type labels - using numeric keys to avoid Turbopack module init issues
 const BUNDLE_TYPE_LABELS: Record<BundleType, string> = {
-  [BundleType.Album]: "Album",
-  [BundleType.Series]: "Series",
-  [BundleType.Playlist]: "Playlist",
-  [BundleType.Course]: "Course",
-  [BundleType.Newsletter]: "Newsletter",
-  [BundleType.Collection]: "Collection",
-  [BundleType.ProductPack]: "Pack",
+  0: "Album",
+  1: "Series",
+  2: "Playlist",
+  3: "Course",
+  4: "Newsletter",
+  5: "Collection",
+  6: "Pack",
 };
 
 export default function LibraryClient() {
@@ -72,7 +72,7 @@ export default function LibraryClient() {
           title,
           thumbnail: content.thumbnail,
           previewCid: content.previewCid,
-          domain: content.contentType !== undefined ? getContentDomain(content.contentType) : "file" as ContentDomain,
+          domain: content.contentType !== undefined ? getContentDomain(content.contentType as ContentType) : "file" as ContentDomain,
           createdAt: content.createdAt ?? BigInt(0),
           count: countMap.get(collectionKey) || 1,
         };

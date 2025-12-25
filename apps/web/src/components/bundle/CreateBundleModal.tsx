@@ -14,14 +14,15 @@ interface CreateBundleModalProps {
   creatorDomain?: ContentDomain;
 }
 
+// Using numeric values to avoid Turbopack module initialization issues
 const ALL_BUNDLE_TYPES: BundleType[] = [
-  BundleType.Album,
-  BundleType.Series,
-  BundleType.Playlist,
-  BundleType.Course,
-  BundleType.Newsletter,
-  BundleType.Collection,
-  BundleType.ProductPack,
+  0, // Album
+  1, // Series
+  2, // Playlist
+  3, // Course
+  4, // Newsletter
+  5, // Collection
+  6, // ProductPack
 ];
 
 type Step = "details" | "content" | "monetization" | "creating" | "done";
@@ -46,7 +47,7 @@ export function CreateBundleModal({
   // Step 1: Details
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [bundleType, setBundleType] = useState<BundleType>(BundleType.Playlist);
+  const [bundleType, setBundleType] = useState<BundleType>(2); // Playlist
   const [coverImage, setCoverImage] = useState<File | null>(null);
 
   // Step 2: Content
@@ -302,7 +303,7 @@ export function CreateBundleModal({
     setStep("details");
     setTitle("");
     setDescription("");
-    setBundleType(BundleType.Playlist);
+    setBundleType(2); // Playlist
     setCoverImage(null);
     setError(null);
     setSelectedContentCids([]);

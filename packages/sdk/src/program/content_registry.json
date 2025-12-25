@@ -6076,7 +6076,8 @@
       "name": "register_content",
       "docs": [
         "Register new content with CID uniqueness enforcement",
-        "CID uniqueness is enforced via PDA seed [\"content\", hash(cid)]"
+        "CID uniqueness is enforced via PDA seed [\"content\", hash(cid)]",
+        "Also creates a Tribunalcraft subject for content moderation via CPI"
       ],
       "discriminator": [
         170,
@@ -6121,6 +6122,48 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tribunalcraft_program",
+          "docs": [
+            "The Tribunalcraft program for CPI"
+          ],
+          "address": "YxF3CEwUr5Nhk8FjzZDhKFcSHfgRHYA31Ccm3vd2Mrz"
+        },
+        {
+          "name": "tc_subject",
+          "docs": [
+            "Subject account to be initialized (PDA: [SUBJECT_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_dispute",
+          "docs": [
+            "Dispute account to be initialized (PDA: [DISPUTE_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_escrow",
+          "docs": [
+            "Escrow account to be initialized (PDA: [ESCROW_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_defender_pool",
+          "docs": [
+            "Defender pool (PDA: [DEFENDER_POOL_SEED, authority.key()])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_defender_record",
+          "docs": [
+            "Defender record for round 0 (PDA: [DEFENDER_RECORD_SEED, subject_id, authority.key(), 0u32])"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -6308,6 +6351,48 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tribunalcraft_program",
+          "docs": [
+            "The Tribunalcraft program for CPI"
+          ],
+          "address": "YxF3CEwUr5Nhk8FjzZDhKFcSHfgRHYA31Ccm3vd2Mrz"
+        },
+        {
+          "name": "tc_subject",
+          "docs": [
+            "Subject account to be initialized (PDA: [SUBJECT_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_dispute",
+          "docs": [
+            "Dispute account to be initialized (PDA: [DISPUTE_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_escrow",
+          "docs": [
+            "Escrow account to be initialized (PDA: [ESCROW_SEED, subject_id])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_defender_pool",
+          "docs": [
+            "Defender pool (PDA: [DEFENDER_POOL_SEED, authority.key()])"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tc_defender_record",
+          "docs": [
+            "Defender record for round 0 (PDA: [DEFENDER_RECORD_SEED, subject_id, authority.key(), 0u32])"
+          ],
+          "writable": true
         }
       ],
       "args": [

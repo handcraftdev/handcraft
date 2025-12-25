@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { getIpfsUrl, getContentTypeLabel, VisibilityLevel } from "@handcraft/sdk";
+import { getIpfsUrl, getContentTypeLabel, VisibilityLevel, ContentType } from "@handcraft/sdk";
 import {
   useContentRegistry,
   ContentEntry,
@@ -258,7 +258,7 @@ export function ManageContentModal({
   if (!isOpen) return null;
 
   const contentTitle = metadata?.title || metadata?.name || (content.contentCid?.slice(0, 16) ?? content.pubkey?.toBase58().slice(0, 16) ?? "Unknown") + "...";
-  const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content";
+  const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType as ContentType) : "Content";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -361,11 +361,11 @@ export function ManageContentModal({
                   <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content Visibility</h3>
                   <div className="flex items-center gap-2">
                     <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
-                      content.visibilityLevel === VisibilityLevel.NftOnly
+                      content.visibilityLevel === 3 /* NftOnly */
                         ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                        : content.visibilityLevel === VisibilityLevel.Subscriber
+                        : content.visibilityLevel === 2 /* Subscriber */
                         ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                        : content.visibilityLevel === VisibilityLevel.Ecosystem
+                        : content.visibilityLevel === 1 /* Ecosystem */
                         ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                         : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                     }`}>
@@ -376,21 +376,21 @@ export function ManageContentModal({
                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                         )}
                       </svg>
-                      {content.visibilityLevel === VisibilityLevel.NftOnly
+                      {content.visibilityLevel === 3 /* NftOnly */
                         ? "Buy/Rent Only"
-                        : content.visibilityLevel === VisibilityLevel.Subscriber
+                        : content.visibilityLevel === 2 /* Subscriber */
                         ? "Members Only"
-                        : content.visibilityLevel === VisibilityLevel.Ecosystem
+                        : content.visibilityLevel === 1 /* Ecosystem */
                         ? "Subscriber Only"
                         : "Public"}
                     </span>
                   </div>
                   <p className="text-xs text-white/30 mt-2">
-                    {content.visibilityLevel === VisibilityLevel.NftOnly
+                    {content.visibilityLevel === 3 /* NftOnly */
                       ? "Only NFT owners or active renters can access"
-                      : content.visibilityLevel === VisibilityLevel.Subscriber
+                      : content.visibilityLevel === 2 /* Subscriber */
                       ? "Requires your membership or NFT ownership"
-                      : content.visibilityLevel === VisibilityLevel.Ecosystem
+                      : content.visibilityLevel === 1 /* Ecosystem */
                       ? "Requires platform subscription, membership, or NFT"
                       : "Anyone can access this content"}
                   </p>

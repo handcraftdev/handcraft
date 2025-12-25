@@ -64,36 +64,38 @@ const SORT_TYPES: { value: SortType; label: string }[] = [
 
 const ITEMS_PER_PAGE = 20;
 
+// Using numeric values to avoid Turbopack module initialization issues
 const CONTENT_TYPE_FILTERS: { value: ContentTypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: SDKContentType.Video, label: "Video" },
-  { value: SDKContentType.Movie, label: "Movie" },
-  { value: SDKContentType.Television, label: "TV" },
-  { value: SDKContentType.MusicVideo, label: "MV" },
-  { value: SDKContentType.Short, label: "Short" },
-  { value: SDKContentType.Music, label: "Music" },
-  { value: SDKContentType.Podcast, label: "Podcast" },
-  { value: SDKContentType.Audiobook, label: "Audiobook" },
-  { value: SDKContentType.Photo, label: "Photo" },
-  { value: SDKContentType.Artwork, label: "Art" },
-  { value: SDKContentType.Book, label: "Book" },
-  { value: SDKContentType.Comic, label: "Comic" },
-  { value: SDKContentType.Asset, label: "Asset" },
-  { value: SDKContentType.Game, label: "Game" },
-  { value: SDKContentType.Software, label: "Software" },
-  { value: SDKContentType.Dataset, label: "Dataset" },
-  { value: SDKContentType.Post, label: "Post" },
+  { value: 0, label: "Video" },
+  { value: 1, label: "Movie" },
+  { value: 2, label: "TV" },
+  { value: 3, label: "MV" },
+  { value: 4, label: "Short" },
+  { value: 5, label: "Music" },
+  { value: 6, label: "Podcast" },
+  { value: 7, label: "Audiobook" },
+  { value: 8, label: "Photo" },
+  { value: 9, label: "Art" },
+  { value: 10, label: "Book" },
+  { value: 11, label: "Comic" },
+  { value: 12, label: "Asset" },
+  { value: 13, label: "Game" },
+  { value: 14, label: "Software" },
+  { value: 15, label: "Dataset" },
+  { value: 16, label: "Post" },
 ];
 
+// Using numeric values to avoid Turbopack module initialization issues
 const BUNDLE_TYPE_FILTERS: { value: BundleTypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: BundleType.Album, label: "Album" },
-  { value: BundleType.Series, label: "Series" },
-  { value: BundleType.Playlist, label: "Playlist" },
-  { value: BundleType.Course, label: "Course" },
-  { value: BundleType.Newsletter, label: "Newsletter" },
-  { value: BundleType.Collection, label: "Collection" },
-  { value: BundleType.ProductPack, label: "Pack" },
+  { value: 0, label: "Album" },
+  { value: 1, label: "Series" },
+  { value: 2, label: "Playlist" },
+  { value: 3, label: "Course" },
+  { value: 4, label: "Newsletter" },
+  { value: 5, label: "Collection" },
+  { value: 6, label: "Pack" },
 ];
 
 function getItemHash(seed: number, itemId: string): number {
@@ -107,7 +109,7 @@ function getItemHash(seed: number, itemId: string): number {
 function parseFilter(param: string | null): ContentTypeFilter {
   if (!param || param === "all") return "all";
   const num = Number(param);
-  if (!isNaN(num) && Object.values(SDKContentType).includes(num)) {
+  if (!isNaN(num) && (Object.values(SDKContentType) as number[]).includes(num)) {
     return num as SDKContentType;
   }
   return "all";
@@ -116,7 +118,7 @@ function parseFilter(param: string | null): ContentTypeFilter {
 function parseBundleTypeFilter(param: string | null): BundleTypeFilter {
   if (!param || param === "all") return "all";
   const num = Number(param);
-  if (!isNaN(num) && Object.values(BundleType).includes(num)) {
+  if (!isNaN(num) && (Object.values(BundleType) as number[]).includes(num)) {
     return num as BundleType;
   }
   return "all";
@@ -923,7 +925,7 @@ export interface BundleItemDisplay {
   previewCid?: string;
   thumbnail?: string;
   position: number;
-  contentType?: SDKContentType;
+  contentType?: number;
   isEncrypted?: boolean;
   artist?: string;
   album?: string;
@@ -1107,8 +1109,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const isEncrypted = content.isEncrypted === true;
   const previewUrl = content.previewCid ? getIpfsUrl(content.previewCid) : null;
   const fullContentUrl = content.contentCid ? getIpfsUrl(content.contentCid) : null;
-  const contentTypeLabel = content.contentType !== undefined ? getContentTypeLabel(content.contentType) : "Content";
-  const contentDomain = content.contentType !== undefined ? getContentDomain(content.contentType) : "document";
+  const contentTypeLabel = content.contentType !== undefined ? getSDKContentTypeLabel(content.contentType as SDKContentType) : "Content";
+  const contentDomain = content.contentType !== undefined ? getContentDomain(content.contentType as SDKContentType) : "document";
   const domainLabel = getDomainLabel(contentDomain);
   const timeAgo = content.createdAt && content.createdAt > 0
     ? getTimeAgo(Number(content.createdAt) * 1000)
@@ -1196,12 +1198,13 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
     setShowOverlay(prev => !prev);
   }, []);
 
+  // Using numeric keys to avoid module initialization order issues with Turbopack
   const rarityColors: Record<Rarity, string> = {
-    [Rarity.Common]: "bg-gray-500/40 text-gray-200",
-    [Rarity.Uncommon]: "bg-green-500/40 text-green-300",
-    [Rarity.Rare]: "bg-blue-500/40 text-blue-300",
-    [Rarity.Epic]: "bg-purple-500/40 text-purple-300",
-    [Rarity.Legendary]: "bg-yellow-500/40 text-yellow-300",
+    0: "bg-gray-500/40 text-gray-200",    // Common
+    1: "bg-green-500/40 text-green-300",  // Uncommon
+    2: "bg-blue-500/40 text-blue-300",    // Rare
+    3: "bg-purple-500/40 text-purple-300", // Epic
+    4: "bg-yellow-500/40 text-yellow-300", // Legendary
   };
 
   // Wrapper props - only add data-feed-item when not skipping (parent provides it)
@@ -1232,13 +1235,13 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         <div className="flex-1 relative flex items-center justify-center">
         {showPlaceholder || !contentUrl ? (
           <div className="w-full h-full flex items-center justify-center">
-            <ViewerPlaceholder contentType={content.contentType} />
+            <ViewerPlaceholder contentType={content.contentType as SDKContentType | undefined} />
           </div>
         ) : (
           <ContentViewer
             contentUrl={contentUrl}
             contentCid={content.contentCid}
-            contentType={content.contentType}
+            contentType={content.contentType as SDKContentType | undefined}
             metadata={content.metadata ?? null}
             title={content.metadata?.title || content.metadata?.name}
             isActive={isActive}
@@ -1295,18 +1298,18 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
           {/* Access Level Badge */}
           {content.visibilityLevel !== undefined && content.visibilityLevel > 0 && (
             <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
-              content.visibilityLevel === VisibilityLevel.NftOnly
+              content.visibilityLevel === 3 /* NftOnly */
                 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                : content.visibilityLevel === VisibilityLevel.Subscriber
+                : content.visibilityLevel === 2 /* Subscriber */
                 ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                 : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
             }`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              {content.visibilityLevel === VisibilityLevel.NftOnly
+              {content.visibilityLevel === 3 /* NftOnly */
                 ? "Buy/Rent Only"
-                : content.visibilityLevel === VisibilityLevel.Subscriber
+                : content.visibilityLevel === 2 /* Subscriber */
                 ? "Members Only"
                 : "Subscriber Only"}
             </span>
@@ -1727,26 +1730,26 @@ function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1
 // ============== BUNDLE TYPE HELPERS ==============
 function getBundleTypeLabel(bundleType: BundleType): string {
   switch (bundleType) {
-    case BundleType.Album: return "Album";
-    case BundleType.Series: return "Series";
-    case BundleType.Playlist: return "Playlist";
-    case BundleType.Course: return "Course";
-    case BundleType.Newsletter: return "Newsletter";
-    case BundleType.Collection: return "Collection";
-    case BundleType.ProductPack: return "Pack";
+    case 0: return "Album";
+    case 1: return "Series";
+    case 2: return "Playlist";
+    case 3: return "Course";
+    case 4: return "Newsletter";
+    case 5: return "Collection";
+    case 6: return "Pack";
     default: return "Bundle";
   }
 }
 
 function getBundleTypeIcon(bundleType: BundleType): string {
   switch (bundleType) {
-    case BundleType.Album: return "M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3";
-    case BundleType.Series: return "M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z";
-    case BundleType.Playlist: return "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10";
-    case BundleType.Course: return "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253";
-    case BundleType.Newsletter: return "M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z";
-    case BundleType.Collection: return "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z";
-    case BundleType.ProductPack: return "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4";
+    case 0: return "M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"; // Album
+    case 1: return "M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"; // Series
+    case 2: return "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"; // Playlist
+    case 3: return "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"; // Course
+    case 4: return "M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"; // Newsletter
+    case 5: return "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"; // Collection
+    case 6: return "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"; // ProductPack
     default: return "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10";
   }
 }

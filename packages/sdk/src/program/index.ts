@@ -557,63 +557,63 @@ export async function fetchNftRentalInfoBatch(
   return result;
 }
 
-// Convert ContentType enum to Anchor format
+// Convert ContentType enum to Anchor format - using numeric values for Turbopack compatibility
 function contentTypeToAnchor(type: ContentType): object {
   switch (type) {
     // Video domain
-    case ContentType.Video: return { video: {} };
-    case ContentType.Movie: return { movie: {} };
-    case ContentType.Television: return { television: {} };
-    case ContentType.MusicVideo: return { musicVideo: {} };
-    case ContentType.Short: return { short: {} };
+    case 0: return { video: {} };       // Video
+    case 1: return { movie: {} };       // Movie
+    case 2: return { television: {} };  // Television
+    case 3: return { musicVideo: {} };  // MusicVideo
+    case 4: return { short: {} };       // Short
     // Audio domain
-    case ContentType.Music: return { music: {} };
-    case ContentType.Podcast: return { podcast: {} };
-    case ContentType.Audiobook: return { audiobook: {} };
+    case 5: return { music: {} };       // Music
+    case 6: return { podcast: {} };     // Podcast
+    case 7: return { audiobook: {} };   // Audiobook
     // Image domain
-    case ContentType.Photo: return { photo: {} };
-    case ContentType.Artwork: return { artwork: {} };
+    case 8: return { photo: {} };       // Photo
+    case 9: return { artwork: {} };     // Artwork
     // Document domain
-    case ContentType.Book: return { book: {} };
-    case ContentType.Comic: return { comic: {} };
+    case 10: return { book: {} };       // Book
+    case 11: return { comic: {} };      // Comic
     // File domain
-    case ContentType.Asset: return { asset: {} };
-    case ContentType.Game: return { game: {} };
-    case ContentType.Software: return { software: {} };
-    case ContentType.Dataset: return { dataset: {} };
+    case 12: return { asset: {} };      // Asset
+    case 13: return { game: {} };       // Game
+    case 14: return { software: {} };   // Software
+    case 15: return { dataset: {} };    // Dataset
     // Text domain
-    case ContentType.Post: return { post: {} };
+    case 16: return { post: {} };       // Post
     default: return { video: {} };
   }
 }
 
-// Convert Anchor format to ContentType enum
+// Convert Anchor format to ContentType enum - using numeric values for Turbopack compatibility
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function anchorToContentType(anchorType: any): ContentType {
   // Video domain
-  if (anchorType.video) return ContentType.Video;
-  if (anchorType.movie) return ContentType.Movie;
-  if (anchorType.television) return ContentType.Television;
-  if (anchorType.musicVideo) return ContentType.MusicVideo;
-  if (anchorType.short) return ContentType.Short;
+  if (anchorType.video) return 0;       // Video
+  if (anchorType.movie) return 1;       // Movie
+  if (anchorType.television) return 2;  // Television
+  if (anchorType.musicVideo) return 3;  // MusicVideo
+  if (anchorType.short) return 4;       // Short
   // Audio domain
-  if (anchorType.music) return ContentType.Music;
-  if (anchorType.podcast) return ContentType.Podcast;
-  if (anchorType.audiobook) return ContentType.Audiobook;
+  if (anchorType.music) return 5;       // Music
+  if (anchorType.podcast) return 6;     // Podcast
+  if (anchorType.audiobook) return 7;   // Audiobook
   // Image domain
-  if (anchorType.photo) return ContentType.Photo;
-  if (anchorType.artwork) return ContentType.Artwork;
+  if (anchorType.photo) return 8;       // Photo
+  if (anchorType.artwork) return 9;     // Artwork
   // Document domain
-  if (anchorType.book) return ContentType.Book;
-  if (anchorType.comic) return ContentType.Comic;
+  if (anchorType.book) return 10;       // Book
+  if (anchorType.comic) return 11;      // Comic
   // File domain
-  if (anchorType.asset) return ContentType.Asset;
-  if (anchorType.game) return ContentType.Game;
-  if (anchorType.software) return ContentType.Software;
-  if (anchorType.dataset) return ContentType.Dataset;
+  if (anchorType.asset) return 12;      // Asset
+  if (anchorType.game) return 13;       // Game
+  if (anchorType.software) return 14;   // Software
+  if (anchorType.dataset) return 15;    // Dataset
   // Text domain
-  if (anchorType.post) return ContentType.Post;
-  return ContentType.Video;
+  if (anchorType.post) return 16;       // Post
+  return 0; // Video
 }
 
 // Create Anchor program instance (read-only, no wallet)
@@ -1133,12 +1133,13 @@ export async function syncNftTransfersBatchInstruction(
 // RENT INSTRUCTION BUILDERS
 // ============================================
 
-// Convert RentTier enum to Anchor format
+// Convert RentTier enum to Anchor format - using numeric values for Turbopack compatibility
 function rentTierToAnchor(tier: RentTier): object {
   switch (tier) {
-    case RentTier.SixHours: return { sixHours: {} };
-    case RentTier.OneDay: return { oneDay: {} };
-    case RentTier.SevenDays: return { sevenDays: {} };
+    case 0: return { sixHours: {} };   // SixHours
+    case 1: return { oneDay: {} };     // OneDay
+    case 2: return { sevenDays: {} };  // SevenDays
+    default: return { oneDay: {} };
   }
 }
 
@@ -2792,33 +2793,33 @@ export async function countTotalMintedNfts(
 // ============================================
 
 /**
- * Convert BundleType enum to Anchor format
+ * Convert BundleType enum to Anchor format - using numeric values for Turbopack compatibility
  */
 function bundleTypeToAnchor(type: BundleType): object {
   switch (type) {
-    case BundleType.Album: return { album: {} };
-    case BundleType.Series: return { series: {} };
-    case BundleType.Playlist: return { playlist: {} };
-    case BundleType.Course: return { course: {} };
-    case BundleType.Newsletter: return { newsletter: {} };
-    case BundleType.Collection: return { collection: {} };
-    case BundleType.ProductPack: return { productPack: {} };
+    case 0: return { album: {} };       // Album
+    case 1: return { series: {} };      // Series
+    case 2: return { playlist: {} };    // Playlist
+    case 3: return { course: {} };      // Course
+    case 4: return { newsletter: {} };  // Newsletter
+    case 5: return { collection: {} };  // Collection
+    case 6: return { productPack: {} }; // ProductPack
     default: return { collection: {} };
   }
 }
 
 /**
- * Convert Anchor bundle type to BundleType enum
+ * Convert Anchor bundle type to BundleType enum - using numeric values for Turbopack compatibility
  */
 function anchorToBundleType(anchorType: object): BundleType {
-  if ("album" in anchorType) return BundleType.Album;
-  if ("series" in anchorType) return BundleType.Series;
-  if ("playlist" in anchorType) return BundleType.Playlist;
-  if ("course" in anchorType) return BundleType.Course;
-  if ("newsletter" in anchorType) return BundleType.Newsletter;
-  if ("collection" in anchorType) return BundleType.Collection;
-  if ("productPack" in anchorType) return BundleType.ProductPack;
-  return BundleType.Collection;
+  if ("album" in anchorType) return 0;       // Album
+  if ("series" in anchorType) return 1;      // Series
+  if ("playlist" in anchorType) return 2;    // Playlist
+  if ("course" in anchorType) return 3;      // Course
+  if ("newsletter" in anchorType) return 4;  // Newsletter
+  if ("collection" in anchorType) return 5;  // Collection
+  if ("productPack" in anchorType) return 6; // ProductPack
+  return 5; // Collection
 }
 
 /**
@@ -3868,10 +3869,10 @@ export async function rentBundleSolInstruction(
 
   const nftAsset = Keypair.generate();
 
-  // Convert tier to Anchor format
-  const anchorTier = tier === RentTier.SixHours ? { sixHours: {} }
-    : tier === RentTier.OneDay ? { oneDay: {} }
-    : { sevenDays: {} };
+  // Convert tier to Anchor format - using numeric values for Turbopack compatibility
+  const anchorTier = tier === 0 ? { sixHours: {} }   // SixHours
+    : tier === 1 ? { oneDay: {} }                    // OneDay
+    : { sevenDays: {} };                             // SevenDays
 
   const instruction = await program.methods
     .rentBundleSol(anchorTier)
