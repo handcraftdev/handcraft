@@ -11,7 +11,6 @@ import {
   getDisputeTypeName,
   type Dispute,
   type Subject,
-  VoteChoiceEnum,
 } from "@tribunalcraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
 import { useTribunalcraft } from "@/hooks/useTribunalcraft";
@@ -58,7 +57,6 @@ function DisputeCard({
 }) {
   const [defenderAmount, setDefenderAmount] = useState("0.1");
   const [challengerAmount, setChallengerAmount] = useState("0.05");
-  const [jurorAmount, setJurorAmount] = useState("0.01");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,14 +86,13 @@ function DisputeCard({
   const jurorsPool = protocolFee * 0.19;
   const protocolPool = protocolFee * 0.01;
 
-  const handleVote = async (choice: "challenger" | "defender") => {
+  const handleDefend = async () => {
     if (!isConnected || !client) {
       setError("Please connect your wallet");
       return;
     }
 
-    const amount = choice === "defender" ? defenderAmount : challengerAmount;
-    const stakeLamports = Math.floor(parseFloat(amount || "0") * 1e9);
+    const stakeLamports = Math.floor(parseFloat(defenderAmount || "0") * 1e9);
     if (stakeLamports < 0.01 * 1e9) {
       setError("Minimum is 0.01 SOL");
       return;
@@ -105,14 +102,40 @@ function DisputeCard({
     setError(null);
 
     try {
-      await client.voteOnDispute({
+      await client.addBondDirect(subject.subjectId, new BN(stakeLamports));
+      onVoteSuccess?.();
+    } catch (err) {
+      console.error("Add bond failed:", err);
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChallenge = async () => {
+    if (!isConnected || !client) {
+      setError("Please connect your wallet");
+      return;
+    }
+
+    const stakeLamports = Math.floor(parseFloat(challengerAmount || "0") * 1e9);
+    if (stakeLamports < 0.01 * 1e9) {
+      setError("Minimum is 0.01 SOL");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await client.addToVote({
         subjectId: subject.subjectId,
-        choice: choice === "challenger" ? VoteChoiceEnum.ForChallenger : VoteChoiceEnum.ForDefender,
-        stakeAllocation: new BN(stakeLamports),
+        round: dispute.round,
+        additionalStake: new BN(stakeLamports),
       });
       onVoteSuccess?.();
     } catch (err) {
-      console.error("Vote failed:", err);
+      console.error("Add stake failed:", err);
       setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIsLoading(false);
@@ -163,11 +186,11 @@ function DisputeCard({
                 <span className="px-3 text-white/40 text-sm">SOL</span>
               </div>
               <button
-                onClick={() => handleVote("defender")}
+                onClick={handleDefend}
                 disabled={isLoading || !isConnected}
                 className="w-full py-3 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                {isLoading ? "..." : "Join Defenders"}
+                {isLoading ? "..." : "Add Bond"}
               </button>
             </div>
           )}
@@ -210,11 +233,11 @@ function DisputeCard({
                 <span className="px-3 text-white/40 text-sm">SOL</span>
               </div>
               <button
-                onClick={() => handleVote("challenger")}
+                onClick={handleChallenge}
                 disabled={isLoading || !isConnected}
                 className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                {isLoading ? "..." : "Join Challengers"}
+                {isLoading ? "..." : "Add Stake"}
               </button>
             </div>
           )}
@@ -280,43 +303,11 @@ function DisputeCard({
         </div>
       </div>
 
-      {/* Juror Section */}
-      {isActive && (
+      {/* Error Display */}
+      {error && (
         <div className="border-t border-white/10 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1 h-5 bg-amber-500 rounded" />
-            <span className="text-sm font-semibold text-white/90 uppercase tracking-wider">Juror</span>
-          </div>
-
-          {error && (
-            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2 mb-3">
-              {error}
-            </div>
-          )}
-
-          <div className="p-3 bg-black/50 border border-white/5 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/50">Your Vote:</span>
-              <span className="text-sky-400">FOR DEFENDER – 0.010000 SOL</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center bg-black/50 border border-white/10 rounded">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={jurorAmount}
-                  onChange={(e) => setJurorAmount(e.target.value)}
-                  className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm focus:outline-none"
-                />
-                <span className="px-3 text-white/40 text-sm">SOL</span>
-              </div>
-              <button
-                disabled={isLoading || !isConnected}
-                className="px-6 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
-              >
-                Add Stake
-              </button>
-            </div>
+          <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
+            {error}
           </div>
         </div>
       )}
