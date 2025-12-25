@@ -31,7 +31,7 @@
     "@supabase/supabase-js": "^2.87.1",
     "@tamagui/next-plugin": "^1.138.6",
     "@tanstack/react-query": "^5.62.2",
-    "@tribunalcraft/sdk": "file:/Users/onlyabrak/dev/tribunalcraft/packages/sdk",
+    "@tribunalcraft/sdk": "file:../../packages/tribunalcraft-sdk",
     "bs58": "^6.0.0",
     "chart.js": "^4.5.1",
     "date-fns": "^4.1.0",
