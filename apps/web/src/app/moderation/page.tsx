@@ -291,6 +291,7 @@ export default function ModerationPage() {
   const toggleSidebar = useCallback(() => setIsSidebarOpen((prev) => !prev), []);
 
   // Fetch active disputes from Tribunalcraft
+  // Only fetch on mount and manual refresh - no polling to avoid excessive RPC calls
   const {
     data: activeDisputes,
     isLoading,
@@ -299,12 +300,17 @@ export default function ModerationPage() {
     queryKey: ["tribunalcraft-active-disputes"],
     queryFn: async () => {
       const client = new TribunalCraftClient({ connection });
-      const subjectAccounts = await client.fetchAllSubjects();
+
+      // Fetch all disputes directly instead of fetching subjects then disputes
+      const allDisputes = await client.fetchAllDisputes();
+
+      // Filter for pending disputes and fetch their subjects
+      const pendingDisputes = allDisputes.filter(({ account }) => isDisputePending(account.status));
 
       const disputesWithSubjects = await Promise.all(
-        subjectAccounts.map(async ({ account: subject }) => {
-          const dispute = await client.fetchDisputeBySubjectId(subject.subjectId);
-          if (dispute && isDisputePending(dispute.status)) {
+        pendingDisputes.map(async ({ account: dispute }) => {
+          const subject = await client.fetchSubjectById(dispute.subjectId);
+          if (subject) {
             return { subject, dispute };
           }
           return null;
@@ -313,8 +319,9 @@ export default function ModerationPage() {
 
       return disputesWithSubjects.filter((d): d is NonNullable<typeof d> => d !== null);
     },
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000, // Cache for 1 minute
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    // No refetchInterval - manual refresh only
   });
 
   if (!connected) {
@@ -380,7 +387,19 @@ export default function ModerationPage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Active Disputes</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-white/40 uppercase tracking-wider">Active Disputes</p>
+              <button
+                onClick={() => refetch()}
+                disabled={isLoading}
+                className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                title="Refresh"
+              >
+                <svg className={`w-3.5 h-3.5 text-white/40 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
             <p className="text-2xl font-bold text-white mt-1">{activeDisputes?.length ?? 0}</p>
           </div>
           <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl">
