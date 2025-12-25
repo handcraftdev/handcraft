@@ -1310,7 +1310,7 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
       {/* Bottom Overlay */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-20 p-6 pb-20 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+        className={`absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
