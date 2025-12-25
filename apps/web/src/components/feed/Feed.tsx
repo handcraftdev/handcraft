@@ -180,12 +180,6 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
     onOverlayChange?.(visible);
   }, [onOverlayChange]);
 
-  // Reset overlay to visible when changing slides
-  useEffect(() => {
-    setLocalOverlayVisible(true);
-    onOverlayChange?.(true);
-  }, [currentIndex, onOverlayChange]);
-
   // Queue of items to insert at a specific position
   const [queuedItem, setQueuedItem] = useState<{ cid: string; insertAfter: number } | null>(null);
   const [jumpToQueued, setJumpToQueued] = useState(false);
