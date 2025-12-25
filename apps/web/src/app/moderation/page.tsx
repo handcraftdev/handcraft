@@ -47,9 +47,8 @@ function Countdown({ endTime }: { endTime: number }) {
 
 // Types for IPFS content
 interface SubjectDetails {
-  title?: string;
+  name?: string;
   description?: string;
-  terms?: string;
 }
 
 interface ReportDetails {
@@ -105,7 +104,7 @@ function DisputeCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium text-white truncate">
-            {subjectDetails?.title || "Disputed Content"}
+            {subjectDetails?.name || "Disputed Content"}
           </h3>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-400 rounded">
