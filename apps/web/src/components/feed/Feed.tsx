@@ -908,6 +908,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
               initialPosition={initialCid === item.id ? initialPosition : 1}
               onNavigateToContent={navigateToContent}
               onOverlayChange={handleOverlayChange}
+              enrichedBundles={globalBundles}
             />
           ) : null
         ))}
@@ -1614,9 +1615,11 @@ interface BundleFeedItemProps {
   onNavigateToContent?: (cid: string) => void;
   // Callback when overlay visibility changes
   onOverlayChange?: (visible: boolean) => void;
+  // Enriched bundles for "part of bundle" display in content slides
+  enrichedBundles?: EnrichedBundle[];
 }
 
-function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1, onNavigateToContent, onOverlayChange }: BundleFeedItemProps) {
+function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1, onNavigateToContent, onOverlayChange, enrichedBundles = [] }: BundleFeedItemProps) {
   const [currentItemIndex, setCurrentItemIndex] = useState(Math.max(0, initialPosition - 1));
   const [bundleItems, setBundleItems] = useState<BundleItemDisplay[]>([]);
   const [itemContents, setItemContents] = useState<Map<string, EnrichedContent>>(new Map());
@@ -1768,6 +1771,7 @@ function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1
           onNavigateToContent={onNavigateToContent}
           onOverlayChange={onOverlayChange}
           skipFeedItemWrapper
+          enrichedBundles={enrichedBundles}
         />
       )}
     </div>
