@@ -1115,7 +1115,6 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const ownedRarities: Rarity[] = ownedNftsForContent.map(nft => nftRarities.get(nft.nftAsset.toBase58())).filter((r): r is Rarity => r !== undefined);
 
   const isEncrypted = content.isEncrypted === true;
-  const previewUrl = content.previewCid ? getIpfsUrl(content.previewCid) : null;
   const fullContentUrl = content.contentCid ? getIpfsUrl(content.contentCid) : null;
   const contentTypeLabel = content.contentType !== undefined ? getSDKContentTypeLabel(content.contentType as SDKContentType) : "Content";
   const contentDomain = content.contentType !== undefined ? getContentDomain(content.contentType as SDKContentType) : "document";
@@ -1160,14 +1159,14 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
   const bundleMintedCount = bundleContext ? Number(bundleContext.bundle.mintedCount ?? 0) : 0;
   const currentBundleItem = bundleContext?.items[bundleContext.currentIndex];
 
-  const contentUrl = !isEncrypted ? fullContentUrl : decryptedUrl || previewUrl || null;
+  const contentUrl = !isEncrypted ? fullContentUrl : decryptedUrl;
   const isPublicContent = (content.visibilityLevel ?? 0) === 0;
   // Access control - consider bundle ownership when viewing bundle content
   const hasAccessViaBundle = bundleContext && ownsBundleNft;
   // Don't show locked overlay for public content (level 0) - anyone can access
   const showLockedOverlay = isEncrypted && !isCreator && hasAccess !== true && !ownsNft && !ownsNftFromBundle && !hasAccessViaBundle && !isPublicContent;
-  // Need session if: encrypted AND (has access OR public content) AND no decrypted URL AND no session token AND no preview playing
-  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent) && !decryptedUrl && !sessionToken && !previewUrl;
+  // Need session if: encrypted AND (has access OR public content) AND no decrypted URL AND no session token
+  const needsSession = isEncrypted && (isCreator || ownsNft || ownsNftFromBundle || hasAccessViaBundle || isPublicContent) && !decryptedUrl && !sessionToken;
   const showPlaceholder = isEncrypted && !contentUrl;
 
   const requestDecryptedContent = useCallback(async () => {
