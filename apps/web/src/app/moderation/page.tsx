@@ -128,14 +128,14 @@ function DisputeCard({
     setError(null);
 
     try {
-      await client.addToVote({
+      await client.joinChallengers({
         subjectId: subject.subjectId,
-        round: dispute.round,
-        additionalStake: new BN(stakeLamports),
+        stake: new BN(stakeLamports),
+        detailsCid: "",
       });
       onVoteSuccess?.();
     } catch (err) {
-      console.error("Add stake failed:", err);
+      console.error("Join challengers failed:", err);
       setError(err instanceof Error ? err.message : "Failed");
     } finally {
       setIsLoading(false);
@@ -237,7 +237,7 @@ function DisputeCard({
                 disabled={isLoading || !isConnected}
                 className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-semibold text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                {isLoading ? "..." : "Add Stake"}
+                {isLoading ? "..." : "Join Challengers"}
               </button>
             </div>
           )}
