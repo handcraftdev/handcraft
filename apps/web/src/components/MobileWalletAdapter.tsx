@@ -27,10 +27,13 @@ export function MobileWalletAdapterProvider({
     if (typeof window === "undefined") return;
 
     const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet";
+    // Use CAIP-2 chain IDs with genesis hash (new format)
+    // Mainnet: 5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp (genesis hash)
+    // Devnet: EtWTRABZaYq6iMfeYKouRu166VU2xqa1 (genesis hash)
     const chains =
       network === "mainnet"
-        ? (["solana:mainnet"] as const)
-        : (["solana:devnet"] as const);
+        ? (["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"] as const)
+        : (["solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"] as const);
 
     const appName = process.env.NEXT_PUBLIC_APP_NAME || "Handcraft";
     const appUrl =
