@@ -1,0 +1,85 @@
+/**
+ * HANDCRAFT DESIGN TOKENS
+ * =======================
+ * CSS custom properties (variables) for the design system.
+ * Import this file directly without Tailwind dependencies.
+ */
+
+:root {
+  /* ========================================
+   * TYPOGRAPHY SCALE
+   * ========================================
+   * Standardized font sizes
+   *
+   * text-2xs  (9px)  - Micro labels, badges
+   * text-xs   (10px) - Labels, captions, uppercase text
+   * text-sm   (11px) - Secondary text, descriptions, tabs
+   * text-base (13px) - Body text, inputs, buttons
+   * text-lg   (15px) - Page titles, section headers
+   * text-xl   (18px) - Large numbers, feature headers
+   * text-2xl  (24px) - Hero text (use sparingly)
+   */
+  --font-size-2xs: 9px;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 13px;
+  --font-size-lg: 15px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+
+  /* ========================================
+   * BORDER RADIUS
+   * ========================================
+   */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* ========================================
+   * SPACING
+   * ========================================
+   */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ========================================
+   * COMPONENT SIZES
+   * ========================================
+   */
+  --height-header: 56px;
+  --width-sidebar: 256px;
+
+  /* ========================================
+   * ACCENT COLORS
+   * ========================================
+   */
+  --color-primary: #a855f7;
+  --color-secondary: #22d3ee;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* ========================================
+   * TRANSITIONS
+   * ========================================
+   */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* Scrollbar hiding utility */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
