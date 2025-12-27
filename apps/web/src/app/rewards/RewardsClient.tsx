@@ -143,6 +143,46 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
   const bundleRewards = bundlePendingRewardsQuery.data || [];
   const bundleRewardsTotal = bundleRewards.reduce((sum, r) => sum + r.pending, BigInt(0));
 
+  // Calculate totals (needed for claimData before any returns)
+  const salesTotal = contentRewardsTotal + bundleRewardsTotal;
+  const globalHolderPending = data?.subscriptionRewards.globalHolder.pending || BigInt(0);
+  const creatorPatronPending = data?.subscriptionRewards.creatorPatron.total || BigInt(0);
+  const holderTotal = salesTotal + globalHolderPending + creatorPatronPending;
+
+  const creatorDistPending = data?.subscriptionRewards.creatorDist.pending || BigInt(0);
+  const creatorDistRps = data?.subscriptionRewards.creatorDist.poolRps || BigInt(0);
+  const creatorWeight = data?.subscriptionRewards.creatorDist.creatorWeight || BigInt(0);
+  const hasCreatorContent = creatorContent.length > 0;
+  const isCreator = creatorWeight > BigInt(0) || hasCreatorContent;
+  const creatorTotal = creatorDistPending;
+
+  const grandTotal = holderTotal + creatorTotal;
+
+  // Prepare claim data (must be called before any returns - hooks rule)
+  const claimData = useMemo(() => {
+    if (!data) return null;
+
+    const nftAssets = data.nfts.map(n => new PublicKey(n.nftAsset));
+
+    const nftsByCreator = new Map<string, PublicKey[]>();
+    data.nfts.forEach(nft => {
+      const existing = nftsByCreator.get(nft.creator) || [];
+      existing.push(new PublicKey(nft.nftAsset));
+      nftsByCreator.set(nft.creator, existing);
+    });
+
+    const contentCids = contentRewards.map(r => r.contentCid);
+
+    const bundleRewardsData = bundleRewards.map(r => ({
+      bundleId: r.bundleId,
+      creator: new PublicKey(r.creator.toBase58()),
+      nftAssets: r.nftRewards.map(nr => new PublicKey(nr.nftAsset.toBase58())),
+    }));
+
+    return { nftAssets, nftsByCreator, contentCids, bundleRewardsData };
+  }, [data, contentRewards, bundleRewards]);
+
+  // Early returns after all hooks
   if (!mounted || isLoadingAny) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -154,7 +194,6 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
   const hasNfts = data && data.nfts.length > 0;
   const hasContentRewards = contentRewards.length > 0;
   const hasBundleRewards = bundleRewards.length > 0;
-  const hasCreatorContent = creatorContent.length > 0;
 
   if (!hasNfts && !hasContentRewards && !hasBundleRewards && !hasCreatorContent) {
     return (
@@ -172,53 +211,12 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
     );
   }
 
-  // Calculate totals
-  const salesTotal = contentRewardsTotal + bundleRewardsTotal;
-  const globalHolderPending = data?.subscriptionRewards.globalHolder.pending || BigInt(0);
-  const creatorPatronPending = data?.subscriptionRewards.creatorPatron.total || BigInt(0);
-  const holderTotal = salesTotal + globalHolderPending + creatorPatronPending;
-
-  const creatorDistPending = data?.subscriptionRewards.creatorDist.pending || BigInt(0);
-  const creatorDistRps = data?.subscriptionRewards.creatorDist.poolRps || BigInt(0);
-  const creatorWeight = data?.subscriptionRewards.creatorDist.creatorWeight || BigInt(0);
   const totalMintedFromContent = creatorContent.reduce((sum, c) => sum + Number(c.mintedCount || 0), 0);
-  const isCreator = creatorWeight > BigInt(0) || hasCreatorContent;
-  const creatorTotal = creatorDistPending;
-
-  const grandTotal = holderTotal + creatorTotal;
 
   const unifiedRewardsByNft = new Map<string, NftRewardData>();
   data?.nfts.forEach(nft => {
     unifiedRewardsByNft.set(nft.nftAsset, nft);
   });
-
-  // Prepare claim data
-  const claimData = useMemo(() => {
-    if (!data) return null;
-
-    // All NFT assets for global holder claims
-    const nftAssets = data.nfts.map(n => new PublicKey(n.nftAsset));
-
-    // Group NFTs by creator for patron claims
-    const nftsByCreator = new Map<string, PublicKey[]>();
-    data.nfts.forEach(nft => {
-      const existing = nftsByCreator.get(nft.creator) || [];
-      existing.push(new PublicKey(nft.nftAsset));
-      nftsByCreator.set(nft.creator, existing);
-    });
-
-    // Content CIDs for content sales claims
-    const contentCids = contentRewards.map(r => r.contentCid);
-
-    // Bundle rewards for bundle sales claims
-    const bundleRewardsData = bundleRewards.map(r => ({
-      bundleId: r.bundleId,
-      creator: new PublicKey(r.creator.toBase58()),
-      nftAssets: r.nftRewards.map(nr => new PublicKey(nr.nftAsset.toBase58())),
-    }));
-
-    return { nftAssets, nftsByCreator, contentCids, bundleRewardsData };
-  }, [data, contentRewards, bundleRewards]);
 
   const handleClaimAll = async () => {
     if (!claimData || grandTotal === BigInt(0)) return;
