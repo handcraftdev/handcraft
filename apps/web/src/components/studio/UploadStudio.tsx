@@ -707,7 +707,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
         {/* Menu Button */}
         <button
           onClick={toggleSidebar}
-          className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
+          className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[264px]' : 'left-4'}`}
         >
           <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
@@ -716,13 +716,13 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
 
         <div className="flex h-screen pt-16">
           {/* Sidebar Skeleton */}
-          <div className="w-72 border-r border-white/5 p-6">
-            <div className="space-y-3">
+          <div className="w-64 border-r border-white/5 p-4">
+            <div className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02]">
-                  <div className="w-8 h-8 rounded-lg bg-white/5 animate-pulse" />
+                <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.02]">
+                  <div className="w-7 h-7 rounded-md bg-white/5 animate-pulse" />
                   <div className="flex-1">
-                    <div className="h-4 w-24 bg-white/5 rounded animate-pulse" />
+                    <div className="h-3 w-20 bg-white/5 rounded animate-pulse" />
                   </div>
                 </div>
               ))}
@@ -730,13 +730,13 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
           </div>
 
           {/* Main Content Skeleton */}
-          <main className="flex-1 overflow-auto p-8">
+          <main className="flex-1 overflow-auto p-6">
             <div className="max-w-2xl mx-auto">
-              <div className="h-8 w-48 bg-white/5 rounded-lg animate-pulse mb-3" />
-              <div className="h-4 w-64 bg-white/5 rounded animate-pulse mb-8" />
-              <div className="space-y-4">
-                <div className="h-32 bg-white/[0.02] border border-white/5 rounded-xl animate-pulse" />
-                <div className="h-32 bg-white/[0.02] border border-white/5 rounded-xl animate-pulse" />
+              <div className="h-6 w-40 bg-white/5 rounded animate-pulse mb-2" />
+              <div className="h-3 w-56 bg-white/5 rounded animate-pulse mb-6" />
+              <div className="space-y-3">
+                <div className="h-28 bg-white/[0.02] border border-white/5 rounded-lg animate-pulse" />
+                <div className="h-28 bg-white/[0.02] border border-white/5 rounded-lg animate-pulse" />
               </div>
             </div>
           </main>
@@ -749,19 +749,19 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
   if (!isEditMode && !isLoadingUserProfile && !userProfile) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="max-w-md text-center p-8">
-          <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="max-w-sm text-center p-6">
+          <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-white mb-3">Set Up Your Creator Profile</h2>
-          <p className="text-white/50 mb-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Set Up Your Creator Profile</h2>
+          <p className="text-sm text-white/50 mb-4">
             Before creating content, please set up your creator profile with a username in the Studio Overview tab.
           </p>
           <button
             onClick={() => router.push('/studio')}
-            className="px-6 py-3 bg-white text-black font-medium rounded-xl hover:bg-white/90 transition-colors"
+            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors"
           >
             Go to Studio Overview
           </button>
@@ -778,7 +778,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
       {/* Menu Button */}
       <button
         onClick={toggleSidebar}
-        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[304px]' : 'left-4'}`}
+        className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${isSidebarOpen ? 'left-[264px]' : 'left-4'}`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />

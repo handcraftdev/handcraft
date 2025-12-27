@@ -122,22 +122,22 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
   const canProceed = !!draft?.title?.trim();
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="text-2xl font-medium text-white/90 mb-2">Content Details</h2>
-      <p className="text-white/40 mb-8">Add information about your content</p>
+    <div className="max-w-2xl mx-auto">
+      <h2 className="text-lg font-medium text-white/90 mb-1">Content Details</h2>
+      <p className="text-sm text-white/40 mb-6">Add information about your content</p>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Collection Name - disabled in edit mode since it's on-chain */}
         {isEditMode ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-white/70">Collection Name</label>
-            <div className="px-4 py-3 bg-white/[0.02] border border-white/5 rounded-xl text-white/50">
+            <div className="px-3 py-2 bg-white/[0.02] border border-white/5 rounded-lg text-sm text-white/50">
               {collectionNameInfo.formatted || 'Not set'}
             </div>
             <p className="text-xs text-amber-400/70">Collection name cannot be changed after publishing</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-white/70">Collection Name (Optional)</label>
             <input
               type="text"
@@ -145,7 +145,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
               onChange={(e) => handleMetadataUpdate('collection_name', e.target.value)}
               placeholder="e.g., Summer Photos 2024"
               maxLength={collectionNameInfo.maxInputLength}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 placeholder:text-white/30"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-purple-500/50 text-white/90 placeholder:text-white/30"
             />
             <div className="flex items-center justify-between text-xs">
               <span className="text-white/30">
@@ -163,7 +163,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
         <button
           onClick={onNext}
           disabled={!canProceed}
-          className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+          className="w-full py-2 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-all duration-200 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
         >
           Continue to File Upload
         </button>

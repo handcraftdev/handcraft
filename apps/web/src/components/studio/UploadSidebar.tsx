@@ -61,14 +61,14 @@ export function UploadSidebar({
   const isPaused = uploadProgress?.status === 'paused';
 
   return (
-    <aside className="w-80 border-r border-white/5 bg-black/50 backdrop-blur-sm flex flex-col">
-      <div className="p-6 border-b border-white/5">
+    <aside className="w-64 border-r border-white/5 bg-black/50 backdrop-blur-sm flex flex-col">
+      <div className="px-4 py-3 border-b border-white/5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-medium text-white/90">
+            <h1 className="text-base font-medium text-white/90">
               {isEditMode ? 'Edit Content' : 'Upload Content'}
             </h1>
-            <p className="text-sm text-white/40 mt-1">
+            <p className="text-sm text-white/40 mt-0.5">
               {isEditMode ? 'Update metadata' : draft?.status === 'published' ? 'Published' : draft?.id ? 'Editing draft' : 'New upload'}
             </p>
           </div>
@@ -111,26 +111,26 @@ export function UploadSidebar({
 
       {/* Upload Progress Indicator */}
       {uploadProgress && (isUploading || isPaused) && (
-        <div className="mx-4 mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+        <div className="mx-3 mt-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/10">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center ${
               isPaused ? 'bg-yellow-500/20' : 'bg-purple-500/20'
             }`}>
               {isPaused ? (
-                <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
                 </svg>
               ) : (
-                <svg className="w-4 h-4 text-purple-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-purple-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white/90 truncate">
+              <p className="text-sm font-medium text-white/90 truncate">
                 {uploadProgress.fileName}
               </p>
-              <p className="text-[10px] text-white/40">
+              <p className="text-xs text-white/40">
                 {formatFileSize(uploadProgress.uploadedBytes)} / {formatFileSize(uploadProgress.fileSize)}
               </p>
             </div>
@@ -178,12 +178,12 @@ export function UploadSidebar({
               style={{ width: `${uploadProgress.progress}%` }}
             />
           </div>
-          <p className="text-[10px] text-white/30 mt-1 text-right">{uploadProgress.progress}%</p>
+          <p className="text-xs text-white/30 mt-1 text-right">{uploadProgress.progress}%</p>
         </div>
       )}
 
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
+      <nav className="flex-1 p-3">
+        <ul className="space-y-1.5">
           {displaySteps.map((s, index) => {
             const isActive = currentStep === s.key;
             const stepComplete = isStepComplete(s.key, draft);
@@ -194,7 +194,7 @@ export function UploadSidebar({
                 <button
                   onClick={() => canNavigate && onStepClick(s.key)}
                   disabled={!canNavigate}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all ${
                     isActive
                       ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300'
                       : stepComplete
@@ -204,7 +204,7 @@ export function UploadSidebar({
                       : 'bg-white/[0.01] border border-white/5 text-white/20 cursor-not-allowed'
                   }`}
                 >
-                  <span className="text-2xl">{s.icon}</span>
+                  <span className="text-base">{s.icon}</span>
                   <div className="flex-1 text-left">
                     <div className="text-sm font-medium">{s.label}</div>
                     {stepComplete && (
@@ -215,7 +215,7 @@ export function UploadSidebar({
                     )}
                   </div>
                   {stepComplete && (
-                    <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
@@ -226,7 +226,7 @@ export function UploadSidebar({
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-white/5 space-y-3">
+      <div className="p-3 border-t border-white/5 space-y-2">
         <p className="text-xs text-white/30 text-center">
           Changes are auto-saved
         </p>
@@ -234,11 +234,11 @@ export function UploadSidebar({
           <button
             onClick={onDelete}
             disabled={isDeleting}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-white/5 hover:bg-red-500/20 disabled:opacity-50 rounded-xl text-sm font-medium transition-all border border-white/10 hover:border-red-500/30 text-white/60 hover:text-red-400"
+            className="w-full flex items-center justify-center gap-1.5 py-2 bg-white/5 hover:bg-red-500/20 disabled:opacity-50 rounded-lg text-sm font-medium transition-all border border-white/10 hover:border-red-500/30 text-white/60 hover:text-red-400"
           >
             {isDeleting ? (
               <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -246,7 +246,7 @@ export function UploadSidebar({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 Delete Draft

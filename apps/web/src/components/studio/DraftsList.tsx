@@ -178,7 +178,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
   if (!isAuthenticated) {
     return (
-      <div className="relative p-8 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
+      <div className="relative p-4 rounded-lg bg-white/[0.02] border border-white/[0.06] text-center">
         <p className="text-sm text-white/40">
           {publicKey ? "Please sign in to view drafts" : "Please connect your wallet to view drafts"}
         </p>
@@ -188,11 +188,11 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
   if (error) {
     return (
-      <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
         <p className="text-sm text-red-400">Error loading drafts: {error}</p>
         <button
           onClick={() => fetchDrafts()}
-          className="mt-2 text-sm text-red-400/80 hover:text-red-400 underline"
+          className="mt-1.5 text-sm text-red-400/80 hover:text-red-400 underline"
         >
           Retry
         </button>
@@ -202,8 +202,8 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <svg className="w-5 h-5 animate-spin text-white/40" fill="none" viewBox="0 0 24 24">
+      <div className="flex items-center justify-center p-6">
+        <svg className="w-4 h-4 animate-spin text-white/40" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
@@ -214,13 +214,13 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
   if (drafts.length === 0) {
     return (
-      <div className="relative p-12 rounded-2xl bg-white/[0.02] border border-white/5 text-center">
-        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <div className="relative p-6 rounded-lg bg-white/[0.02] border border-white/[0.06] text-center">
+        <div className="w-8 h-8 rounded-md bg-white/5 flex items-center justify-center mx-auto mb-2">
+          <svg className="w-4 h-4 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <h3 className="text-lg font-medium mb-2 text-white/90">No drafts yet</h3>
+        <h3 className="text-sm font-medium mb-0.5 text-white/90">No drafts yet</h3>
         <p className="text-white/40 text-sm">Create your first draft to get started</p>
       </div>
     );
@@ -229,7 +229,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
   // Compact list view for sidebar/embedded
   if (compact) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {drafts.slice(0, 5).map((draft) => {
           const statusStyle = STATUS_STYLES[draft.status] || STATUS_STYLES.draft;
           const isDeleting = deletingId === draft.id;
@@ -238,41 +238,41 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
             <div
               key={draft.id}
               onClick={() => handleEditDraft(draft.id)}
-              className="group flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all cursor-pointer"
+              className="group flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
                 {draft.thumbnail_cid ? (
                   <img
                     src={`https://ipfs.filebase.io/ipfs/${draft.thumbnail_cid}`}
                     alt={draft.title || "Draft thumbnail"}
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover rounded-md"
                   />
                 ) : (
-                  <svg className="w-5 h-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate text-white/90 text-sm">{draft.title || "Untitled"}</p>
-                <p className="text-xs text-white/40">{formatDate(draft.updated_at)}</p>
+                <p className="text-2xs text-white/40">{formatDate(draft.updated_at)}</p>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] border ${statusStyle}`}>
+              <span className={`px-1.5 py-0.5 rounded text-2xs border ${statusStyle}`}>
                 {draft.status}
               </span>
               <button
                 onClick={(e) => handleDeleteClick(draft.id, e)}
                 disabled={isDeleting}
-                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all disabled:opacity-50"
+                className="p-1 rounded opacity-0 group-hover:opacity-100 bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all disabled:opacity-50"
                 title="Delete"
               >
                 {isDeleting ? (
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 )}
@@ -281,7 +281,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
           );
         })}
         {drafts.length > 5 && (
-          <p className="text-center text-xs text-white/30 py-2">
+          <p className="text-center text-2xs text-white/30 py-1.5">
             +{drafts.length - 5} more drafts
           </p>
         )}
@@ -313,7 +313,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
   // Full grid view
   return (
     <>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {drafts.map((draft) => {
           const statusStyle = STATUS_STYLES[draft.status] || STATUS_STYLES.draft;
           const isDeleting = deletingId === draft.id;
@@ -322,12 +322,12 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
             <div
               key={draft.id}
               onClick={() => handleEditDraft(draft.id)}
-              className="group relative flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-all duration-300 cursor-pointer"
+              className="group relative flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all duration-300 cursor-pointer"
             >
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
               {/* Thumbnail */}
-              <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+              <div className="relative w-10 h-10 rounded-md overflow-hidden bg-white/5 flex-shrink-0">
                 {draft.thumbnail_cid ? (
                   <img
                     src={`https://ipfs.filebase.io/ipfs/${draft.thumbnail_cid}`}
@@ -336,7 +336,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
@@ -345,8 +345,8 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
 
               {/* Content */}
               <div className="relative flex-1 min-w-0">
-                <p className="font-medium truncate text-white/90">{draft.title || "Untitled"}</p>
-                <div className="flex items-center gap-2 text-xs text-white/40 mt-0.5">
+                <p className="text-base font-medium truncate text-white/90">{draft.title || "Untitled"}</p>
+                <div className="flex items-center gap-2 text-2xs text-white/40">
                   <span>{formatDate(draft.updated_at)}</span>
                   {draft.scheduled_at && draft.status === "scheduled" && (
                     <span className="text-amber-400/80">
@@ -357,8 +357,8 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
               </div>
 
               {/* Status & Actions */}
-              <div className="relative flex items-center gap-3">
-                <span className={`px-2.5 py-1 rounded-full text-[11px] border ${statusStyle}`}>
+              <div className="relative flex items-center gap-2">
+                <span className={`px-1.5 py-0.5 rounded text-2xs border ${statusStyle}`}>
                   {draft.status}
                 </span>
 
@@ -368,10 +368,10 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
                       e.stopPropagation();
                       handleEditDraft(draft.id);
                     }}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-all"
+                    className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/90 transition-all"
                     title="Edit"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
@@ -379,16 +379,16 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
                   <button
                     onClick={(e) => handleDeleteClick(draft.id, e)}
                     disabled={isDeleting}
-                    className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-all disabled:opacity-50"
+                    className="p-1.5 rounded bg-white/5 hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-all disabled:opacity-50"
                     title="Delete"
                   >
                     {isDeleting ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     )}
@@ -396,7 +396,7 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
                 </div>
               </div>
 
-              <svg className="relative w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="relative w-3.5 h-3.5 text-white/20 group-hover:text-white/40 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
               </svg>
             </div>

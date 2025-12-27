@@ -53,7 +53,7 @@ export default function MovieMetadataForm({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Director
           </label>
           <input
@@ -61,11 +61,11 @@ export default function MovieMetadataForm({
             value={typeMetadata.director || ''}
             onChange={(e) => onUpdate('director', e.target.value)}
             placeholder="Director name"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Release Year
           </label>
           <input
@@ -73,14 +73,14 @@ export default function MovieMetadataForm({
             value={typeMetadata.releaseYear || ''}
             onChange={(e) => onUpdate('releaseYear', parseInt(e.target.value) || '')}
             placeholder="2024"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Runtime (minutes)
           </label>
           <input
@@ -88,17 +88,17 @@ export default function MovieMetadataForm({
             value={typeMetadata.runtime || ''}
             onChange={(e) => onUpdate('runtime', parseInt(e.target.value) || '')}
             placeholder="120"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Rating
           </label>
           <select
             value={typeMetadata.rating || ''}
             onChange={(e) => onUpdate('rating', e.target.value)}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           >
             <option value="">Select rating</option>
             <option value="G">G</option>
@@ -112,7 +112,7 @@ export default function MovieMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Genre
         </label>
         <input
@@ -120,12 +120,12 @@ export default function MovieMetadataForm({
           value={typeMetadata.genre || ''}
           onChange={(e) => onUpdate('genre', e.target.value)}
           placeholder="Action, Drama, Sci-Fi..."
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Studio
         </label>
         <input
@@ -133,12 +133,12 @@ export default function MovieMetadataForm({
           value={typeMetadata.studio || ''}
           onChange={(e) => onUpdate('studio', e.target.value)}
           placeholder="Production studio"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Cast
         </label>
         <div className="space-y-2">
@@ -166,12 +166,12 @@ export default function MovieMetadataForm({
               onChange={(e) => setCastInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCast())}
               placeholder="Add cast member"
-              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
             />
             <button
               type="button"
               onClick={handleAddCast}
-              className="px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-400 transition-colors"
+              className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 transition-colors"
             >
               Add
             </button>
@@ -180,7 +180,7 @@ export default function MovieMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Chapters
         </label>
         <div className="space-y-2">
@@ -212,7 +212,7 @@ export default function MovieMetadataForm({
           <button
             type="button"
             onClick={handleAddChapter}
-            className="w-full px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-400 transition-colors"
+            className="w-full px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 transition-colors"
           >
             Add Chapter
           </button>

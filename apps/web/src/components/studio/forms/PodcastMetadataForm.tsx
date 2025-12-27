@@ -76,7 +76,7 @@ export default function PodcastMetadataForm({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Show Name *
         </label>
         <input
@@ -84,12 +84,12 @@ export default function PodcastMetadataForm({
           value={typeMetadata.showName || ""}
           onChange={(e) => onUpdate("showName", e.target.value)}
           placeholder="Podcast show name"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Episode Number
         </label>
         <input
@@ -97,12 +97,12 @@ export default function PodcastMetadataForm({
           value={typeMetadata.episodeNumber || ""}
           onChange={(e) => onUpdate("episodeNumber", parseInt(e.target.value) || "")}
           placeholder="Episode number"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Host Names
         </label>
         <div className="space-y-2">
@@ -113,12 +113,12 @@ export default function PodcastMetadataForm({
               onChange={(e) => setHostInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleAddHost()}
               placeholder="Add host name"
-              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
             />
             <button
               type="button"
               onClick={handleAddHost}
-              className="px-4 py-3 bg-purple-500/20 border border-purple-500/30 rounded-xl hover:bg-purple-500/30 transition-colors text-white/90"
+              className="px-3 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg hover:bg-purple-500/30 transition-colors text-white/90"
             >
               Add
             </button>
@@ -146,7 +146,7 @@ export default function PodcastMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Guest Names
         </label>
         <div className="space-y-2">
@@ -157,12 +157,12 @@ export default function PodcastMetadataForm({
               onChange={(e) => setGuestInput(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleAddGuest()}
               placeholder="Add guest name"
-              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
             />
             <button
               type="button"
               onClick={handleAddGuest}
-              className="px-4 py-3 bg-purple-500/20 border border-purple-500/30 rounded-xl hover:bg-purple-500/30 transition-colors text-white/90"
+              className="px-3 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg hover:bg-purple-500/30 transition-colors text-white/90"
             >
               Add
             </button>
@@ -190,7 +190,7 @@ export default function PodcastMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Timestamps
         </label>
         <div className="space-y-2">
@@ -203,7 +203,7 @@ export default function PodcastMetadataForm({
                   handleUpdateTimestamp(index, "label", e.target.value)
                 }
                 placeholder="Label (e.g., Intro, Discussion)"
-                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
               />
               <input
                 type="text"
@@ -212,12 +212,12 @@ export default function PodcastMetadataForm({
                   handleUpdateTimestamp(index, "time", e.target.value)
                 }
                 placeholder="Time (e.g., 1:23)"
-                className="w-24 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+                className="w-24 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
               />
               <button
                 type="button"
                 onClick={() => handleRemoveTimestamp(index)}
-                className="px-4 py-3 bg-red-500/20 border border-red-500/30 rounded-xl hover:bg-red-500/30 transition-colors text-white/90"
+                className="px-3 py-2 bg-red-500/20 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors text-white/90"
               >
                 Remove
               </button>
@@ -226,7 +226,7 @@ export default function PodcastMetadataForm({
           <button
             type="button"
             onClick={handleAddTimestamp}
-            className="w-full px-4 py-3 bg-purple-500/20 border border-purple-500/30 rounded-xl hover:bg-purple-500/30 transition-colors text-white/90"
+            className="w-full px-3 py-2 bg-purple-500/20 border border-purple-500/30 rounded-lg hover:bg-purple-500/30 transition-colors text-white/90"
           >
             Add Timestamp
           </button>
@@ -234,7 +234,7 @@ export default function PodcastMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Show Notes
         </label>
         <textarea
@@ -242,7 +242,7 @@ export default function PodcastMetadataForm({
           onChange={(e) => onUpdate("showNotes", e.target.value)}
           placeholder="Detailed episode notes, links, resources..."
           rows={6}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
         />
       </div>
 

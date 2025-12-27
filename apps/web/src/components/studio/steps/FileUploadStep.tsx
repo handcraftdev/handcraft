@@ -353,8 +353,8 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-medium text-white/90 mb-2">Upload your content</h2>
-      <p className="text-white/40 mb-8">
+      <h2 className="text-lg font-medium text-white/90 mb-1">Upload your content</h2>
+      <p className="text-sm text-white/40 mb-6">
         {isUploading
           ? 'Uploading in background - you can continue to the next step'
           : 'Drop your file here or click to browse'}
@@ -362,24 +362,24 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
 
       {/* Upload Progress */}
       {(isUploading || isPaused) && uploadProgress && (
-        <div className="mb-6 p-4 rounded-xl bg-white/[0.02] border border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+        <div className="mb-4 p-3 rounded-lg bg-white/[0.02] border border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-md flex items-center justify-center ${
                 isPaused ? 'bg-yellow-500/20' : 'bg-purple-500/20'
               }`}>
                 {isPaused ? (
-                  <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 ) : (
-                  <svg className="w-5 h-5 text-purple-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-purple-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-white/90 truncate max-w-[200px]">
+                <p className="text-sm font-medium text-white/90 truncate max-w-[180px]">
                   {uploadProgress.fileName}
                 </p>
                 <p className="text-xs text-white/40">
@@ -480,10 +480,10 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
 
       {/* Completed State */}
       {isCompleted && !isUploading && (
-        <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-md bg-emerald-500/20 flex items-center justify-center">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -504,7 +504,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 ${
+          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${
             isDragging
               ? 'border-purple-500/50 bg-purple-500/5'
               : error
@@ -512,16 +512,16 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
               : 'border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5'
           }`}
         >
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-            <svg className="w-8 h-8 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-lg bg-white/5 flex items-center justify-center">
+            <svg className="w-6 h-6 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
-          <p className="text-lg font-medium text-white/90 mb-2">
+          <p className="text-base font-medium text-white/90 mb-1">
             {isDragging ? 'Drop your file' : 'Drop your file here'}
           </p>
           <p className="text-sm text-white/40">or click to browse</p>
-          <p className="text-xs text-white/30 mt-2">
+          <p className="text-xs text-white/30 mt-1.5">
             Max size: {draft?.domain ? formatFileSize(FILE_SIZE_LIMITS[draft.domain]) : ''}
           </p>
           <input
@@ -535,7 +535,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
       )}
 
       {/* Thumbnail Upload - always visible */}
-      <div className="mt-6">
+      <div className="mt-4">
         {requiresThumbnail ? (
           <ThumbnailUpload
             thumbnailCid={draft?.thumbnail_cid || null}
@@ -543,9 +543,9 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
             label="Cover Image"
           />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="block text-sm font-medium text-white/70">Cover Image (Optional)</label>
-            <p className="text-xs text-white/40 mb-2">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
+            <p className="text-xs text-white/40 mb-1.5">Your image will be used as the cover. Upload a custom thumbnail if you prefer.</p>
             <ThumbnailUpload
               thumbnailCid={draft?.thumbnail_cid || null}
               onUpload={handleThumbnailUpload}
@@ -557,17 +557,17 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
 
       {/* Error */}
       {error && (
-        <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+        <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {/* Actions */}
-      <div className="mt-6 flex gap-3">
+      <div className="mt-4 flex gap-2">
         {isUploading && !canProceed && (
           <button
             disabled
-            className="flex-1 py-3 bg-white/5 rounded-xl font-medium transition-all duration-300 border border-white/10 text-white/30 cursor-not-allowed"
+            className="flex-1 py-2 bg-white/5 rounded-lg text-sm font-medium transition-all duration-200 border border-white/10 text-white/30 cursor-not-allowed"
           >
             {requiresThumbnail && !hasThumbnail ? 'Upload cover image to continue' : 'Uploading...'}
           </button>
@@ -575,7 +575,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
         {canProceed && (
           <button
             onClick={onNext}
-            className="flex-1 py-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+            className="flex-1 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg text-sm font-medium transition-all duration-200 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
           >
             Continue to Monetization
           </button>
@@ -583,7 +583,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
         {!isUploading && !isCompleted && (
           <button
             onClick={handleSkip}
-            className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-medium transition-all duration-300 border border-white/10 hover:border-white/20 text-white/50"
+            className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium transition-all duration-200 border border-white/10 hover:border-white/20 text-white/50"
           >
             Skip for now
           </button>

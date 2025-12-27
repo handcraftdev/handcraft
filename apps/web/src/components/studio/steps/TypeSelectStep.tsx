@@ -71,21 +71,21 @@ export function TypeSelectStep({ draft, onUpdate, onNext }: TypeSelectStepProps)
 
   if (!selectedDomain) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-medium text-white/90 mb-2">What are you uploading?</h2>
-        <p className="text-white/40 mb-8">Choose the type of content you want to publish</p>
+      <div className="max-w-3xl mx-auto">
+        <h2 className="text-lg font-medium text-white/90 mb-1">What are you uploading?</h2>
+        <p className="text-sm text-white/40 mb-6">Choose the type of content you want to publish</p>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {DOMAINS.map((domain) => (
             <button
               key={domain.key}
               onClick={() => handleDomainSelect(domain.key)}
-              className="relative p-6 rounded-xl border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group overflow-hidden"
+              className="relative p-4 rounded-lg border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-200 text-left group overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-200" />
               <div className="relative">
-                <div className="text-4xl mb-3">{domain.icon}</div>
-                <p className="font-medium text-lg text-white/90 mb-1">{domain.label}</p>
+                <div className="text-xl mb-2">{domain.icon}</div>
+                <p className="font-medium text-base text-white/90 mb-0.5">{domain.label}</p>
                 <p className="text-sm text-white/40">{domain.description}</p>
               </div>
             </button>
@@ -98,36 +98,36 @@ export function TypeSelectStep({ draft, onUpdate, onNext }: TypeSelectStepProps)
   const types = CONTENT_TYPES[selectedDomain] || [];
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       <button
         onClick={() => onUpdate({ domain: '', content_type: undefined })}
-        className="flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors mb-6"
+        className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         Back to domains
       </button>
 
-      <h2 className="text-2xl font-medium text-white/90 mb-2">
+      <h2 className="text-lg font-medium text-white/90 mb-1">
         What type of {selectedDomain}?
       </h2>
-      <p className="text-white/40 mb-8">Select the specific type</p>
+      <p className="text-sm text-white/40 mb-5">Select the specific type</p>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {types.map((type) => (
           <button
             key={type.type}
             onClick={() => handleTypeSelect(type.type)}
-            className={`relative w-full p-4 rounded-xl border transition-all duration-300 text-left group flex items-center gap-4 overflow-hidden ${
+            className={`relative w-full p-3 rounded-lg border transition-all duration-200 text-left group flex items-center gap-3 overflow-hidden ${
               selectedType === type.type
                 ? 'border-purple-500/50 bg-purple-500/10'
                 : 'border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5'
             }`}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300" />
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-200" />
             <div className="relative flex-1">
-              <p className="font-medium text-white/90 mb-1">{type.label}</p>
+              <p className="font-medium text-sm text-white/90 mb-0.5">{type.label}</p>
               <p className="text-sm text-white/40">{type.description}</p>
             </div>
           </button>

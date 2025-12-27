@@ -26,53 +26,53 @@ export function AssetMetadataForm({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">Asset Title *</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">Asset Title *</label>
         <input
           type="text"
           value={title}
           onChange={(e) => onBasicUpdate('title', e.target.value)}
           placeholder="Asset name"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">File Type</label>
+          <label className="block text-sm font-medium mb-1.5 text-white/70">File Type</label>
           <input
             type="text"
             value={metadata.fileType || ''}
             onChange={(e) => onUpdate('fileType', e.target.value)}
             placeholder="e.g., PNG, SVG, GLB"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">File Size</label>
+          <label className="block text-sm font-medium mb-1.5 text-white/70">File Size</label>
           <input
             type="text"
             value={metadata.fileSize || ''}
             onChange={(e) => onUpdate('fileSize', e.target.value)}
             placeholder="e.g., 2.5 MB"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">Resolution</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">Resolution</label>
         <input
           type="text"
           value={metadata.resolution || ''}
           onChange={(e) => onUpdate('resolution', e.target.value)}
           placeholder="e.g., 4096x4096 (if applicable)"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">License</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">License</label>
         <select
           value={metadata.license || ''}
           onChange={(e) => onUpdate('license', e.target.value)}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         >
           <option value="">Select license</option>
           <option value="CC0">CC0 - Public Domain</option>
@@ -87,33 +87,33 @@ export function AssetMetadataForm({
         </select>
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">Description</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">Description</label>
         <textarea
           value={description}
           onChange={(e) => onBasicUpdate('description', e.target.value)}
           placeholder="Describe this asset..."
           rows={3}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">Usage Instructions</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">Usage Instructions</label>
         <textarea
           value={metadata.usageInstructions || ''}
           onChange={(e) => onUpdate('usageInstructions', e.target.value)}
           placeholder="How to use this asset, requirements, compatibility notes..."
           rows={3}
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90 resize-none"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">Tags</label>
+        <label className="block text-sm font-medium mb-1.5 text-white/70">Tags</label>
         <input
           type="text"
           value={tagsString}
           onChange={(e) => handleTagsChange(e.target.value)}
           placeholder="comma, separated, tags"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
     </div>

@@ -30,7 +30,7 @@ export default function TelevisionMetadataForm({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Show Name
         </label>
         <input
@@ -38,13 +38,13 @@ export default function TelevisionMetadataForm({
           value={typeMetadata.showName || ''}
           onChange={(e) => onUpdate('showName', e.target.value)}
           placeholder="Series title"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Season Number
           </label>
           <input
@@ -52,11 +52,11 @@ export default function TelevisionMetadataForm({
             value={typeMetadata.seasonNumber || ''}
             onChange={(e) => onUpdate('seasonNumber', parseInt(e.target.value) || '')}
             placeholder="1"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Episode Number
           </label>
           <input
@@ -64,11 +64,11 @@ export default function TelevisionMetadataForm({
             value={typeMetadata.episodeNumber || ''}
             onChange={(e) => onUpdate('episodeNumber', parseInt(e.target.value) || '')}
             placeholder="1"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/70">
+          <label className="block text-sm font-medium mb-1.5 text-white/70">
             Runtime (min)
           </label>
           <input
@@ -76,13 +76,13 @@ export default function TelevisionMetadataForm({
             value={typeMetadata.runtime || ''}
             onChange={(e) => onUpdate('runtime', parseInt(e.target.value) || '')}
             placeholder="45"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Episode Title
         </label>
         <input
@@ -90,12 +90,12 @@ export default function TelevisionMetadataForm({
           value={typeMetadata.episodeTitle || ''}
           onChange={(e) => onUpdate('episodeTitle', e.target.value)}
           placeholder="Episode title"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Director
         </label>
         <input
@@ -103,12 +103,12 @@ export default function TelevisionMetadataForm({
           value={typeMetadata.director || ''}
           onChange={(e) => onUpdate('director', e.target.value)}
           placeholder="Director name"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Cast
         </label>
         <div className="space-y-2">
@@ -136,12 +136,12 @@ export default function TelevisionMetadataForm({
               onChange={(e) => setCastInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCast())}
               placeholder="Add cast member"
-              className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
             />
             <button
               type="button"
               onClick={handleAddCast}
-              className="px-4 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-xl text-purple-400 transition-colors"
+              className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-purple-400 transition-colors"
             >
               Add
             </button>
@@ -150,7 +150,7 @@ export default function TelevisionMetadataForm({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2 text-white/70">
+        <label className="block text-sm font-medium mb-1.5 text-white/70">
           Next Episode Hint
         </label>
         <input
@@ -158,7 +158,7 @@ export default function TelevisionMetadataForm({
           value={typeMetadata.nextEpisodeHint || ''}
           onChange={(e) => onUpdate('nextEpisodeHint', e.target.value)}
           placeholder="Teaser for next episode"
-          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 text-white/90"
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 text-white/90"
         />
       </div>
     </div>
