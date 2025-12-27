@@ -24,7 +24,7 @@ const STATUS_STYLES = {
 
 export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [] }: DraftsListProps) {
   const { publicKey } = useWallet();
-  const { session, isAuthenticated } = useSupabaseAuth();
+  const { session, isAuthenticated, signIn, loading: authLoading } = useSupabaseAuth();
   const router = useRouter();
   const [drafts, setDrafts] = useState<ContentDraft[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,9 +179,18 @@ export function DraftsList({ onDraftSelect, compact = false, excludeStatuses = [
   if (!isAuthenticated) {
     return (
       <div className="relative p-4 rounded-lg bg-white/[0.02] border border-white/[0.06] text-center">
-        <p className="text-sm text-white/40">
-          {publicKey ? "Please sign in to view drafts" : "Please connect your wallet to view drafts"}
+        <p className="text-sm text-white/40 mb-2">
+          {publicKey ? "Sign in to view and manage drafts" : "Connect your wallet to view drafts"}
         </p>
+        {publicKey && (
+          <button
+            onClick={() => signIn()}
+            disabled={authLoading}
+            className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-md text-sm text-purple-400 transition-all disabled:opacity-50"
+          >
+            {authLoading ? "Signing..." : "Sign In"}
+          </button>
+        )}
       </div>
     );
   }

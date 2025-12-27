@@ -253,26 +253,9 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     };
   }, [supabase]);
 
-  // Auto sign-in when wallet connects and no session exists
-  const hasAttemptedAutoSignIn = useRef(false);
-  useEffect(() => {
-    // Only attempt auto sign-in once per wallet connection
-    if (
-      wallet.connected &&
-      wallet.publicKey &&
-      !authState.session &&
-      !authState.loading &&
-      !hasAttemptedAutoSignIn.current
-    ) {
-      hasAttemptedAutoSignIn.current = true;
-      signIn();
-    }
-
-    // Reset the flag when wallet disconnects
-    if (!wallet.connected) {
-      hasAttemptedAutoSignIn.current = false;
-    }
-  }, [wallet.connected, wallet.publicKey, authState.session, authState.loading, signIn]);
+  // NOTE: Auto sign-in removed to prevent premature wallet signing
+  // Users should explicitly trigger signIn() when they need to authenticate
+  // This allows session checks to complete before prompting for signatures
 
   const value: SupabaseAuthContextValue = {
     ...authState,
