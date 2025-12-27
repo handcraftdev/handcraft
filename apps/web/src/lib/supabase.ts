@@ -310,3 +310,56 @@ export interface PoolSnapshot {
   snapshot_at: string;
   epoch: number | null;
 }
+
+// ============= CREATOR LANDING PAGE TYPES =============
+
+export interface CreatorProfileSettings {
+  id: number;
+  creator_address: string;
+  banner_cid: string | null;
+  banner_url: string | null;
+  bio: string | null;
+  tagline: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatorSocialLink {
+  id: number;
+  creator_address: string;
+  platform: string;
+  url: string;
+  display_name: string | null;
+  position: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatorAnnouncement {
+  id: number;
+  creator_address: string;
+  title: string;
+  content: string;
+  link_url: string | null;
+  link_text: string | null;
+  is_pinned: boolean;
+  is_active: boolean;
+  published_at: string;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatorFeaturedContent {
+  id: number;
+  creator_address: string;
+  content_type: 'content' | 'bundle';
+  content_cid: string;
+  position: number;
+  is_hero: boolean;
+  custom_title: string | null;
+  custom_description: string | null;
+  created_at: string;
+  updated_at: string;
+}
