@@ -892,3 +892,407 @@ pub fn handle_claim_creator_ecosystem_payout(ctx: Context<ClaimCreatorEcosystemP
 
     Ok(())
 }
+
+// ============================================================================
+// BATCH CLAIM GLOBAL HOLDER REWARDS
+// ============================================================================
+
+/// Batch claim global holder rewards for multiple NFTs
+/// remaining_accounts: pairs of (nft_asset, nft_reward_state)
+#[derive(Accounts)]
+pub struct BatchClaimGlobalHolderRewards<'info> {
+    /// GlobalHolderPool - singleton, holds SOL for NFT holder rewards
+    #[account(
+        mut,
+        seeds = [GLOBAL_HOLDER_POOL_SEED],
+        bump
+    )]
+    pub global_holder_pool: Account<'info, GlobalHolderPool>,
+
+    /// CreatorDistPool - singleton, needed for distribution
+    #[account(
+        mut,
+        seeds = [CREATOR_DIST_POOL_SEED],
+        bump
+    )]
+    pub creator_dist_pool: Account<'info, CreatorDistPool>,
+
+    /// EcosystemEpochState - shared epoch tracking
+    #[account(
+        mut,
+        seeds = [ECOSYSTEM_EPOCH_STATE_SEED],
+        bump
+    )]
+    pub ecosystem_epoch_state: Account<'info, EcosystemEpochState>,
+
+    /// EcosystemStreamingTreasury - receives subscription payments
+    /// CHECK: PDA verified by seeds, we just read lamports
+    #[account(
+        mut,
+        seeds = [ECOSYSTEM_STREAMING_TREASURY_SEED],
+        bump
+    )]
+    pub ecosystem_streaming_treasury: AccountInfo<'info>,
+
+    /// Platform treasury to receive 5% on distribution
+    /// CHECK: Retrieved from ecosystem config
+    #[account(mut)]
+    pub platform_treasury: AccountInfo<'info>,
+
+    /// CHECK: Ecosystem treasury to receive 3% on distribution - verified by constraint
+    #[account(
+        mut,
+        constraint = ecosystem_treasury.key() == ecosystem_config.treasury @ ContentRegistryError::Unauthorized
+    )]
+    pub ecosystem_treasury: AccountInfo<'info>,
+
+    /// Ecosystem config (for treasury address)
+    #[account(
+        seeds = [ECOSYSTEM_CONFIG_SEED],
+        bump
+    )]
+    pub ecosystem_config: Account<'info, EcosystemConfig>,
+
+    /// The NFT holder (must be signer to claim)
+    #[account(mut)]
+    pub holder: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+    // remaining_accounts: pairs of (nft_asset, nft_reward_state)
+}
+
+/// Handler for batch_claim_global_holder_rewards
+pub fn handle_batch_claim_global_holder_rewards(ctx: Context<BatchClaimGlobalHolderRewards>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let epoch_state = &mut ctx.accounts.ecosystem_epoch_state;
+    let treasury = &ctx.accounts.ecosystem_streaming_treasury;
+    let holder_pool = &mut ctx.accounts.global_holder_pool;
+    let dist_pool = &mut ctx.accounts.creator_dist_pool;
+
+    // Step 1: If epoch ended, distribute streaming treasury to BOTH pools (once)
+    if epoch_state.epoch_ended(now) && treasury.lamports() > 0 {
+        let balance = treasury.lamports();
+        let (creator_share, holder_share, platform_share, ecosystem_share) = calculate_ecosystem_split(balance);
+
+        let (_, treasury_bump) = Pubkey::find_program_address(
+            &[ECOSYSTEM_STREAMING_TREASURY_SEED],
+            &crate::ID
+        );
+        let treasury_seeds = &[ECOSYSTEM_STREAMING_TREASURY_SEED, &[treasury_bump]];
+        let treasury_signer = &[&treasury_seeds[..]];
+
+        // Transfer 5% to platform treasury
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: ctx.accounts.platform_treasury.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            platform_share,
+        )?;
+
+        // Transfer 3% to ecosystem treasury
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: ctx.accounts.ecosystem_treasury.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            ecosystem_share,
+        )?;
+
+        // Transfer 12% to GlobalHolderPool
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: holder_pool.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            holder_share,
+        )?;
+
+        if holder_pool.total_weight > 0 {
+            holder_pool.reward_per_share += (holder_share as u128 * PRECISION) / holder_pool.total_weight as u128;
+        }
+        holder_pool.total_deposited += holder_share;
+
+        // Transfer 80% to CreatorDistPool
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: dist_pool.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            creator_share,
+        )?;
+
+        if dist_pool.total_weight > 0 {
+            dist_pool.reward_per_share += (creator_share as u128 * PRECISION) / dist_pool.total_weight as u128;
+        }
+        dist_pool.total_deposited += creator_share;
+
+        epoch_state.last_distribution_at = now;
+        msg!("Distributed ecosystem pools: {} to holders, {} to creators", holder_share, creator_share);
+    }
+
+    // Step 2: Claim from GlobalHolderPool for each NFT
+    let remaining = &ctx.remaining_accounts;
+    require!(remaining.len() % 2 == 0, ContentRegistryError::InvalidAccountPairs);
+
+    let mut total_claimed: u64 = 0;
+    let num_pairs = remaining.len() / 2;
+
+    for i in 0..num_pairs {
+        let nft_asset_info = &remaining[i * 2];
+        let nft_state_info = &remaining[i * 2 + 1];
+
+        // Deserialize and verify NFT reward state
+        let mut nft_state_data = nft_state_info.try_borrow_mut_data()?;
+        let mut nft_state: UnifiedNftRewardState = UnifiedNftRewardState::try_deserialize(
+            &mut &nft_state_data[..]
+        )?;
+
+        // Verify PDA matches nft_asset
+        let (expected_pda, _) = Pubkey::find_program_address(
+            &[UNIFIED_NFT_REWARD_STATE_SEED, nft_asset_info.key.as_ref()],
+            &crate::ID
+        );
+        require!(nft_state_info.key() == expected_pda, ContentRegistryError::InvalidAccountPairs);
+
+        // Calculate pending rewards
+        let weighted_rps = nft_state.weight as u128 * holder_pool.reward_per_share;
+        let pending = weighted_rps.saturating_sub(nft_state.global_debt) / PRECISION;
+
+        if pending > 0 {
+            // Transfer SOL from pool to holder
+            **holder_pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+            **ctx.accounts.holder.to_account_info().try_borrow_mut_lamports()? += pending as u64;
+
+            holder_pool.total_claimed += pending as u64;
+            total_claimed += pending as u64;
+
+            // Update debt
+            nft_state.global_debt = weighted_rps;
+
+            // Re-serialize
+            nft_state.try_serialize(&mut *nft_state_data)?;
+        }
+    }
+
+    if total_claimed > 0 {
+        msg!("Batch claimed {} lamports from global holder pool for {} NFTs", total_claimed, num_pairs);
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// BATCH CLAIM PATRON REWARDS
+// ============================================================================
+
+/// Batch claim patron rewards for multiple NFTs from same creator
+/// remaining_accounts: pairs of (nft_asset, nft_reward_state)
+#[derive(Accounts)]
+pub struct BatchClaimPatronRewards<'info> {
+    /// The creator whose NFTs these are
+    /// CHECK: Verified by nft_reward_state.creator for each NFT
+    pub creator: AccountInfo<'info>,
+
+    /// CreatorPatronPool - holds SOL for this creator's NFT holder rewards
+    #[account(
+        mut,
+        seeds = [CREATOR_PATRON_POOL_SEED, creator.key().as_ref()],
+        bump,
+        constraint = creator_patron_pool.creator == creator.key() @ ContentRegistryError::Unauthorized
+    )]
+    pub creator_patron_pool: Account<'info, CreatorPatronPool>,
+
+    /// CreatorPatronStreamingTreasury - receives Streamflow payments
+    /// CHECK: PDA verified by seeds, we just read lamports
+    #[account(
+        mut,
+        seeds = [CREATOR_PATRON_TREASURY_SEED, creator.key().as_ref()],
+        bump
+    )]
+    pub creator_patron_treasury: AccountInfo<'info>,
+
+    /// Creator's wallet to receive 80% on distribution
+    /// CHECK: Must match creator account
+    #[account(
+        mut,
+        constraint = creator_wallet.key() == creator.key() @ ContentRegistryError::Unauthorized
+    )]
+    pub creator_wallet: AccountInfo<'info>,
+
+    /// Platform treasury to receive 5% on distribution
+    /// CHECK: Retrieved from ecosystem config
+    #[account(mut)]
+    pub platform_treasury: AccountInfo<'info>,
+
+    /// CHECK: Ecosystem treasury to receive 3% on distribution - verified by constraint
+    #[account(
+        mut,
+        constraint = ecosystem_treasury.key() == ecosystem_config.treasury @ ContentRegistryError::Unauthorized
+    )]
+    pub ecosystem_treasury: AccountInfo<'info>,
+
+    /// Ecosystem config (for treasury address)
+    #[account(
+        seeds = [ECOSYSTEM_CONFIG_SEED],
+        bump
+    )]
+    pub ecosystem_config: Account<'info, EcosystemConfig>,
+
+    /// The NFT holder (must be signer to claim)
+    #[account(mut)]
+    pub holder: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+    // remaining_accounts: pairs of (nft_asset, nft_reward_state)
+}
+
+/// Handler for batch_claim_patron_rewards
+pub fn handle_batch_claim_patron_rewards(ctx: Context<BatchClaimPatronRewards>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let pool = &mut ctx.accounts.creator_patron_pool;
+    let treasury = &ctx.accounts.creator_patron_treasury;
+    let creator_key = ctx.accounts.creator.key();
+
+    // Step 1: If epoch ended, distribute streaming treasury (once)
+    if pool.epoch_ended(now) && treasury.lamports() > 0 {
+        let balance = treasury.lamports();
+        let (creator_share, platform_share, ecosystem_share, holder_share) = calculate_primary_split(balance);
+
+        let (_, treasury_bump) = Pubkey::find_program_address(
+            &[CREATOR_PATRON_TREASURY_SEED, creator_key.as_ref()],
+            &crate::ID
+        );
+        let treasury_seeds = &[CREATOR_PATRON_TREASURY_SEED, creator_key.as_ref(), &[treasury_bump]];
+        let treasury_signer = &[&treasury_seeds[..]];
+
+        // Transfer 80% to creator wallet
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: ctx.accounts.creator_wallet.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            creator_share,
+        )?;
+
+        // Transfer 5% to platform treasury
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: ctx.accounts.platform_treasury.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            platform_share,
+        )?;
+
+        // Transfer 3% to ecosystem treasury
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: ctx.accounts.ecosystem_treasury.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            ecosystem_share,
+        )?;
+
+        // Transfer 12% to pool
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: treasury.to_account_info(),
+                    to: pool.to_account_info(),
+                },
+                treasury_signer,
+            ),
+            holder_share,
+        )?;
+
+        if pool.total_weight > 0 {
+            pool.reward_per_share += (holder_share as u128 * PRECISION) / pool.total_weight as u128;
+        }
+        pool.total_deposited += holder_share;
+        pool.last_distribution_at = now;
+
+        msg!("Distributed patron pool: {} to holder pool", holder_share);
+    }
+
+    // Step 2: Claim from pool for each NFT
+    let remaining = &ctx.remaining_accounts;
+    require!(remaining.len() % 2 == 0, ContentRegistryError::InvalidAccountPairs);
+
+    let mut total_claimed: u64 = 0;
+    let num_pairs = remaining.len() / 2;
+
+    for i in 0..num_pairs {
+        let nft_asset_info = &remaining[i * 2];
+        let nft_state_info = &remaining[i * 2 + 1];
+
+        // Deserialize and verify NFT reward state
+        let mut nft_state_data = nft_state_info.try_borrow_mut_data()?;
+        let mut nft_state: UnifiedNftRewardState = UnifiedNftRewardState::try_deserialize(
+            &mut &nft_state_data[..]
+        )?;
+
+        // Verify PDA matches nft_asset
+        let (expected_pda, _) = Pubkey::find_program_address(
+            &[UNIFIED_NFT_REWARD_STATE_SEED, nft_asset_info.key.as_ref()],
+            &crate::ID
+        );
+        require!(nft_state_info.key() == expected_pda, ContentRegistryError::InvalidAccountPairs);
+
+        // Verify NFT belongs to this creator
+        require!(nft_state.creator == creator_key, ContentRegistryError::Unauthorized);
+
+        // Calculate pending rewards
+        let weighted_rps = nft_state.weight as u128 * pool.reward_per_share;
+        let pending = weighted_rps.saturating_sub(nft_state.patron_debt) / PRECISION;
+
+        if pending > 0 {
+            // Transfer SOL from pool to holder
+            **pool.to_account_info().try_borrow_mut_lamports()? -= pending as u64;
+            **ctx.accounts.holder.to_account_info().try_borrow_mut_lamports()? += pending as u64;
+
+            pool.total_claimed += pending as u64;
+            total_claimed += pending as u64;
+
+            // Update debt
+            nft_state.patron_debt = weighted_rps;
+
+            // Re-serialize
+            nft_state.try_serialize(&mut *nft_state_data)?;
+        }
+    }
+
+    if total_claimed > 0 {
+        msg!("Batch claimed {} lamports from patron pool for {} NFTs", total_claimed, num_pairs);
+    }
+
+    Ok(())
+}

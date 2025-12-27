@@ -2538,6 +2538,164 @@ export function useContentRegistry() {
     },
   });
 
+  // Comprehensive claim all rewards - includes sales + subscription rewards
+  const claimAllRewardsComprehensive = useMutation({
+    mutationFn: async ({
+      contentCids,
+      bundleRewards,
+      nftAssets,
+      nftsByCreator,
+      isCreator,
+    }: {
+      contentCids: string[];
+      bundleRewards: Array<{
+        bundleId: string;
+        creator: PublicKey;
+        nftAssets: PublicKey[];
+      }>;
+      nftAssets: PublicKey[]; // All user's NFTs for global holder claims
+      nftsByCreator: Map<string, PublicKey[]>; // NFTs grouped by creator for patron claims
+      isCreator: boolean; // Whether user is a creator (has creator weight)
+    }) => {
+      if (!publicKey || !client) throw new Error("Wallet not connected");
+
+      const allInstructions: TransactionInstruction[] = [];
+      const MAX_NFTS_PER_BATCH = 10; // Conservative limit for remaining_accounts
+
+      // 1. Unwrap ecosystem treasury WSOL
+      try {
+        const unwrapIx = await client.unwrapEcosystemTreasuryWsolInstruction(publicKey);
+        allInstructions.push(unwrapIx);
+        console.log("Added ecosystem treasury WSOL unwrap instruction");
+      } catch (err) {
+        console.log("Skipping ecosystem unwrap:", err);
+      }
+
+      // 2. Content sales claims
+      if (contentCids.length > 0) {
+        console.log("Building content claim instructions...", { count: contentCids.length });
+        for (const contentCid of contentCids) {
+          const contentEntry = await client.fetchContent(contentCid);
+          if (!contentEntry) continue;
+
+          const contentNfts = await client.fetchWalletNftsForCollection(
+            publicKey,
+            contentEntry.collectionAsset
+          );
+          if (contentNfts.length === 0) continue;
+
+          for (let i = 0; i < contentNfts.length; i += MAX_NFTS_PER_BATCH) {
+            const batch = contentNfts.slice(i, i + MAX_NFTS_PER_BATCH);
+            const ix = await client.claimRewardsVerifiedInstruction(publicKey, contentCid, batch);
+            allInstructions.push(ix);
+          }
+        }
+      }
+
+      // 3. Bundle sales claims
+      const uniqueCreators = new Set<string>();
+      if (bundleRewards.length > 0) {
+        console.log("Building bundle claim instructions...", { bundleCount: bundleRewards.length });
+        for (const reward of bundleRewards) {
+          if (reward.nftAssets.length > 0) {
+            uniqueCreators.add(reward.creator.toBase58());
+            const ix = await client.batchClaimBundleRewardsInstruction(
+              publicKey,
+              reward.bundleId,
+              reward.creator,
+              reward.nftAssets
+            );
+            allInstructions.push(ix);
+          }
+        }
+      }
+
+      // 4. Unwrap creator patron treasuries
+      for (const creatorKey of uniqueCreators) {
+        try {
+          const creatorPubkey = new PublicKey(creatorKey);
+          const unwrapIx = await client.unwrapCreatorPatronTreasuryWsolInstruction(creatorPubkey, publicKey);
+          allInstructions.push(unwrapIx);
+        } catch (err) {
+          console.log(`Skipping creator patron unwrap for ${creatorKey.slice(0, 8)}...`);
+        }
+      }
+
+      // 5. Global holder rewards (subscription - 12%)
+      if (nftAssets.length > 0) {
+        console.log("Building global holder claim instructions...", { nftCount: nftAssets.length });
+        for (let i = 0; i < nftAssets.length; i += MAX_NFTS_PER_BATCH) {
+          const batch = nftAssets.slice(i, i + MAX_NFTS_PER_BATCH);
+          const ix = await client.batchClaimGlobalHolderRewardsInstruction(publicKey, batch);
+          allInstructions.push(ix);
+        }
+      }
+
+      // 6. Patron rewards per creator (membership - 12%)
+      if (nftsByCreator.size > 0) {
+        console.log("Building patron claim instructions...", { creatorCount: nftsByCreator.size });
+        for (const [creatorKey, creatorNfts] of nftsByCreator) {
+          const creatorPubkey = new PublicKey(creatorKey);
+          for (let i = 0; i < creatorNfts.length; i += MAX_NFTS_PER_BATCH) {
+            const batch = creatorNfts.slice(i, i + MAX_NFTS_PER_BATCH);
+            const ix = await client.batchClaimPatronRewardsInstruction(publicKey, creatorPubkey, batch);
+            allInstructions.push(ix);
+          }
+        }
+      }
+
+      // 7. Creator ecosystem payout (if user is a creator)
+      if (isCreator) {
+        console.log("Building creator ecosystem payout instruction...");
+        try {
+          const ix = await client.claimCreatorEcosystemPayoutInstruction(publicKey);
+          allInstructions.push(ix);
+        } catch (err) {
+          console.log("Skipping creator payout (may not have weight):", err);
+        }
+      }
+
+      if (allInstructions.length === 0) {
+        console.log("No instructions to process");
+        return { signatures: [], claimedCount: 0 };
+      }
+
+      console.log(`Total instructions to process: ${allInstructions.length}`);
+
+      // Batch instructions into transactions
+      const MAX_INSTRUCTIONS_PER_TX = 3; // More conservative for complex subscription claims
+      const signatures: string[] = [];
+
+      for (let i = 0; i < allInstructions.length; i += MAX_INSTRUCTIONS_PER_TX) {
+        const batch = allInstructions.slice(i, i + MAX_INSTRUCTIONS_PER_TX);
+        const tx = new Transaction();
+        for (const ix of batch) {
+          tx.add(ix);
+        }
+
+        const txNum = Math.floor(i / MAX_INSTRUCTIONS_PER_TX) + 1;
+        const totalTxs = Math.ceil(allInstructions.length / MAX_INSTRUCTIONS_PER_TX);
+        console.log(`Sending comprehensive claim tx ${txNum}/${totalTxs} (${batch.length} instructions)...`);
+
+        await simulateTransaction(connection, tx, publicKey);
+        const sig = await sendTransaction(tx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
+        signatures.push(sig);
+        console.log(`Tx ${txNum} confirmed:`, sig);
+      }
+
+      return { signatures, claimedCount: allInstructions.length };
+    },
+    onSuccess: () => {
+      // Invalidate all reward-related queries
+      queryClient.invalidateQueries({ queryKey: ["contentRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["pendingRewards"] });
+      queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
+      queryClient.invalidateQueries({ queryKey: ["bundlePendingRewards"] });
+      queryClient.invalidateQueries({ queryKey: ["unifiedRewards"] });
+    },
+  });
+
   // Fetch bundle mint config
   const useBundleMintConfig = (creator: PublicKey | null, bundleId: string | null) => {
     return useQuery({
@@ -3292,6 +3450,7 @@ export function useContentRegistry() {
     claimBundleRewards,
     claimAllBundleRewards: claimAllBundleRewards.mutateAsync,
     claimAllRewardsUnified: claimAllRewardsUnified.mutateAsync,
+    claimAllRewardsComprehensive: claimAllRewardsComprehensive.mutateAsync,
     useBundleMintConfig,
     useBundleRentConfig,
     useBundleCollection,
@@ -3303,7 +3462,8 @@ export function useContentRegistry() {
     isConfiguringBundleRent: configureBundleRent.isPending,
     isUpdatingBundleRentConfig: updateBundleRentConfig.isPending,
     isRentingBundle: rentBundleSol.isPending,
-    isClaimingBundleRewards: claimBundleRewards.isPending || claimAllBundleRewards.isPending || claimAllRewardsUnified.isPending,
+    isClaimingBundleRewards: claimBundleRewards.isPending || claimAllBundleRewards.isPending || claimAllRewardsUnified.isPending || claimAllRewardsComprehensive.isPending,
+    isClaimingAllRewards: claimAllRewardsComprehensive.isPending,
 
     // Utilities
     client,

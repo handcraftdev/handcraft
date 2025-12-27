@@ -1790,6 +1790,16 @@ pub mod content_registry {
         handle_claim_creator_ecosystem_payout(ctx)
     }
 
+    /// Batch claim global holder rewards for multiple NFTs
+    pub fn batch_claim_global_holder_rewards(ctx: Context<BatchClaimGlobalHolderRewards>) -> Result<()> {
+        handle_batch_claim_global_holder_rewards(ctx)
+    }
+
+    /// Batch claim patron rewards for multiple NFTs from same creator
+    pub fn batch_claim_patron_rewards(ctx: Context<BatchClaimPatronRewards>) -> Result<()> {
+        handle_batch_claim_patron_rewards(ctx)
+    }
+
     // =========================================================================
     // SUBSCRIPTION SYSTEM - NFT Registration (Phase 1)
     // =========================================================================

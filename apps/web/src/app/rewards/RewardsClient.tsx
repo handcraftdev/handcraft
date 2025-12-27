@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery } from "@tanstack/react-query";
+import { PublicKey } from "@solana/web3.js";
 import { SidebarPanel } from "@/components/sidebar";
 import { useUnifiedRewards, formatSol, NftRewardData } from "@/hooks/useUnifiedRewards";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
@@ -111,10 +112,17 @@ export default function RewardsClient() {
 function MyRewardsTab({ mounted }: { mounted: boolean }) {
   const { publicKey } = useWallet();
   const { data, isLoading } = useUnifiedRewards();
-  const { pendingRewardsQuery, bundlePendingRewardsQuery, client } = useContentRegistry();
+  const {
+    pendingRewardsQuery,
+    bundlePendingRewardsQuery,
+    claimAllRewardsComprehensive,
+    isClaimingAllRewards,
+    client
+  } = useContentRegistry();
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const creatorContentQuery = useQuery({
     queryKey: ["creatorContent", publicKey?.toBase58()],
@@ -184,9 +192,55 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
     unifiedRewardsByNft.set(nft.nftAsset, nft);
   });
 
+  // Prepare claim data
+  const claimData = useMemo(() => {
+    if (!data) return null;
+
+    // All NFT assets for global holder claims
+    const nftAssets = data.nfts.map(n => new PublicKey(n.nftAsset));
+
+    // Group NFTs by creator for patron claims
+    const nftsByCreator = new Map<string, PublicKey[]>();
+    data.nfts.forEach(nft => {
+      const existing = nftsByCreator.get(nft.creator) || [];
+      existing.push(new PublicKey(nft.nftAsset));
+      nftsByCreator.set(nft.creator, existing);
+    });
+
+    // Content CIDs for content sales claims
+    const contentCids = contentRewards.map(r => r.contentCid);
+
+    // Bundle rewards for bundle sales claims
+    const bundleRewardsData = bundleRewards.map(r => ({
+      bundleId: r.bundleId,
+      creator: new PublicKey(r.creator.toBase58()),
+      nftAssets: r.nftRewards.map(nr => new PublicKey(nr.nftAsset.toBase58())),
+    }));
+
+    return { nftAssets, nftsByCreator, contentCids, bundleRewardsData };
+  }, [data, contentRewards, bundleRewards]);
+
+  const handleClaimAll = async () => {
+    if (!claimData || grandTotal === BigInt(0)) return;
+
+    setClaimError(null);
+    try {
+      await claimAllRewardsComprehensive({
+        contentCids: claimData.contentCids,
+        bundleRewards: claimData.bundleRewardsData,
+        nftAssets: claimData.nftAssets,
+        nftsByCreator: claimData.nftsByCreator,
+        isCreator,
+      });
+    } catch (err) {
+      console.error("Claim all failed:", err);
+      setClaimError(err instanceof Error ? err.message : "Failed to claim rewards");
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Summary row */}
+      {/* Summary row with Claim All button */}
       <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20">
         <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
           <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,7 +251,28 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
           <p className="text-xs text-emerald-400/70 uppercase tracking-wider">Total Claimable</p>
           <p className="text-xl font-bold text-white">{formatSol(grandTotal)} <span className="text-sm text-emerald-400/80">SOL</span></p>
         </div>
+        <button
+          onClick={handleClaimAll}
+          disabled={isClaimingAllRewards || grandTotal === BigInt(0)}
+          className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/30 disabled:cursor-not-allowed text-black font-medium text-sm transition-colors flex items-center gap-2"
+        >
+          {isClaimingAllRewards ? (
+            <>
+              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              Claiming...
+            </>
+          ) : (
+            "Claim All"
+          )}
+        </button>
       </div>
+
+      {/* Error message */}
+      {claimError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          {claimError}
+        </div>
+      )}
 
       {/* Creator section */}
       {isCreator && (

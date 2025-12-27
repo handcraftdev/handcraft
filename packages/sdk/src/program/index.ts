@@ -5197,6 +5197,131 @@ export async function claimGlobalHolderRewardsInstruction(
     .instruction();
 }
 
+/**
+ * Claim creator's ecosystem payout (80% of ecosystem subscriptions for creators)
+ */
+export async function claimCreatorEcosystemPayoutInstruction(
+  program: Program,
+  creator: PublicKey
+): Promise<TransactionInstruction> {
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [creatorDistPoolPda] = getCreatorDistPoolPda();
+  const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+  const [creatorWeightPda] = getCreatorWeightPda(creator);
+
+  // Fetch ecosystem config to get treasury address
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ecosystemConfig = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
+
+  return await program.methods
+    .claimCreatorEcosystemPayout()
+    .accounts({
+      globalHolderPool: globalHolderPoolPda,
+      creatorDistPool: creatorDistPoolPda,
+      ecosystemEpochState: ecosystemEpochStatePda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      ecosystemTreasury: ecosystemConfig.treasury,
+      ecosystemConfig: ecosystemConfigPda,
+      creatorWeight: creatorWeightPda,
+      creator,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/**
+ * Batch claim global holder rewards for multiple NFTs
+ * More efficient than individual claims - does distribution once then claims all
+ */
+export async function batchClaimGlobalHolderRewardsInstruction(
+  program: Program,
+  holder: PublicKey,
+  nftAssets: PublicKey[]
+): Promise<TransactionInstruction> {
+  const [globalHolderPoolPda] = getGlobalHolderPoolPda();
+  const [creatorDistPoolPda] = getCreatorDistPoolPda();
+  const [ecosystemEpochStatePda] = getEcosystemEpochStatePda();
+  const [ecosystemStreamingTreasuryPda] = getEcosystemStreamingTreasuryPda();
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+
+  // Fetch ecosystem config to get treasury addresses
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ecosystemConfig = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
+
+  // Build remaining accounts: pairs of (nft_asset, nft_reward_state)
+  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
+  for (const nftAsset of nftAssets) {
+    const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
+    remainingAccounts.push(
+      { pubkey: nftAsset, isSigner: false, isWritable: false },
+      { pubkey: nftRewardStatePda, isSigner: false, isWritable: true }
+    );
+  }
+
+  return await program.methods
+    .batchClaimGlobalHolderRewards()
+    .accounts({
+      globalHolderPool: globalHolderPoolPda,
+      creatorDistPool: creatorDistPoolPda,
+      ecosystemEpochState: ecosystemEpochStatePda,
+      ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      platformTreasury: ecosystemConfig.platform,
+      ecosystemTreasury: ecosystemConfig.treasury,
+      ecosystemConfig: ecosystemConfigPda,
+      holder,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+}
+
+/**
+ * Batch claim patron rewards for multiple NFTs from the same creator
+ * More efficient than individual claims - does distribution once then claims all
+ */
+export async function batchClaimPatronRewardsInstruction(
+  program: Program,
+  holder: PublicKey,
+  creator: PublicKey,
+  nftAssets: PublicKey[]
+): Promise<TransactionInstruction> {
+  const [creatorPatronPoolPda] = getCreatorPatronPoolPda(creator);
+  const [creatorPatronTreasuryPda] = getCreatorPatronTreasuryPda(creator);
+  const [ecosystemConfigPda] = getEcosystemConfigPda();
+
+  // Fetch ecosystem config to get treasury addresses
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ecosystemConfig = await (program.account as any).ecosystemConfig.fetch(ecosystemConfigPda);
+
+  // Build remaining accounts: pairs of (nft_asset, nft_reward_state)
+  const remainingAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = [];
+  for (const nftAsset of nftAssets) {
+    const [nftRewardStatePda] = getUnifiedNftRewardStatePda(nftAsset);
+    remainingAccounts.push(
+      { pubkey: nftAsset, isSigner: false, isWritable: false },
+      { pubkey: nftRewardStatePda, isSigner: false, isWritable: true }
+    );
+  }
+
+  return await program.methods
+    .batchClaimPatronRewards()
+    .accounts({
+      creator,
+      creatorPatronPool: creatorPatronPoolPda,
+      creatorPatronTreasury: creatorPatronTreasuryPda,
+      creatorWallet: creator,
+      platformTreasury: ecosystemConfig.platform,
+      ecosystemTreasury: ecosystemConfig.treasury,
+      ecosystemConfig: ecosystemConfigPda,
+      holder,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+}
+
 // ============================================
 // HIGH-LEVEL CLIENT
 // ============================================
@@ -5586,6 +5711,21 @@ export function createContentRegistryClient(connection: Connection) {
       claimer: PublicKey,
       nftAsset: PublicKey
     ) => claimGlobalHolderRewardsInstruction(program, claimer, nftAsset),
+
+    claimCreatorEcosystemPayoutInstruction: (
+      creator: PublicKey
+    ) => claimCreatorEcosystemPayoutInstruction(program, creator),
+
+    batchClaimGlobalHolderRewardsInstruction: (
+      holder: PublicKey,
+      nftAssets: PublicKey[]
+    ) => batchClaimGlobalHolderRewardsInstruction(program, holder, nftAssets),
+
+    batchClaimPatronRewardsInstruction: (
+      holder: PublicKey,
+      creator: PublicKey,
+      nftAssets: PublicKey[]
+    ) => batchClaimPatronRewardsInstruction(program, holder, creator, nftAssets),
 
     // Subscription PDA helpers
     getCreatorPatronConfigPda,
