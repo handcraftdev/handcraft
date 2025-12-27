@@ -1541,18 +1541,21 @@ pub mod content_registry {
     /// Create a new bundle (album, series, playlist, course, etc.)
     /// Bundles group related content with ordering and shared metadata
     /// Metadata is stored in IPFS/Metaplex, not on-chain
+    /// visibility_level: 0=Public, 1=Ecosystem (default), 2=Subscriber, 3=NFT Only
     pub fn create_bundle(
         ctx: Context<CreateBundle>,
         bundle_id: String,
         bundle_type: BundleType,
+        visibility_level: Option<u8>,
     ) -> Result<()> {
-        handle_create_bundle(ctx, bundle_id, bundle_type)
+        handle_create_bundle(ctx, bundle_id, bundle_type, visibility_level)
     }
 
     /// Create a bundle with mint and rent configuration in a single transaction
     /// Bundle is created as published with mint and rent enabled by default
     /// metadata_cid: IPFS CID for collection metadata JSON
     /// collection_name: Optional collection name - if provided, collection is named "HC: <Username>: <CollectionName>"
+    /// visibility_level: 0=Public, 1=Ecosystem (default), 2=Subscriber, 3=NFT Only
     pub fn create_bundle_with_mint_and_rent(
         ctx: Context<CreateBundleWithMintAndRent>,
         bundle_id: String,
@@ -1565,6 +1568,7 @@ pub mod content_registry {
         rent_fee_1d: u64,
         rent_fee_7d: u64,
         collection_name: Option<String>,
+        visibility_level: Option<u8>,
     ) -> Result<()> {
         handle_create_bundle_with_mint_and_rent(
             ctx,
@@ -1578,6 +1582,7 @@ pub mod content_registry {
             rent_fee_1d,
             rent_fee_7d,
             collection_name,
+            visibility_level,
         )
     }
 
@@ -1598,6 +1603,7 @@ pub mod content_registry {
 
     /// Update bundle active status
     /// Metadata is stored in IPFS/Metaplex, not on-chain
+    /// NOTE: visibility_level is immutable - set only at creation time
     pub fn update_bundle(
         ctx: Context<UpdateBundle>,
         is_active: Option<bool>,

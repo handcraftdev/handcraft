@@ -341,6 +341,12 @@ pub struct RegisterNftInSubscriptionPools<'info> {
 
 /// Handler for registering an NFT in subscription pools
 /// Called after mint with the determined weight
+///
+/// IMPORTANT: GlobalPool (12% holder + 80% creator) only applies to Level 1 content.
+/// This creates proper economic incentives:
+/// - Level 1 content earns from GlobalPool (ecosystem subscriptions)
+/// - Level 2/3 content earns from PatreonPool/ContentPool only
+/// - Creators must have Level 1 content to earn from ecosystem subscriptions
 pub fn handle_register_nft_in_subscription_pools(
     ctx: Context<RegisterNftInSubscriptionPools>,
     weight: u16,
@@ -350,6 +356,10 @@ pub fn handle_register_nft_in_subscription_pools(
     let nft_asset = ctx.accounts.nft_asset.key();
     let creator = ctx.accounts.creator.key();
     let content_key = ctx.accounts.content.key();
+    let visibility_level = ctx.accounts.content.visibility_level;
+
+    // Only Level 1 content participates in GlobalPool (ecosystem subscription rewards)
+    let is_level_1 = visibility_level == 1;
 
     // =========================================================================
     // STEP 0: Trigger epoch distribution if needed (Option B)
@@ -381,29 +391,35 @@ pub fn handle_register_nft_in_subscription_pools(
         &creator,
     )?;
 
-    // Ecosystem pools distribution
-    maybe_distribute_ecosystem_pools(
-        &mut ctx.accounts.global_holder_pool,
-        &mut ctx.accounts.creator_dist_pool,
-        &mut ctx.accounts.ecosystem_epoch_state,
-        &ctx.accounts.ecosystem_streaming_treasury,
-        &ctx.accounts.platform_treasury,
-        &ctx.accounts.ecosystem_treasury,
-        now,
-        &ctx.accounts.system_program.to_account_info(),
-    )?;
+    // Ecosystem pools distribution (only if Level 1 content exists in the system)
+    if is_level_1 {
+        maybe_distribute_ecosystem_pools(
+            &mut ctx.accounts.global_holder_pool,
+            &mut ctx.accounts.creator_dist_pool,
+            &mut ctx.accounts.ecosystem_epoch_state,
+            &ctx.accounts.ecosystem_streaming_treasury,
+            &ctx.accounts.platform_treasury,
+            &ctx.accounts.ecosystem_treasury,
+            now,
+            &ctx.accounts.system_program.to_account_info(),
+        )?;
+    }
 
     // =========================================================================
-    // STEP 1: Add weight to ALL pools (EAGER)
+    // STEP 1: Add weight to pools based on visibility level
     // =========================================================================
 
     // ContentRewardPool already updated by mint instruction
-    // But we add to our tracked pools
+    // PatronPool: All content levels participate (creator membership rewards)
     patron_pool.total_weight += weight as u64;
-    ctx.accounts.global_holder_pool.total_weight += weight as u64;
-    ctx.accounts.creator_dist_pool.total_weight += weight as u64;
 
-    // Initialize creator weight if new
+    // GlobalPool: Only Level 1 content participates (ecosystem subscription rewards)
+    if is_level_1 {
+        ctx.accounts.global_holder_pool.total_weight += weight as u64;
+        ctx.accounts.creator_dist_pool.total_weight += weight as u64;
+    }
+
+    // Initialize creator weight if new (only used for Level 1)
     let creator_weight = &mut ctx.accounts.creator_weight;
     if creator_weight.creator == Pubkey::default() {
         creator_weight.creator = creator;
@@ -426,22 +442,26 @@ pub fn handle_register_nft_in_subscription_pools(
         patron_pool.total_weight,
     );
 
-    // Global holder pool virtual RPS (12% of ecosystem streaming treasury)
-    let eco_treasury_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
-    let virtual_global_rps = calculate_virtual_rps(
-        ctx.accounts.global_holder_pool.reward_per_share,
-        eco_treasury_balance,
-        12, // holder share
-        ctx.accounts.global_holder_pool.total_weight,
-    );
-
-    // Creator dist pool virtual RPS (80% of ecosystem streaming treasury)
-    let virtual_creator_dist_rps = calculate_virtual_rps(
-        ctx.accounts.creator_dist_pool.reward_per_share,
-        eco_treasury_balance,
-        80, // creator share
-        ctx.accounts.creator_dist_pool.total_weight,
-    );
+    // Global pool virtual RPS - only calculate if Level 1
+    let (virtual_global_rps, virtual_creator_dist_rps) = if is_level_1 {
+        let eco_treasury_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
+        (
+            calculate_virtual_rps(
+                ctx.accounts.global_holder_pool.reward_per_share,
+                eco_treasury_balance,
+                12, // holder share
+                ctx.accounts.global_holder_pool.total_weight,
+            ),
+            calculate_virtual_rps(
+                ctx.accounts.creator_dist_pool.reward_per_share,
+                eco_treasury_balance,
+                80, // creator share
+                ctx.accounts.creator_dist_pool.total_weight,
+            ),
+        )
+    } else {
+        (0, 0)
+    };
 
     // =========================================================================
     // STEP 3: Set debts with virtual RPS
@@ -460,17 +480,26 @@ pub fn handle_register_nft_in_subscription_pools(
 
     // SET debt for lazy pools (uses virtual RPS)
     nft_state.patron_debt = weight as u128 * virtual_patron_rps;
-    nft_state.global_debt = weight as u128 * virtual_global_rps;
+
+    // Global debt: Only set for Level 1 content (others get 0, meaning no rewards)
+    nft_state.global_debt = if is_level_1 {
+        weight as u128 * virtual_global_rps
+    } else {
+        0 // Level 2/3 content does not participate in GlobalPool
+    };
 
     nft_state.created_at = now;
 
-    // ADD to creator weight debt (accumulates, not set)
-    creator_weight.total_weight += weight as u64;
-    creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+    // ADD to creator weight debt (only for Level 1 content)
+    if is_level_1 {
+        creator_weight.total_weight += weight as u64;
+        creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+    }
 
     msg!(
-        "NFT registered in subscription pools. Weight: {}, Patron debt: {}, Global debt: {}",
+        "NFT registered in subscription pools. Weight: {}, Visibility: {}, Patron debt: {}, Global debt: {}",
         weight,
+        visibility_level,
         nft_state.patron_debt,
         nft_state.global_debt
     );
@@ -597,6 +626,12 @@ pub struct RegisterBundleNftInSubscriptionPools<'info> {
 }
 
 /// Handler for registering a bundle NFT in subscription pools
+///
+/// IMPORTANT: GlobalPool (12% holder + 80% creator) only applies to Level 1 bundles.
+/// This creates proper economic incentives:
+/// - Level 1 bundles earn from GlobalPool (ecosystem subscriptions)
+/// - Level 2/3 bundles earn from PatronPool/BundleRewardPool only
+/// - Creators must have Level 1 content/bundles to earn from ecosystem subscriptions
 pub fn handle_register_bundle_nft_in_subscription_pools(
     ctx: Context<RegisterBundleNftInSubscriptionPools>,
     weight: u16,
@@ -605,6 +640,10 @@ pub fn handle_register_bundle_nft_in_subscription_pools(
     let nft_asset = ctx.accounts.nft_asset.key();
     let creator = ctx.accounts.creator.key();
     let bundle_key = ctx.accounts.bundle.key();
+    let visibility_level = ctx.accounts.bundle.visibility_level;
+
+    // Only Level 1 bundles participate in GlobalPool (ecosystem subscription rewards)
+    let is_level_1 = visibility_level == 1;
 
     // STEP 0: Trigger epoch distribution if needed
     let patron_pool = &mut ctx.accounts.creator_patron_pool;
@@ -631,22 +670,31 @@ pub fn handle_register_bundle_nft_in_subscription_pools(
         &creator,
     )?;
 
-    maybe_distribute_ecosystem_pools(
-        &mut ctx.accounts.global_holder_pool,
-        &mut ctx.accounts.creator_dist_pool,
-        &mut ctx.accounts.ecosystem_epoch_state,
-        &ctx.accounts.ecosystem_streaming_treasury,
-        &ctx.accounts.platform_treasury,
-        &ctx.accounts.ecosystem_treasury,
-        now,
-        &ctx.accounts.system_program.to_account_info(),
-    )?;
+    // Ecosystem pools distribution (only if Level 1 bundle)
+    if is_level_1 {
+        maybe_distribute_ecosystem_pools(
+            &mut ctx.accounts.global_holder_pool,
+            &mut ctx.accounts.creator_dist_pool,
+            &mut ctx.accounts.ecosystem_epoch_state,
+            &ctx.accounts.ecosystem_streaming_treasury,
+            &ctx.accounts.platform_treasury,
+            &ctx.accounts.ecosystem_treasury,
+            now,
+            &ctx.accounts.system_program.to_account_info(),
+        )?;
+    }
 
-    // STEP 1: Add weight to ALL pools
+    // STEP 1: Add weight to pools based on visibility level
+    // PatronPool: All bundle levels participate (creator membership rewards)
     patron_pool.total_weight += weight as u64;
-    ctx.accounts.global_holder_pool.total_weight += weight as u64;
-    ctx.accounts.creator_dist_pool.total_weight += weight as u64;
 
+    // GlobalPool: Only Level 1 bundles participate (ecosystem subscription rewards)
+    if is_level_1 {
+        ctx.accounts.global_holder_pool.total_weight += weight as u64;
+        ctx.accounts.creator_dist_pool.total_weight += weight as u64;
+    }
+
+    // Initialize creator weight if new (only used for Level 1)
     let creator_weight = &mut ctx.accounts.creator_weight;
     if creator_weight.creator == Pubkey::default() {
         creator_weight.creator = creator;
@@ -665,20 +713,26 @@ pub fn handle_register_bundle_nft_in_subscription_pools(
         patron_pool.total_weight,
     );
 
-    let eco_treasury_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
-    let virtual_global_rps = calculate_virtual_rps(
-        ctx.accounts.global_holder_pool.reward_per_share,
-        eco_treasury_balance,
-        12,
-        ctx.accounts.global_holder_pool.total_weight,
-    );
-
-    let virtual_creator_dist_rps = calculate_virtual_rps(
-        ctx.accounts.creator_dist_pool.reward_per_share,
-        eco_treasury_balance,
-        80,
-        ctx.accounts.creator_dist_pool.total_weight,
-    );
+    // Global pool virtual RPS - only calculate if Level 1
+    let (virtual_global_rps, virtual_creator_dist_rps) = if is_level_1 {
+        let eco_treasury_balance = ctx.accounts.ecosystem_streaming_treasury.lamports();
+        (
+            calculate_virtual_rps(
+                ctx.accounts.global_holder_pool.reward_per_share,
+                eco_treasury_balance,
+                12, // holder share
+                ctx.accounts.global_holder_pool.total_weight,
+            ),
+            calculate_virtual_rps(
+                ctx.accounts.creator_dist_pool.reward_per_share,
+                eco_treasury_balance,
+                80, // creator share
+                ctx.accounts.creator_dist_pool.total_weight,
+            ),
+        )
+    } else {
+        (0, 0)
+    };
 
     // STEP 3: Set debts
     let nft_state = &mut ctx.accounts.unified_nft_state;
@@ -691,15 +745,27 @@ pub fn handle_register_bundle_nft_in_subscription_pools(
     // Bundle uses RewardPool for immediate rewards
     nft_state.content_or_bundle_debt = weight as u128 * ctx.accounts.reward_pool.reward_per_share;
     nft_state.patron_debt = weight as u128 * virtual_patron_rps;
-    nft_state.global_debt = weight as u128 * virtual_global_rps;
+
+    // Global debt: Only set for Level 1 bundles (others get 0, meaning no rewards)
+    nft_state.global_debt = if is_level_1 {
+        weight as u128 * virtual_global_rps
+    } else {
+        0 // Level 2/3 bundles do not participate in GlobalPool
+    };
     nft_state.created_at = now;
 
-    creator_weight.total_weight += weight as u64;
-    creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+    // ADD to creator weight debt (only for Level 1 bundles)
+    if is_level_1 {
+        creator_weight.total_weight += weight as u64;
+        creator_weight.reward_debt += weight as u128 * virtual_creator_dist_rps;
+    }
 
     msg!(
-        "Bundle NFT registered in subscription pools. Weight: {}",
-        weight
+        "Bundle NFT registered in subscription pools. Weight: {}, Visibility: {}, Patron debt: {}, Global debt: {}",
+        weight,
+        visibility_level,
+        nft_state.patron_debt,
+        nft_state.global_debt
     );
 
     Ok(())

@@ -104,8 +104,14 @@ pub fn handle_create_bundle_with_mint_and_rent(
     rent_fee_7d: u64,
     // Collection naming
     collection_name: Option<String>,
+    // Visibility level (0=Public, 1=Ecosystem, 2=Subscriber, 3=NFT Only)
+    visibility_level: Option<u8>,
 ) -> Result<()> {
     require!(metadata_cid.len() <= 64, ContentRegistryError::CidTooLong);
+
+    // Validate visibility level (0-3), default to Level 1 (Ecosystem)
+    let vis_level = visibility_level.unwrap_or(1);
+    require!(vis_level <= 3, ContentRegistryError::InvalidVisibilityLevel);
     // Validate mint price
     require!(
         MintConfig::validate_price(mint_price, PaymentCurrency::Sol),
@@ -151,6 +157,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
     bundle.is_locked = false;
     bundle.minted_count = 0;
     bundle.pending_count = 0;
+    bundle.visibility_level = vis_level;
     bundle.created_at = clock.unix_timestamp;
     bundle.updated_at = clock.unix_timestamp;
 
@@ -240,7 +247,7 @@ pub fn handle_create_bundle_with_mint_and_rent(
         .plugins(vec![royalties_plugin])
         .invoke()?;
 
-    msg!("Bundle created with mint and rent: id={}, type={:?}", bundle_id, bundle_type);
+    msg!("Bundle created with mint and rent: id={}, type={:?}, visibility={}", bundle_id, bundle_type, vis_level);
     msg!("Mint: price={}, max_supply={:?}, royalty_bps={}", mint_price, mint_max_supply, creator_royalty_bps);
     msg!("Rent: 6h={}, 1d={}, 7d={}", rent_fee_6h, rent_fee_1d, rent_fee_7d);
 

@@ -110,9 +110,14 @@ pub fn handle_create_bundle(
     ctx: Context<CreateBundle>,
     bundle_id: String,
     bundle_type: BundleType,
+    visibility_level: Option<u8>,
 ) -> Result<()> {
     let bundle = &mut ctx.accounts.bundle;
     let clock = Clock::get()?;
+
+    // Validate visibility level (0-3)
+    let vis_level = visibility_level.unwrap_or(1); // Default to Level 1 (Ecosystem)
+    require!(vis_level <= 3, ContentRegistryError::InvalidVisibilityLevel);
 
     bundle.creator = ctx.accounts.creator.key();
     bundle.bundle_id = bundle_id;
@@ -123,10 +128,11 @@ pub fn handle_create_bundle(
     bundle.is_locked = false;
     bundle.minted_count = 0;
     bundle.pending_count = 0;
+    bundle.visibility_level = vis_level;
     bundle.created_at = clock.unix_timestamp;
     bundle.updated_at = clock.unix_timestamp;
 
-    msg!("Bundle created as draft: {} (type: {:?})", bundle.bundle_id, bundle.bundle_type);
+    msg!("Bundle created as draft: {} (type: {:?}, visibility: {})", bundle.bundle_id, bundle.bundle_type, vis_level);
 
     Ok(())
 }
@@ -187,6 +193,9 @@ pub fn handle_update_bundle(
     if let Some(active) = is_active {
         bundle.is_active = active;
     }
+
+    // NOTE: visibility_level is immutable - set only at creation time
+    // This is consistent with content visibility behavior
 
     bundle.updated_at = clock.unix_timestamp;
 
