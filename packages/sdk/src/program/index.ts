@@ -370,12 +370,15 @@ export async function enrichBundleWithMetadata(
     // Fetch metadata from IPFS to get collection_name
     const metadata = await fetchCollectionMetadata(collectionData.uri);
 
-    // Use collection_name from IPFS metadata (e.g., "Summer Photo") instead of on-chain name
+    // Use collection_name or name from IPFS metadata (e.g., "Summer Photo") instead of on-chain name
     const props = metadata?.properties as Record<string, unknown> | undefined;
     const collectionName = (props?.collection_name as string) ||
                            (props?.collectionName as string) ||
+                           (props?.name as string) ||
                            (metadata?.collection_name as string) ||
                            (metadata?.collectionName as string) ||
+                           (metadata?.name as string) ||
+                           collectionData.name || // Fallback to on-chain name
                            undefined;
     // Extract thumbnail from metadata.image
     const thumbnail = metadata?.image || undefined;
@@ -2892,7 +2895,8 @@ export async function createBundleWithMintAndRentInstruction(
   rentFee1d: bigint,
   rentFee7d: bigint,
   platform: PublicKey,
-  collectionName: string | null = null
+  collectionName: string | null = null,
+  visibilityLevel: number | null = null
 ): Promise<CreateBundleWithMintAndRentResult> {
   const [bundlePda] = getBundlePda(creator, bundleId);
   const [mintConfigPda] = getBundleMintConfigPda(bundlePda);
@@ -2912,7 +2916,8 @@ export async function createBundleWithMintAndRentInstruction(
       new BN(rentFee6h.toString()),
       new BN(rentFee1d.toString()),
       new BN(rentFee7d.toString()),
-      collectionName
+      collectionName,
+      visibilityLevel
     )
     .accounts({
       creator,
@@ -5331,11 +5336,12 @@ export function createContentRegistryClient(connection: Connection) {
       rentFee1d: bigint,
       rentFee7d: bigint,
       platform: PublicKey,
-      collectionName: string | null = null
+      collectionName: string | null = null,
+      visibilityLevel: number | null = null
     ) => createBundleWithMintAndRentInstruction(
       program, creator, bundleId, metadataCid, bundleType,
       mintPrice, mintMaxSupply, creatorRoyaltyBps,
-      rentFee6h, rentFee1d, rentFee7d, platform, collectionName
+      rentFee6h, rentFee1d, rentFee7d, platform, collectionName, visibilityLevel
     ),
 
     addBundleItemInstruction: (creator: PublicKey, bundleId: string, contentCid: string, position?: number) =>
