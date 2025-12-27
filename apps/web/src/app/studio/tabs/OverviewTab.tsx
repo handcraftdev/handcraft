@@ -57,12 +57,12 @@ export function OverviewTab({ content, bundles, isLoadingProfile, hasProfile }: 
 
   // Format revenue
   const totalRevenue = revenue?.total_all_time_revenue
-    ? (Number(revenue.total_all_time_revenue) / LAMPORTS_PER_SOL).toFixed(2)
-    : "0.00";
+    ? (Number(revenue.total_all_time_revenue) / LAMPORTS_PER_SOL).toFixed(6)
+    : "0.000000";
 
   const period30dRevenue = revenue?.total_primary_sales
-    ? (Number(revenue.total_primary_sales) / LAMPORTS_PER_SOL).toFixed(2)
-    : "0.00";
+    ? (Number(revenue.total_primary_sales) / LAMPORTS_PER_SOL).toFixed(6)
+    : "0.000000";
 
   return (
     <div className="space-y-6">
@@ -146,8 +146,8 @@ export function OverviewTab({ content, bundles, isLoadingProfile, hasProfile }: 
                 <span className="text-white/50 text-sm">Patron Revenue</span>
                 <span className="text-white font-medium text-base">
                   {revenue?.total_patron_revenue
-                    ? (Number(revenue.total_patron_revenue) / LAMPORTS_PER_SOL).toFixed(2)
-                    : "0.00"}{" "}
+                    ? (Number(revenue.total_patron_revenue) / LAMPORTS_PER_SOL).toFixed(6)
+                    : "0.000000"}{" "}
                   SOL
                 </span>
               </div>
@@ -155,8 +155,8 @@ export function OverviewTab({ content, bundles, isLoadingProfile, hasProfile }: 
                 <span className="text-white/50 text-sm">Secondary Royalties</span>
                 <span className="text-white font-medium text-base">
                   {revenue?.total_secondary_royalties
-                    ? (Number(revenue.total_secondary_royalties) / LAMPORTS_PER_SOL).toFixed(2)
-                    : "0.00"}{" "}
+                    ? (Number(revenue.total_secondary_royalties) / LAMPORTS_PER_SOL).toFixed(6)
+                    : "0.000000"}{" "}
                   SOL
                 </span>
               </div>
@@ -209,7 +209,7 @@ export function OverviewTab({ content, bundles, isLoadingProfile, hasProfile }: 
                     </div>
                   </div>
                   <span className="text-emerald-400 font-medium text-sm">
-                    +{(Number(tx.amount || tx.creator_amount || 0) / LAMPORTS_PER_SOL).toFixed(3)} SOL
+                    +{(Number(tx.amount || tx.creator_amount || 0) / LAMPORTS_PER_SOL).toFixed(6)} SOL
                   </span>
                 </div>
               ))}

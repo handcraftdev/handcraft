@@ -91,7 +91,7 @@ export function RevenueChart({
         beginAtZero: true,
         ticks: {
           callback: function (value: any) {
-            return value.toFixed(3) + " SOL";
+            return value.toFixed(6) + " SOL";
           },
         },
       },

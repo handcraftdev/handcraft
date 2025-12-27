@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRewardHistory } from "@/hooks/useRewardHistory";
 import { TransactionRow } from "./TransactionRow";
 import { Loader2 } from "lucide-react";
@@ -35,9 +35,7 @@ export function TransactionHistory({
     offset: page * pageSize,
   });
 
-  useEffect(() => {
-    refetch();
-  }, [page, wallet, creator, content, poolType, transactionType, refetch]);
+  // Hook now auto-fetches when params change
 
   if (error) {
     return (

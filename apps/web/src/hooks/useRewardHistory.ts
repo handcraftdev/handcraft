@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   RewardTransaction,
   TransactionHistoryParams,
@@ -20,22 +20,27 @@ export function useRewardHistory(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Use ref to store params to avoid infinite loops
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
   const refetch = useCallback(async () => {
+    const currentParams = paramsRef.current;
     setLoading(true);
     setError(null);
 
     try {
       const queryParams = new URLSearchParams();
 
-      if (params.wallet) queryParams.set("wallet", params.wallet);
-      if (params.creator) queryParams.set("creator", params.creator);
-      if (params.content) queryParams.set("content", params.content);
-      if (params.pool_type) queryParams.set("pool_type", params.pool_type);
-      if (params.transaction_type)
-        queryParams.set("transaction_type", params.transaction_type);
-      if (params.limit) queryParams.set("limit", params.limit.toString());
-      if (params.offset) queryParams.set("offset", params.offset.toString());
-      if (params.sort) queryParams.set("sort", params.sort);
+      if (currentParams.wallet) queryParams.set("wallet", currentParams.wallet);
+      if (currentParams.creator) queryParams.set("creator", currentParams.creator);
+      if (currentParams.content) queryParams.set("content", currentParams.content);
+      if (currentParams.pool_type) queryParams.set("pool_type", currentParams.pool_type);
+      if (currentParams.transaction_type)
+        queryParams.set("transaction_type", currentParams.transaction_type);
+      if (currentParams.limit) queryParams.set("limit", currentParams.limit.toString());
+      if (currentParams.offset) queryParams.set("offset", currentParams.offset.toString());
+      if (currentParams.sort) queryParams.set("sort", currentParams.sort);
 
       const response = await fetch(`/api/rewards/history?${queryParams}`);
 
@@ -45,15 +50,30 @@ export function useRewardHistory(
 
       const data = await response.json();
 
-      setTransactions(data.transactions);
-      setTotal(data.total);
+      setTransactions(data.transactions || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error("Error fetching reward history:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }
-  }, [params]);
+  }, []);
+
+  // Auto-fetch when params change
+  useEffect(() => {
+    refetch();
+  }, [
+    params.wallet,
+    params.creator,
+    params.content,
+    params.pool_type,
+    params.transaction_type,
+    params.limit,
+    params.offset,
+    params.sort,
+    refetch,
+  ]);
 
   return {
     transactions,

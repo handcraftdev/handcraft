@@ -27,7 +27,7 @@ export interface EarningsSummaryProps {
 
 export function EarningsSummary({ data, type }: EarningsSummaryProps) {
   const lamportsToSol = (lamports: number = 0) => {
-    return (lamports / 1e9).toFixed(4);
+    return (lamports / 1e9).toFixed(6);
   };
 
   if (type === "creator") {

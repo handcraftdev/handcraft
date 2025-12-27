@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
                   <div>
                     <div className="text-sm text-white/40">{item.source}</div>
                     <div className="text-base font-semibold text-white/80 mt-0.5">
-                      {(item.amount / 1e9).toFixed(4)} SOL
+                      {(item.amount / 1e9).toFixed(6)} SOL
                     </div>
                   </div>
                   <div className="text-right">
