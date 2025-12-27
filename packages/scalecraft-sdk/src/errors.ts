@@ -6,7 +6,7 @@ import {
 } from "@solana/web3.js";
 import { AnchorError, ProgramError } from "@coral-xyz/anchor";
 
-// Program error codes from IDL (must match programs/tribunalcraft/src/errors/mod.rs)
+// Program error codes from IDL (must match programs/scalecraft/src/errors/mod.rs)
 const PROGRAM_ERRORS: Record<number, { name: string; message: string }> = {
   6000: { name: "Unauthorized", message: "You are not authorized to perform this action" },
   6001: { name: "InvalidConfig", message: "Invalid configuration parameter" },
@@ -531,7 +531,7 @@ export async function simulateTransaction(
 /**
  * Custom error class with parsed error info
  */
-export class TribunalError extends Error {
+export class ScaleError extends Error {
   code: number | null;
   errorName: string;
   raw?: string;
@@ -539,7 +539,7 @@ export class TribunalError extends Error {
 
   constructor(error: TransactionError) {
     super(error.message);
-    this.name = "TribunalError";
+    this.name = "ScaleError";
     this.code = error.code;
     this.errorName = error.name;
     this.raw = error.raw;
@@ -548,14 +548,14 @@ export class TribunalError extends Error {
 }
 
 /**
- * Wrap a function that may throw and convert errors to TribunalError
+ * Wrap a function that may throw and convert errors to ScaleError
  */
 export async function withErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     const parsed = parseTransactionError(error);
-    throw new TribunalError(parsed);
+    throw new ScaleError(parsed);
   }
 }
 

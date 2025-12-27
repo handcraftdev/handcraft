@@ -12,7 +12,7 @@ import {
 import { Program, AnchorProvider, BN, Wallet, translateError } from "@coral-xyz/anchor";
 import { PDA } from "./pda";
 import { PROGRAM_ID } from "./constants";
-import type { Tribunalcraft } from "./idl-types";
+import type { Scalecraft } from "./idl-types";
 import type {
   ProtocolConfig,
   DefenderPool,
@@ -67,7 +67,7 @@ export interface SimulationResult {
   unitsConsumed?: number;
 }
 
-export interface TribunalCraftClientConfig {
+export interface ScaleCraftClientConfig {
   connection: Connection;
   wallet?: Wallet;
   programId?: PublicKey;
@@ -81,34 +81,34 @@ export interface TransactionResult {
 }
 
 /**
- * TribunalCraft SDK Client
+ * ScaleCraft SDK Client
  *
- * Framework-agnostic client for interacting with the TribunalCraft Solana program.
+ * Framework-agnostic client for interacting with the ScaleCraft Solana program.
  * Can be used in Node.js, browser, React, Vue, or any JavaScript/TypeScript environment.
  *
  * @example
  * ```ts
- * import { TribunalCraftClient } from "@tribunalcraft/sdk";
+ * import { ScaleCraftClient } from "@scalecraft/sdk";
  * import { Connection, Keypair } from "@solana/web3.js";
  *
  * const connection = new Connection("https://api.devnet.solana.com");
  * const wallet = new Wallet(keypair);
- * const client = new TribunalCraftClient({ connection, wallet });
+ * const client = new ScaleCraftClient({ connection, wallet });
  *
  * // Register as a juror
  * const result = await client.registerJuror(new BN(100_000_000));
  * console.log("Signature:", result.signature);
  * ```
  */
-export class TribunalCraftClient {
+export class ScaleCraftClient {
   public readonly connection: Connection;
   public readonly programId: PublicKey;
   public readonly pda: PDA;
   public simulateFirst: boolean;
   private wallet: Wallet | null;
-  private anchorProgram: Program<Tribunalcraft>;
+  private anchorProgram: Program<Scalecraft>;
 
-  constructor(config: TribunalCraftClientConfig) {
+  constructor(config: ScaleCraftClientConfig) {
     this.connection = config.connection;
     this.programId = config.programId ?? PROGRAM_ID;
     this.pda = new PDA(this.programId);
@@ -121,8 +121,8 @@ export class TribunalCraftClient {
       {} as Wallet, // Dummy wallet for read-only operations
       { commitment: "confirmed" }
     );
-    this.anchorProgram = new Program<Tribunalcraft>(
-      idl as unknown as Tribunalcraft,
+    this.anchorProgram = new Program<Scalecraft>(
+      idl as unknown as Scalecraft,
       readOnlyProvider
     );
 
@@ -138,8 +138,8 @@ export class TribunalCraftClient {
     const provider = new AnchorProvider(this.connection, this.wallet, {
       commitment: "confirmed",
     });
-    this.anchorProgram = new Program<Tribunalcraft>(
-      idl as unknown as Tribunalcraft,
+    this.anchorProgram = new Program<Scalecraft>(
+      idl as unknown as Scalecraft,
       provider
     );
   }
@@ -162,14 +162,14 @@ export class TribunalCraftClient {
   /**
    * Get the Anchor program instance (for advanced usage)
    */
-  get program(): Program<Tribunalcraft> | null {
+  get program(): Program<Scalecraft> | null {
     return this.anchorProgram;
   }
 
   /**
    * Get wallet and program, throwing if not connected
    */
-  private getWalletAndProgram(): { wallet: Wallet; program: Program<Tribunalcraft> } {
+  private getWalletAndProgram(): { wallet: Wallet; program: Program<Scalecraft> } {
     if (!this.wallet || !this.anchorProgram) {
       throw new Error("Wallet not connected. Call setWallet() first.");
     }
@@ -2094,7 +2094,7 @@ export class TribunalCraftClient {
   };
 
   /**
-   * Fetch transaction history for a user and parse TribunalCraft activity
+   * Fetch transaction history for a user and parse ScaleCraft activity
    * This allows showing historical activity even for closed records
    */
   async fetchUserActivity(
@@ -2529,7 +2529,7 @@ export class TribunalCraftClient {
    * Uses pre-computed EVENT_DISCRIMINATORS to avoid crypto dependency
    */
   private matchesEventName(discriminator: string, eventName: string): boolean {
-    const expected = TribunalCraftClient.EVENT_DISCRIMINATORS[eventName];
+    const expected = ScaleCraftClient.EVENT_DISCRIMINATORS[eventName];
     return expected ? discriminator === expected : false;
   }
 
@@ -2611,7 +2611,7 @@ export class TribunalCraftClient {
   /**
    * Extract dispute and subject pubkeys from transaction accounts
    *
-   * Account layout for most TribunalCraft instructions:
+   * Account layout for most ScaleCraft instructions:
    * [0] signer (user)
    * [1] user's main account (juror_account, challenger_account, etc.)
    * [2] dispute PDA

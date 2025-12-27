@@ -1,21 +1,21 @@
-# @tribunalcraft/sdk
+# @scalecraft/sdk
 
-Framework-agnostic SDK for interacting with the TribunalCraft Solana program.
+Framework-agnostic SDK for interacting with the ScaleCraft Solana program.
 
 ## Installation
 
 ```bash
-npm install @tribunalcraft/sdk
+npm install @scalecraft/sdk
 # or
-yarn add @tribunalcraft/sdk
+yarn add @scalecraft/sdk
 # or
-pnpm add @tribunalcraft/sdk
+pnpm add @scalecraft/sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { TribunalCraftClient, VoteChoiceEnum, DisputeTypeEnum } from "@tribunalcraft/sdk";
+import { ScaleCraftClient, VoteChoiceEnum, DisputeTypeEnum } from "@scalecraft/sdk";
 import { Connection, Keypair } from "@solana/web3.js";
 import { Wallet } from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
@@ -25,7 +25,7 @@ const connection = new Connection("https://api.devnet.solana.com");
 const keypair = Keypair.fromSecretKey(/* your secret key */);
 const wallet = new Wallet(keypair);
 
-const client = new TribunalCraftClient({ connection, wallet });
+const client = new ScaleCraftClient({ connection, wallet });
 
 // Register as a juror with 0.1 SOL stake
 const result = await client.registerJuror(new BN(100_000_000));
@@ -137,7 +137,7 @@ const votesForDispute = await client.fetchVotesByDispute(disputePubkey);
 ### PDA Derivation
 
 ```typescript
-import { pda } from "@tribunalcraft/sdk";
+import { pda } from "@scalecraft/sdk";
 
 // Get PDA addresses
 const [jurorAccount, bump] = pda.jurorAccount(walletPubkey);
@@ -155,7 +155,7 @@ import {
   isChallengerWins,
   getDisputeTypeName,
   getOutcomeName,
-} from "@tribunalcraft/sdk";
+} from "@scalecraft/sdk";
 
 // Check status
 if (isSubjectActive(subject.status)) {
@@ -178,7 +178,7 @@ import {
   MIN_JUROR_STAKE,
   STAKE_UNLOCK_BUFFER,
   TOTAL_FEE_BPS,
-} from "@tribunalcraft/sdk";
+} from "@scalecraft/sdk";
 
 console.log("Program ID:", PROGRAM_ID.toBase58());
 console.log("Min juror stake:", MIN_JUROR_STAKE, "lamports");
@@ -188,7 +188,7 @@ console.log("Total fee:", TOTAL_FEE_BPS / 100, "%");
 
 ## API Reference
 
-### TribunalCraftClient
+### ScaleCraftClient
 
 | Method | Description |
 |--------|-------------|

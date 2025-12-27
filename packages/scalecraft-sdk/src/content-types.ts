@@ -1,5 +1,5 @@
 /**
- * TribunalCraft Content Types
+ * ScaleCraft Content Types
  *
  * These types define the JSON structure stored at CIDs on IPFS.
  * The protocol only stores CIDs - content interpretation is platform-specific.

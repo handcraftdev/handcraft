@@ -1,6 +1,6 @@
 // Main Client
-export { TribunalCraftClient } from "./client";
-export type { TribunalCraftClientConfig, TransactionResult, SimulationResult } from "./client";
+export { ScaleCraftClient } from "./client";
+export type { ScaleCraftClientConfig, TransactionResult, SimulationResult } from "./client";
 
 // PDA Helpers
 export { PDA, pda } from "./pda";
@@ -139,7 +139,7 @@ export type {
   RecordClosedEvent,
   StakeUnlockedEvent,
   DisputeResolvedEvent,
-  TribunalEvent,
+  ScaleEvent,
 } from "./events";
 
 // Error Handling
@@ -147,7 +147,7 @@ export {
   parseTransactionError,
   parseSimulationError,
   simulateTransaction,
-  TribunalError,
+  ScaleError,
   withErrorHandling,
   getProgramErrors,
   getErrorByCode,
@@ -179,4 +179,4 @@ export type {
 
 // IDL (for advanced usage)
 export { default as IDL } from "./idl.json";
-export type { Tribunalcraft } from "./idl-types";
+export type { Scalecraft } from "./idl-types";

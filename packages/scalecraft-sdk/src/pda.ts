@@ -14,7 +14,7 @@ import {
 } from "./constants";
 
 /**
- * PDA derivation helpers for TribunalCraft accounts
+ * PDA derivation helpers for ScaleCraft accounts
  * Updated for V2 round-based design
  */
 export class PDA {

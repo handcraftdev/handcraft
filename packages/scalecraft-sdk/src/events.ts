@@ -1,6 +1,6 @@
 import { PublicKey, Connection, ParsedTransactionWithMeta } from "@solana/web3.js";
 import { BorshCoder, EventParser, Program } from "@coral-xyz/anchor";
-import type { Tribunalcraft } from "./idl-types";
+import type { Scalecraft } from "./idl-types";
 import IDL from "./idl.json";
 import { PROGRAM_ID } from "./constants";
 
@@ -54,7 +54,7 @@ export interface DisputeResolvedEvent {
 }
 
 /** Union of all parsed events */
-export type TribunalEvent =
+export type ScaleEvent =
   | { type: "RewardClaimed"; data: RewardClaimedEvent }
   | { type: "RecordClosed"; data: RecordClosedEvent }
   | { type: "StakeUnlocked"; data: StakeUnlockedEvent }
@@ -85,19 +85,19 @@ function parseOutcome(outcome: Record<string, unknown>): string {
 }
 
 /**
- * Create an event parser for TribunalCraft events
+ * Create an event parser for ScaleCraft events
  */
 export function createEventParser(): EventParser {
-  const coder = new BorshCoder(IDL as Tribunalcraft);
+  const coder = new BorshCoder(IDL as Scalecraft);
   return new EventParser(new PublicKey(PROGRAM_ID), coder);
 }
 
 /**
  * Parse events from transaction logs
  */
-export function parseEventsFromLogs(logs: string[]): TribunalEvent[] {
+export function parseEventsFromLogs(logs: string[]): ScaleEvent[] {
   const parser = createEventParser();
-  const events: TribunalEvent[] = [];
+  const events: ScaleEvent[] = [];
 
   for (const event of parser.parseLogs(logs)) {
     switch (event.name) {
@@ -358,7 +358,7 @@ export async function getClaimSummaryFromHistory(
 export async function parseEventsFromTransaction(
   connection: Connection,
   signature: string
-): Promise<TribunalEvent[]> {
+): Promise<ScaleEvent[]> {
   const tx = await connection.getParsedTransaction(signature, {
     maxSupportedTransactionVersion: 0,
   });
