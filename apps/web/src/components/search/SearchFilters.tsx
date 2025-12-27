@@ -58,25 +58,25 @@ export function SearchFilters({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+    <div className="bg-white/[0.02] rounded-lg border border-white/[0.06] p-3">
       {/* Type toggle */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-1.5 mb-3">
         <button
           onClick={() => handleTypeChange("content")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             filters.type === "content"
-              ? "bg-blue-500 text-white"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              ? "bg-white text-black"
+              : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08]"
           }`}
         >
           Content
         </button>
         <button
           onClick={() => handleTypeChange("bundle")}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             filters.type === "bundle"
-              ? "bg-blue-500 text-white"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              ? "bg-white text-black"
+              : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08]"
           }`}
         >
           Bundles
@@ -86,11 +86,11 @@ export function SearchFilters({
       {/* Expandable filters */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+        className="flex items-center justify-between w-full text-left text-sm font-medium text-white/40 mb-2"
       >
         <span>Filters</span>
         <svg
-          className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -100,17 +100,17 @@ export function SearchFilters({
       </button>
 
       {isExpanded && (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-3 pt-2">
           {/* Domain filter (only for content) */}
           {filters.type === "content" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-2xs uppercase tracking-[0.15em] text-white/30 mb-1.5">
                 Domain
               </label>
               <select
                 value={filters.domain || "all"}
                 onChange={(e) => handleDomainChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-2.5 py-1.5 border border-white/[0.08] rounded-lg bg-white/[0.04] text-white/90 text-sm focus:outline-none focus:border-purple-500/50"
               >
                 <option value="all">All Domains</option>
                 {DOMAINS.map((domain) => (
@@ -125,13 +125,13 @@ export function SearchFilters({
           {/* Visibility filter */}
           {showVisibilityFilter && filters.type === "content" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-2xs uppercase tracking-[0.15em] text-white/30 mb-1.5">
                 Visibility
               </label>
               <select
                 value={filters.visibility?.toString() || "all"}
                 onChange={(e) => handleVisibilityChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-2.5 py-1.5 border border-white/[0.08] rounded-lg bg-white/[0.04] text-white/90 text-sm focus:outline-none focus:border-purple-500/50"
               >
                 <option value="all">All Visibility Levels</option>
                 {VISIBILITY_LEVELS.map((level) => (
@@ -145,13 +145,13 @@ export function SearchFilters({
 
           {/* Sort */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-2xs uppercase tracking-[0.15em] text-white/30 mb-1.5">
               Sort By
             </label>
             <select
               value={filters.sort}
               onChange={(e) => handleSortChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-2.5 py-1.5 border border-white/[0.08] rounded-lg bg-white/[0.04] text-white/90 text-sm focus:outline-none focus:border-purple-500/50"
             >
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

@@ -235,57 +235,56 @@ export function BuyContentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={isProcessing ? undefined : handleClose} />
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={isProcessing ? undefined : handleClose} />
 
-      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 overflow-hidden">
+      <div className="relative bg-black border border-white/[0.08] rounded-lg w-full max-w-sm p-4 m-4 overflow-hidden">
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
 
         <div className="relative">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-medium text-white/90">Buy Content</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-white/90">Buy Content</h2>
             <button
               onClick={handleClose}
               disabled={isProcessing}
-              className="p-2 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {contentTitle && (
-            <p className="text-white/40 mb-4 text-sm">
+            <p className="text-white/40 mb-3 text-base">
               <span className="text-white/90 font-medium">{contentTitle}</span>
             </p>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Rarity Info Banner */}
             {mintStep === "idle" && (
-              <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/20 rounded-xl p-3 text-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/20 rounded-lg p-2.5 text-sm">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                   </svg>
                   <span className="font-medium text-white/90">Random Rarity</span>
                 </div>
-                <p className="text-white/40 text-xs">
-                  Your content will be assigned a random rarity using verifiable randomness.
-                  Higher rarity = more rewards from the holder pool!
+                <p className="text-white/40 text-sm">
+                  Your content will be assigned a random rarity. Higher rarity = more rewards!
                 </p>
-                <RarityProbabilities className="mt-2" />
+                <RarityProbabilities className="mt-1.5" />
               </div>
             )}
 
             {/* Minting Progress (VRF mode) */}
             {isProcessing && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
-                <div className="mb-4">
+              <div className="bg-white/[0.04] border border-white/[0.08] rounded-lg p-4 text-center">
+                <div className="mb-3">
                   {mintStep === "determining" ? (
                     // Animated dice/stars for randomness
-                    <div className="w-16 h-16 mx-auto relative">
+                    <div className="w-12 h-12 mx-auto relative">
                       <div className="absolute inset-0 animate-spin-slow">
                         <svg className="w-full h-full text-purple-400" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
@@ -299,31 +298,31 @@ export function BuyContentModal({
                     </div>
                   ) : (
                     // Standard loading spinner
-                    <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <div className="w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
                   )}
                 </div>
-                <p className="text-lg font-medium text-white/90">{getStepMessage()}</p>
+                <p className="text-base font-medium text-white/90">{getStepMessage()}</p>
                 {quantity > 1 && (
                   <p className="text-sm text-white/40 mt-1">
                     Buying {mintingProgress} of {quantity}
                   </p>
                 )}
-                <div className="flex justify-center gap-1 mt-4">
-                  <div className={`w-2 h-2 rounded-full ${mintStep === "committing" || mintStep === "determining" || mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
-                  <div className={`w-2 h-2 rounded-full ${mintStep === "determining" || mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
-                  <div className={`w-2 h-2 rounded-full ${mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
+                <div className="flex justify-center gap-1 mt-3">
+                  <div className={`w-1.5 h-1.5 rounded-full ${mintStep === "committing" || mintStep === "determining" || mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full ${mintStep === "determining" || mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full ${mintStep === "revealing" ? "bg-purple-400" : "bg-white/20"}`} />
                 </div>
               </div>
             )}
 
             {/* Success State */}
             {mintStep === "success" && (
-              <div className={`rounded-xl p-6 text-center border ${
+              <div className={`rounded-lg p-4 text-center border ${
                 revealedRarity !== null && RARITY_STYLES[revealedRarity]
                   ? `${RARITY_STYLES[revealedRarity].border} ${RARITY_STYLES[revealedRarity].bg}`
                   : "border-emerald-500/30 bg-emerald-500/10"
               }`}>
-                <div className="text-5xl mb-3">
+                <div className="text-4xl mb-2">
                   {revealedRarity === 4 && <span className="animate-pulse">⭐</span>}{/* Legendary */}
                   {revealedRarity === 3 && <span className="animate-bounce">💎</span>}{/* Epic */}
                   {revealedRarity === 2 && "💠"}{/* Rare */}
@@ -333,22 +332,22 @@ export function BuyContentModal({
                 </div>
                 {revealedRarity !== null && RARITY_STYLES[revealedRarity] ? (
                   <>
-                    <p className={`text-xl font-bold ${RARITY_STYLES[revealedRarity].text}`}>
+                    <p className={`text-lg font-bold ${RARITY_STYLES[revealedRarity].text}`}>
                       {getRarityName(revealedRarity)}!
                     </p>
-                    <p className="text-sm text-white/40 mt-1">
+                    <p className="text-sm text-white/40 mt-0.5">
                       Your edition has {getRarityName(revealedRarity).toLowerCase()} rarity
                     </p>
                     {revealedRarity >= 2 && ( /* Rare or higher */
-                      <p className="text-xs text-white/30 mt-2">
-                        Higher rarity means more rewards from the holder pool!
+                      <p className="text-sm text-white/30 mt-1.5">
+                        Higher rarity means more rewards!
                       </p>
                     )}
                   </>
                 ) : (
                   <>
-                    <p className="text-xl font-bold text-emerald-400">Success!</p>
-                    <p className="text-sm text-white/40 mt-1">
+                    <p className="text-lg font-bold text-emerald-400">Success!</p>
+                    <p className="text-sm text-white/40 mt-0.5">
                       Your purchase was successful
                     </p>
                   </>
@@ -358,41 +357,41 @@ export function BuyContentModal({
 
             {/* Already Owned Info */}
             {ownedCount > 0 && mintStep === "idle" && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-emerald-400 text-sm flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-emerald-400 text-sm flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                You already own {ownedCount} edition{ownedCount > 1 ? "s" : ""} of this content
+                You already own {ownedCount} edition{ownedCount > 1 ? "s" : ""}
               </div>
             )}
 
             {/* Price Display (hidden during processing) */}
             {mintStep === "idle" && (
-              <div className="bg-white/5 border border-white/5 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-white/40">Price per edition</span>
-                  <span className="text-xl font-bold text-purple-400">
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-lg p-3">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-white/40 text-sm">Price per edition</span>
+                  <span className="text-lg font-bold text-purple-400">
                     {formatPrice(1)}
                   </span>
                 </div>
 
                 {/* Quantity Selector */}
                 {!isSoldOut && maxQuantity > 1 && (
-                  <div className="flex justify-between items-center mb-3 pt-2 border-t border-white/5">
-                    <span className="text-white/40">Quantity</span>
-                    <div className="flex items-center gap-2">
+                  <div className="flex justify-between items-center mb-2 pt-2 border-t border-white/[0.06]">
+                    <span className="text-white/40 text-sm">Quantity</span>
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}
                         disabled={quantity <= 1}
-                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                        className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all text-sm"
                       >
                         -
                       </button>
-                      <span className="w-8 text-center font-medium text-white/90">{quantity}</span>
+                      <span className="w-6 text-center font-medium text-white/90 text-base">{quantity}</span>
                       <button
                         onClick={() => setQuantity(q => Math.min(maxQuantity, q + 1))}
                         disabled={quantity >= maxQuantity}
-                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all"
+                        className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all text-sm"
                       >
                         +
                       </button>
@@ -402,9 +401,9 @@ export function BuyContentModal({
 
                 {/* Total Price */}
                 {quantity > 1 && (
-                  <div className="flex justify-between items-center mb-2 pt-2 border-t border-white/5">
-                    <span className="text-white/40">Total</span>
-                    <span className="text-2xl font-bold text-purple-400">
+                  <div className="flex justify-between items-center mb-1.5 pt-2 border-t border-white/[0.06]">
+                    <span className="text-white/40 text-sm">Total</span>
+                    <span className="text-xl font-bold text-purple-400">
                       {formatPrice(quantity)}
                     </span>
                   </div>
@@ -435,9 +434,9 @@ export function BuyContentModal({
 
             {/* Revenue Split (hidden during processing) */}
             {mintStep === "idle" && (
-              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                <h3 className="text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Your payment goes to</h3>
-                <div className="space-y-1.5 text-sm">
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2.5">
+                <h3 className="text-2xs uppercase tracking-[0.15em] text-white/30 mb-2">Your payment goes to</h3>
+                <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-white/50">Creator</span>
                     <span className="text-emerald-400">80%</span>
@@ -456,7 +455,7 @@ export function BuyContentModal({
                   </div>
                 </div>
                 {mintedCount === BigInt(0) && (
-                  <p className="text-xs text-white/30 mt-2">
+                  <p className="text-2xs text-white/30 mt-1.5">
                     First purchase: 12% holder reward goes to creator
                   </p>
                 )}
@@ -465,13 +464,13 @@ export function BuyContentModal({
 
             {/* Royalty Info (hidden during processing) */}
             {mintStep === "idle" && (
-              <p className="text-xs text-white/30 text-center">
+              <p className="text-2xs text-white/30 text-center">
                 Creator receives {mintConfig.creatorRoyaltyBps / 100}% royalty on resales
               </p>
             )}
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -480,10 +479,10 @@ export function BuyContentModal({
               <button
                 onClick={handleBuy}
                 disabled={isSoldOut || !publicKey}
-                className={`w-full py-3 rounded-xl font-medium transition-all duration-300 ${
+                className={`w-full py-2 rounded-lg text-base font-medium transition-all ${
                   isSoldOut
-                    ? "bg-white/5 text-white/30 cursor-not-allowed"
-                    : "bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    ? "bg-white/[0.04] text-white/30 cursor-not-allowed"
+                    : "bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 }`}
               >
                 {isSoldOut

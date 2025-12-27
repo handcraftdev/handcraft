@@ -69,7 +69,7 @@ export function RarityBadge({
   const icon = showIcon ? getRarityIcon(rarity) : null;
 
   const sizeClasses = {
-    xs: "text-[10px] px-1.5 py-0.5",
+    xs: "text-xs px-1.5 py-0.5",
     sm: "text-xs px-2 py-0.5",
     md: "text-sm px-2.5 py-1",
     lg: "text-base px-3 py-1.5",

@@ -53,7 +53,7 @@ export function ModerationBadge({ contentCid, showDetails = false, size = "sm" }
   const config = statusConfig[data.status];
   if (!config) return null;
 
-  const sizeClasses = size === "sm" ? "px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs";
+  const sizeClasses = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-xs";
 
   return (
     <div
@@ -111,7 +111,7 @@ export function ModerationStatusBadge({
   const config = statusConfig[status];
   if (!config) return null;
 
-  const sizeClasses = size === "sm" ? "px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs";
+  const sizeClasses = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-xs";
 
   return (
     <div

@@ -128,7 +128,7 @@ export function VotingPanel({
         {isActive && (
           <div className="text-right">
             <p className="text-xs text-white/70">{formatTimeRemaining(timeRemaining)}</p>
-            <p className="text-[10px] text-white/40">
+            <p className="text-xs text-white/40">
               Ends {votingEndsAt.toLocaleDateString()}
             </p>
           </div>
@@ -138,13 +138,13 @@ export function VotingPanel({
       {/* Stakes at risk */}
       <div className="grid grid-cols-2 gap-3 text-center">
         <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-          <p className="text-[10px] text-white/50 uppercase">Challenger Stake</p>
+          <p className="text-xs text-white/50 uppercase">Challenger Stake</p>
           <p className="text-lg font-semibold text-orange-400">
             {(dispute.totalStake.toNumber() / 1e9).toFixed(2)} SOL
           </p>
         </div>
         <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-          <p className="text-[10px] text-white/50 uppercase">Defender Bond</p>
+          <p className="text-xs text-white/50 uppercase">Defender Bond</p>
           <p className="text-lg font-semibold text-blue-400">
             {(dispute.bondAtRisk.toNumber() / 1e9).toFixed(2)} SOL
           </p>

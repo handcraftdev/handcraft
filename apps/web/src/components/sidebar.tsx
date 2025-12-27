@@ -118,19 +118,19 @@ function SlideInSidebar({
 
   const navItems = [
     { icon: "content", label: "Content", href: "/content" },
-    { icon: "library", label: "Library", href: "/library" },
     { icon: "search", label: "Search", href: "/search" },
-    { icon: "studio", label: "Studio", href: "/studio" },
     { icon: "moderation", label: "Moderation", href: "/moderation" },
   ];
 
   const accountItems = [
     { icon: "profile", label: "Profile", href: publicKey ? `/profile/${publicKey.toBase58()}` : "#" },
+    { icon: "library", label: "Library", href: "/library" },
+    { icon: "studio", label: "Studio", href: "/studio" },
     { icon: "rewards", label: "Rewards", href: "/rewards" },
   ];
 
   const renderIcon = (icon: string, isActive: boolean) => {
-    const baseClass = `w-[18px] h-[18px] transition-colors duration-200 ${isActive ? "text-white" : "text-white/40 group-hover:text-white/70"}`;
+    const baseClass = `w-4 h-4 transition-colors duration-200 ${isActive ? "text-white" : "text-white/40 group-hover:text-white/70"}`;
 
     switch (icon) {
       case "content":
@@ -185,7 +185,7 @@ function SlideInSidebar({
       {/* Slide-in Panel */}
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 h-full w-72 z-50 bg-black/95 backdrop-blur-xl border-r border-white/10 transform transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"} ${overlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`fixed top-0 left-0 h-full w-64 z-50 bg-black/95 backdrop-blur-xl border-r border-white/10 transform transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${isOpen ? "translate-x-0" : "-translate-x-full"} ${overlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
         {/* Subtle gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
@@ -193,25 +193,25 @@ function SlideInSidebar({
         {/* Content wrapper */}
         <div className="relative flex flex-col h-full">
           {/* Header - Refined brand mark */}
-          <div className="px-6 pt-6 pb-4">
+          <div className="px-4 pt-4 pb-3">
             <div className="flex items-center justify-between">
-              <Link href="/" className="group flex items-center gap-3" onClick={onClose}>
-                <div className="relative w-9 h-9 rounded-xl bg-white/[0.08] flex items-center justify-center border border-white/[0.06] group-hover:bg-white/[0.12] group-hover:border-white/10 transition-all duration-300">
-                  <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <Link href="/" className="group flex items-center gap-2.5" onClick={onClose}>
+                <div className="relative w-8 h-8 rounded-lg bg-white/[0.08] flex items-center justify-center border border-white/[0.06] group-hover:bg-white/[0.12] group-hover:border-white/10 transition-all duration-300">
+                  <svg className="w-3.5 h-3.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
                   </svg>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[15px] font-semibold text-white/90 tracking-tight">Handcraft</span>
-                  <span className="text-[10px] text-white/30 tracking-[0.08em] uppercase">Creator Platform</span>
+                  <span className="text-base font-semibold text-white/90 tracking-tight">Handcraft</span>
+                  <span className="text-2xs text-white/30 tracking-[0.08em] uppercase">Creator Platform</span>
                 </div>
               </Link>
 
               <button
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.04] rounded-lg transition-all duration-200"
+                className="w-7 h-7 flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.04] rounded-md transition-all duration-200"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -220,7 +220,7 @@ function SlideInSidebar({
 
           {/* Upload Button - Clean, prominent */}
           {publicKey && (
-            <div className="px-5 pb-5">
+            <div className="px-3 pb-3">
               <button
                 onClick={() => {
                   router.push('/studio/upload');
@@ -228,21 +228,21 @@ function SlideInSidebar({
                 }}
                 className="group w-full relative overflow-hidden"
               >
-                <div className="relative flex items-center justify-center gap-2.5 px-4 py-3 bg-white hover:bg-white/95 rounded-xl transition-all duration-200">
-                  <svg className="w-4 h-4 text-black/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <div className="relative flex items-center justify-center gap-2 px-3 py-2 bg-white hover:bg-white/95 rounded-lg transition-all duration-200">
+                  <svg className="w-3.5 h-3.5 text-black/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
-                  <span className="text-[13px] font-semibold text-black tracking-wide">Upload Content</span>
+                  <span className="text-sm font-semibold text-black">Upload Content</span>
                 </div>
               </button>
             </div>
           )}
 
           {/* Divider */}
-          <div className="mx-5 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+          <div className="mx-3 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
 
           {/* Navigation */}
-          <nav className="flex-shrink-0 px-4 py-4">
+          <nav className="flex-shrink-0 px-3 py-3">
             <div className="space-y-0.5">
               {navItems.map((item, index) => {
                 const isActive = pathname === item.href;
@@ -254,19 +254,19 @@ function SlideInSidebar({
                     className="group relative block"
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
-                    <div className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                    <div className={`relative flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-all duration-200 ${
                       isActive
                         ? "bg-white/[0.08]"
                         : "hover:bg-white/[0.04]"
                     }`}>
                       {/* Active indicator */}
-                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full transition-all duration-300 ${
+                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-3.5 rounded-full transition-all duration-300 ${
                         isActive ? "bg-white/80" : "bg-transparent"
                       }`} />
 
                       {renderIcon(item.icon, isActive)}
 
-                      <span className={`text-[13px] font-medium tracking-wide transition-colors duration-200 ${
+                      <span className={`text-sm font-medium transition-colors duration-200 ${
                         isActive ? "text-white" : "text-white/50 group-hover:text-white/80"
                       }`}>
                         {item.label}
@@ -280,11 +280,11 @@ function SlideInSidebar({
             {/* Account section */}
             {publicKey && (
               <>
-                <div className="my-4 mx-2">
+                <div className="my-3 mx-1">
                   <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
                 </div>
 
-                <p className="px-3 mb-2 text-[10px] text-white/25 uppercase tracking-[0.12em] font-medium">Account</p>
+                <p className="px-2.5 mb-1.5 text-2xs text-white/25 uppercase tracking-[0.12em] font-medium">Account</p>
 
                 <div className="space-y-0.5">
                   {accountItems.map((item) => {
@@ -296,18 +296,18 @@ function SlideInSidebar({
                         onClick={onClose}
                         className="group relative block"
                       >
-                        <div className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                        <div className={`relative flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-all duration-200 ${
                           isActive
                             ? "bg-white/[0.08]"
                             : "hover:bg-white/[0.04]"
                         }`}>
-                          <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full transition-all duration-300 ${
+                          <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-3.5 rounded-full transition-all duration-300 ${
                             isActive ? "bg-white/80" : "bg-transparent"
                           }`} />
 
                           {renderIcon(item.icon, isActive)}
 
-                          <span className={`text-[13px] font-medium tracking-wide transition-colors duration-200 ${
+                          <span className={`text-sm font-medium transition-colors duration-200 ${
                             isActive ? "text-white" : "text-white/50 group-hover:text-white/80"
                           }`}>
                             {item.label}
@@ -322,44 +322,44 @@ function SlideInSidebar({
           </nav>
 
           {/* Membership - Scrollable section */}
-          <div className="flex-1 overflow-y-auto px-4 min-h-0" style={{ scrollbarWidth: "none" }}>
+          <div className="flex-1 overflow-y-auto px-3 min-h-0" style={{ scrollbarWidth: "none" }}>
             <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
             <div className="py-2">
-              <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-4" />
-              <p className="px-2 mb-3 text-[10px] text-white/25 uppercase tracking-[0.12em] font-medium">Subscription</p>
+              <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent mb-3" />
+              <p className="px-1 mb-2 text-2xs text-white/25 uppercase tracking-[0.12em] font-medium">Subscription</p>
               <EcosystemMembershipCard compact />
             </div>
           </div>
 
           {/* User Section - Refined */}
-          <div className="mt-auto border-t border-white/[0.04] p-4" ref={userMenuRef}>
+          <div className="mt-auto border-t border-white/[0.04] p-3" ref={userMenuRef}>
             {publicKey ? (
               <div className="relative">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="w-full flex items-center gap-3 p-2.5 hover:bg-white/[0.04] rounded-xl transition-all duration-200"
+                  className="w-full flex items-center gap-2.5 p-2 hover:bg-white/[0.04] rounded-lg transition-all duration-200"
                 >
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 bg-gradient-to-br from-white/20 to-white/5 rounded-xl flex items-center justify-center text-sm text-white/90 font-semibold border border-white/[0.08]">
+                    <div className="w-8 h-8 bg-gradient-to-br from-white/20 to-white/5 rounded-lg flex items-center justify-center text-sm text-white/90 font-semibold border border-white/[0.08]">
                       {userProfile?.username?.charAt(0)?.toUpperCase() || publicKey.toBase58().charAt(0).toUpperCase()}
                     </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black" />
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-black" />
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 text-left min-w-0">
-                    <p className="text-[13px] font-medium text-white/90 truncate">
+                    <p className="text-sm font-medium text-white/90 truncate">
                       {userProfile?.username || shortAddress}
                     </p>
-                    <p className="text-[11px] text-white/35 flex items-center gap-1.5">
+                    <p className="text-xs text-white/35 flex items-center gap-1.5">
                       {balance !== null ? `${balance.toFixed(3)} SOL` : "Loading..."}
                     </p>
                   </div>
 
                   {/* Chevron */}
                   <svg
-                    className={`w-4 h-4 text-white/20 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`}
+                    className={`w-3.5 h-3.5 text-white/20 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -371,38 +371,38 @@ function SlideInSidebar({
 
                 {/* User Menu Popup */}
                 {isUserMenuOpen && (
-                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-black/95 backdrop-blur-xl rounded-xl border border-white/[0.08] shadow-2xl shadow-black/50 overflow-hidden">
+                  <div className="absolute bottom-full left-0 right-0 mb-2 bg-black/95 backdrop-blur-xl rounded-lg border border-white/[0.08] shadow-2xl shadow-black/50 overflow-hidden">
                     {/* Balance display */}
-                    <div className="p-4 border-b border-white/[0.04]">
-                      <p className="text-xl font-semibold text-white tracking-tight">{balance !== null ? balance.toFixed(4) : "-"}</p>
-                      <p className="text-[10px] uppercase tracking-[0.1em] text-white/30 mt-0.5">SOL Balance</p>
+                    <div className="p-3 border-b border-white/[0.04]">
+                      <p className="text-lg font-semibold text-white tracking-tight">{balance !== null ? balance.toFixed(4) : "-"}</p>
+                      <p className="text-2xs uppercase tracking-[0.1em] text-white/30 mt-0.5">SOL Balance</p>
                     </div>
 
                     {/* Network */}
-                    <div className="px-4 py-3 flex items-center justify-between border-b border-white/[0.04]">
-                      <span className="text-[11px] text-white/40">Network</span>
-                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium bg-amber-500/10 text-amber-400/90 border border-amber-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <div className="px-3 py-2 flex items-center justify-between border-b border-white/[0.04]">
+                      <span className="text-xs text-white/40">Network</span>
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-amber-500/10 text-amber-400/90 border border-amber-500/20">
+                        <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
                         Devnet
                       </span>
                     </div>
 
                     {/* Actions */}
-                    <div className="p-2">
+                    <div className="p-1.5">
                       <button
                         onClick={() => { navigator.clipboard.writeText(publicKey.toBase58()); setIsUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-white/50 hover:text-white/80 hover:bg-white/[0.04] rounded-lg transition-all duration-200"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-white/50 hover:text-white/80 hover:bg-white/[0.04] rounded-md transition-all duration-200"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
                         </svg>
                         Copy Address
                       </button>
                       <button
                         onClick={() => { clearSession(); disconnect(); setIsUserMenuOpen(false); onClose(); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.04] rounded-lg transition-all duration-200"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 text-sm text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.04] rounded-md transition-all duration-200"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
                         </svg>
                         Disconnect
@@ -413,10 +413,10 @@ function SlideInSidebar({
               </div>
             ) : mounted ? (
               <div className="w-full">
-                <WalletMultiButton className="!w-full !bg-white/[0.06] hover:!bg-white/[0.1] !text-white/80 hover:!text-white !rounded-lg !py-3 !text-[13px] !font-medium !justify-center !border !border-white/10 hover:!border-white/20 !transition-all !duration-200" />
+                <WalletMultiButton className="!w-full !bg-white/[0.06] hover:!bg-white/[0.1] !text-white/80 hover:!text-white !rounded-md !py-2.5 !text-sm !font-medium !justify-center !border !border-white/10 hover:!border-white/20 !transition-all !duration-200" />
               </div>
             ) : (
-              <div className="h-11 bg-white/[0.04] rounded-xl animate-pulse" />
+              <div className="h-10 bg-white/[0.04] rounded-lg animate-pulse" />
             )}
           </div>
         </div>
