@@ -23,11 +23,9 @@ function FeedLoadingFallback() {
 
 export default function ContentPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
 
   const toggleSidebar = useCallback(() => {
-    setShowFilters(false); // Always close filters when toggling sidebar
     setIsSidebarOpen(prev => !prev);
   }, []);
 
@@ -47,7 +45,7 @@ export default function ContentPage() {
       {/* Menu Button - synced with content overlay */}
       <button
         onClick={toggleSidebar}
-        className={`fixed top-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen || showFilters ? 'left-[304px]' : 'left-4'} ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed top-4 z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen ? 'left-[264px]' : 'left-4'} ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         title="Menu"
       >
         <svg className="w-5 h-5 text-white/70 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,8 +57,6 @@ export default function ContentPage() {
       <Feed
         isSidebarOpen={isSidebarOpen}
         onCloseSidebar={() => setIsSidebarOpen(false)}
-        showFilters={showFilters}
-        setShowFilters={setShowFilters}
         onOverlayChange={handleOverlayChange}
       />
     </div>

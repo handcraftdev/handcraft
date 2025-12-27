@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@solana/wallet-adapter-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   TribunalCraftClient,
   isDisputePending,
@@ -65,6 +65,9 @@ function DisputeCard({
   subject: Subject;
   dispute: Dispute;
 }) {
+  const router = useRouter();
+  const [isLoadingReview, setIsLoadingReview] = useState(false);
+
   // Fetch subject details from IPFS
   const { data: subjectDetails } = useQuery<SubjectDetails>({
     queryKey: ["subject-details", subject.detailsCid],
@@ -97,8 +100,33 @@ function DisputeCard({
   const totalPool = totalStake + bondAtRisk;
   const jurorReward = totalPool * 0.19; // 19% to jurors
 
+  // Handle review content click - fetch signed token then navigate
+  const handleReviewContent = async () => {
+    if (!reportDetails?.contentCid) return;
+
+    setIsLoadingReview(true);
+    try {
+      const res = await fetch("/api/moderation/review-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentCid: reportDetails.contentCid }),
+      });
+
+      if (!res.ok) throw new Error("Failed to get review token");
+
+      const { token } = await res.json();
+      router.push(`/content/${reportDetails.contentCid}?review=${token}`);
+    } catch (error) {
+      console.error("Failed to get review token:", error);
+      // Fallback to regular view if token generation fails
+      router.push(`/content/${reportDetails.contentCid}`);
+    } finally {
+      setIsLoadingReview(false);
+    }
+  };
+
   return (
-    <div className="bg-[#0a0a0c] border border-white/10 rounded-xl p-4 space-y-3">
+    <div className="bg-[#0a0a0c] border border-white/10 rounded-lg p-4 space-y-3">
       {/* Title and Status */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -130,16 +158,21 @@ function DisputeCard({
       {/* Links */}
       <div className="flex items-center gap-2 pt-2 border-t border-white/5">
         {reportDetails?.contentCid && (
-          <Link
-            href={`/content/${reportDetails.contentCid}`}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+          <button
+            onClick={handleReviewContent}
+            disabled={isLoadingReview}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            View Content
-          </Link>
+            {isLoadingReview ? (
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            )}
+            Review Content
+          </button>
         )}
         <a
           href={`https://tribunalcraft.io/subject/${subject.subjectId.toBase58()}`}
@@ -206,7 +239,7 @@ export default function ModerationPage() {
       <button
         onClick={toggleSidebar}
         className={`fixed top-4 z-50 p-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10 hover:border-white/20 transition-all duration-300 ${
-          isSidebarOpen ? "left-[304px]" : "left-4"
+          isSidebarOpen ? "left-[264px]" : "left-4"
         }`}
       >
         <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,19 +247,14 @@ export default function ModerationPage() {
         </svg>
       </button>
 
-      <main className="max-w-4xl mx-auto px-6 py-20">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Moderation</h1>
-              <p className="text-sm text-white/40">
-                Powered by{" "}
+      {/* Compact header bar */}
+      <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14">
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg font-medium text-white">Moderation</h1>
+              <span className="text-xs text-white/30">
+                via{" "}
                 <a
                   href="https://tribunalcraft.io"
                   target="_blank"
@@ -235,20 +263,15 @@ export default function ModerationPage() {
                 >
                   Tribunalcraft
                 </a>
-              </p>
+              </span>
             </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-white/40 uppercase tracking-wider">Active Disputes</p>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-white/40">Disputes:</span>
+              <span className="font-medium text-white">{activeDisputes?.length ?? 0}</span>
               <button
                 onClick={() => refetch()}
                 disabled={isLoading}
-                className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                className="p-1.5 hover:bg-white/10 rounded-md transition-colors disabled:opacity-50"
                 title="Refresh"
               >
                 <svg className={`w-3.5 h-3.5 text-white/40 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,41 +279,35 @@ export default function ModerationPage() {
                 </svg>
               </button>
             </div>
-            <p className="text-2xl font-bold text-white mt-1">{activeDisputes?.length ?? 0}</p>
           </div>
-          <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Protocol</p>
-            <p className="text-lg font-semibold text-purple-400 mt-1">Tribunalcraft</p>
-          </div>
-          <div className="p-4 bg-white/[0.02] border border-white/10 rounded-xl">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Network</p>
-            <p className="text-lg font-semibold text-white mt-1">Devnet</p>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 p-1 bg-white/[0.02] rounded-lg border border-white/5 w-fit">
-          <button
-            onClick={() => setActiveTab("disputes")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "disputes"
-                ? "bg-white/10 text-white"
-                : "text-white/50 hover:text-white"
-            }`}
-          >
-            Active Disputes
-          </button>
-          <button
-            onClick={() => setActiveTab("juror")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "juror"
-                ? "bg-white/10 text-white"
-                : "text-white/50 hover:text-white"
-            }`}
-          >
-            Become a Juror
-          </button>
+          {/* Tabs in header */}
+          <div className="flex items-center gap-1 pb-3 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setActiveTab("disputes")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                activeTab === "disputes"
+                  ? "bg-white text-black"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+              }`}
+            >
+              Active Disputes
+            </button>
+            <button
+              onClick={() => setActiveTab("juror")}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                activeTab === "juror"
+                  ? "bg-white text-black"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+              }`}
+            >
+              Become a Juror
+            </button>
+          </div>
         </div>
+      </div>
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
 
         {/* Tab Content */}
         {activeTab === "disputes" && (
@@ -301,8 +318,8 @@ export default function ModerationPage() {
               </div>
             ) : !activeDisputes || activeDisputes.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 mx-auto rounded-lg bg-green-500/10 flex items-center justify-center mb-3 border border-green-500/20">
+                  <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
@@ -323,9 +340,9 @@ export default function ModerationPage() {
 
         {activeTab === "juror" && (
           <div className="max-w-lg">
-            <div className="bg-white/[0.02] border border-white/10 rounded-xl p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+            <div className="bg-white/[0.02] border border-white/10 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                   <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
                   </svg>

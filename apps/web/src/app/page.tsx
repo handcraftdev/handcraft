@@ -69,7 +69,7 @@ export default function Home() {
           {/* Scroll indicator */}
           <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 transition-all duration-1000 delay-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
             <div className="flex flex-col items-center gap-2 text-white/20">
-              <span className="text-[10px] uppercase tracking-[0.3em]">Scroll</span>
+              <span className="text-xs uppercase tracking-[0.3em]">Scroll</span>
               <div className="w-px h-8 bg-gradient-to-b from-white/20 to-transparent" />
             </div>
           </div>
