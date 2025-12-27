@@ -22,8 +22,8 @@ interface BuyBundleModalProps {
   bundleName?: string;
   creator: PublicKey;
   mintConfig: BundleMintConfig;
-  mintedCount: bigint;
-  pendingCount?: bigint;
+  mintedCount?: bigint | number;
+  pendingCount?: bigint | number;
   ownedCount?: number;
   onSuccess?: (rarity?: Rarity) => void;
 }
@@ -77,7 +77,9 @@ export function BuyBundleModal({
     const checkForPendingRequests = async () => {
       setIsCheckingPending(true);
       try {
-        const maxEdition = mintedCount + pendingCount + BigInt(10);
+        const mintedBigInt = typeof mintedCount === 'bigint' ? mintedCount : BigInt(mintedCount ?? 0);
+        const pendingBigInt = typeof pendingCount === 'bigint' ? pendingCount : BigInt(pendingCount ?? 0);
+        const maxEdition = mintedBigInt + pendingBigInt + BigInt(10);
         const pendingRequests = await client.findPendingBundleMintRequests(
           publicKey,
           bundleId,
@@ -108,7 +110,9 @@ export function BuyBundleModal({
   const price = mintConfig.price;
   const isFree = price === BigInt(0);
   const maxSupply = mintConfig.maxSupply;
-  const remaining = maxSupply ? maxSupply - mintedCount : null;
+  const mintedCountBigInt = typeof mintedCount === 'bigint' ? mintedCount : BigInt(mintedCount ?? 0);
+  const pendingCountBigInt = typeof pendingCount === 'bigint' ? pendingCount : BigInt(pendingCount ?? 0);
+  const remaining = maxSupply ? maxSupply - mintedCountBigInt : null;
   const isSoldOut = remaining !== null && remaining <= BigInt(0);
   const maxQuantity = remaining !== null ? Math.min(Number(remaining), 10) : 10;
 
@@ -250,52 +254,52 @@ export function BuyBundleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={isProcessing ? undefined : handleClose} />
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={isProcessing ? undefined : handleClose} />
 
-      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 overflow-hidden">
+      <div className="relative bg-black border border-white/[0.08] rounded-xl w-full max-w-sm p-4 m-4 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
 
         <div className="relative">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-medium text-white/90">Buy Bundle</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-white/90">Buy Bundle</h2>
             <button
               onClick={handleClose}
               disabled={isProcessing}
-              className="p-2 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/70 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {bundleName && (
-            <p className="text-white/40 mb-4 text-sm">
+            <p className="text-white/40 mb-3 text-base">
               <span className="text-white/90 font-medium">{bundleName}</span>
             </p>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {mintStep === "idle" && (
-              <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/20 rounded-xl p-3 text-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-gradient-to-r from-purple-500/10 to-yellow-500/10 border border-purple-500/20 rounded-lg p-2.5 text-sm">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                   </svg>
                   <span className="font-medium text-white/90">Random Rarity</span>
                 </div>
-                <p className="text-white/40 text-xs">
-                  Your rarity is determined by verifiable random function. Higher rarity = more rewards!
+                <p className="text-white/40 text-sm">
+                  Rarity determines rewards. Higher rarity = more rewards!
                 </p>
-                <RarityProbabilities className="mt-2" />
+                <RarityProbabilities className="mt-1.5" />
               </div>
             )}
 
             {isProcessing && (
-              <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-center">
-                <div className="mb-4">
+              <div className="bg-white/[0.04] border border-white/[0.08] rounded-lg p-4 text-center">
+                <div className="mb-3">
                   {mintStep === "determining" ? (
-                    <div className="w-16 h-16 mx-auto relative">
+                    <div className="w-12 h-12 mx-auto relative">
                       <div className="absolute inset-0 animate-spin" style={{ animationDuration: "3s" }}>
                         <svg className="w-full h-full text-purple-400" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
@@ -308,38 +312,38 @@ export function BuyBundleModal({
                       </div>
                     </div>
                   ) : (
-                    <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <div className="w-10 h-10 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
                   )}
                 </div>
                 <p className="text-lg font-medium text-white/90">{getStepMessage()}</p>
 {quantity > 1 && (
                   <p className="text-sm text-white/40 mt-1">Buying {mintingProgress} of {quantity}</p>
                 )}
-                <div className="flex justify-center gap-1 mt-4">
-                  <div className={`w-2 h-2 rounded-full ${mintStep === "committing" || mintStep === "determining" ? "bg-cyan-400" : "bg-white/20"}`} />
-                  <div className={`w-2 h-2 rounded-full ${mintStep === "determining" ? "bg-cyan-400" : "bg-white/20"}`} />
-                  <div className="w-2 h-2 rounded-full bg-white/20" />
+                <div className="flex justify-center gap-1 mt-3">
+                  <div className={`w-1.5 h-1.5 rounded-full ${mintStep === "committing" || mintStep === "determining" ? "bg-cyan-400" : "bg-white/20"}`} />
+                  <div className={`w-1.5 h-1.5 rounded-full ${mintStep === "determining" ? "bg-cyan-400" : "bg-white/20"}`} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
                 </div>
               </div>
             )}
 
             {mintStep === "revealing" && pendingRequest && (
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-center">
-                <p className="text-yellow-400 font-medium mb-2">Oracle timeout</p>
-                <p className="text-sm text-white/40 mb-4">
-                  The VRF oracle didn't respond in time. You can claim your edition with slot hash randomness.
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-center">
+                <p className="text-yellow-400 font-medium text-base mb-1.5">Oracle timeout</p>
+                <p className="text-sm text-white/40 mb-3">
+                  VRF oracle didn't respond. Claim with slot hash randomness.
                 </p>
                 {fallbackCountdown !== null && fallbackCountdown > 0 ? (
-                  <p className="text-sm text-white/30 mb-3">Fallback available in {Math.ceil(fallbackCountdown)}s</p>
+                  <p className="text-sm text-white/30 mb-2">Fallback available in {Math.ceil(fallbackCountdown)}s</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <button onClick={handleClaimFallback} disabled={isClaimingFallback || isCancelling}
-                      className="w-full py-2.5 rounded-xl font-medium bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 disabled:opacity-50 text-white/90 transition-all duration-300">
-                      {isClaimingFallback ? "Claiming..." : "Claim with Slot Hash Randomness"}
+                      className="w-full py-2 rounded-lg text-sm font-medium bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 disabled:opacity-50 text-white/90 transition-all">
+                      {isClaimingFallback ? "Claiming..." : "Claim with Slot Hash"}
                     </button>
                     <button onClick={handleCancelMint} disabled={isClaimingFallback || isCancelling}
-                      className="w-full py-2.5 rounded-xl font-medium bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 text-white/70 transition-all duration-300">
-                      {isCancelling ? "Cancelling..." : "Cancel & Get Refund"}
+                      className="w-full py-2 rounded-lg text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50 text-white/60 transition-all">
+                      {isCancelling ? "Cancelling..." : "Cancel & Refund"}
                     </button>
                   </div>
                 )}
@@ -347,95 +351,95 @@ export function BuyBundleModal({
             )}
 
             {mintStep === "success" && (
-              <div className={`rounded-xl p-6 text-center border ${
+              <div className={`rounded-lg p-4 text-center border ${
                 revealedRarity !== null && RARITY_STYLES[revealedRarity]
                   ? `${RARITY_STYLES[revealedRarity].border} ${RARITY_STYLES[revealedRarity].bg}`
                   : "border-emerald-500/30 bg-emerald-500/10"
               }`}>
-                <div className="text-5xl mb-3">
-                  {revealedRarity === 4 && <span className="animate-pulse">⭐</span>}{/* Legendary */}
-                  {revealedRarity === 3 && <span className="animate-bounce">💎</span>}{/* Epic */}
-                  {revealedRarity === 2 && "💠"}{/* Rare */}
-                  {revealedRarity === 1 && "🌿"}{/* Uncommon */}
-                  {revealedRarity === 0 && "⚪"}{/* Common */}
+                <div className="text-4xl mb-2">
+                  {revealedRarity === 4 && <span className="animate-pulse">⭐</span>}
+                  {revealedRarity === 3 && <span className="animate-bounce">💎</span>}
+                  {revealedRarity === 2 && "💠"}
+                  {revealedRarity === 1 && "🌿"}
+                  {revealedRarity === 0 && "⚪"}
                   {(revealedRarity === null || !RARITY_STYLES[revealedRarity]) && "🎉"}
                 </div>
                 {revealedRarity !== null && RARITY_STYLES[revealedRarity] ? (
                   <>
                     <p className={`text-xl font-bold ${RARITY_STYLES[revealedRarity].text}`}>{getRarityName(revealedRarity)}!</p>
-                    <p className="text-sm text-white/40 mt-1">You purchased a {getRarityName(revealedRarity).toLowerCase()} rarity edition</p>
+                    <p className="text-sm text-white/40 mt-0.5">{getRarityName(revealedRarity).toLowerCase()} rarity edition</p>
                   </>
                 ) : (
                   <>
                     <p className="text-xl font-bold text-emerald-400">Success!</p>
-                    <p className="text-sm text-white/40 mt-1">Your bundle purchase was successful</p>
+                    <p className="text-sm text-white/40 mt-0.5">Bundle purchase successful</p>
                   </>
                 )}
               </div>
             )}
 
             {ownedCount > 0 && mintStep === "idle" && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-emerald-400 text-sm flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-emerald-400 text-sm flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                You already own {ownedCount} edition{ownedCount > 1 ? "s" : ""} of this bundle
+                You already own {ownedCount} edition{ownedCount > 1 ? "s" : ""}
               </div>
             )}
 
             {mintStep === "idle" && (
-              <div className="bg-white/5 border border-white/5 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-white/40">Price per edition</span>
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-lg p-3">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-white/40 text-sm">Price per edition</span>
                   <span className="text-xl font-bold text-cyan-400">{formatPrice(1)}</span>
                 </div>
 
                 {!isSoldOut && maxQuantity > 1 && (
-                  <div className="flex justify-between items-center mb-3 pt-2 border-t border-white/5">
-                    <span className="text-white/40">Quantity</span>
-                    <div className="flex items-center gap-2">
+                  <div className="flex justify-between items-center mb-2 pt-2 border-t border-white/[0.06]">
+                    <span className="text-white/40 text-sm">Quantity</span>
+                    <div className="flex items-center gap-1.5">
                       <button onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1}
-                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 flex items-center justify-center transition-all">-</button>
-                      <span className="w-8 text-center font-medium text-white/90">{quantity}</span>
+                        className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50 flex items-center justify-center transition-all text-sm text-white/70 hover:text-white/90">-</button>
+                      <span className="w-6 text-center font-medium text-white/90 text-base">{quantity}</span>
                       <button onClick={() => setQuantity(q => Math.min(maxQuantity, q + 1))} disabled={quantity >= maxQuantity}
-                        className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50 flex items-center justify-center transition-all">+</button>
+                        className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] disabled:opacity-50 flex items-center justify-center transition-all text-sm text-white/70 hover:text-white/90">+</button>
                     </div>
                   </div>
                 )}
 
                 {quantity > 1 && (
-                  <div className="flex justify-between items-center mb-2 pt-2 border-t border-white/5">
-                    <span className="text-white/40">Total</span>
-                    <span className="text-2xl font-bold text-cyan-400">{formatPrice(quantity)}</span>
+                  <div className="flex justify-between items-center mb-1.5 pt-2 border-t border-white/[0.06]">
+                    <span className="text-white/40 text-sm">Total</span>
+                    <span className="text-xl font-bold text-cyan-400">{formatPrice(quantity)}</span>
                   </div>
                 )}
 
                 {maxSupply ? (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-white/40">Editions</span>
-                    <span className="text-white/70">{mintedCount.toString()} / {maxSupply.toString()}
+                    <span className="text-white/70">{mintedCountBigInt.toString()} / {maxSupply.toString()}
                       {remaining !== null && remaining > BigInt(0) && <span className="text-white/40 ml-1">({remaining.toString()} left)</span>}
                     </span>
                   </div>
                 ) : (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-white/40">Editions</span>
-                    <span className="text-white/70">{mintedCount.toString()} (unlimited)</span>
+                    <span className="text-white/70">{mintedCountBigInt.toString()} (unlimited)</span>
                   </div>
                 )}
               </div>
             )}
 
             {mintStep === "idle" && (
-              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                <h3 className="text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Your payment goes to</h3>
-                <div className="space-y-1.5 text-sm">
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-2.5">
+                <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Your payment goes to</h3>
+                <div className="space-y-1 text-sm">
                   <div className="flex justify-between"><span className="text-white/50">Creator</span><span className="text-emerald-400">80%</span></div>
                   <div className="flex justify-between"><span className="text-white/50">Existing Holders</span><span className="text-blue-400">12%</span></div>
                   <div className="flex justify-between"><span className="text-white/30">Platform</span><span className="text-white/30">5%</span></div>
                   <div className="flex justify-between"><span className="text-white/30">Ecosystem</span><span className="text-white/30">3%</span></div>
                 </div>
-                {mintedCount === BigInt(0) && <p className="text-xs text-white/30 mt-2">First mint: 12% holder reward goes to creator</p>}
+                {mintedCountBigInt === BigInt(0) && <p className="text-xs text-white/30 mt-1.5">First mint: 12% holder reward goes to creator</p>}
               </div>
             )}
 
@@ -444,14 +448,14 @@ export function BuyBundleModal({
             )}
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-400 text-sm">{error}</div>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-red-400 text-sm">{error}</div>
             )}
 
             {mintStep === "idle" && (
               <button onClick={handleBuy} disabled={isSoldOut || !publicKey || isLoadingCollection || isCheckingPending || !bundleCollection || !client}
-                className={`w-full py-3 rounded-xl font-medium transition-all duration-300 ${
-                  isSoldOut ? "bg-white/5 text-white/30 cursor-not-allowed"
-                    : "bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 hover:border-cyan-500/50 text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full py-2 rounded-lg text-base font-medium transition-all ${
+                  isSoldOut ? "bg-white/[0.04] text-white/30 cursor-not-allowed"
+                    : "bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-white/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 }`}>
 {isCheckingPending ? "Checking..." : isLoadingCollection ? "Loading..." : isSoldOut ? "Sold Out"
                   : !publicKey ? "Connect Wallet" : isFree ? (quantity > 1 ? `Buy ${quantity} for Free` : "Buy for Free")
