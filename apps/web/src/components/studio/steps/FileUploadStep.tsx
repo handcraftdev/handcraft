@@ -352,7 +352,7 @@ export function FileUploadStep({ draft, onUpdate, onNext, onUploadStateChange, u
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <h2 className="text-lg font-medium text-white/90 mb-1">Upload your content</h2>
       <p className="text-sm text-white/40 mb-6">
         {isUploading

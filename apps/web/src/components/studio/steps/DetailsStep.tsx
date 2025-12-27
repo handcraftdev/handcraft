@@ -122,7 +122,7 @@ export function DetailsStep({ draft, onUpdate, onNext, username = '', isEditMode
   const canProceed = !!draft?.title?.trim();
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <h2 className="text-lg font-medium text-white/90 mb-1">Content Details</h2>
       <p className="text-sm text-white/40 mb-6">Add information about your content</p>
 

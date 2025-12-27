@@ -731,7 +731,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
 
           {/* Main Content Skeleton */}
           <main className="flex-1 overflow-auto p-6">
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-5xl mx-auto">
               <div className="h-6 w-40 bg-white/5 rounded animate-pulse mb-2" />
               <div className="h-3 w-56 bg-white/5 rounded animate-pulse mb-6" />
               <div className="space-y-3">
@@ -803,7 +803,7 @@ export function UploadStudio({ draftId, editContentCid }: UploadStudioProps) {
 
         <main className="flex-1 overflow-auto p-8">
         {error && (
-          <div className="max-w-3xl mx-auto mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400">
+          <div className="max-w-5xl mx-auto mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400">
             {error}
           </div>
         )}

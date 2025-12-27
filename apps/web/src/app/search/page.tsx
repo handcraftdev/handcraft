@@ -7,11 +7,11 @@ function SearchLoadingFallback() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-3xl mx-auto px-6 py-6">
+        <div className="max-w-5xl mx-auto px-6 py-6">
           <div className="h-14 bg-white/5 rounded-2xl animate-pulse" />
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="flex gap-4 p-5 rounded-xl bg-white/[0.02] border border-white/5 animate-pulse">

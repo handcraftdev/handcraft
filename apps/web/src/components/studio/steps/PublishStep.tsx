@@ -107,7 +107,7 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
   // Edit mode UI - simpler save changes flow
   if (isEditMode) {
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h2 className="text-lg font-medium text-white/90 mb-1">Save Changes</h2>
         <p className="text-sm text-white/40 mb-6">Update your content metadata on IPFS and blockchain</p>
 
@@ -156,7 +156,7 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
 
   if (draft?.status === 'published') {
     return (
-      <div className="max-w-2xl mx-auto text-center py-8">
+      <div className="max-w-5xl mx-auto text-center py-8">
         <div className="w-12 h-12 mx-auto mb-3 rounded-lg bg-emerald-500/20 flex items-center justify-center">
           <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -179,7 +179,7 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
 
   if (draft?.status === 'scheduled') {
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Current Schedule Status */}
         <div className="text-center py-6 mb-6 bg-amber-500/10 border border-amber-500/20 rounded-lg">
           <div className="w-12 h-12 mx-auto mb-3 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -234,7 +234,7 @@ export function PublishStep({ draft, onPublish, isPublishing: externalPublishing
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <h2 className="text-lg font-medium text-white/90 mb-1">Publish</h2>
       <p className="text-sm text-white/40 mb-6">Choose when to publish your content</p>
 

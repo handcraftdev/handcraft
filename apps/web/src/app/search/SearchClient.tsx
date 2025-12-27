@@ -436,7 +436,7 @@ function SearchContent() {
 
       {/* Compact header bar */}
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           {/* Search input */}
           <form onSubmit={handleSearch} className="py-3">
             <div className="relative">
@@ -491,7 +491,7 @@ function SearchContent() {
       </div>
 
       {/* Results */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
         {!query ? (
           <div>
             {history.length > 0 && (
@@ -906,11 +906,11 @@ function SearchLoadingFallback() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
           <div className="h-10 bg-white/[0.04] rounded-lg animate-pulse" />
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="flex gap-3 p-3 rounded-lg bg-white/[0.02] animate-pulse">

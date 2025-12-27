@@ -12,7 +12,7 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 
 function formatSol(lamports: number | null | undefined): string {
   if (lamports == null) return '-';
-  return (lamports / LAMPORTS_PER_SOL).toFixed(3);
+  return (lamports / LAMPORTS_PER_SOL).toFixed(6);
 }
 
 export function ReviewStep({ draft, onNext }: ReviewStepProps) {
@@ -30,7 +30,7 @@ export function ReviewStep({ draft, onNext }: ReviewStepProps) {
   const canProceed = incompleteSteps.length === 0;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <h2 className="text-lg font-medium text-white/90 mb-1">Review</h2>
       <p className="text-sm text-white/40 mb-6">Review your content before publishing</p>
 

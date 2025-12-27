@@ -71,7 +71,7 @@ export function TypeSelectStep({ draft, onUpdate, onNext }: TypeSelectStepProps)
 
   if (!selectedDomain) {
     return (
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h2 className="text-lg font-medium text-white/90 mb-1">What are you uploading?</h2>
         <p className="text-sm text-white/40 mb-6">Choose the type of content you want to publish</p>
 
@@ -98,7 +98,7 @@ export function TypeSelectStep({ draft, onUpdate, onNext }: TypeSelectStepProps)
   const types = CONTENT_TYPES[selectedDomain] || [];
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <button
         onClick={() => onUpdate({ domain: '', content_type: undefined })}
         className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors mb-4"

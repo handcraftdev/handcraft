@@ -4301,6 +4301,22 @@ export async function fetchEcosystemStreamingTreasuryBalance(
 }
 
 /**
+ * Fetch native SOL balance in the ecosystem streaming treasury PDA
+ * This is where funds sit after unwrapping WSOL, waiting for distribution
+ */
+export async function fetchEcosystemStreamingTreasuryNativeBalance(
+  connection: Connection
+): Promise<bigint> {
+  try {
+    const [treasuryPda] = getEcosystemStreamingTreasuryPda();
+    const balance = await connection.getBalance(treasuryPda);
+    return BigInt(balance);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+/**
  * Result of pending distribution calculation
  */
 export interface PendingDistributionResult {
@@ -5222,6 +5238,7 @@ export async function claimCreatorEcosystemPayoutInstruction(
       creatorDistPool: creatorDistPoolPda,
       ecosystemEpochState: ecosystemEpochStatePda,
       ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
+      platformTreasury: ecosystemConfig.admin, // TODO: Add proper platform_treasury field to EcosystemConfig
       ecosystemTreasury: ecosystemConfig.treasury,
       ecosystemConfig: ecosystemConfigPda,
       creatorWeight: creatorWeightPda,
@@ -5267,7 +5284,7 @@ export async function batchClaimGlobalHolderRewardsInstruction(
       creatorDistPool: creatorDistPoolPda,
       ecosystemEpochState: ecosystemEpochStatePda,
       ecosystemStreamingTreasury: ecosystemStreamingTreasuryPda,
-      platformTreasury: ecosystemConfig.platform,
+      platformTreasury: ecosystemConfig.admin, // TODO: Add proper platform_treasury field to EcosystemConfig
       ecosystemTreasury: ecosystemConfig.treasury,
       ecosystemConfig: ecosystemConfigPda,
       holder,
@@ -5312,7 +5329,7 @@ export async function batchClaimPatronRewardsInstruction(
       creatorPatronPool: creatorPatronPoolPda,
       creatorPatronTreasury: creatorPatronTreasuryPda,
       creatorWallet: creator,
-      platformTreasury: ecosystemConfig.platform,
+      platformTreasury: ecosystemConfig.admin, // TODO: Add proper platform_treasury field to EcosystemConfig
       ecosystemTreasury: ecosystemConfig.treasury,
       ecosystemConfig: ecosystemConfigPda,
       holder,
@@ -5776,6 +5793,7 @@ export function createContentRegistryClient(connection: Connection) {
     fetchGlobalHolderPool: () => fetchGlobalHolderPool(connection),
     fetchCreatorDistPool: () => fetchCreatorDistPool(connection),
     fetchEcosystemStreamingTreasuryBalance: () => fetchEcosystemStreamingTreasuryBalance(connection),
+    fetchEcosystemStreamingTreasuryNativeBalance: () => fetchEcosystemStreamingTreasuryNativeBalance(connection),
     fetchEcosystemPendingDistribution: (
       streamflowClient: Parameters<typeof fetchEcosystemPendingDistribution>[1]
     ) => fetchEcosystemPendingDistribution(connection, streamflowClient),

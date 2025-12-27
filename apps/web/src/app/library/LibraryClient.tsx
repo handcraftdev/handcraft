@@ -323,7 +323,7 @@ export default function LibraryClient() {
 
       {/* Compact header bar */}
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             {/* Left: Title & count */}
             <div className="flex items-center gap-3">

@@ -905,7 +905,7 @@ export function useMembership() {
 // Helper to format SOL amounts
 export function formatSol(lamports: bigint | number): string {
   const num = typeof lamports === "bigint" ? Number(lamports) : lamports;
-  return (num / LAMPORTS_PER_SOL).toFixed(4);
+  return (num / LAMPORTS_PER_SOL).toFixed(6);
 }
 
 // Helper to calculate days remaining from stream's endTime

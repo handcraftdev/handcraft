@@ -56,11 +56,7 @@ export function EpochStatusCard() {
   };
 
   const formatSol = (lamports: bigint): string => {
-    const sol = Number(lamports) / LAMPORTS_PER_SOL;
-    if (sol === 0) return "0";
-    if (sol < 0.001) return sol.toFixed(6);
-    if (sol < 1) return sol.toFixed(4);
-    return sol.toFixed(2);
+    return (Number(lamports) / LAMPORTS_PER_SOL).toFixed(6);
   };
 
   const formatTimestamp = (timestamp: number): string => {

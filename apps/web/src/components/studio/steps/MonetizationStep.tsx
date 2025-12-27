@@ -50,7 +50,7 @@ export function MonetizationStep({ draft, onUpdate, onNext, isEditMode = false }
   const canProceed = hasBuyPrice && hasAllRentals;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <h2 className="text-lg font-medium text-white/90 mb-1">Monetization</h2>
       <p className="text-sm text-white/40 mb-6">Set pricing for buying and renting your content</p>
 

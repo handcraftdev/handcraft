@@ -2693,6 +2693,18 @@ export function useContentRegistry() {
       queryClient.invalidateQueries({ queryKey: ["bundleRewardPool"] });
       queryClient.invalidateQueries({ queryKey: ["bundlePendingRewards"] });
       queryClient.invalidateQueries({ queryKey: ["unifiedRewards"] });
+      // Invalidate ecosystem epoch/pool state (updated after distribution)
+      queryClient.invalidateQueries({ queryKey: ["epochState"] });
+      queryClient.invalidateQueries({ queryKey: ["globalHolderPool"] });
+      queryClient.invalidateQueries({ queryKey: ["creatorDistPool"] });
+      queryClient.invalidateQueries({ queryKey: ["ecosystemTreasuryBalance"] });
+      queryClient.invalidateQueries({ queryKey: ["ecosystemTreasuryNativeBalance"] });
+      // Invalidate patron/creator pool state (per-creator, use partial key match)
+      queryClient.invalidateQueries({ predicate: (query) =>
+        query.queryKey[0] === "creatorPatronPool" ||
+        query.queryKey[0] === "creatorPatronTreasuryBalance" ||
+        query.queryKey[0] === "creatorPatronEscrowBalance"
+      });
     },
   });
 
@@ -3287,6 +3299,17 @@ export function useContentRegistry() {
     refetchOnWindowFocus: false,
   });
 
+  // Native SOL balance in treasury PDA (after unwrapping WSOL, waiting for distribution)
+  const ecosystemTreasuryNativeBalanceQuery = useQuery({
+    queryKey: ["ecosystemTreasuryNativeBalance"],
+    queryFn: () => client?.fetchEcosystemStreamingTreasuryNativeBalance() ?? BigInt(0),
+    enabled: !!client,
+    staleTime: 30000,
+    gcTime: 60000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
   // Derive mintable content from already-cached globalContent + allMintConfigs
   // This avoids duplicate RPC calls by reusing data from other queries
   const mintableContent = useMemo(() => {
@@ -3332,14 +3355,17 @@ export function useContentRegistry() {
     globalHolderPool: globalHolderPoolQuery.data,
     creatorDistPool: creatorDistPoolQuery.data,
     ecosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.data ?? BigInt(0),
+    ecosystemTreasuryNativeBalance: ecosystemTreasuryNativeBalanceQuery.data ?? BigInt(0),
     isLoadingEpochState: epochStateQuery.isLoading,
     isLoadingGlobalHolderPool: globalHolderPoolQuery.isLoading,
     isLoadingCreatorDistPool: creatorDistPoolQuery.isLoading,
     isLoadingEcosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.isLoading,
+    isLoadingEcosystemTreasuryNativeBalance: ecosystemTreasuryNativeBalanceQuery.isLoading,
     refetchEpochState: epochStateQuery.refetch,
     refetchGlobalHolderPool: globalHolderPoolQuery.refetch,
     refetchCreatorDistPool: creatorDistPoolQuery.refetch,
     refetchEcosystemTreasuryBalance: ecosystemTreasuryBalanceQuery.refetch,
+    refetchEcosystemTreasuryNativeBalance: ecosystemTreasuryNativeBalanceQuery.refetch,
 
     // User Profile
     userProfile: userProfileQuery.data,

@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 function LibraryLoading() {
   return (
     <div className="min-h-screen bg-black">
-      <div className="max-w-7xl mx-auto px-6 py-20">
+      <div className="max-w-5xl mx-auto px-6 py-20">
         <div className="mb-8">
           <div className="h-9 w-32 bg-white/5 rounded-lg animate-pulse mb-2" />
           <div className="h-5 w-48 bg-white/5 rounded animate-pulse" />

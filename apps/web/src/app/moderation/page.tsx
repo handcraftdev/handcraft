@@ -249,7 +249,7 @@ export default function ModerationPage() {
 
       {/* Compact header bar */}
       <div className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/[0.06]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-medium text-white">Moderation</h1>
@@ -307,7 +307,7 @@ export default function ModerationPage() {
         </div>
       </div>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
 
         {/* Tab Content */}
         {activeTab === "disputes" && (
