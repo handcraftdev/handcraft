@@ -8,9 +8,16 @@ import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
+import { WalletAdapterNetwork, Adapter } from "@solana/wallet-adapter-base";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { WalletConnectWalletAdapter } from "@walletconnect/solana-adapter";
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+  CoinbaseWalletAdapter,
+  TrustWalletAdapter,
+  LedgerWalletAdapter,
+} from "@solana/wallet-adapter-wallets";
 import { SupabaseAuthProvider } from "@/hooks/useSupabaseAuth";
 import { MobileWalletAdapterProvider } from "@/components/MobileWalletAdapter";
 
@@ -39,39 +46,48 @@ export function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   // Configure wallet adapters
+  // - Explicit adapters for major wallets
   // - WalletConnect: Enables QR code scanning for desktop-to-mobile connections
-  // - Other wallets (Phantom, Solflare, etc.) are auto-discovered via Wallet Standard
+  // - Wallet Standard auto-discovery also enabled for other wallets
   const wallets = useMemo(() => {
-    const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-
-    // Only add WalletConnect if project ID is configured
-    if (!projectId) {
-      console.log("[Providers] WalletConnect not configured (no project ID)");
-      return [];
-    }
-
     const network =
       process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
         ? WalletAdapterNetwork.Mainnet
         : WalletAdapterNetwork.Devnet;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://handcraft.io";
-    const appName = process.env.NEXT_PUBLIC_APP_NAME || "Handcraft";
-
-    return [
-      new WalletConnectWalletAdapter({
-        network,
-        options: {
-          projectId,
-          metadata: {
-            name: appName,
-            description: "Decentralized content platform - Videos, Audio, Communities",
-            url: appUrl,
-            icons: [`${appUrl}/icon.png`],
-          },
-        },
-      }),
+    const adapters: Adapter[] = [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter({ network }),
+      new CoinbaseWalletAdapter(),
+      new TrustWalletAdapter(),
+      new LedgerWalletAdapter(),
     ];
+
+    // Add WalletConnect if project ID is configured
+    const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+    if (projectId) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://handcraft.io";
+      const appName = process.env.NEXT_PUBLIC_APP_NAME || "Handcraft";
+
+      adapters.push(
+        new WalletConnectWalletAdapter({
+          network,
+          options: {
+            projectId,
+            metadata: {
+              name: appName,
+              description: "Decentralized content platform - Videos, Audio, Communities",
+              url: appUrl,
+              icons: [`${appUrl}/icon.png`],
+            },
+          },
+        })
+      );
+    } else {
+      console.log("[Providers] WalletConnect not configured (no project ID)");
+    }
+
+    return adapters;
   }, []);
 
   if (!endpoint) {
