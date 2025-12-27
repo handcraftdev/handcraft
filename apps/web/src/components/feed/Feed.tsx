@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useContentRegistry } from "@/hooks/useContentRegistry";
@@ -50,6 +51,7 @@ import { type EnrichedContent, type UnifiedFeedItem, type NftTypeFilter, NFT_TYP
 import { getCachedDecryptedUrl, setCachedDecryptedUrl } from "./cache";
 import { getContentTypeLabel, getTimeAgo, formatDuration } from "./helpers";
 import { EmptyState, LockedOverlay, NeedsSessionOverlay } from "./Overlays";
+import { parseReviewToken } from "@/lib/reviewToken";
 import { ContentViewer, ViewerPlaceholder } from "@/components/viewers";
 
 type ContentTypeFilter = "all" | SDKContentType;
@@ -148,8 +150,6 @@ function parseSortDir(param: string | null): SortDirection {
 interface FeedProps {
   isSidebarOpen?: boolean;
   onCloseSidebar?: () => void;
-  showFilters: boolean;
-  setShowFilters: (show: boolean) => void;
   // When provided, this content/bundle starts first in the feed
   initialCid?: string;
   // For bundles: which item position to start at (1-indexed)
@@ -158,7 +158,7 @@ interface FeedProps {
   onOverlayChange?: (visible: boolean) => void;
 }
 
-export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setShowFilters, initialCid, initialPosition = 1, onOverlayChange }: FeedProps) {
+export function Feed({ isSidebarOpen = false, onCloseSidebar, initialCid, initialPosition = 1, onOverlayChange }: FeedProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -171,6 +171,31 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Dropdown states for filter controls
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Check if any filter is active
+  const hasActiveFilters = nftTypeFilter !== "all" || typeFilter !== "all" || bundleTypeFilter !== "all";
+
+  // Click outside handler for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setShowSortDropdown(false);
+      }
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+    };
+    if (showSortDropdown || showFilterDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showSortDropdown, showFilterDropdown]);
 
   // Track overlay visibility for syncing UI elements
   const [localOverlayVisible, setLocalOverlayVisible] = useState(true);
@@ -772,102 +797,173 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
 
   return (
     <div className={containerClass}>
-      {/* Filter Button - positioned below menu button (handled by page), synced with overlay */}
-      <button
-        onClick={() => {
-          if (isSidebarOpen && onCloseSidebar) onCloseSidebar();
-          setShowFilters(!showFilters);
-        }}
-        className={`fixed z-50 p-3 bg-black/60 backdrop-blur-md rounded-full border border-white/10 hover:border-white/30 transition-all duration-300 ${isSidebarOpen || showFilters ? "left-[304px]" : "left-4"} ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        style={{ top: "4.5rem" }}
-        title="Filter"
-      >
-        <svg className="w-5 h-5 text-white/70 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-        </svg>
-      </button>
+      {/* Top Right Controls - Sort & Filter dropdowns */}
+      <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 transition-opacity duration-300 ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        {/* Sort dropdown */}
+        <div className="relative" ref={sortRef}>
+          <button
+            onClick={() => setShowSortDropdown(!showSortDropdown)}
+            className={`p-2 rounded-lg bg-black/60 backdrop-blur-md border transition-all duration-200 ${
+              showSortDropdown ? "border-white/30 bg-white/10" : "border-white/10 hover:border-white/30"
+            }`}
+            title={`Sort by: ${sortType}`}
+          >
+            <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7h6M3 12h9m-9 5h12M17 3v18m0 0l-3-3m3 3l3-3" />
+            </svg>
+          </button>
 
-      {/* Filters Panel - synced with overlay */}
-      <div className={`absolute top-0 left-0 h-full w-72 bg-black/95 backdrop-blur-xl border-r border-white/10 z-40 transform transition-all duration-300 overflow-y-auto ${showFilters ? "translate-x-0" : "-translate-x-full"} ${localOverlayVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-        <div className="p-6 pt-6 pb-12">
-          <h3 className="text-white/40 text-xs uppercase tracking-[0.2em] mb-6">Filters</h3>
-
-          {/* NFT Type Filter */}
-          <div className="mb-6">
-            <label className="text-white/60 text-sm mb-3 block">Type</label>
-            <div className="flex gap-2">
-              {NFT_TYPE_FILTERS.map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => setNftTypeFilter(filter.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
-                    nftTypeFilter === filter.value ? "bg-white text-black font-medium" : "bg-white/10 text-white/60 hover:text-white hover:bg-white/20"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+          {showSortDropdown && (
+            <div className="absolute right-0 top-full mt-2 w-40 bg-black/95 backdrop-blur-xl border border-white/[0.08] rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="p-2">
+                <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-1.5 px-1">Sort By</p>
+                <div className="flex flex-col gap-1">
+                  {SORT_TYPES.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setSortType(option.value);
+                        setShowSortDropdown(false);
+                      }}
+                      className={`px-2 py-1.5 text-sm font-medium rounded-md transition-all duration-200 text-left ${
+                        sortType === option.value
+                          ? "bg-white text-black"
+                          : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {sortType !== "random" && (
+                  <button
+                    onClick={toggleSortDir}
+                    className="w-full mt-2 px-2 py-1.5 text-sm font-medium text-white/40 hover:text-white/60 hover:bg-white/[0.04] rounded-md text-left flex items-center gap-1.5"
+                  >
+                    {sortDir === "desc" ? "↓" : "↑"} {sortDir === "desc" ? "Descending" : "Ascending"}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Sort */}
-          <div className="mb-6">
-            <label className="text-white/60 text-sm mb-3 block">Sort by</label>
-            <div className="space-y-1">
-              {SORT_TYPES.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSortType(option.value)}
-                  className={`w-full px-4 py-2.5 text-left text-sm rounded-lg transition-all ${
-                    sortType === option.value ? "bg-white text-black font-medium" : "text-white/60 hover:text-white hover:bg-white/10"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {sortType !== "random" && (
-              <button onClick={toggleSortDir} className="mt-3 flex items-center gap-2 text-white/40 hover:text-white text-sm transition-colors">
-                {sortDir === "desc" ? "↓ Descending" : "↑ Ascending"}
-              </button>
+        {/* Filter dropdown */}
+        <div className="relative" ref={filterRef}>
+          <button
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className={`p-2 rounded-lg bg-black/60 backdrop-blur-md border transition-all duration-200 ${
+              hasActiveFilters ? "border-purple-500/50 bg-purple-500/20" :
+              showFilterDropdown ? "border-white/30 bg-white/10" : "border-white/10 hover:border-white/30"
+            }`}
+            title="Filter"
+          >
+            <svg className={`w-4 h-4 ${hasActiveFilters ? "text-purple-300" : "text-white/70"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            {hasActiveFilters && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-purple-400 rounded-full" />
             )}
-          </div>
+          </button>
 
-          {/* Content Type Filter - active when showing All or Content */}
-          <div className={`mb-6 ${nftTypeFilter === "bundle" ? "opacity-40 pointer-events-none" : ""}`}>
-            <label className="text-white/60 text-sm mb-3 block">Content Type</label>
-            <div className="flex flex-wrap gap-2">
-              {CONTENT_TYPE_FILTERS.map((filter) => (
-                <button
-                  key={String(filter.value)}
-                  onClick={() => setTypeFilter(filter.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
-                    typeFilter === filter.value ? "bg-white text-black font-medium" : "bg-white/10 text-white/60 hover:text-white hover:bg-white/20"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {showFilterDropdown && (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-black/95 backdrop-blur-xl border border-white/[0.08] rounded-lg shadow-xl z-50 overflow-hidden max-h-[70vh] overflow-y-auto">
+              {/* Item type filter */}
+              <div className="p-2 border-b border-white/[0.06]">
+                <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-1.5 px-1">Item Type</p>
+                <div className="flex items-center gap-1">
+                  {NFT_TYPE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value}
+                      onClick={() => {
+                        setNftTypeFilter(filter.value);
+                        // Reset type-specific filters when switching
+                        if (filter.value === "all") {
+                          setTypeFilter("all");
+                          setBundleTypeFilter("all");
+                        }
+                        if (filter.value === "content") setBundleTypeFilter("all");
+                        if (filter.value === "bundle") setTypeFilter("all");
+                      }}
+                      className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md capitalize transition-all duration-200 ${
+                        nftTypeFilter === filter.value
+                          ? "bg-white text-black"
+                          : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Bundle Type Filter - active when showing All or Bundle */}
-          <div className={`${nftTypeFilter === "content" ? "opacity-40 pointer-events-none" : ""}`}>
-            <label className="text-white/60 text-sm mb-3 block">Bundle Type</label>
-            <div className="flex flex-wrap gap-2">
-              {BUNDLE_TYPE_FILTERS.map((filter) => (
-                <button
-                  key={String(filter.value)}
-                  onClick={() => setBundleTypeFilter(filter.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs transition-all ${
-                    bundleTypeFilter === filter.value ? "bg-white text-black font-medium" : "bg-white/10 text-white/60 hover:text-white hover:bg-white/20"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+              {/* Content type filter (content only, hide if bundle type selected) */}
+              {nftTypeFilter !== "bundle" && bundleTypeFilter === "all" && (
+                <div className="p-2 border-b border-white/[0.06]">
+                  <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-1.5 px-1">Content Type</p>
+                  <div className="flex flex-wrap gap-1">
+                    {CONTENT_TYPE_FILTERS.map((filter) => (
+                      <button
+                        key={String(filter.value)}
+                        onClick={() => {
+                          setTypeFilter(filter.value);
+                          if (filter.value !== "all") setNftTypeFilter("content");
+                        }}
+                        className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                          typeFilter === filter.value
+                            ? "bg-white text-black"
+                            : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bundle type filter (bundles only, hide if content type selected) */}
+              {nftTypeFilter !== "content" && typeFilter === "all" && (
+                <div className="p-2 border-b border-white/[0.06]">
+                  <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-1.5 px-1">Bundle Type</p>
+                  <div className="flex flex-wrap gap-1">
+                    {BUNDLE_TYPE_FILTERS.map((filter) => (
+                      <button
+                        key={String(filter.value)}
+                        onClick={() => {
+                          setBundleTypeFilter(filter.value);
+                          if (filter.value !== "all") setNftTypeFilter("bundle");
+                        }}
+                        className={`px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                          bundleTypeFilter === filter.value
+                            ? "bg-white text-black"
+                            : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Clear button */}
+              {hasActiveFilters && (
+                <div className="p-2">
+                  <button
+                    onClick={() => {
+                      setNftTypeFilter("all");
+                      setTypeFilter("all");
+                      setBundleTypeFilter("all");
+                    }}
+                    className="w-full px-2 py-1.5 text-sm font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.04] rounded-md transition-all"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -885,19 +981,16 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
         })}
       </div>
 
-      {/* Main Feed Container - click to close filter panel */}
+      {/* Main Feed Container */}
       <div
         ref={containerRef}
         className="h-full overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        onClick={() => {
-          if (showFilters) setShowFilters(false);
-        }}
       >
         <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
         {displayItems.map((item, index) => (
           item.type === "content" && item.contentEntry ? (
-            <ContentSlide key={item.id} content={item.contentEntry} index={index} isActive={index === currentIndex} onNavigateToContent={navigateToContent} onOverlayChange={handleOverlayChange} enrichedBundles={globalBundles} />
+            <ContentSlide key={item.id} content={item.contentEntry} index={index} isActive={index === currentIndex} onNavigateToContent={navigateToContent} onOverlayChange={handleOverlayChange} enrichedBundles={globalBundles} overlayVisible={localOverlayVisible} />
           ) : item.type === "bundle" && item.bundleEntry ? (
             <BundleFeedItem
               key={item.id}
@@ -909,6 +1002,7 @@ export function Feed({ isSidebarOpen = false, onCloseSidebar, showFilters, setSh
               onNavigateToContent={navigateToContent}
               onOverlayChange={handleOverlayChange}
               enrichedBundles={globalBundles}
+              overlayVisible={localOverlayVisible}
             />
           ) : null
         ))}
@@ -959,12 +1053,19 @@ interface ContentSlideProps {
   skipFeedItemWrapper?: boolean;
   // Enriched bundles for "part of bundle" display
   enrichedBundles?: EnrichedBundle[];
+  // Current overlay visibility state from parent
+  overlayVisible?: boolean;
 }
 
-export function ContentSlide({ content, index, isActive, rightPanelOpen = false, bundleContext, onNavigateToContent, onOverlayChange, skipFeedItemWrapper = false, enrichedBundles = [] }: ContentSlideProps) {
-  const [showOverlay, setShowOverlay] = useState(true);
+export function ContentSlide({ content, index, isActive, rightPanelOpen = false, bundleContext, onNavigateToContent, onOverlayChange, skipFeedItemWrapper = false, enrichedBundles = [], overlayVisible = true }: ContentSlideProps) {
+  const [showOverlay, setShowOverlay] = useState(overlayVisible);
 
-  // Notify parent when overlay visibility changes or slide becomes active
+  // Sync with parent overlay state when it changes
+  useEffect(() => {
+    setShowOverlay(overlayVisible);
+  }, [overlayVisible]);
+
+  // Notify parent when overlay visibility changes
   useEffect(() => {
     if (isActive) {
       onOverlayChange?.(showOverlay);
@@ -1079,7 +1180,19 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
   // Moderation status
   const { data: moderationData } = useSubjectStatus(content.contentCid ?? null);
-  const isInReview = moderationData?.status === "disputed";
+  const contentIsDisputed = moderationData?.status === "disputed";
+
+  // Check for valid review token (allows jurors to bypass moderation overlay)
+  const searchParams = useSearchParams();
+  const reviewToken = searchParams.get("review");
+  const hasValidReviewToken = useMemo(() => {
+    if (!reviewToken || !content.contentCid) return false;
+    const parsed = parseReviewToken(reviewToken);
+    return parsed !== null && parsed.valid && parsed.contentCid === content.contentCid;
+  }, [reviewToken, content.contentCid]);
+
+  // Show moderation overlay only if disputed AND no valid review token
+  const isInReview = contentIsDisputed && !hasValidReviewToken;
 
   // Bundle config hooks (only used when bundleContext is provided)
   const { data: bundleMintConfig, refetch: refetchBundleMintConfig } = useBundleMintConfig(
@@ -1310,93 +1423,89 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
       {/* Bottom Overlay */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+        className={`absolute bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-12 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 pointer-events-none ${showOverlay ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
       >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/20 to-white/5 flex items-center justify-center text-white font-medium border border-white/10">{(creatorUsername || content.creatorAddress)?.charAt(0).toUpperCase() || "?"}</div>
-          <div><p className="text-white font-medium">{displayName}</p>{timeAgo && <p className="text-white/40 text-xs">{timeAgo}</p>}</div>
+        <div className="mb-2">
+          <Link href={`/profile/${content.creatorAddress}`} className="pointer-events-auto text-sm text-white/80 font-medium hover:underline">{displayName}</Link>
         </div>
         {/* Show content's collection name */}
         {content.collectionName && content.collectionName !== (content.metadata?.title || content.metadata?.name) && (
-          <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide mb-1">{content.collectionName}</p>
+          <p className="text-white/40 text-xs uppercase tracking-wider mb-0.5">{content.collectionName}</p>
         )}
-        <h2 className="text-white text-xl font-medium mb-2 line-clamp-2">{content.metadata?.title || content.metadata?.name || content.collectionName || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
-        {(artist || album) && <p className="text-white/50 text-sm mb-2">{artist}{artist && album && " · "}{album}</p>}
-        {content.metadata?.description && <p className="text-white/40 text-sm line-clamp-2 mb-4">{content.metadata.description}</p>}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{domainLabel}</span>
-          <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{contentTypeLabel}</span>
-          {genre && <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{genre}</span>}
-          {duration && duration > 0 && <span className="px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">{formatDuration(duration)}</span>}
+        <h2 className="text-white text-lg font-medium mb-1.5 line-clamp-2">{content.metadata?.title || content.metadata?.name || content.collectionName || `Content ${(content.contentCid ?? content.pubkey?.toBase58() ?? "Unknown").slice(0, 12)}...`}</h2>
+        {(artist || album) && <p className="text-white/50 text-sm mb-1.5">{artist}{artist && album && " · "}{album}</p>}
+        {content.metadata?.description && <p className="text-white/40 text-sm line-clamp-1 mb-2">{content.metadata.description}</p>}
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/50">{domainLabel}</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/50">{contentTypeLabel}</span>
+          {genre && <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/50">{genre}</span>}
+          {duration && duration > 0 && <span className="px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/50">{formatDuration(duration)}</span>}
           {/* Access Level Badge */}
           {content.visibilityLevel !== undefined && content.visibilityLevel > 0 && (
-            <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
+            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1 ${
               content.visibilityLevel === 3 /* NftOnly */
                 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                 : content.visibilityLevel === 2 /* Subscriber */
                 ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                 : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
             }`}>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
               </svg>
               {content.visibilityLevel === 3 /* NftOnly */
-                ? "Buy/Rent Only"
+                ? "Buy/Rent"
                 : content.visibilityLevel === 2 /* Subscriber */
-                ? "Members Only"
-                : "Subscriber Only"}
+                ? "Members"
+                : "Subscribers"}
             </span>
           )}
           {/* Moderation Status Badge */}
           {content.contentCid && <ModerationBadge contentCid={content.contentCid} size="sm" />}
         </div>
-        <div className="flex items-center gap-4 text-white/40 text-sm">
-          {hasMintConfig && <span className="flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>{actualMintedCount} sold</span>}
+        <div className="flex items-center gap-3 text-white/40 text-xs">
+          {hasMintConfig && <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>{actualMintedCount} sold</span>}
           {!isCreator && ownedRarities.length > 0 && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <span className="text-white/40">Owned:</span>
               {Object.entries(ownedRarities.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<Rarity, number>)).sort(([a], [b]) => Number(b) - Number(a)).map(([rarity, count]) => (
-                <span key={rarity} className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium ${rarityColors[Number(rarity) as Rarity]}`}>{count}</span>
+                <span key={rarity} className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-2xs font-medium ${rarityColors[Number(rarity) as Rarity]}`}>{count}</span>
               ))}
             </div>
           )}
-          {activeRental && <span className="text-amber-400/80 text-xs">Rental expires {new Date(Number(activeRental.expiresAt) * 1000).toLocaleDateString()}</span>}
+          {activeRental && <span className="text-amber-400/80">Rental expires {new Date(Number(activeRental.expiresAt) * 1000).toLocaleDateString()}</span>}
         </div>
 
         {/* Bundle Details Section - when viewing content in bundle context */}
         {bundleContext && (
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mt-3 pt-3 border-t border-white/[0.08]">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={bundleTypeIcon || ""} />
                 </svg>
-                <span className="text-purple-400 text-sm font-medium">{bundleTypeLabel}</span>
+                <span className="text-purple-400 text-xs font-medium">{bundleTypeLabel}</span>
               </div>
-              <span className="text-white/30">·</span>
-              <span className="text-white/60 text-sm">{bundleContext.currentIndex + 1} of {bundleContext.items.length}</span>
+              <span className="text-white/20">·</span>
+              <span className="text-white/50 text-xs">{bundleContext.currentIndex + 1} of {bundleContext.items.length}</span>
             </div>
             {bundleContext.bundle.collectionName && bundleContext.bundle.collectionName !== bundleContext.metadata?.title && (
-              <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide">{bundleContext.bundle.collectionName}</p>
+              <p className="text-white/40 text-xs uppercase tracking-wider">{bundleContext.bundle.collectionName}</p>
             )}
-            <h3 className="text-white font-medium mb-1">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
-            {bundleContext.metadata?.description && (
-              <p className="text-white/40 text-sm line-clamp-1 mb-2">{bundleContext.metadata.description}</p>
-            )}
-            <div className="flex items-center gap-4 text-white/40 text-sm">
+            <h3 className="text-white/90 text-sm font-medium mb-1">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
+            <div className="flex items-center gap-3 text-white/40 text-xs">
               {hasBundleMintConfig && (
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                   {bundleMintedCount} sold
                 </span>
               )}
               {!isBundleCreator && ownedBundleRarities.length > 0 && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <span className="text-white/40">Owned:</span>
                   {Object.entries(ownedBundleRarities.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<Rarity, number>)).sort(([a], [b]) => Number(b) - Number(a)).map(([rarity, count]) => (
-                    <span key={rarity} className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium ${rarityColors[Number(rarity) as Rarity]}`}>{count}</span>
+                    <span key={rarity} className={`inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-2xs font-medium ${rarityColors[Number(rarity) as Rarity]}`}>{count}</span>
                   ))}
                 </div>
               )}
@@ -1406,28 +1515,28 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
 
         {/* Multi-Bundle Indicator - only for standalone content */}
         {!bundleContext && contentBundles.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <p className="text-white/40 text-xs mb-2 flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mt-3 pt-3 border-t border-white/[0.08]">
+            <p className="text-white/40 text-xs mb-1.5 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
               Part of {contentBundles.length} {contentBundles.length === 1 ? "bundle" : "bundles"}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {contentBundles.slice(0, 3).map((bundle) => (
                 <button
                   key={bundle.bundleId}
                   onClick={(e) => { e.stopPropagation(); onNavigateToContent?.(bundle.bundleId); }}
-                  className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
+                  className="pointer-events-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                   {bundle.metadata?.name || bundle.collectionName || bundle.bundleId}
                 </button>
               ))}
               {contentBundles.length > 3 && (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/60">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/50">
                   +{contentBundles.length - 3} more
                 </span>
               )}
@@ -1437,12 +1546,12 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
       </div>
 
       {/* Right Actions - shift when bundle sidebar opens */}
-      <div className={`absolute bottom-6 z-40 flex flex-col items-center gap-4 transition-all duration-300 ${showBundleSidebar ? "right-[340px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`absolute bottom-4 z-40 flex flex-col items-center gap-3 transition-all duration-300 ${showBundleSidebar ? "right-[340px]" : "right-4"} ${showOverlay ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none"}`} onClick={(e) => e.stopPropagation()}>
         {/* Bundle Sidebar Toggle */}
         {bundleContext && bundleContext.items.length > 0 && (
           <button
             onClick={() => setShowBundleSidebar(prev => !prev)}
-            className={`w-12 h-12 rounded-full backdrop-blur-sm flex items-center justify-center text-white transition-colors border border-white/10 ${showBundleSidebar ? "bg-purple-500/30 border-purple-500/50" : "bg-white/10 hover:bg-white/20"}`}
+            className={`w-12 h-12 rounded-full backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border ${showBundleSidebar ? "bg-purple-500/30 border-purple-500/50" : "bg-black/60 border-white/10 hover:border-white/30"}`}
             title="View Playlist"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1452,27 +1561,27 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         )}
         {/* Bundle Buy/Rent buttons (when viewing bundle) */}
         {bundleContext && !isBundleCreator && hasBundleMintConfig && (
-          <button onClick={() => setShowBuyBundleModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={`Buy Bundle · ${Number(bundleMintPrice) / 1e9} SOL`}>
+          <button onClick={() => setShowBuyBundleModal(true)} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title={`Buy Bundle · ${Number(bundleMintPrice) / 1e9} SOL`}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
           </button>
         )}
         {bundleContext && !isBundleCreator && hasBundleRentConfig && (
-          <button onClick={() => setShowRentBundleModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={`Rent Bundle · ${bundleLowestRentPrice! / 1e9} SOL`}>
+          <button onClick={() => setShowRentBundleModal(true)} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title={`Rent Bundle · ${bundleLowestRentPrice! / 1e9} SOL`}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </button>
         )}
         {/* Content Buy/Rent buttons (when viewing standalone content) */}
-        {!bundleContext && !isCreator && hasMintConfig && <button onClick={() => setShowBuyContentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Buy NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></button>}
-        {!bundleContext && !isCreator && hasRentConfig && <button onClick={() => setShowRentModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title={activeRental ? "Extend" : "Rent"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
-        {!bundleContext && !isCreator && ownedNftCount > 0 && <button onClick={() => setShowSellModal(true)} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Sell NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
-        <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/content/${content.contentCid}`).then(() => { setShowCopied(true); setTimeout(() => setShowCopied(false), 2000); }); }} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors border border-white/10" title="Share">
+        {!bundleContext && !isCreator && hasMintConfig && <button onClick={() => setShowBuyContentModal(true)} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title="Buy NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></button>}
+        {!bundleContext && !isCreator && hasRentConfig && <button onClick={() => setShowRentModal(true)} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title={activeRental ? "Extend" : "Rent"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
+        {!bundleContext && !isCreator && ownedNftCount > 0 && <button onClick={() => setShowSellModal(true)} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title="Sell NFT"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>}
+        <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/content/${content.contentCid}`).then(() => { setShowCopied(true); setTimeout(() => setShowCopied(false), 2000); }); }} className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 hover:border-white/30" title="Share">
           {showCopied ? <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" /></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>}
         </button>
         {/* Report button - for non-creators */}
         {!isCreator && !bundleContext && content.contentCid && (
           <button
             onClick={() => setShowReportModal(true)}
-            className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors border border-white/10"
+            className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-red-400 transition-all border border-white/10 hover:border-white/30"
             title="Report Content"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1482,63 +1591,65 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
         )}
         {isCreator && !bundleContext && (
           <>
-            <button onClick={() => setShowEditModal(true)} disabled={!canEdit} className={`w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center transition-colors border border-white/10 ${canEdit ? "text-white hover:bg-white/20" : "text-white/30 cursor-not-allowed"}`} title={canEdit ? "Edit" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-            <button onClick={() => setShowDeleteModal(true)} disabled={!canDelete} className={`w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center transition-colors border border-white/10 ${canDelete ? "text-red-400 hover:bg-red-500/20" : "text-white/30 cursor-not-allowed"}`} title={canDelete ? "Delete" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+            <button onClick={() => setShowEditModal(true)} disabled={!canEdit} className={`w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center transition-all border border-white/10 ${canEdit ? "text-white/70 hover:text-white hover:border-white/30" : "text-white/30 cursor-not-allowed"}`} title={canEdit ? "Edit" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+            <button onClick={() => setShowDeleteModal(true)} disabled={!canDelete} className={`w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center transition-all border border-white/10 ${canDelete ? "text-red-400 hover:border-white/30" : "text-white/30 cursor-not-allowed"}`} title={canDelete ? "Delete" : "Locked"}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
           </>
         )}
       </div>
 
-      {/* Bundle Sidebar - hidden/shown with overlay */}
+      {/* Bundle Sidebar - Playlist Panel */}
       {bundleContext && (
         <div
-          className={`absolute top-0 right-0 h-full w-80 bg-black/95 backdrop-blur-xl border-l border-white/10 transform transition-all duration-300 z-30 ${showBundleSidebar && showOverlay ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"}`}
+          className={`absolute top-0 right-0 h-full w-80 bg-black border-l border-white/[0.08] transform transition-all duration-300 z-30 ${showBundleSidebar && showOverlay ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"}`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Sidebar Header */}
-          <div className="p-4 border-b border-white/10">
-            <div className="flex items-center justify-between mb-2">
+          {/* Header */}
+          <div className="p-4 border-b border-white/[0.06]">
+            <div className="flex items-center justify-between mb-1.5">
               <div className="min-w-0 flex-1">
                 {bundleContext.bundle.collectionName && bundleContext.bundle.collectionName !== bundleContext.metadata?.title && (
-                  <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide truncate">{bundleContext.bundle.collectionName}</p>
+                  <p className="text-xs text-white/40 uppercase tracking-wider truncate">{bundleContext.bundle.collectionName}</p>
                 )}
-                <h3 className="text-white font-medium truncate">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
+                <h3 className="text-lg font-medium text-white/90 truncate">{bundleContext.metadata?.title || bundleContext.bundle.collectionName || bundleContext.bundle.bundleId}</h3>
               </div>
-              <button onClick={() => setShowBundleSidebar(false)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-                <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+              <button onClick={() => setShowBundleSidebar(false)} className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/40 hover:text-white/60">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <p className="text-white/40 text-xs">{bundleTypeLabel} · {bundleContext.items.length} items</p>
+            <p className="text-sm text-white/40">{bundleTypeLabel} · {bundleContext.items.length} items</p>
           </div>
 
           {/* Items List */}
-          <div className="overflow-y-auto h-[calc(100%-80px)]" style={{ scrollbarWidth: "thin" }}>
+          <div className="overflow-y-auto h-[calc(100%-88px)]" style={{ scrollbarWidth: "thin" }}>
             {bundleContext.isLoadingItems ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-12">
                 <div className="w-6 h-6 border-2 border-white/20 border-t-purple-400 rounded-full animate-spin" />
               </div>
             ) : bundleContext.items.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-white/40 text-sm">No items found</div>
+              <div className="flex items-center justify-center py-12 text-white/40 text-sm">No items found</div>
             ) : (
-              <div className="py-2">
+              <div className="p-2 space-y-1">
                 {bundleContext.items.map((item, idx) => (
                   <button
                     key={item.contentCid}
                     onClick={() => bundleContext.onNavigate(idx)}
-                    className={`w-full px-4 py-3 flex items-center gap-3 transition-colors ${
-                      idx === bundleContext.currentIndex ? "bg-purple-500/20 border-l-2 border-purple-400" : "hover:bg-white/5 border-l-2 border-transparent"
+                    className={`w-full p-2 flex items-center gap-3 rounded-lg transition-all duration-200 ${
+                      idx === bundleContext.currentIndex
+                        ? "bg-purple-500/20 border border-purple-500/30"
+                        : "hover:bg-white/[0.04] border border-transparent"
                     }`}
                   >
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                      idx === bundleContext.currentIndex ? "bg-purple-500 text-white" : "bg-white/10 text-white/60"
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${
+                      idx === bundleContext.currentIndex ? "bg-purple-500 text-white" : "bg-white/[0.08] text-white/50"
                     }`}>{idx + 1}</span>
-                    <div className="w-10 h-10 rounded bg-white/5 flex-shrink-0 overflow-hidden">
+                    <div className="w-12 h-12 rounded-lg bg-white/[0.04] flex-shrink-0 overflow-hidden">
                       {item.thumbnail ? (
                         <img src={getIpfsUrl(item.thumbnail)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13" />
                           </svg>
                         </div>
@@ -1546,12 +1657,12 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       {item.collectionName && item.collectionName !== item.title && (
-                        <p className="text-white/50 text-[10px] font-medium uppercase tracking-wide truncate">{item.collectionName}</p>
+                        <p className="text-xs text-white/40 uppercase tracking-wider truncate">{item.collectionName}</p>
                       )}
-                      <span className={`text-sm truncate block ${idx === bundleContext.currentIndex ? "text-white" : "text-white/70"}`}>{item.title}</span>
+                      <span className={`text-base truncate block ${idx === bundleContext.currentIndex ? "text-white/90 font-medium" : "text-white/70"}`}>{item.title}</span>
                     </div>
                     {idx === bundleContext.currentIndex && (
-                      <div className="flex gap-0.5">
+                      <div className="flex gap-0.5 flex-shrink-0">
                         <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" />
                         <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: "150ms" }} />
                         <div className="w-0.5 h-3 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: "300ms" }} />
@@ -1617,21 +1728,23 @@ interface BundleFeedItemProps {
   onOverlayChange?: (visible: boolean) => void;
   // Enriched bundles for "part of bundle" display in content slides
   enrichedBundles?: EnrichedBundle[];
+  // Current overlay visibility state from parent
+  overlayVisible?: boolean;
 }
 
-function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1, onNavigateToContent, onOverlayChange, enrichedBundles = [] }: BundleFeedItemProps) {
+function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1, onNavigateToContent, onOverlayChange, enrichedBundles = [], overlayVisible = true }: BundleFeedItemProps) {
   const [currentItemIndex, setCurrentItemIndex] = useState(Math.max(0, initialPosition - 1));
   const [bundleItems, setBundleItems] = useState<BundleItemDisplay[]>([]);
   const [itemContents, setItemContents] = useState<Map<string, EnrichedContent>>(new Map());
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const { client } = useContentRegistry();
 
-  // Notify parent when bundle becomes active (reset overlay to visible)
+  // Notify parent of current overlay state when bundle becomes active
   useEffect(() => {
     if (isActive) {
-      onOverlayChange?.(true);
+      onOverlayChange?.(overlayVisible);
     }
-  }, [isActive, onOverlayChange]);
+  }, [isActive, onOverlayChange, overlayVisible]);
 
   // Fetch bundle items when slide becomes active
   useEffect(() => {
@@ -1772,6 +1885,7 @@ function BundleFeedItem({ bundle, metadata, index, isActive, initialPosition = 1
           onOverlayChange={onOverlayChange}
           skipFeedItemWrapper
           enrichedBundles={enrichedBundles}
+          overlayVisible={overlayVisible}
         />
       )}
     </div>
