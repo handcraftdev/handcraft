@@ -1382,8 +1382,8 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
               </div>
               <p className="text-white/60 text-sm mb-6">
                 {!publicKey ? "Connect your wallet to access this content" :
-                 content.visibilityLevel === 1 ? "Subscribe to the creator to unlock" :
-                 content.visibilityLevel === 2 ? "Join membership to unlock" :
+                 content.visibilityLevel === 1 ? "Subscribe to the platform to unlock" :
+                 content.visibilityLevel === 2 ? "Join creator membership to unlock" :
                  "This content requires ownership"}
               </p>
               <div className="flex flex-col items-center gap-3">
@@ -1400,16 +1400,16 @@ export function ContentSlide({ content, index, isActive, rightPanelOpen = false,
                   </button>
                 )}
 
-                {/* Visibility Level 1: Subscribers */}
+                {/* Visibility Level 1: Platform Subscribers */}
                 {publicKey && content.visibilityLevel === 1 && (
                   <Link
-                    href={`/profile/${content.creatorAddress}`}
+                    href="/rewards"
                     className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-medium transition-colors flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                     </svg>
-                    Subscribe to Creator
+                    Subscribe to Platform
                   </Link>
                 )}
 
