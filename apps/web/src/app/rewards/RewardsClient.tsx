@@ -258,14 +258,8 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
                 <span>Your Weight</span>
                 <span className="font-mono text-pink-400">{creatorWeight.toString()}</span>
               </div>
-              {data?.subscriptionRewards.creatorDist.treasuryBalance && data.subscriptionRewards.creatorDist.treasuryBalance > BigInt(0) && (
-                <div className="flex justify-between text-white/40">
-                  <span>Treasury Balance</span>
-                  <span className="font-mono text-amber-400">{formatSol(data.subscriptionRewards.creatorDist.treasuryBalance)} SOL</span>
-                </div>
-              )}
               <div className="flex justify-between pt-1.5 border-t border-white/[0.04]">
-                <span className="text-white/50">Pending (incl. treasury)</span>
+                <span className="text-white/50">Pending</span>
                 <span className="font-medium text-pink-400">{formatSol(creatorDistPending)} SOL</span>
               </div>
             </div>
@@ -304,42 +298,6 @@ function MyRewardsTab({ mounted }: { mounted: boolean }) {
               <p className="text-sm font-medium text-amber-400">{formatSol(creatorPatronPending)}</p>
             </div>
           </div>
-
-          {/* Treasury breakdown for subscription rewards */}
-          {data?.subscriptionRewards.globalHolder.treasuryBalance && data.subscriptionRewards.globalHolder.treasuryBalance > BigInt(0) && (
-            <>
-              <button
-                onClick={() => toggleSection("holder-treasury")}
-                className="w-full p-2.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors border-t border-white/[0.04]"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <span className="text-sm text-white/60">Treasury Details</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-amber-400">{formatSol(data.subscriptionRewards.globalHolder.treasuryBalance)} SOL</span>
-                  <svg className={`w-3 h-3 text-white/30 transition-transform ${expandedSections["holder-treasury"] ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
-              {expandedSections["holder-treasury"] && (
-                <div className="p-3 bg-white/[0.01] border-t border-white/[0.04] text-xs space-y-1.5">
-                  <div className="flex justify-between text-white/40">
-                    <span>Treasury WSOL Balance</span>
-                    <span className="font-mono text-amber-400">{formatSol(data.subscriptionRewards.globalHolder.treasuryBalance)} SOL</span>
-                  </div>
-                  <div className="flex justify-between text-white/40">
-                    <span>Your Share (12% of treasury)</span>
-                    <span className="font-mono text-emerald-400">{formatSol((data.subscriptionRewards.globalHolder.treasuryBalance * BigInt(12)) / BigInt(100))} SOL</span>
-                  </div>
-                  <p className="text-2xs text-white/30 pt-1">
-                    Treasury balance is included in pending rewards and will be distributed on claim.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
 
           {/* NFT breakdown */}
           <div className="divide-y divide-white/[0.04]">
