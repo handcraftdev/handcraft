@@ -141,6 +141,7 @@ export function useContentRegistry() {
         visibilityLevel: number;
         collectionName: string | null;
         creatorAddress: string;
+        thumbnail: string | null;
       }) => ({
         pubkey: c.pubkey ? new PublicKey(c.pubkey) : undefined,
         creator: new PublicKey(c.creator),
@@ -158,6 +159,7 @@ export function useContentRegistry() {
         visibilityLevel: c.visibilityLevel,
         collectionName: c.collectionName,
         creatorAddress: c.creatorAddress,
+        thumbnail: c.thumbnail,
       }));
     },
     staleTime: 60000, // Cache for 60 seconds
@@ -1527,6 +1529,7 @@ export function useContentRegistry() {
         metadataCid: string | null;
         creatorAddress: string;
         collectionName: string | null;
+        thumbnail: string | null;
       }) => ({
         pubkey: b.pubkey ? new PublicKey(b.pubkey) : undefined,
         creator: new PublicKey(b.creator),
@@ -1538,6 +1541,7 @@ export function useContentRegistry() {
         metadataCid: b.metadataCid,
         creatorAddress: b.creatorAddress,
         collectionName: b.collectionName,
+        thumbnail: b.thumbnail,
       })) as EnrichedBundle[];
     },
     staleTime: 60000,
@@ -1641,12 +1645,12 @@ export function useContentRegistry() {
       .filter((b: EnrichedBundle | undefined): b is EnrichedBundle => b !== undefined);
   };
 
-  // Fetch all bundles for the connected wallet
+  // Fetch all bundles for the connected wallet (with metadata for names/images)
   const myBundlesQuery = useQuery({
     queryKey: ["bundles", "creator", publicKey?.toBase58()],
     queryFn: async () => {
       if (!publicKey || !client) return [];
-      return client.fetchBundlesByCreator(publicKey);
+      return client.fetchBundlesByCreatorWithMetadata(publicKey);
     },
     enabled: !!publicKey && !!client,
     staleTime: 60000,
@@ -1737,6 +1741,8 @@ export function useContentRegistry() {
       rentFee1d,
       rentFee7d,
       platform,
+      visibilityLevel,
+      collectionName,
     }: {
       bundleId: string;
       metadataCid: string;
@@ -1748,6 +1754,8 @@ export function useContentRegistry() {
       rentFee1d: bigint;
       rentFee7d: bigint;
       platform: PublicKey;
+      visibilityLevel?: number;
+      collectionName?: string;
     }) => {
       if (!publicKey || !client) throw new Error("Wallet not connected");
 
@@ -1762,7 +1770,9 @@ export function useContentRegistry() {
         rentFee6h,
         rentFee1d,
         rentFee7d,
-        platform
+        platform,
+        collectionName ?? null,
+        visibilityLevel ?? null
       );
 
       const tx = new Transaction().add(instruction);
