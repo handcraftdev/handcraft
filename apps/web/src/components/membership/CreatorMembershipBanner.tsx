@@ -197,20 +197,20 @@ export function CreatorMembershipBanner({ creator }: CreatorMembershipBannerProp
                 {/* Balance Info */}
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div className="text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-white/30">Streamed</p>
+                    <p className="text-xs uppercase tracking-wider text-white/30">Streamed</p>
                     <p className="text-sm font-medium text-amber-400">
                       {streamProgress.progressPercent.toFixed(2)}%
                     </p>
-                    <p className="text-[10px] text-white/20">
+                    <p className="text-xs text-white/20">
                       {streamProgress.streamedSol.toFixed(6)} SOL
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-white/30">Remaining</p>
+                    <p className="text-xs uppercase tracking-wider text-white/30">Remaining</p>
                     <p className="text-sm font-medium text-emerald-400">
                       {(100 - streamProgress.progressPercent).toFixed(2)}%
                     </p>
-                    <p className="text-[10px] text-white/20">
+                    <p className="text-xs text-white/20">
                       {streamProgress.remainingSol.toFixed(6)} SOL
                     </p>
                   </div>

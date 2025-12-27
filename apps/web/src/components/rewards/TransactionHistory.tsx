@@ -41,13 +41,13 @@ export function TransactionHistory({
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-sm text-red-800">
+      <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+        <p className="text-sm text-red-400">
           Error loading transactions: {error}
         </p>
         <button
           onClick={() => refetch()}
-          className="mt-2 text-sm text-red-600 hover:text-red-700 underline"
+          className="mt-2 text-sm text-red-400 hover:text-red-300 underline"
         >
           Retry
         </button>
@@ -57,9 +57,9 @@ export function TransactionHistory({
 
   if (loading && transactions.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-sm text-gray-600">
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-4 w-4 animate-spin text-white/40" />
+        <span className="ml-2 text-sm text-white/40">
           Loading transactions...
         </span>
       </div>
@@ -68,8 +68,8 @@ export function TransactionHistory({
 
   if (transactions.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
-        <p className="text-sm text-gray-600">No transactions found</p>
+      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-6 text-center">
+        <p className="text-sm text-white/40">No transactions found</p>
       </div>
     );
   }
@@ -87,16 +87,16 @@ export function TransactionHistory({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-          <div className="text-sm text-gray-600">
-            Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, total)} of {total} transactions
+        <div className="flex items-center justify-between border-t border-white/[0.06] pt-3">
+          <div className="text-sm text-white/40">
+            Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, total)} of {total}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0 || loading}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2.5 py-1 text-sm border border-white/[0.08] rounded-lg hover:bg-white/[0.04] text-white/60 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
@@ -117,10 +117,10 @@ export function TransactionHistory({
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
                     disabled={loading}
-                    className={`px-3 py-1 text-sm border rounded-md ${
+                    className={`px-2.5 py-1 text-sm border rounded-lg ${
                       pageNum === page
-                        ? "bg-blue-500 text-white border-blue-500"
-                        : "border-gray-300 hover:bg-gray-50"
+                        ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                        : "border-white/[0.08] hover:bg-white/[0.04] text-white/60"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {pageNum + 1}
@@ -132,7 +132,7 @@ export function TransactionHistory({
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1 || loading}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2.5 py-1 text-sm border border-white/[0.08] rounded-lg hover:bg-white/[0.04] text-white/60 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>
@@ -142,8 +142,8 @@ export function TransactionHistory({
 
       {/* Loading overlay for pagination */}
       {loading && transactions.length > 0 && (
-        <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+          <Loader2 className="h-4 w-4 animate-spin text-white/40" />
         </div>
       )}
     </div>

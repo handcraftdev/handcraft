@@ -100,14 +100,14 @@ export function RevenueChart({
 
   if (data.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-        <p className="text-gray-500">No data available</p>
+      <div className="h-48 flex items-center justify-center bg-white/[0.02] border border-white/[0.06] rounded-lg">
+        <p className="text-sm text-white/40">No data available</p>
       </div>
     );
   }
 
   return (
-    <div className="h-64">
+    <div className="h-48">
       <Line data={chartData} options={options} />
     </div>
   );

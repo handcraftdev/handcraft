@@ -76,11 +76,11 @@ export function EpochStatusCard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-          <div className="p-6 animate-pulse">
-            <div className="h-6 bg-white/5 rounded-lg w-1/3 mb-4" />
-            <div className="h-20 bg-white/5 rounded-xl" />
+      <div className="space-y-3">
+        <div className="relative rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+          <div className="p-4 animate-pulse">
+            <div className="h-5 bg-white/5 rounded-lg w-1/3 mb-3" />
+            <div className="h-16 bg-white/5 rounded-lg" />
           </div>
         </div>
       </div>
@@ -91,8 +91,8 @@ export function EpochStatusCard() {
 
   if (!poolsInitialized) {
     return (
-      <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden p-6">
-        <p className="text-sm text-white/50 text-center">
+      <div className="relative rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden p-4">
+        <p className="text-sm text-white/40 text-center">
           Subscription pools not yet initialized
         </p>
       </div>
@@ -111,19 +111,19 @@ export function EpochStatusCard() {
   const creatorPoolWeight = creatorDistPool?.totalWeight ?? BigInt(0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* ============================================ */}
       {/* SECTION 1: EPOCH & TREASURY */}
       {/* ============================================ */}
-      <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+      <div className="relative rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none" />
 
-        <div className="relative p-5">
+        <div className="relative p-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -135,30 +135,30 @@ export function EpochStatusCard() {
           </div>
 
           {/* Treasury Balance - Main Display */}
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-3">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-amber-400/80">Total Pending</span>
-              <span className="text-2xl font-bold text-amber-400">
+              <span className="text-xl font-bold text-amber-400">
                 {formatSol(totalPending)} SOL
               </span>
             </div>
 
             {/* Breakdown: Escrow vs WSOL ATA */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <div className="p-2 bg-amber-500/5 rounded-lg">
-                <p className="text-[10px] text-amber-400/60 mb-0.5">In Stream Escrows</p>
+                <p className="text-2xs text-amber-400/60 mb-0.5">In Stream Escrows</p>
                 <p className="text-sm font-medium text-amber-400/80">{formatSol(escrowBalance)} SOL</p>
-                <p className="text-[9px] text-amber-400/40 mt-0.5">Need to withdraw</p>
+                <p className="text-2xs text-amber-400/40 mt-0.5">Need to withdraw</p>
               </div>
               <div className="p-2 bg-amber-500/5 rounded-lg">
-                <p className="text-[10px] text-amber-400/60 mb-0.5">In Treasury WSOL</p>
+                <p className="text-2xs text-amber-400/60 mb-0.5">In Treasury WSOL</p>
                 <p className="text-sm font-medium text-amber-400/80">{formatSol(ecosystemTreasuryBalance)} SOL</p>
-                <p className="text-[9px] text-amber-400/40 mt-0.5">Need to unwrap</p>
+                <p className="text-2xs text-amber-400/40 mt-0.5">Need to unwrap</p>
               </div>
             </div>
 
             {totalPending > BigInt(0) && (
-              <div className="pt-3 border-t border-amber-500/20 grid grid-cols-3 gap-3 text-xs">
+              <div className="pt-2 border-t border-amber-500/20 grid grid-cols-3 gap-2 text-xs">
                 <div className="text-center">
                   <p className="text-amber-400/60">→ Holders (12%)</p>
                   <p className="text-amber-400 font-medium">{formatSol(totalPending * BigInt(12) / BigInt(100))} SOL</p>
@@ -176,12 +176,12 @@ export function EpochStatusCard() {
           </div>
 
           {/* Treasury Distribution Cycle */}
-          <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-white/30">Treasury Distribution Cycle</span>
+          <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs uppercase tracking-[0.15em] text-white/30">Treasury Distribution Cycle</span>
               <span className="text-sm text-white/70">{formatTimeRemaining(timeRemaining)}</span>
             </div>
-            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   epochEnded
@@ -191,14 +191,14 @@ export function EpochStatusCard() {
                 style={{ width: `${Math.min(100, epochProgress)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-white/30">
+            <div className="flex items-center justify-between mt-1.5 text-xs text-white/30">
               <span>Last: {formatTimestamp(lastDistribution)}</span>
               <span>Next: {formatTimestamp(nextDistribution)}</span>
             </div>
           </div>
 
           {/* How Distribution Works */}
-          <p className="text-[11px] text-white/30 mt-3 leading-relaxed">
+          <p className="text-xs text-white/30 mt-2.5 leading-relaxed">
             Subscription fees stream to escrow → withdraw to treasury → unwrap WSOL → distribute to pools.
             Distribution triggers on mint/claim after epoch ends. Anyone can trigger.
           </p>
@@ -208,15 +208,15 @@ export function EpochStatusCard() {
       {/* ============================================ */}
       {/* SECTION 2: HOLDER POOL */}
       {/* ============================================ */}
-      <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+      <div className="relative rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
 
-        <div className="relative p-5">
+        <div className="relative p-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
@@ -228,32 +228,32 @@ export function EpochStatusCard() {
           </div>
 
           {/* Pool Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl text-center">
-              <p className="text-xs text-white/40 mb-1">Total Distributed</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg text-center">
+              <p className="text-xs text-white/40 mb-0.5">Total Distributed</p>
               <p className="text-lg font-medium text-white/80">{formatSol(holderPoolTotal)} SOL</p>
             </div>
-            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl text-center">
-              <p className="text-xs text-white/40 mb-1">Claimed</p>
+            <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg text-center">
+              <p className="text-xs text-white/40 mb-0.5">Claimed</p>
               <p className="text-lg font-medium text-white/50">{formatSol(holderPoolClaimed)} SOL</p>
             </div>
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
-              <p className="text-xs text-emerald-400/70 mb-1">Available to Claim</p>
+            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-center">
+              <p className="text-xs text-emerald-400/70 mb-0.5">Available to Claim</p>
               <p className="text-lg font-medium text-emerald-400">{formatSol(holderPoolUnclaimed)} SOL</p>
             </div>
           </div>
 
           {/* User Allocation Info */}
-          <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-            <p className="text-xs text-white/50 mb-2 font-medium">Your Allocation</p>
+          <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg">
+            <p className="text-sm text-white/50 mb-1.5 font-medium">Your Allocation</p>
             <p className="text-xs text-white/40 leading-relaxed">
               Your share = (Your NFT Weight / Total Weight) × Pool Balance
             </p>
-            <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+            <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] flex items-center justify-between text-xs">
               <span className="text-white/30">Total Pool Weight</span>
               <span className="text-white/50 font-mono">{holderPoolWeight.toString()}</span>
             </div>
-            <p className="text-[10px] text-white/30 mt-2">
+            <p className="text-2xs text-white/30 mt-1.5">
               Claim anytime from the Rewards page. No epoch lock on claiming.
             </p>
           </div>
@@ -263,15 +263,15 @@ export function EpochStatusCard() {
       {/* ============================================ */}
       {/* SECTION 3: CREATOR POOL */}
       {/* ============================================ */}
-      <div className="relative rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+      <div className="relative rounded-xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
 
-        <div className="relative p-5">
+        <div className="relative p-4">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </div>
@@ -283,32 +283,32 @@ export function EpochStatusCard() {
           </div>
 
           {/* Pool Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl text-center">
-              <p className="text-xs text-white/40 mb-1">Total Distributed</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg text-center">
+              <p className="text-xs text-white/40 mb-0.5">Total Distributed</p>
               <p className="text-lg font-medium text-white/80">{formatSol(creatorPoolTotal)} SOL</p>
             </div>
-            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl text-center">
-              <p className="text-xs text-white/40 mb-1">Claimed</p>
+            <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg text-center">
+              <p className="text-xs text-white/40 mb-0.5">Claimed</p>
               <p className="text-lg font-medium text-white/50">{formatSol(creatorPoolClaimed)} SOL</p>
             </div>
-            <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-center">
-              <p className="text-xs text-purple-400/70 mb-1">Available to Claim</p>
+            <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-center">
+              <p className="text-xs text-purple-400/70 mb-0.5">Available to Claim</p>
               <p className="text-lg font-medium text-purple-400">{formatSol(creatorPoolUnclaimed)} SOL</p>
             </div>
           </div>
 
           {/* User Allocation Info */}
-          <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-            <p className="text-xs text-white/50 mb-2 font-medium">Your Allocation</p>
+          <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg">
+            <p className="text-sm text-white/50 mb-1.5 font-medium">Your Allocation</p>
             <p className="text-xs text-white/40 leading-relaxed">
               Your share = (Your Content Weight / Total Weight) × Pool Balance
             </p>
-            <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+            <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] flex items-center justify-between text-xs">
               <span className="text-white/30">Total Pool Weight</span>
               <span className="text-white/50 font-mono">{creatorPoolWeight.toString()}</span>
             </div>
-            <p className="text-[10px] text-white/30 mt-2">
+            <p className="text-2xs text-white/30 mt-1.5">
               Creators can claim anytime based on their registered content weight.
             </p>
           </div>

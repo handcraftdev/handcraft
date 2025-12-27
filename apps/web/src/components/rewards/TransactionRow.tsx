@@ -48,15 +48,15 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
 
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      mint: "bg-green-100 text-green-800",
-      patron_subscription: "bg-purple-100 text-purple-800",
-      ecosystem_subscription: "bg-blue-100 text-blue-800",
-      secondary_royalty: "bg-yellow-100 text-yellow-800",
-      reward_claim: "bg-indigo-100 text-indigo-800",
-      reward_distribution: "bg-pink-100 text-pink-800",
-      reward_transfer: "bg-gray-100 text-gray-800",
+      mint: "bg-emerald-500/20 text-emerald-400",
+      patron_subscription: "bg-purple-500/20 text-purple-400",
+      ecosystem_subscription: "bg-blue-500/20 text-blue-400",
+      secondary_royalty: "bg-amber-500/20 text-amber-400",
+      reward_claim: "bg-indigo-500/20 text-indigo-400",
+      reward_distribution: "bg-pink-500/20 text-pink-400",
+      reward_transfer: "bg-white/10 text-white/60",
     };
-    return colors[type] || "bg-gray-100 text-gray-800";
+    return colors[type] || "bg-white/10 text-white/60";
   };
 
   const getPoolLabel = (pool: string | null) => {
@@ -75,48 +75,48 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
   const explorerUrl = `https://solscan.io/tx/${tx.signature}?cluster=devnet`;
 
   return (
-    <div className="border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+    <div className="border border-white/[0.06] rounded-lg hover:border-white/[0.1] transition-colors bg-white/[0.02]">
       {/* Main Row */}
       <div
-        className="p-4 cursor-pointer"
+        className="p-3 cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            <button className="text-gray-400 hover:text-gray-600">
+          <div className="flex items-center gap-2.5 flex-1">
+            <button className="text-white/30 hover:text-white/50">
               {expanded ? (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-3.5 w-3.5" />
               ) : (
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               )}
             </button>
 
             <div className="flex flex-col">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <span
-                  className={`px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(
+                  className={`px-2 py-0.5 text-xs font-medium rounded-full ${getTypeColor(
                     tx.transaction_type
                   )}`}
                 >
                   {getTypeLabel(tx.transaction_type)}
                 </span>
                 {tx.pool_type && (
-                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                  <span className="px-2 py-0.5 text-xs bg-white/[0.06] text-white/40 rounded-full">
                     {getPoolLabel(tx.pool_type)}
                   </span>
                 )}
               </div>
-              <div className="text-sm text-gray-600 mt-1">
+              <div className="text-sm text-white/40 mt-1">
                 {date.toLocaleDateString()} {date.toLocaleTimeString()}
               </div>
             </div>
           </div>
 
           <div className="text-right">
-            <div className="text-lg font-semibold">
+            <div className="text-lg font-semibold text-white/90">
               {lamportsToSol(tx.amount)} SOL
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-white/30 font-mono">
               {truncate(tx.signature)}
             </div>
           </div>
@@ -125,14 +125,14 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
 
       {/* Expanded Details */}
       {expanded && (
-        <div className="border-t border-gray-200 bg-gray-50 p-4 space-y-3">
+        <div className="border-t border-white/[0.06] bg-white/[0.02] p-3 space-y-2.5">
           {/* Transaction Signature */}
           <div>
-            <label className="text-xs font-medium text-gray-500">
+            <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
               Transaction
             </label>
-            <div className="flex items-center gap-2 mt-1">
-              <code className="flex-1 text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono">
+            <div className="flex items-center gap-1.5 mt-1">
+              <code className="flex-1 text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 truncate">
                 {tx.signature}
               </code>
               <button
@@ -140,13 +140,13 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
                   e.stopPropagation();
                   copyToClipboard(tx.signature);
                 }}
-                className="p-1 hover:bg-gray-200 rounded"
+                className="p-1 hover:bg-white/[0.06] rounded"
                 title="Copy"
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-green-600" />
+                  <Check className="h-3.5 w-3.5 text-emerald-400" />
                 ) : (
-                  <Copy className="h-4 w-4 text-gray-600" />
+                  <Copy className="h-3.5 w-3.5 text-white/40" />
                 )}
               </button>
               <a
@@ -154,10 +154,10 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="p-1 hover:bg-gray-200 rounded"
+                className="p-1 hover:bg-white/[0.06] rounded"
                 title="View on Solscan"
               >
-                <ExternalLink className="h-4 w-4 text-gray-600" />
+                <ExternalLink className="h-3.5 w-3.5 text-white/40" />
               </a>
             </div>
           </div>
@@ -165,31 +165,31 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
           {/* Fee Split (if applicable) */}
           {(tx.creator_share || tx.platform_share || tx.ecosystem_share || tx.holder_share) && (
             <div className="grid grid-cols-2 gap-2">
-              <label className="col-span-2 text-xs font-medium text-gray-500">
+              <label className="col-span-2 text-xs font-medium text-white/30 uppercase tracking-wider">
                 Fee Distribution
               </label>
               {tx.creator_share && (
                 <div className="text-sm">
-                  <span className="text-gray-600">Creator:</span>{" "}
-                  <span className="font-mono">{lamportsToSol(tx.creator_share)} SOL</span>
+                  <span className="text-white/40">Creator:</span>{" "}
+                  <span className="font-mono text-white/60">{lamportsToSol(tx.creator_share)} SOL</span>
                 </div>
               )}
               {tx.holder_share && (
                 <div className="text-sm">
-                  <span className="text-gray-600">Holders:</span>{" "}
-                  <span className="font-mono">{lamportsToSol(tx.holder_share)} SOL</span>
+                  <span className="text-white/40">Holders:</span>{" "}
+                  <span className="font-mono text-white/60">{lamportsToSol(tx.holder_share)} SOL</span>
                 </div>
               )}
               {tx.platform_share && (
                 <div className="text-sm">
-                  <span className="text-gray-600">Platform:</span>{" "}
-                  <span className="font-mono">{lamportsToSol(tx.platform_share)} SOL</span>
+                  <span className="text-white/40">Platform:</span>{" "}
+                  <span className="font-mono text-white/60">{lamportsToSol(tx.platform_share)} SOL</span>
                 </div>
               )}
               {tx.ecosystem_share && (
                 <div className="text-sm">
-                  <span className="text-gray-600">Ecosystem:</span>{" "}
-                  <span className="font-mono">{lamportsToSol(tx.ecosystem_share)} SOL</span>
+                  <span className="text-white/40">Ecosystem:</span>{" "}
+                  <span className="font-mono text-white/60">{lamportsToSol(tx.ecosystem_share)} SOL</span>
                 </div>
               )}
             </div>
@@ -199,30 +199,30 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
           <div className="grid grid-cols-1 gap-2">
             {tx.source_wallet && (
               <div>
-                <label className="text-xs font-medium text-gray-500">
+                <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
                   Source
                 </label>
-                <code className="block text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono mt-1">
+                <code className="block text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 mt-1">
                   {truncate(tx.source_wallet, 12)}
                 </code>
               </div>
             )}
             {tx.creator_wallet && (
               <div>
-                <label className="text-xs font-medium text-gray-500">
+                <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
                   Creator
                 </label>
-                <code className="block text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono mt-1">
+                <code className="block text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 mt-1">
                   {truncate(tx.creator_wallet, 12)}
                 </code>
               </div>
             )}
             {tx.receiver_wallet && (
               <div>
-                <label className="text-xs font-medium text-gray-500">
+                <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
                   Receiver
                 </label>
-                <code className="block text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono mt-1">
+                <code className="block text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 mt-1">
                   {truncate(tx.receiver_wallet, 12)}
                 </code>
               </div>
@@ -234,20 +234,20 @@ export function TransactionRow({ transaction: tx }: TransactionRowProps) {
             <div className="grid grid-cols-1 gap-2">
               {tx.content_pubkey && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">
+                  <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
                     Content
                   </label>
-                  <code className="block text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono mt-1">
+                  <code className="block text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 mt-1">
                     {truncate(tx.content_pubkey, 12)}
                   </code>
                 </div>
               )}
               {tx.nft_asset && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">
+                  <label className="text-xs font-medium text-white/30 uppercase tracking-wider">
                     NFT Asset {tx.nft_weight && `(Weight: ${tx.nft_weight})`}
                   </label>
-                  <code className="block text-sm bg-white px-2 py-1 rounded border border-gray-200 font-mono mt-1">
+                  <code className="block text-sm bg-black/30 px-2 py-1 rounded border border-white/[0.06] font-mono text-white/60 mt-1">
                     {truncate(tx.nft_asset, 12)}
                   </code>
                 </div>

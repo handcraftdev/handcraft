@@ -213,20 +213,20 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
                   {/* Balance Info */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center">
-                      <p className="text-[10px] text-gray-500">Streamed</p>
+                      <p className="text-xs text-gray-500">Streamed</p>
                       <p className="text-xs font-medium text-orange-400">
                         {streamProgress.progressPercent.toFixed(2)}%
                       </p>
-                      <p className="text-[9px] text-gray-600">
+                      <p className="text-2xs text-gray-600">
                         {streamProgress.streamedSol.toFixed(6)} SOL
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] text-gray-500">Remaining</p>
+                      <p className="text-xs text-gray-500">Remaining</p>
                       <p className="text-xs font-medium text-green-400">
                         {(100 - streamProgress.progressPercent).toFixed(2)}%
                       </p>
-                      <p className="text-[9px] text-gray-600">
+                      <p className="text-2xs text-gray-600">
                         {streamProgress.remainingSol.toFixed(6)} SOL
                       </p>
                     </div>
@@ -271,7 +271,7 @@ export function MembershipButton({ creator, className = "" }: MembershipButtonPr
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                     <span>1 Year</span>
-                    <span className="px-1 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">Save 2mo</span>
+                    <span className="px-1 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">Save 2mo</span>
                   </div>
                   <span className="text-purple-400 font-medium">{formatSol(yearlyPrice)} SOL</span>
                 </button>
