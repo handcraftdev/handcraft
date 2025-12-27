@@ -67,8 +67,8 @@ importers:
         specifier: file:../../packages/sdk
         version: link:../../packages/sdk
       '@scalecraft/sdk':
-        specifier: file:../../packages/scalecraft-sdk
-        version: file:packages/scalecraft-sdk(@coral-xyz/anchor@0.31.1(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))
+        specifier: workspace:*
+        version: link:../../packages/scalecraft-sdk
       '@solana-mobile/wallet-standard-mobile':
         specifier: ^0.4.4
         version: 0.4.4(@solana/wallet-adapter-base@0.9.27(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)))(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(fastestsmallesttextencoderdecoder@1.0.22)(react-native@0.82.1(@babel/core@7.28.5)(@types/react@19.2.7)(bufferutil@4.0.9)(react@19.2.0)(utf-8-validate@5.0.10))(react@19.2.0)(typescript@5.9.3)
@@ -2209,12 +2209,6 @@ packages:
 
   '@rushstack/eslint-patch@1.15.0':
     resolution: {integrity: sha512-ojSshQPKwVvSMR8yT2L/QtUkV5SXi/IfDiJ4/8d6UbTPjiHVmxZzUAzGD8Tzks1b9+qQkZa0isUOvYObedITaw==}
-
-  '@scalecraft/sdk@file:packages/scalecraft-sdk':
-    resolution: {directory: packages/scalecraft-sdk, type: directory}
-    peerDependencies:
-      '@coral-xyz/anchor': '>=0.30.0'
-      '@solana/web3.js': '>=1.90.0'
 
   '@scure/base@1.1.9':
     resolution: {integrity: sha512-8YKhl8GHiNI/pU2VMaofa2Tor7PJRAjwQLBBuilkJ9L5+13yVbC7JO/wS7piioAvPSwR3JKM1IJ/u4xQzbcXKg==}
@@ -11513,11 +11507,6 @@ snapshots:
   '@rtsao/scc@1.1.0': {}
 
   '@rushstack/eslint-patch@1.15.0': {}
-
-  '@scalecraft/sdk@file:packages/scalecraft-sdk(@coral-xyz/anchor@0.31.1(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(@solana/web3.js@1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))':
-    dependencies:
-      '@coral-xyz/anchor': 0.31.1(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
-      '@solana/web3.js': 1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
 
   '@scure/base@1.1.9': {}
 
