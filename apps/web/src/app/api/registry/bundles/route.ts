@@ -15,6 +15,7 @@ export interface BundleResponse {
   metadataCid: string | null;
   creatorAddress: string;
   collectionName: string | null;
+  thumbnail: string | null;
 }
 
 export interface BundleItemResponse {
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
             metadataCid: bundle.metadataCid || null,
             creatorAddress: bundle.creator.toBase58(),
             collectionName: bundle.collectionName || null,
+            thumbnail: bundle.thumbnail || null,
           } as BundleResponse,
           items: items.map(({ item, content }) => ({
             pubkey: item.content?.toBase58() || "", // Use content PDA as pubkey
@@ -112,6 +114,7 @@ export async function GET(request: NextRequest) {
         metadataCid: b.metadataCid || null,
         creatorAddress: b.creator.toBase58(),
         collectionName: b.collectionName || null,
+        thumbnail: b.thumbnail || null,
       };
     });
 
@@ -133,6 +136,7 @@ export async function GET(request: NextRequest) {
               metadataCid: b.metadataCid || null,
               creatorAddress: b.creator.toBase58(),
               collectionName: b.collectionName || null,
+              thumbnail: b.thumbnail || null,
             } as BundleResponse,
             items: (bundleWithItems?.items || []).map(({ item, content }) => ({
               pubkey: item.content?.toBase58() || "", // Use content PDA as pubkey

@@ -21,6 +21,7 @@ export interface ContentEntryResponse {
   visibilityLevel: number;
   collectionName: string | null;
   creatorAddress: string;
+  thumbnail: string | null;
 }
 
 /**
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
       visibilityLevel: c.visibilityLevel ?? 0,
       collectionName: c.collectionName || null,
       creatorAddress: c.creator.toBase58(),
+      thumbnail: c.thumbnail || null,
     }));
 
     return NextResponse.json({
