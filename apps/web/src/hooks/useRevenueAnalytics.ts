@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   CreatorRevenue,
   UserEarnings,
@@ -35,8 +35,14 @@ export function useRevenueAnalytics(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Use ref to store params to avoid infinite loops
+  const paramsRef = useRef({ type, wallet, period });
+  paramsRef.current = { type, wallet, period };
+
   const refetch = useCallback(async () => {
-    if (!wallet) {
+    const { type: currentType, wallet: currentWallet, period: currentPeriod } = paramsRef.current;
+
+    if (!currentWallet) {
       setError("Wallet address required");
       return;
     }
@@ -46,9 +52,9 @@ export function useRevenueAnalytics(
 
     try {
       const queryParams = new URLSearchParams({
-        type,
-        wallet,
-        period,
+        type: currentType,
+        wallet: currentWallet,
+        period: currentPeriod,
       });
 
       const response = await fetch(`/api/rewards/analytics?${queryParams}`);
@@ -59,7 +65,7 @@ export function useRevenueAnalytics(
 
       const data = await response.json();
 
-      if (type === "creator") {
+      if (currentType === "creator") {
         setRevenue(data.revenue);
       } else {
         setEarnings(data.earnings);
@@ -74,7 +80,7 @@ export function useRevenueAnalytics(
     } finally {
       setLoading(false);
     }
-  }, [type, wallet, period]);
+  }, []);
 
   // Auto-fetch on mount and when deps change
   useEffect(() => {
