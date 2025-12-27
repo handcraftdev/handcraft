@@ -134,7 +134,7 @@ export function RentBundleModal({
           <div className="space-y-5">
             {/* Tier Selection */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Select Duration</label>
+              <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-3">Select Duration</label>
               <div className="grid grid-cols-3 gap-2">
                 {TIER_OPTIONS.map(({ tier, label }) => {
                   const fee = getFeeForTier(tier);
@@ -189,7 +189,7 @@ export function RentBundleModal({
 
             {/* What you get */}
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-emerald-400 mb-3">What you get</h3>
+              <h3 className="text-sm uppercase tracking-[0.15em] text-emerald-400 mb-3">What you get</h3>
               <ul className="text-sm text-white/60 space-y-2">
                 <li className="flex items-start gap-2">
                   <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +208,7 @@ export function RentBundleModal({
 
             {/* Limitations */}
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-amber-300 mb-3">Please note</h3>
+              <h3 className="text-sm uppercase tracking-[0.15em] text-amber-300 mb-3">Please note</h3>
               <ul className="text-sm text-amber-200/60 space-y-1.5">
                 <li className="flex items-start gap-2">
                   <span className="text-amber-400/60 mt-0.5">-</span>

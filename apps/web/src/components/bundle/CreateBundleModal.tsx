@@ -5,6 +5,7 @@ import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { BundleType, getBundleTypeLabel, getSuggestedBundleTypes, ContentDomain, getIpfsUrl } from "@handcraft/sdk";
 import { useContentRegistry, ContentEntry } from "@/hooks/useContentRegistry";
+import { formatCollectionName, getCollectionNameInfo } from "@/utils/nft-naming";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 interface CreateBundleModalProps {
@@ -46,6 +47,7 @@ export function CreateBundleModal({
 
   // Step 1: Details
   const [title, setTitle] = useState("");
+  const [collectionNameInput, setCollectionNameInput] = useState("");
   const [description, setDescription] = useState("");
   const [bundleType, setBundleType] = useState<BundleType>(2); // Playlist
   const [coverImage, setCoverImage] = useState<File | null>(null);
@@ -70,6 +72,9 @@ export function CreateBundleModal({
   const [rentFee1d, setRentFee1d] = useState("");
   const [rentFee7d, setRentFee7d] = useState("");
 
+  // Visibility level (0=Public, 1=Ecosystem, 2=Subscriber, 3=NFT Only)
+  const [visibilityLevel, setVisibilityLevel] = useState<number>(1); // Default to Ecosystem
+
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -79,6 +84,7 @@ export function CreateBundleModal({
     isAddingBundleItem,
     content: userContent,
     isLoadingContent: isLoadingUserContent,
+    userProfile,
   } = useContentRegistry();
 
   const suggestedTypes = creatorDomain
@@ -268,6 +274,11 @@ export function CreateBundleModal({
         : null;
 
       // Create bundle with mint and rent in a single transaction
+      // Generate collection name: "HC: username: collectionName" (optional)
+      const collectionName = userProfile?.username && collectionNameInput.trim()
+        ? formatCollectionName(userProfile.username, collectionNameInput.trim())
+        : undefined;
+
       await createBundleWithMintAndRent.mutateAsync({
         bundleId,
         metadataCid,
@@ -279,6 +290,8 @@ export function CreateBundleModal({
         rentFee1d: rent1dLamports,
         rentFee7d: rent7dLamports,
         platform: publicKey,
+        visibilityLevel,
+        collectionName,
       });
 
       // Add selected content items in a single transaction
@@ -302,6 +315,7 @@ export function CreateBundleModal({
   const handleClose = () => {
     setStep("details");
     setTitle("");
+    setCollectionNameInput("");
     setDescription("");
     setBundleType(2); // Playlist
     setCoverImage(null);
@@ -315,6 +329,7 @@ export function CreateBundleModal({
     setRentFee6h("");
     setRentFee1d("");
     setRentFee7d("");
+    setVisibilityLevel(1); // Reset to Ecosystem
     onClose();
   };
 
@@ -347,7 +362,7 @@ export function CreateBundleModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-black rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
+      <div className="relative bg-black rounded-lg w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
 
@@ -382,14 +397,14 @@ export function CreateBundleModal({
           {step === "details" && (
             <div className="space-y-5">
               <div>
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Bundle Type</label>
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Bundle Type</label>
                 <div className="grid grid-cols-2 gap-2">
                   {suggestedTypes.map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => setBundleType(type)}
-                      className={`relative px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 overflow-hidden ${
+                      className={`relative px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 overflow-hidden ${
                         bundleType === type
                           ? "bg-cyan-500/20 border border-cyan-500/50 text-white/90"
                           : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5 hover:border-white/20"
@@ -405,7 +420,36 @@ export function CreateBundleModal({
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">
+                  Collection Name
+                </label>
+                <input
+                  type="text"
+                  value={collectionNameInput}
+                  onChange={(e) => setCollectionNameInput(e.target.value)}
+                  placeholder="e.g., Summer Beats 2024"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                />
+                {/* Collection name preview */}
+                {userProfile?.username && (
+                  <div className="mt-2 p-2 bg-white/[0.02] border border-white/5 rounded-lg">
+                    <p className="text-2xs uppercase tracking-[0.15em] text-white/30 mb-1">NFT Collection Name Preview</p>
+                    <code className="text-xs text-purple-400 font-mono">
+                      {formatCollectionName(userProfile.username, collectionNameInput.trim() || null)}
+                    </code>
+                    {(() => {
+                      if (!collectionNameInput.trim()) return null;
+                      const info = getCollectionNameInfo(userProfile.username, collectionNameInput.trim());
+                      return info.inputLength > info.maxInputLength ? (
+                        <p className="text-2xs text-amber-400/60 mt-1">Name truncated to fit 32 char limit</p>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">
                   Title <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -413,35 +457,71 @@ export function CreateBundleModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={`Enter ${getBundleTypeLabel(bundleType).toLowerCase()} title`}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Description</label>
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe your bundle..."
                   rows={3}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] resize-none text-white/90 placeholder:text-white/20 transition-all duration-300"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] resize-none text-white/90 placeholder:text-white/20 transition-all duration-300"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Cover Image (Optional)</label>
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Cover Image (Optional)</label>
                 <div className="relative">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={(e) => setCoverImage(e.target.files?.[0] || null)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/90 transition-all duration-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:text-cyan-300 file:text-sm file:font-medium hover:file:bg-cyan-500/30 file:transition-all file:duration-300 file:cursor-pointer"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/90 transition-all duration-300 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-500/20 file:text-cyan-300 file:text-sm file:font-medium hover:file:bg-cyan-500/30 file:transition-all file:duration-300 file:cursor-pointer"
                   />
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Access Level</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { level: 0, label: "Public", desc: "Free access for everyone", color: "emerald" },
+                    { level: 1, label: "Ecosystem", desc: "Subscribers can access", color: "cyan" },
+                    { level: 2, label: "Members", desc: "Your members only", color: "purple" },
+                    { level: 3, label: "NFT Only", desc: "Buyers/renters only", color: "amber" },
+                  ].map(({ level, label, desc, color }) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setVisibilityLevel(level)}
+                      className={`relative px-4 py-3 rounded-lg text-left transition-all duration-300 overflow-hidden ${
+                        visibilityLevel === level
+                          ? `bg-${color}-500/20 border border-${color}-500/50`
+                          : "bg-white/[0.02] border border-white/10 hover:bg-white/5 hover:border-white/20"
+                      }`}
+                      style={visibilityLevel === level ? {
+                        backgroundColor: color === "emerald" ? "rgba(16, 185, 129, 0.2)" : color === "cyan" ? "rgba(6, 182, 212, 0.2)" : color === "purple" ? "rgba(168, 85, 247, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                        borderColor: color === "emerald" ? "rgba(16, 185, 129, 0.5)" : color === "cyan" ? "rgba(6, 182, 212, 0.5)" : color === "purple" ? "rgba(168, 85, 247, 0.5)" : "rgba(245, 158, 11, 0.5)"
+                      } : {}}
+                    >
+                      <span className={`block text-sm font-medium ${visibilityLevel === level ? "text-white/90" : "text-white/50"}`}>{label}</span>
+                      <span className="block text-xs text-white/30 mt-0.5">{desc}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/30 mt-2">
+                  {visibilityLevel === 0 && "Public bundles are free to access - no subscription required"}
+                  {visibilityLevel === 1 && "Level 1 bundles earn from ecosystem subscription pool (12% holder + 80% creator)"}
+                  {visibilityLevel === 2 && "Level 2 bundles earn from your membership pool only"}
+                  {visibilityLevel === 3 && "Level 3 bundles earn from direct sales only"}
+                </p>
+              </div>
+
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -450,7 +530,7 @@ export function CreateBundleModal({
                 type="button"
                 onClick={handleContinueToContent}
                 disabled={!title.trim()}
-                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Continue to Content
               </button>
@@ -496,7 +576,7 @@ export function CreateBundleModal({
                         key={contentKey}
                         type="button"
                         onClick={() => toggleContentSelection(contentKey)}
-                        className={`relative w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 overflow-hidden ${
+                        className={`relative w-full flex items-center gap-3 p-3 rounded-lg border transition-all duration-300 overflow-hidden ${
                           isSelected
                             ? "bg-cyan-500/10 border-cyan-500/50"
                             : "bg-white/[0.02] border-white/10 hover:border-white/20 hover:bg-white/5"
@@ -549,13 +629,13 @@ export function CreateBundleModal({
               </div>
 
               {selectedContentCids.length > 0 && (
-                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-3 text-sm">
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3 text-sm">
                   <span className="text-cyan-300 font-medium">{selectedContentCids.length} items selected</span>
                 </div>
               )}
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -563,7 +643,7 @@ export function CreateBundleModal({
               <button
                 type="button"
                 onClick={handleContinueToMonetization}
-                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-lg transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Continue to Monetization
               </button>
@@ -574,7 +654,7 @@ export function CreateBundleModal({
           {step === "monetization" && publicKey && (
             <div className="space-y-5">
               {/* Tabs */}
-              <div className="flex rounded-xl bg-white/[0.02] p-1 border border-white/5">
+              <div className="flex rounded-lg bg-white/[0.02] p-1 border border-white/5">
                 <button
                   onClick={() => setMonetizationTab("minting")}
                   className={`flex-1 py-2.5 text-center font-medium transition-all duration-300 rounded-lg text-sm ${
@@ -615,7 +695,7 @@ export function CreateBundleModal({
                   </p>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Buy Price (SOL)</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Buy Price (SOL)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -624,20 +704,20 @@ export function CreateBundleModal({
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
                         placeholder="Min 0.001"
-                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/40 text-sm">SOL</span>
                     </div>
                     <p className="text-xs text-white/30 mt-2">Minimum price is 0.001 SOL</p>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Supply</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Supply</label>
                     <div className="flex gap-3 mb-3">
                       <button
                         type="button"
                         onClick={() => setNftSupplyType("unlimited")}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                           nftSupplyType === "unlimited"
                             ? "bg-cyan-500/20 border border-cyan-500/50 text-cyan-300"
                             : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -653,7 +733,7 @@ export function CreateBundleModal({
                       <button
                         type="button"
                         onClick={() => setNftSupplyType("limited")}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                           nftSupplyType === "limited"
                             ? "bg-cyan-500/20 border border-cyan-500/50 text-cyan-300"
                             : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -674,15 +754,15 @@ export function CreateBundleModal({
                         value={nftMaxSupply}
                         onChange={(e) => setNftMaxSupply(e.target.value)}
                         placeholder="Max editions (e.g., 100)"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     {/* Primary Sale Split */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <p className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-white/40">You (Creator)</span>
@@ -704,8 +784,8 @@ export function CreateBundleModal({
                     </div>
 
                     {/* Secondary Sale Split */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <p className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-white/40">Seller</span>
@@ -751,9 +831,9 @@ export function CreateBundleModal({
                           value={rentFee6h}
                           onChange={(e) => setRentFee6h(e.target.value)}
                           placeholder="0.01"
-                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                         />
-                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white/40 text-sm">SOL</span>
                       </div>
                     </div>
 
@@ -767,9 +847,9 @@ export function CreateBundleModal({
                           value={rentFee1d}
                           onChange={(e) => setRentFee1d(e.target.value)}
                           placeholder="0.02"
-                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                         />
-                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white/40 text-sm">SOL</span>
                       </div>
                     </div>
 
@@ -783,14 +863,14 @@ export function CreateBundleModal({
                           value={rentFee7d}
                           onChange={(e) => setRentFee7d(e.target.value)}
                           placeholder="0.05"
-                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                          className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                         />
-                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/40 text-sm">SOL</span>
+                        <span className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white/40 text-sm">SOL</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-sm">
                     <p className="text-amber-300 font-medium mb-2">About Rentals</p>
                     <ul className="text-amber-200/60 space-y-1.5">
                       <li className="flex items-start gap-2">
@@ -816,14 +896,14 @@ export function CreateBundleModal({
                 const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
                 const hasPartialRent = hasAnyRent && !hasAllRent;
                 return hasPartialRent ? (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-400">
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-400">
                     Please set all three rental tiers or leave them all empty.
                   </div>
                 ) : null;
               })()}
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                   {error}
                 </div>
               )}
@@ -834,7 +914,7 @@ export function CreateBundleModal({
                   isLoading ||
                   Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
                 }
-                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                className="w-full py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Create Bundle
               </button>
@@ -872,7 +952,7 @@ export function CreateBundleModal({
               </p>
               <button
                 onClick={handleClose}
-                className="px-8 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-xl transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                className="px-8 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 rounded-lg transition-all duration-300 font-medium border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
               >
                 Done
               </button>

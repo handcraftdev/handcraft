@@ -176,7 +176,7 @@ export function ConfigureRentModal({
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* 3-Tier Pricing */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Rental Fees (SOL)</label>
+              <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-3">Rental Fees (SOL)</label>
               <p className="text-xs text-white/30 mb-4">
                 Set prices for all three rental tiers. Users will choose which duration suits them.
               </p>
@@ -267,7 +267,7 @@ export function ConfigureRentModal({
             {/* Stats - only show for existing configs */}
             {existingConfig && (
               <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Rental Stats</h3>
+                <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-3">Rental Stats</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-white/40">Total Rentals</span>
@@ -285,7 +285,7 @@ export function ConfigureRentModal({
 
             {/* Revenue Split Info */}
             <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Rental Fee Split</h3>
+              <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-3">Rental Fee Split</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-white/40">Creator (you)</span>
@@ -308,7 +308,7 @@ export function ConfigureRentModal({
 
             {/* Rental NFT Info */}
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-amber-300 mb-3 flex items-center gap-2">
+              <h3 className="text-sm uppercase tracking-[0.15em] text-amber-300 mb-3 flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>

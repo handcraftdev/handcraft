@@ -78,7 +78,7 @@ export function SellNftModal({
           {/* Your NFTs */}
           {contentNfts.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Your NFTs</h3>
+              <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-3">Your NFTs</h3>
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {contentNfts.map((nft, i) => (
                   <div
@@ -101,7 +101,7 @@ export function SellNftModal({
 
           {/* Marketplace Links */}
           <div className="space-y-3 mb-6">
-            <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30">List on Marketplace</h3>
+            <h3 className="text-sm uppercase tracking-[0.15em] text-white/30">List on Marketplace</h3>
             <p className="text-xs text-white/30 mb-3">
               To sell your NFT, list it on a Solana NFT marketplace.
             </p>

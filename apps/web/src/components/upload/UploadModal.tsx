@@ -420,7 +420,7 @@ function InputField({ label, field, placeholder, type = "text", required = false
         value={value}
         onChange={(e) => onChange(field, e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm transition-all duration-300"
+        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm transition-all duration-300"
       />
     </div>
   );
@@ -442,7 +442,7 @@ function TextAreaField({ label, field, placeholder, rows = 3, value, onChange }:
         onChange={(e) => onChange(field, e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm resize-none transition-all duration-300"
+        className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 text-sm resize-none transition-all duration-300"
       />
     </div>
   );
@@ -479,7 +479,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const MIN_PRICE_SOL = 0.001;
 
   // Visibility level (0=Public, 1=Ecosystem, 2=Subscriber, 3=Edition-only)
-  const [visibilityLevel, setVisibilityLevel] = useState<number>(0);
+  const [visibilityLevel, setVisibilityLevel] = useState<number>(1); // Default to Ecosystem
 
   // Rental config
   const [rentFee6h, setRentFee6h] = useState("");
@@ -733,7 +733,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     setNftPrice("");
     setNftSupplyType("unlimited");
     setNftMaxSupply("");
-    setVisibilityLevel(0);
+    setVisibilityLevel(1); // Reset to Ecosystem
     setRentFee6h("");
     setRentFee1d("");
     setRentFee7d("");
@@ -1061,7 +1061,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-black rounded-2xl w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
+      <div className="relative bg-black rounded-lg w-full max-w-xl mx-4 overflow-hidden border border-white/10 max-h-[90vh] flex flex-col">
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
 
@@ -1069,7 +1069,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         <div className="relative flex items-center justify-between px-6 py-4 border-b border-white/5">
           <div className="flex items-center gap-3">
             {step !== "domain" && step !== "uploading" && step !== "registering" && step !== "done" && (
-              <button onClick={goBack} className="p-1.5 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90">
+              <button onClick={goBack} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-white/50 hover:text-white/90">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
@@ -1077,7 +1077,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             )}
             <h2 className="text-xl font-medium text-white/90">{getStepTitle()}</h2>
           </div>
-          <button onClick={handleClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors text-white/50 hover:text-white/90">
+          <button onClick={handleClose} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-white/50 hover:text-white/90">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -1098,7 +1098,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             </p>
             <a
               href="/studio"
-              className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl font-medium transition-all duration-300 inline-flex items-center gap-2 text-white/90"
+              className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-lg font-medium transition-all duration-300 inline-flex items-center gap-2 text-white/90"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -1118,7 +1118,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 <button
                   key={domain.key}
                   onClick={() => handleDomainSelect(domain.key)}
-                  className="relative p-5 rounded-xl border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group overflow-hidden"
+                  className="relative p-5 rounded-lg border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300 pointer-events-none" />
                   <div className="relative">
@@ -1140,7 +1140,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 <button
                   key={type.key}
                   onClick={() => handleTypeSelect(type)}
-                  className="relative w-full p-4 rounded-xl border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group flex items-center gap-4 overflow-hidden"
+                  className="relative w-full p-4 rounded-lg border border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5 transition-all duration-300 text-left group flex items-center gap-4 overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-transparent group-hover:from-purple-500/5 transition-all duration-300 pointer-events-none" />
                   <div className="relative text-white/40 group-hover:text-purple-400 transition-colors">
@@ -1160,7 +1160,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
             <div className="space-y-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 ${
+                className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-all duration-300 ${
                   fileSizeError
                     ? "border-red-500/50 bg-red-500/5"
                     : "border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5"
@@ -1185,7 +1185,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 />
               </div>
               {fileSizeError && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
                   {fileSizeError}
                 </div>
               )}
@@ -1196,7 +1196,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {step === "details" && file && contentType && (
             <div className="space-y-4">
               {/* Preview */}
-              <div className="aspect-video bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+              <div className="aspect-video bg-white/5 border border-white/10 rounded-lg overflow-hidden">
                 {contentType.domain === "video" && preview && (
                   <video src={preview} className="w-full h-full object-contain" controls />
                 )}
@@ -1230,7 +1230,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 </label>
                 <div
                   onClick={() => thumbnailInputRef.current?.click()}
-                  className={`relative border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all duration-300 ${
+                  className={`relative border-2 border-dashed rounded-lg p-4 cursor-pointer transition-all duration-300 ${
                     thumbnail
                       ? "border-emerald-500/30 bg-emerald-500/5"
                       : "border-white/10 hover:border-purple-500/30 bg-white/[0.02] hover:bg-white/5"
@@ -1281,7 +1281,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               <button
                 onClick={() => setStep("monetization")}
                 disabled={!metadata.title?.trim() || !thumbnail}
-                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
               >
                 {!thumbnail ? "Add Thumbnail to Continue" : "Continue to Monetization"}
               </button>
@@ -1292,7 +1292,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
           {step === "monetization" && publicKey && (
             <div className="space-y-4">
               {/* Tabs */}
-              <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl border border-white/5">
+              <div className="flex gap-1 p-1 bg-white/[0.02] rounded-lg border border-white/5">
                 <button
                   onClick={() => setMonetizationTab("minting")}
                   className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
@@ -1333,7 +1333,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   </p>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Buy Price (SOL)</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Buy Price (SOL)</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -1342,19 +1342,19 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                         value={nftPrice}
                         onChange={(e) => setNftPrice(e.target.value)}
                         placeholder="Min 0.001"
-                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
-                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/40">SOL</span>
+                      <span className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/40">SOL</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Supply</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Supply</label>
                     <div className="flex gap-3 mb-3">
                       <button
                         type="button"
                         onClick={() => setNftSupplyType("unlimited")}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                           nftSupplyType === "unlimited"
                             ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
                             : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -1370,7 +1370,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                       <button
                         type="button"
                         onClick={() => setNftSupplyType("limited")}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                           nftSupplyType === "limited"
                             ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
                             : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -1392,14 +1392,14 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                         value={nftMaxSupply}
                         onChange={(e) => setNftMaxSupply(e.target.value)}
                         placeholder="Max supply (max 999,999)"
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                       />
                     )}
                   </div>
 
                   {/* Visibility Level */}
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Content Visibility</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Content Visibility</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { level: 0, label: "Public", desc: "Anyone can view", icon: "🌍" },
@@ -1411,7 +1411,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                           key={opt.level}
                           type="button"
                           onClick={() => setVisibilityLevel(opt.level)}
-                          className={`p-3 rounded-xl border text-left transition-all duration-300 ${
+                          className={`p-3 rounded-lg border text-left transition-all duration-300 ${
                             visibilityLevel === opt.level
                               ? "border-purple-500/50 bg-purple-500/10"
                               : "border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/5"
@@ -1429,8 +1429,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
                   <div className="grid grid-cols-2 gap-3">
                     {/* Primary Sale Split */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <p className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Primary Sale</p>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between">
                           <span className="text-white/40">You (Creator)</span>
@@ -1452,8 +1452,8 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                     </div>
 
                     {/* Secondary Sale Split */}
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <p className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <p className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Secondary Sale</p>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between">
                           <span className="text-white/40">Seller</span>
@@ -1489,7 +1489,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   </p>
 
                   <div>
-                    <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Rental Pricing (SOL)</label>
+                    <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Rental Pricing (SOL)</label>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs text-white/40 mb-2">6 Hours</label>
@@ -1500,7 +1500,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                           value={rentFee6h}
                           onChange={(e) => setRentFee6h(e.target.value)}
                           placeholder="0.01"
-                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                         />
                       </div>
                       <div>
@@ -1512,7 +1512,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                           value={rentFee1d}
                           onChange={(e) => setRentFee1d(e.target.value)}
                           placeholder="0.02"
-                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                         />
                       </div>
                       <div>
@@ -1524,13 +1524,13 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                           value={rentFee7d}
                           onChange={(e) => setRentFee7d(e.target.value)}
                           placeholder="0.05"
-                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                          className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-sm">
                     <p className="text-amber-400 font-medium mb-2">About Rentals</p>
                     <ul className="text-amber-200/70 space-y-1">
                       <li>• Temporary access via non-transferable tokens</li>
@@ -1543,7 +1543,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
               {/* Error states */}
               {isLoadingEcosystemConfig && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
                   <div className="flex items-center gap-2 text-blue-400">
                     <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -1555,7 +1555,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               )}
 
               {!isLoadingEcosystemConfig && !ecosystemConfig && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-amber-400">
                       {isEcosystemConfigError ? "Network error." : "Config not found."}
@@ -1573,7 +1573,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               {/* Rental validation - require all or none */}
               {/* Price validation - free minting not allowed */}
               {nftPrice && parseFloat(nftPrice) < MIN_PRICE_SOL && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                   Minimum price is {MIN_PRICE_SOL} SOL. Free minting is not allowed.
                 </div>
               )}
@@ -1583,20 +1583,20 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                 const hasAllRent = rentFee6h && rentFee1d && rentFee7d;
                 const hasPartialRent = hasAnyRent && !hasAllRent;
                 return hasPartialRent ? (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-400">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm text-amber-400">
                     Please set all three rental tiers or leave them all empty.
                   </div>
                 ) : null;
               })()}
 
               {registrationError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-sm text-red-400">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                   {registrationError}
                 </div>
               )}
 
               {uploadResult && !registrationError && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-sm text-emerald-400">
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-sm text-emerald-400">
                   File uploaded to IPFS. Click below to register on-chain.
                 </div>
               )}
@@ -1612,7 +1612,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   // Disable if partial rental fees (require all or none)
                   Boolean((rentFee6h || rentFee1d || rentFee7d) && !(rentFee6h && rentFee1d && rentFee7d))
                 }
-                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
               >
                 {uploadResult ? "Register on Solana" : "Publish Content"}
               </button>
@@ -1625,7 +1625,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               <p className="text-white/40 mb-4">Connect your wallet to configure monetization and register on-chain.</p>
               <button
                 onClick={handleUpload}
-                className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl transition-all duration-300 font-medium text-white/90"
+                className="px-6 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all duration-300 font-medium text-white/90"
               >
                 Upload to IPFS Only
               </button>
@@ -1675,7 +1675,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
               </p>
               <button
                 onClick={handleClose}
-                className="px-8 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-xl transition-all duration-300 font-medium text-white/90"
+                className="px-8 py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 hover:border-purple-500/50 rounded-lg transition-all duration-300 font-medium text-white/90"
               >
                 Done
               </button>

@@ -341,24 +341,24 @@ export function ManageContentModal({
             {settingsTab === "details" && (
               <div className="space-y-3">
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content CID</h3>
+                  <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Content CID</h3>
                   <p className="text-sm text-white/60 font-mono break-all">{content.contentCid ?? "N/A"}</p>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content Type</h3>
+                  <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Content Type</h3>
                   <p className="text-sm text-white/60">{contentTypeLabel}</p>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Encryption</h3>
+                  <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Encryption</h3>
                   <p className="text-sm text-white/60">
                     {content.isEncrypted ? "Encrypted - requires NFT ownership or rental" : "Public - accessible to everyone"}
                   </p>
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Content Visibility</h3>
+                  <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Content Visibility</h3>
                   <div className="flex items-center gap-2">
                     <span className={`px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 ${
                       content.visibilityLevel === 3 /* NftOnly */
@@ -397,7 +397,7 @@ export function ManageContentModal({
                 </div>
 
                 <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
+                  <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${isLocked ? "bg-amber-400" : "bg-emerald-400"}`} />
                     <p className="text-sm text-white/60">
@@ -408,7 +408,7 @@ export function ManageContentModal({
 
                 {actualMintedCount > 0 && (
                   <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                    <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
+                    <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
                     <p className="text-sm text-purple-400 font-medium">{actualMintedCount} NFTs</p>
                   </div>
                 )}
@@ -463,7 +463,7 @@ export function ManageContentModal({
 
                     {/* Mint Price */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">
                         Price (SOL)
                       </label>
                       <input
@@ -478,7 +478,7 @@ export function ManageContentModal({
 
                     {/* Max Supply */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">
                         Max Supply
                       </label>
                       {mintConfig.maxSupply !== null ? (
@@ -548,7 +548,7 @@ export function ManageContentModal({
 
                     {/* Stats */}
                     <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Minted</h3>
+                      <h3 className="text-sm uppercase tracking-[0.15em] text-white/30 mb-2">Minted</h3>
                       <p className="text-sm text-purple-400 font-medium">
                         {actualMintedCount}
                         {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
@@ -569,7 +569,7 @@ export function ManageContentModal({
 
                     {/* Mint Price */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">
                         Price (SOL)
                       </label>
                       <input
@@ -585,7 +585,7 @@ export function ManageContentModal({
 
                     {/* Supply */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">
                         Supply
                       </label>
                       <div className="flex gap-3 mb-3">
@@ -690,7 +690,7 @@ export function ManageContentModal({
 
                     {/* Rent Fees */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-3">
                         Rental Pricing (SOL)
                       </label>
                       <div className="grid grid-cols-3 gap-3">
@@ -756,7 +756,7 @@ export function ManageContentModal({
 
                     {/* Rent Fees */}
                     <div>
-                      <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                      <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-3">
                         Rental Pricing (SOL)
                       </label>
                       <div className="grid grid-cols-3 gap-3">

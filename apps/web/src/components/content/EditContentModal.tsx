@@ -171,7 +171,7 @@ export function EditContentModal({
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Title */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Title</label>
+              <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">Title</label>
               <input
                 type="text"
                 value={title}
@@ -183,7 +183,7 @@ export function EditContentModal({
 
             {/* Description */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Description</label>
+              <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -195,7 +195,7 @@ export function EditContentModal({
 
             {/* Tags */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">Tags</label>
+              <label className="block text-sm uppercase tracking-[0.2em] text-white/30 mb-2">Tags</label>
               <input
                 type="text"
                 value={tags}

@@ -39,6 +39,7 @@ export function ManageBundleModal({
   const [hasOrderChanges, setHasOrderChanges] = useState(false);
   const [addingItemCid, setAddingItemCid] = useState<string | null>(null);
   const [removingItemCid, setRemovingItemCid] = useState<string | null>(null);
+  const [contentMetadataMap, setContentMetadataMap] = useState<Record<string, { name?: string; image?: string }>>({});
 
   // Mint config state
   const [mintPrice, setMintPrice] = useState("0.1");
@@ -129,6 +130,42 @@ export function ManageBundleModal({
     }
     fetchMetadata();
   }, [bundle.collectionAsset]);
+
+  // Fetch content metadata for all items (bundle items + available content)
+  useEffect(() => {
+    async function fetchContentMetadata() {
+      const allContent = [...onChainItems.map(i => i.content).filter(Boolean), ...availableContent];
+      const toFetch = allContent.filter(c => c?.metadataCid && !contentMetadataMap[c.contentCid || ""]);
+
+      if (toFetch.length === 0) return;
+
+      const results: Record<string, { name?: string; image?: string }> = {};
+
+      await Promise.allSettled(
+        toFetch.map(async (content) => {
+          if (!content?.metadataCid || !content?.contentCid) return;
+          try {
+            const res = await fetch(getIpfsUrl(content.metadataCid));
+            if (res.ok) {
+              const data = await res.json();
+              results[content.contentCid] = {
+                name: data.properties?.title || data.name,
+                image: data.image,
+              };
+            }
+          } catch {
+            // Ignore fetch errors
+          }
+        })
+      );
+
+      if (Object.keys(results).length > 0) {
+        setContentMetadataMap(prev => ({ ...prev, ...results }));
+      }
+    }
+
+    fetchContentMetadata();
+  }, [onChainItems, availableContent]);
 
   // Sync ordered items when on-chain items change
   useEffect(() => {
@@ -434,9 +471,9 @@ export function ManageBundleModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-2xl p-6 m-4 max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="relative bg-black border border-white/10 rounded-lg w-full max-w-2xl p-5 m-4 max-h-[90vh] flex flex-col overflow-hidden">
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none rounded-2xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none rounded-lg" />
 
         <div className="relative flex flex-col h-full">
           {/* Header */}
@@ -456,7 +493,7 @@ export function ManageBundleModal({
           </div>
 
           {/* Main Tabs */}
-          <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl mb-5 border border-white/5">
+          <div className="flex gap-1 p-1 bg-white/[0.02] rounded-lg mb-5 border border-white/5">
             <button
               onClick={() => setMainTab("content")}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-300 ${
@@ -482,7 +519,7 @@ export function ManageBundleModal({
           {/* Content */}
           <div className="flex-1 overflow-y-auto">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm mb-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm mb-4">
                 {error}
               </div>
             )}
@@ -492,7 +529,7 @@ export function ManageBundleModal({
               <div className="space-y-4">
                 {/* Bundle Items */}
                 <div>
-                  <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">
+                  <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">
                     Bundle Items ({orderedItems.length})
                   </h3>
                   {bundleWithItemsQuery.isLoading ? (
@@ -503,8 +540,8 @@ export function ManageBundleModal({
                       </svg>
                     </div>
                   ) : orderedItems.length === 0 ? (
-                    <div className="text-center py-12 bg-white/[0.02] border border-white/5 rounded-xl">
-                      <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <div className="text-center py-12 bg-white/[0.02] border border-white/5 rounded-lg">
+                      <div className="w-12 h-12 mx-auto mb-4 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
                         <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
@@ -525,7 +562,7 @@ export function ManageBundleModal({
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, index)}
                             onDragEnd={handleDragEnd}
-                            className={`flex items-center gap-3 p-3 bg-white/[0.02] border rounded-xl transition-all duration-300 ${
+                            className={`flex items-center gap-3 p-3 bg-white/[0.02] border rounded-lg transition-all duration-300 ${
                               !currentBundle.isLocked ? "cursor-move hover:bg-white/5" : ""
                             } ${draggedIndex === index ? "opacity-50 scale-95" : ""} ${
                               dragOverIndex === index ? "border-cyan-500/50 bg-cyan-500/5" : "border-white/5"
@@ -574,7 +611,7 @@ export function ManageBundleModal({
                     <button
                       onClick={handleSaveOrder}
                       disabled={isSavingOrder}
-                      className="w-full mt-4 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
+                      className="w-full mt-4 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-white/90"
                     >
                       {isSavingOrder ? "Saving Order..." : "Save Order"}
                     </button>
@@ -584,7 +621,7 @@ export function ManageBundleModal({
                 {/* Add Content */}
                 {!currentBundle.isLocked && addableContent.length > 0 && (
                   <div>
-                    <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-3">Add Content</h3>
+                    <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-3">Add Content</h3>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
                       {addableContent.map((content) => {
                         const contentKey = content.contentCid || content.pubkey?.toBase58() || "";
@@ -592,7 +629,7 @@ export function ManageBundleModal({
                         return (
                           <div
                             key={contentKey}
-                            className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/5 hover:border-white/10 transition-all duration-300"
+                            className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-lg hover:bg-white/5 hover:border-white/10 transition-all duration-300"
                           >
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-white/70 truncate">{contentKey.slice(0, 16)}...</p>
@@ -600,7 +637,7 @@ export function ManageBundleModal({
                             <button
                               onClick={() => content.contentCid && handleAddItem(content.contentCid)}
                               disabled={addingItemCid !== null || !content.contentCid}
-                              className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-xl text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 min-w-[60px]"
+                              className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 disabled:opacity-30 rounded-lg text-sm font-medium transition-all duration-300 border border-cyan-500/30 hover:border-cyan-500/50 text-cyan-300 min-w-[60px]"
                             >
                               {isAddingThis ? (
                                 <svg className="animate-spin w-4 h-4 mx-auto" fill="none" viewBox="0 0 24 24">
@@ -617,7 +654,7 @@ export function ManageBundleModal({
                 )}
 
                 {currentBundle.isLocked && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-400/80">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-sm text-amber-400/80">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -633,7 +670,7 @@ export function ManageBundleModal({
             {mainTab === "settings" && (
               <div className="space-y-4">
                 {/* Settings Sub-tabs */}
-                <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl border border-white/5">
+                <div className="flex gap-1 p-1 bg-white/[0.02] rounded-lg border border-white/5">
                   <button
                     onClick={() => setSettingsTab("details")}
                     className={`flex-1 py-2.5 text-center text-sm font-medium rounded-lg transition-all duration-300 ${
@@ -679,7 +716,7 @@ export function ManageBundleModal({
                 {/* Details Sub-tab */}
                 {settingsTab === "details" && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                    <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-white/80">Bundle Status</p>
                         <p className="text-xs text-white/40 mt-0.5">
@@ -689,7 +726,7 @@ export function ManageBundleModal({
                       <button
                         onClick={handleToggleBundleActive}
                         disabled={isUpdatingBundle}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                           currentBundle.isActive
                             ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
                             : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
@@ -699,18 +736,18 @@ export function ManageBundleModal({
                       </button>
                     </div>
 
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Bundle ID</h3>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Bundle ID</h3>
                       <p className="text-sm text-white/60 font-mono">{currentBundle.bundleId}</p>
                     </div>
 
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Bundle Type</h3>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Bundle Type</h3>
                       <p className="text-sm text-white/60">{getBundleTypeLabel(currentBundle.bundleType)}</p>
                     </div>
 
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                      <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
+                    <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                      <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Lock Status</h3>
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${isLocked ? "bg-amber-400" : "bg-emerald-400"}`} />
                         <p className="text-sm text-white/60">
@@ -720,8 +757,8 @@ export function ManageBundleModal({
                     </div>
 
                     {actualMintedCount > 0 && (
-                      <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                        <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
+                      <div className="bg-white/[0.02] border border-white/5 rounded-lg p-4">
+                        <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Editions Minted</h3>
                         <p className="text-sm text-cyan-400 font-medium">{actualMintedCount} NFTs</p>
                       </div>
                     )}
@@ -734,7 +771,7 @@ export function ManageBundleModal({
                     {mintConfig ? (
                       <>
                         {/* Buy Status */}
-                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-lg">
                           <div>
                             <p className="text-sm font-medium text-white/80">Buying Status</p>
                             <p className="text-xs text-white/40 mt-0.5">
@@ -744,7 +781,7 @@ export function ManageBundleModal({
                           <button
                             onClick={handleToggleMintActive}
                             disabled={isLoading}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                               mintConfig.isActive
                                 ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
                                 : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
@@ -756,7 +793,7 @@ export function ManageBundleModal({
 
                         {/* Mint Price */}
                         <div>
-                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                          <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">
                             Price (SOL)
                           </label>
                           <input
@@ -766,14 +803,14 @@ export function ManageBundleModal({
                             min="0.001"
                             step="0.001"
                             placeholder="Min 0.001"
-                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                           />
                           <p className="text-xs text-white/30 mt-2">Minimum 0.001 SOL</p>
                         </div>
 
                         {/* Max Supply */}
                         <div>
-                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-2">
+                          <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-2">
                             Max Supply
                           </label>
                           {mintConfig.maxSupply !== null ? (
@@ -784,7 +821,7 @@ export function ManageBundleModal({
                                 onChange={(e) => setMintMaxSupply(e.target.value)}
                                 min="1"
                                 max="999999"
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                               />
                               <p className="text-xs text-white/30 mt-2">
                                 Limited supply cannot be changed to unlimited (max 999,999)
@@ -796,7 +833,7 @@ export function ManageBundleModal({
                                 <button
                                   type="button"
                                   onClick={() => setMintSupplyType("unlimited")}
-                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                                     mintSupplyType === "unlimited"
                                       ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
                                       : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -812,7 +849,7 @@ export function ManageBundleModal({
                                 <button
                                   type="button"
                                   onClick={() => setMintSupplyType("limited")}
-                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 text-sm ${
+                                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 text-sm ${
                                     mintSupplyType === "limited"
                                       ? "bg-purple-500/20 border border-purple-500/50 text-purple-300"
                                       : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5"
@@ -834,7 +871,7 @@ export function ManageBundleModal({
                                   min="1"
                                   max="999999"
                                   placeholder="Max supply (max 999,999)"
-                                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
+                                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300"
                                 />
                               )}
                             </>
@@ -842,8 +879,8 @@ export function ManageBundleModal({
                         </div>
 
                         {/* Stats */}
-                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-                          <h3 className="text-[11px] uppercase tracking-[0.15em] text-white/30 mb-2">Sold</h3>
+                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-lg">
+                          <h3 className="text-xs uppercase tracking-[0.15em] text-white/30 mb-2">Sold</h3>
                           <p className="text-sm text-purple-400 font-medium">
                             {actualMintedCount}
                             {mintConfig.maxSupply && ` / ${mintConfig.maxSupply.toString()}`}
@@ -853,14 +890,14 @@ export function ManageBundleModal({
                         <button
                           onClick={handleUpdateMintSettings}
                           disabled={isLoading}
-                          className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
+                          className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg font-medium transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-white/90"
                         >
                           {isUpdatingBundleMintSettings ? "Saving..." : "Update Buy Settings"}
                         </button>
                       </>
                     ) : (
                       <div className="text-center py-12">
-                        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                        <div className="w-12 h-12 mx-auto mb-4 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
                           <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
@@ -885,7 +922,7 @@ export function ManageBundleModal({
                     ) : rentConfig ? (
                       <>
                         {/* Rent Status */}
-                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+                        <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-lg">
                           <div>
                             <p className="text-sm font-medium text-white/80">Rental Status</p>
                             <p className="text-xs text-white/40 mt-0.5">
@@ -895,7 +932,7 @@ export function ManageBundleModal({
                           <button
                             onClick={handleToggleRentActive}
                             disabled={isLoading}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                               rentConfig.isActive
                                 ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40"
                                 : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40"
@@ -907,7 +944,7 @@ export function ManageBundleModal({
 
                         {/* Rent Fees */}
                         <div>
-                          <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">
+                          <label className="block text-xs uppercase tracking-[0.15em] text-white/30 mb-3">
                             Rental Pricing (SOL)
                           </label>
                           <div className="grid grid-cols-3 gap-3">
@@ -919,7 +956,7 @@ export function ManageBundleModal({
                                 onChange={(e) => setRentFee6h(e.target.value)}
                                 min="0.001"
                                 step="0.001"
-                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                               />
                             </div>
                             <div>
@@ -930,7 +967,7 @@ export function ManageBundleModal({
                                 onChange={(e) => setRentFee1d(e.target.value)}
                                 min="0.001"
                                 step="0.001"
-                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                               />
                             </div>
                             <div>
@@ -941,14 +978,14 @@ export function ManageBundleModal({
                                 onChange={(e) => setRentFee7d(e.target.value)}
                                 min="0.001"
                                 step="0.001"
-                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
+                                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.07] text-white/90 placeholder:text-white/20 transition-all duration-300 text-sm"
                               />
                             </div>
                           </div>
                         </div>
 
                         {/* Stats */}
-                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl space-y-2">
+                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-lg space-y-2">
                           <div className="flex justify-between">
                             <span className="text-xs text-white/40">Total Rentals</span>
                             <span className="text-sm text-amber-400 font-medium">{rentConfig.totalRentals?.toString() || "0"}</span>
@@ -962,14 +999,14 @@ export function ManageBundleModal({
                         <button
                           onClick={handleUpdateRentConfig}
                           disabled={isLoading}
-                          className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+                          className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
                         >
                           {isUpdatingBundleRentConfig ? "Saving..." : "Update Rent Pricing"}
                         </button>
                       </>
                     ) : (
                       <div className="text-center py-12">
-                        <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                        <div className="w-12 h-12 mx-auto mb-4 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
                           <svg className="w-6 h-6 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
@@ -983,7 +1020,7 @@ export function ManageBundleModal({
                         <p className="text-white/30 text-xs mt-2">Bundle ID: {bundle.bundleId}</p>
                         <button
                           onClick={() => rentConfigQuery.refetch()}
-                          className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 rounded-xl text-sm font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-amber-300"
+                          className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-sm font-medium transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 text-amber-300"
                         >
                           Retry
                         </button>
@@ -999,7 +1036,7 @@ export function ManageBundleModal({
           <div className="flex justify-end mt-5 pt-4 border-t border-white/5">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-xl font-medium transition-all duration-300 text-white/70 hover:text-white/90"
+              className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg font-medium transition-all duration-300 text-white/70 hover:text-white/90"
             >
               Close
             </button>

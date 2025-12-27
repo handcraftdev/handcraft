@@ -88,41 +88,41 @@ export function ConfirmModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/85 backdrop-blur-md"
         onClick={isLoading ? undefined : onClose}
       />
 
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative w-full max-w-md mx-4 p-6 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl"
+        className="relative w-full max-w-sm mx-4 p-4 bg-black border border-white/[0.08] rounded-lg shadow-2xl"
       >
-        <div className="flex items-start gap-4">
-          <div className={`w-12 h-12 rounded-xl ${styles.iconBg} flex items-center justify-center flex-shrink-0`}>
+        <div className="flex items-start gap-3">
+          <div className={`w-9 h-9 rounded-lg ${styles.iconBg} flex items-center justify-center flex-shrink-0`}>
             {styles.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-medium text-white/90 mb-1">{title}</h3>
-            <p className="text-sm text-white/50">{message}</p>
+            <h3 className="text-lg font-medium text-white/90">{title}</h3>
+            <p className="text-base text-white/45 mt-0.5">{message}</p>
           </div>
         </div>
 
-        <div className="flex gap-3 mt-6">
+        <div className="flex gap-2 mt-4">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 disabled:opacity-50 rounded-xl text-sm font-medium transition-all border border-white/10 text-white/70"
+            className="flex-1 py-2 bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-50 rounded-lg text-base font-medium transition-all border border-white/[0.06] text-white/60"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 py-2.5 disabled:opacity-50 rounded-xl text-sm font-medium transition-all border ${styles.button} flex items-center justify-center gap-2`}
+            className={`flex-1 py-2 disabled:opacity-50 rounded-lg text-base font-medium transition-all border ${styles.button} flex items-center justify-center gap-1.5`}
           >
             {isLoading ? (
               <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -210,21 +210,21 @@ export function AlertModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md mx-4 p-6 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl">
-        <div className="flex items-start gap-4">
-          <div className={`w-12 h-12 rounded-xl ${styles.iconBg} flex items-center justify-center flex-shrink-0`}>
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-full max-w-sm mx-4 p-4 bg-black border border-white/[0.08] rounded-lg shadow-2xl">
+        <div className="flex items-start gap-3">
+          <div className={`w-9 h-9 rounded-lg ${styles.iconBg} flex items-center justify-center flex-shrink-0`}>
             {styles.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-medium text-white/90 mb-1">{title}</h3>
-            <p className="text-sm text-white/50">{message}</p>
+            <h3 className="text-lg font-medium text-white/90">{title}</h3>
+            <p className="text-base text-white/45 mt-0.5">{message}</p>
           </div>
         </div>
-        <div className="mt-6">
+        <div className="mt-4">
           <button
             onClick={onClose}
-            className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all border ${styles.button}`}
+            className={`w-full py-2 rounded-lg text-base font-medium transition-all border ${styles.button}`}
           >
             OK
           </button>

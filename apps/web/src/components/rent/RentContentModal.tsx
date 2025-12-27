@@ -127,37 +127,37 @@ export function RentContentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} />
 
-      <div className="relative bg-black border border-white/10 rounded-2xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-black border border-white/[0.08] rounded-lg w-full max-w-sm p-4 m-4 max-h-[90vh] overflow-y-auto">
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none rounded-2xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent pointer-events-none rounded-lg" />
 
         <div className="relative">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-medium text-white/90">{isExtending ? "Extend Rental" : "Rent Content"}</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/5 rounded-full transition-all duration-300 text-white/40 hover:text-white/70"
+              className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-all text-white/40 hover:text-white/70"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {contentTitle && (
-            <p className="text-white/40 mb-5 text-sm">
+            <p className="text-white/40 mb-4 text-base">
               {isExtending ? "Extending" : "Renting"} access to: <span className="text-white/80">{contentTitle}</span>
             </p>
           )}
 
           {/* Current rental info banner */}
           {isExtending && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-5">
-              <div className="flex items-center gap-2 text-amber-300 text-sm">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 mb-4">
+              <div className="flex items-center gap-1.5 text-amber-300 text-sm">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>Current access expires: {new Date(currentExpiry).toLocaleString()}</span>
@@ -165,11 +165,11 @@ export function RentContentModal({
             </div>
           )}
 
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* Tier Selection */}
             <div>
-              <label className="block text-[11px] uppercase tracking-[0.2em] text-white/30 mb-3">Select Duration</label>
-              <div className="grid grid-cols-3 gap-2">
+              <label className="block text-2xs uppercase tracking-[0.15em] text-white/30 mb-2">Select Duration</label>
+              <div className="grid grid-cols-3 gap-1.5">
                 {TIER_OPTIONS.map(({ tier, label }) => {
                   const fee = getFeeForTier(tier);
                   const feeInSol = Number(fee) / LAMPORTS_PER_SOL;
@@ -178,10 +178,10 @@ export function RentContentModal({
                       key={tier}
                       type="button"
                       onClick={() => setSelectedTier(tier)}
-                      className={`relative p-3 rounded-xl text-center transition-all duration-300 overflow-hidden ${
+                      className={`relative p-2 rounded-lg text-center transition-all overflow-hidden ${
                         selectedTier === tier
                           ? "bg-amber-500/20 border border-amber-500/50 text-white/90"
-                          : "bg-white/[0.02] border border-white/10 text-white/50 hover:bg-white/5 hover:border-white/20"
+                          : "bg-white/[0.02] border border-white/[0.08] text-white/50 hover:bg-white/[0.04]"
                       }`}
                     >
                       {selectedTier === tier && (
@@ -189,7 +189,7 @@ export function RentContentModal({
                       )}
                       <div className="relative">
                         <div className="text-sm font-medium">{label}</div>
-                        <div className={`text-xs mt-1 ${selectedTier === tier ? "text-amber-300" : "text-white/40"}`}>
+                        <div className={`text-xs mt-0.5 ${selectedTier === tier ? "text-amber-300" : "text-white/40"}`}>
                           {feeInSol.toFixed(4)} SOL
                         </div>
                       </div>
@@ -200,16 +200,16 @@ export function RentContentModal({
             </div>
 
             {/* Selected Details */}
-            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3">
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-white/40 text-sm">Rental Fee</span>
-                <span className="text-xl font-bold text-white/90">
+                <span className="text-lg font-bold text-white/90">
                   {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white/40 text-sm">Access Period</span>
-                <span className="text-white/80 font-medium">
+                <span className="text-white/80 text-base font-medium">
                   {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}
                 </span>
               </div>
@@ -222,17 +222,17 @@ export function RentContentModal({
             </div>
 
             {/* What you get */}
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-emerald-400 mb-3">What you get</h3>
-              <ul className="text-sm text-white/60 space-y-2">
-                <li className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+              <h3 className="text-2xs uppercase tracking-[0.15em] text-emerald-400 mb-2">What you get</h3>
+              <ul className="text-sm text-white/60 space-y-1.5">
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Temporary NFT granting access to encrypted content</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <li className="flex items-start gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Access for {TIER_OPTIONS.find(t => t.tier === selectedTier)?.label}</span>
@@ -241,24 +241,20 @@ export function RentContentModal({
             </div>
 
             {/* Limitations */}
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-              <h3 className="text-[11px] uppercase tracking-[0.15em] text-amber-300 mb-3">Please note</h3>
-              <ul className="text-sm text-amber-200/60 space-y-1.5">
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400/60 mt-0.5">-</span>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <h3 className="text-2xs uppercase tracking-[0.15em] text-amber-300 mb-2">Please note</h3>
+              <ul className="text-sm text-amber-200/60 space-y-1">
+                <li className="flex items-start gap-1.5">
+                  <span className="text-amber-400/60">-</span>
                   Rental NFTs cannot be transferred or sold
                 </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400/60 mt-0.5">-</span>
-                  Access expires automatically after the rental period
+                <li className="flex items-start gap-1.5">
+                  <span className="text-amber-400/60">-</span>
+                  Access expires automatically
                 </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400/60 mt-0.5">-</span>
-                  Rental NFTs do not accumulate holder rewards
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-amber-400/60 mt-0.5">-</span>
-                  You can rent again to extend access
+                <li className="flex items-start gap-1.5">
+                  <span className="text-amber-400/60">-</span>
+                  No holder rewards for rentals
                 </li>
               </ul>
             </div>
@@ -271,7 +267,7 @@ export function RentContentModal({
             )}
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -279,11 +275,11 @@ export function RentContentModal({
             <button
               onClick={handleRent}
               disabled={isRentingContent}
-              className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 border border-amber-500/30 hover:border-amber-500/50 text-white/90"
+              className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-base font-medium transition-all flex items-center justify-center gap-1.5 border border-amber-500/30 text-white/90"
             >
               {isRentingContent ? (
                 <>
-                  <svg className="animate-spin w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
@@ -291,7 +287,7 @@ export function RentContentModal({
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span>{isExtending ? "Extend" : "Rent"} for {(Number(selectedFee) / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>
@@ -301,10 +297,10 @@ export function RentContentModal({
 
             {/* Buy NFT suggestion */}
             {onBuyClick && (
-              <p className="text-center text-xs text-white/30">
+              <p className="text-center text-2xs text-white/30">
                 Want permanent access?{" "}
                 <button
-                  className="text-purple-400 hover:text-purple-300 transition-colors duration-300"
+                  className="text-purple-400 hover:text-purple-300 transition-colors"
                   onClick={() => { onClose(); onBuyClick(); }}
                 >
                   Buy the NFT instead
