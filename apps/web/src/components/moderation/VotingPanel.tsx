@@ -9,8 +9,8 @@ import {
   type VoteChoice,
   isDisputePending,
   getDisputeTypeName,
-} from "@tribunalcraft/sdk";
-import { useTribunalcraft } from "@/hooks/useTribunalcraft";
+} from "@scalecraft/sdk";
+import { useScalecraft } from "@/hooks/useScalecraft";
 
 interface VotingPanelProps {
   contentCid: string;
@@ -28,7 +28,7 @@ export function VotingPanel({
   dispute,
   onVoteSuccess,
 }: VotingPanelProps) {
-  const { client, isConnected } = useTribunalcraft();
+  const { client, isConnected } = useScalecraft();
   const [isVoting, setIsVoting] = useState(false);
   const [votingChoice, setVotingChoice] = useState<"challenger" | "defender" | null>(null);
   const [stakeAmount, setStakeAmount] = useState(MIN_VOTE_STAKE.toString());

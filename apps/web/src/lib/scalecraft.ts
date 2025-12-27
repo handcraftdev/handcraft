@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { PROGRAM_ID as TRIBUNALCRAFT_PROGRAM_ID } from "@tribunalcraft/sdk";
+import { PROGRAM_ID as SCALECRAFT_PROGRAM_ID } from "@scalecraft/sdk";
 import { sha256 } from "js-sha256";
 
 // Handcraft's seed for deriving Tribunalcraft subject IDs
@@ -9,7 +9,7 @@ const HANDCRAFT_SEED = Buffer.from("handcraft");
 /**
  * Derive a Tribunalcraft subject ID from a Handcraft content CID
  *
- * Subject ID = PDA([HANDCRAFT_SEED, sha256(contentCid)], TRIBUNALCRAFT_PROGRAM_ID)
+ * Subject ID = PDA([HANDCRAFT_SEED, sha256(contentCid)], SCALECRAFT_PROGRAM_ID)
  *
  * This ensures:
  * - 1:1 mapping between content CID and subject
@@ -20,7 +20,7 @@ export function deriveSubjectId(contentCid: string): PublicKey {
   const cidHash = sha256.array(contentCid);
   const [subjectId] = PublicKey.findProgramAddressSync(
     [HANDCRAFT_SEED, Buffer.from(cidHash)],
-    TRIBUNALCRAFT_PROGRAM_ID
+    SCALECRAFT_PROGRAM_ID
   );
   return subjectId;
 }

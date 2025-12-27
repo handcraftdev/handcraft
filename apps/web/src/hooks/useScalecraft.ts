@@ -5,18 +5,18 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import {
-  TribunalCraftClient,
+  ScaleCraftClient,
   DisputeTypeEnum,
   type Subject,
   type Dispute,
   type DisputeType,
-} from "@tribunalcraft/sdk";
-import { deriveSubjectId } from "@/lib/tribunalcraft";
+} from "@scalecraft/sdk";
+import { deriveSubjectId } from "@/lib/scalecraft";
 
 /**
  * Hook to interact with Tribunalcraft protocol for content moderation
  */
-export function useTribunalcraft() {
+export function useScalecraft() {
   const { connection } = useConnection();
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
 
@@ -32,7 +32,7 @@ export function useTribunalcraft() {
       };
     }
 
-    return new TribunalCraftClient(config);
+    return new ScaleCraftClient(config);
   }, [connection, publicKey, signTransaction, signAllTransactions]);
 
   /**

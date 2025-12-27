@@ -1,6 +1,6 @@
 "use client";
 
-import { DisputeTypeEnum, type DisputeType } from "@tribunalcraft/sdk";
+import { DisputeTypeEnum, type DisputeType } from "@scalecraft/sdk";
 
 interface ReportCategorySelectProps {
   value: DisputeType;

@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import {
-  TribunalCraftClient,
+  ScaleCraftClient,
   isDisputePending,
   getDisputeTypeName,
   type Dispute,
   type Subject,
-} from "@tribunalcraft/sdk";
+} from "@scalecraft/sdk";
 import { SidebarPanel } from "@/components/sidebar";
 import { getIpfsUrl } from "@handcraft/sdk";
 
@@ -175,7 +175,7 @@ function DisputeCard({
           </button>
         )}
         <a
-          href={`https://tribunalcraft.io/subject/${subject.subjectId.toBase58()}`}
+          href={`https://scalecraft.io/subject/${subject.subjectId.toBase58()}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-colors"
@@ -204,9 +204,9 @@ export default function ModerationPage() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["tribunalcraft-active-disputes"],
+    queryKey: ["scalecraft-active-disputes"],
     queryFn: async () => {
-      const client = new TribunalCraftClient({ connection });
+      const client = new ScaleCraftClient({ connection });
 
       // Fetch all disputes directly instead of fetching subjects then disputes
       const allDisputes = await client.fetchAllDisputes();
@@ -256,7 +256,7 @@ export default function ModerationPage() {
               <span className="text-xs text-white/30">
                 via{" "}
                 <a
-                  href="https://tribunalcraft.io"
+                  href="https://scalecraft.io"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-purple-400 hover:text-purple-300"
@@ -380,7 +380,7 @@ export default function ModerationPage() {
                   <p className="text-sm text-purple-300">
                     Register as a juror on the{" "}
                     <a
-                      href="https://tribunalcraft.io"
+                      href="https://scalecraft.io"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-medium underline hover:text-purple-200"
@@ -392,7 +392,7 @@ export default function ModerationPage() {
               </div>
 
               <a
-                href="https://tribunalcraft.io"
+                href="https://scalecraft.io"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg font-medium transition-colors border border-purple-500/30 text-purple-400 text-center text-sm"

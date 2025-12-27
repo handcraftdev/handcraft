@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@solana/wallet-adapter-react";
 import {
-  TribunalCraftClient,
+  ScaleCraftClient,
   type Subject,
   type Dispute,
   type SubjectStatus,
@@ -12,8 +12,8 @@ import {
   isDisputePending,
   isDisputeResolved,
   isChallengerWins,
-} from "@tribunalcraft/sdk";
-import { deriveSubjectId } from "@/lib/tribunalcraft";
+} from "@scalecraft/sdk";
+import { deriveSubjectId } from "@/lib/scalecraft";
 
 // Local helper functions that handle both lowercase and capitalized status keys
 // (IDL uses Dormant/Valid, but Anchor may deserialize as dormant/valid)
@@ -94,7 +94,7 @@ export function useSubjectStatus(contentCid: string | null) {
   const { connection } = useConnection();
 
   return useQuery<SubjectStatusResult>({
-    queryKey: ["tribunalcraft-subject", contentCid],
+    queryKey: ["scalecraft-subject", contentCid],
     queryFn: async (): Promise<SubjectStatusResult> => {
       if (!contentCid) {
         return {
@@ -105,7 +105,7 @@ export function useSubjectStatus(contentCid: string | null) {
         };
       }
 
-      const client = new TribunalCraftClient({ connection });
+      const client = new ScaleCraftClient({ connection });
       const subjectId = deriveSubjectId(contentCid);
 
       const [subject, dispute] = await Promise.all([
@@ -143,9 +143,9 @@ export function useSubjectStatuses(contentCids: string[]) {
   const { connection } = useConnection();
 
   return useQuery<Map<string, SubjectStatusResult>>({
-    queryKey: ["tribunalcraft-subjects", contentCids.join(",")],
+    queryKey: ["scalecraft-subjects", contentCids.join(",")],
     queryFn: async () => {
-      const client = new TribunalCraftClient({ connection });
+      const client = new ScaleCraftClient({ connection });
       const results = new Map<string, SubjectStatusResult>();
 
       await Promise.all(

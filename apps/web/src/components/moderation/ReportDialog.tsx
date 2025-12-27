@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { DisputeTypeEnum, type DisputeType, getDisputeTypeName } from "@tribunalcraft/sdk";
-import { useTribunalcraft } from "@/hooks/useTribunalcraft";
+import { DisputeTypeEnum, type DisputeType, getDisputeTypeName } from "@scalecraft/sdk";
+import { useScalecraft } from "@/hooks/useScalecraft";
 import { useSubjectStatus } from "@/hooks/useSubjectStatus";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { ReportCategorySelect } from "./ReportCategorySelect";
@@ -26,7 +26,7 @@ export function ReportDialog({
   onSuccess,
 }: ReportDialogProps) {
   const { session } = useSupabaseAuth();
-  const { createDispute, joinDispute, isConnected } = useTribunalcraft();
+  const { createDispute, joinDispute, isConnected } = useScalecraft();
   const { data: subjectStatus, refetch } = useSubjectStatus(contentCid);
 
   const [disputeType, setDisputeType] = useState<DisputeType>(DisputeTypeEnum.Other);
